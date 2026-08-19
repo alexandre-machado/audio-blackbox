@@ -1,3 +1,38 @@
 <resources>
     <string name="app_name">Audio Blackbox</string>
+
+    <!-- Legal / consent notice -->
+    <string name="onboarding_legal_title">Aviso legal</string>
+    <string name="onboarding_legal_body">O Audio Blackbox grava áudio continuamente em segundo plano. Gravar conversas pode exigir o consentimento das pessoas envolvidas, dependendo da legislação da sua jurisdição. Você é responsável por usar este aplicativo de acordo com a lei aplicável.</string>
+    <string name="onboarding_legal_continue">Entendi, continuar</string>
+
+    <!-- RECORD_AUDIO rationale -->
+    <string name="onboarding_audio_title">Permissão de microfone</string>
+    <string name="onboarding_audio_body">O Audio Blackbox precisa de acesso ao microfone para gravar o áudio dos últimos minutos em um buffer contínuo. Sem essa permissão, o aplicativo não pode gravar nada.</string>
+    <string name="onboarding_audio_grant">Permitir microfone</string>
+
+    <!-- RECORD_AUDIO permanently denied -->
+    <string name="onboarding_audio_denied_title">Microfone bloqueado</string>
+    <string name="onboarding_audio_denied_body">Você negou permanentemente o acesso ao microfone. O Audio Blackbox não pode gravar sem ele. Abra as configurações do aplicativo e permita o acesso ao microfone manualmente.</string>
+    <string name="onboarding_open_settings">Abrir configurações do aplicativo</string>
+
+    <!-- POST_NOTIFICATIONS rationale -->
+    <string name="onboarding_notifications_title">Permissão de notificações</string>
+    <string name="onboarding_notifications_body">O Audio Blackbox grava em segundo plano usando um serviço em primeiro plano, que exige uma notificação permanente mostrando que a gravação está ativa. Sem essa permissão, o Android pode impedir o serviço de continuar.</string>
+    <string name="onboarding_notifications_grant">Permitir notificações</string>
+
+    <!-- POST_NOTIFICATIONS permanently denied -->
+    <string name="onboarding_notifications_denied_title">Notificações bloqueadas</string>
+    <string name="onboarding_notifications_denied_body">Você negou permanentemente a permissão de notificações. Abra as configurações do aplicativo para permiti-la manualmente e garantir que a gravação em segundo plano continue funcionando.</string>
+
+    <!-- Battery optimization -->
+    <string name="onboarding_battery_title">Otimização de bateria</string>
+    <string name="onboarding_battery_body">Alguns fabricantes (Samsung, Xiaomi, entre outros) encerram aplicativos em segundo plano agressivamente para economizar bateria. Para que a gravação contínua não seja interrompida, é recomendado isentar o Audio Blackbox da otimização de bateria.</string>
+    <string name="onboarding_battery_grant">Isentar da otimização de bateria</string>
+    <string name="onboarding_battery_skip">Pular por enquanto</string>
+    <string name="onboarding_battery_warning">Sem essa isenção, o sistema pode interromper a gravação em segundo plano. Você pode ativá-la depois nas configurações do aplicativo.</string>
+
+    <!-- Main screen -->
+    <string name="main_start_engine">Iniciar gravação</string>
+    <string name="main_start_engine_disabled_reason">Permissão de microfone necessária para iniciar a gravação.</string>
 </resources>
