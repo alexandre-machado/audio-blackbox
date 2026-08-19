@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31+ only. Complements android:allowBackup="false" in the manifest; it
+  does not replace it. allowBackup="false" disables cloud Auto Backup and
+  `adb backup`, but on some OEMs it does NOT stop device-to-device transfer
+  (e.g. Samsung Smart Switch, Google Quick Start); see
+  https://developer.android.com/identity/data/autobackup. The
+  device-transfer exclusion below is what actually blocks that path on
+  API 31+. Do not remove either mechanism thinking the other makes it
+  redundant.
+
+  Residual gap on API 29-30 (this app's minSdk is 29): dataExtractionRules
+  is API 31+ only and has no effect below that. The legacy
+  android:fullBackupContent mechanism governs backup content on 29-30, but
+  it does not control OEM device-to-device transfer at all; Smart
+  Switch-style transfers on 29-30 are outside the scope of both
+  fullBackupContent and dataExtractionRules. On 29-30 this app relies on
+  allowBackup="false" alone, which is a known, deliberate, accepted
+  tradeoff: raising minSdk to 31 to close this gap would cost real device
+  reach, and the residual exposure requires physical access to an unlocked
+  device plus a deliberate user-initiated transfer.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>

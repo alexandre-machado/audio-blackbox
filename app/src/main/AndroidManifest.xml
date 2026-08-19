@@ -6,8 +6,19 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
+    <!--
+      android:allowBackup="false" and android:dataExtractionRules are both
+      present on purpose: allowBackup="false" blocks cloud Auto Backup and
+      `adb backup`, but on some OEMs it does not block device-to-device
+      transfer (Samsung Smart Switch, Google Quick Start) on API 31+. The
+      dataExtractionRules file adds an explicit device-transfer exclusion
+      for that path. Do not remove either one; see
+      app/src/main/res/xml/data_extraction_rules.xml for the full rationale
+      and the documented residual gap on API 29-30 (this app's minSdk).
+    -->
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
