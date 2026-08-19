@@ -306,15 +306,34 @@ class AudioCaptureEngine(
 
     /** Resumes writes into the ring buffer. No-op unless currently [CaptureState.Paused].
      * Appends a [PauseGap] spanning [pauseStartMillis] to now onto [gaps] -- the wall-clock
-     * duration the export gap handler (Module 3) needs to inject the right amount of silence. */
+     * duration the export gap handler (Module 3) needs to inject the right amount of silence.
+     * Also prunes [gaps] of any entry that has aged out of the retention window -- see
+     * [pruneExpiredGaps]. */
     fun resume() {
         synchronized(lock) {
             if (_state.value is CaptureState.Paused) {
                 paused = false
-                _gaps.value = _gaps.value + PauseGap(pauseStartMillis, clock())
+                val now = clock()
+                _gaps.value = pruneExpiredGaps(_gaps.value + PauseGap(pauseStartMillis, now), now)
                 _state.value = CaptureState.Recording
             }
         }
+    }
+
+    /**
+     * Drops any [PauseGap] that has scrolled entirely out of the ring buffer's retention window.
+     * Not an arbitrary cap: the ring buffer only ever holds the most recent
+     * [AudioConfig.bufferDurationMinutes] of audio, so once a gap's end is older than that window,
+     * the audio surrounding it no longer exists in the buffer either -- the export gap handler
+     * (Module 3) can never need a gap it has nothing left to place, because there is nothing left
+     * to export around it. Pruning on this basis keeps [gaps] bounded by the same window the
+     * audio itself is bounded by, for a session with arbitrarily many pause/resume cycles (e.g.
+     * repeated mic contention) over an arbitrarily long run. Must be called with [lock] held.
+     */
+    private fun pruneExpiredGaps(gaps: List<PauseGap>, now: Long): List<PauseGap> {
+        val retentionMillis = config.bufferDurationMinutes.toLong() * MILLIS_PER_MINUTE
+        val cutoff = now - retentionMillis
+        return gaps.filter { it.endTimestampMillis > cutoff }
     }
 
     private fun captureLoop(record: AudioRecord, buffer: RingBuffer, minBufferSize: Int, myGeneration: Long) {
@@ -370,6 +389,7 @@ class AudioCaptureEngine(
 
     private companion object {
         const val MILLIS_PER_SECOND = 1000L
+        const val MILLIS_PER_MINUTE = 60_000L
 
         fun mapReadError(code: Int): CaptureErrorReason = when (code) {
             AudioRecord.ERROR_INVALID_OPERATION -> CaptureErrorReason.READ_INVALID_OPERATION

@@ -15,6 +15,12 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.CaptureState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Foreground microphone service (issue #3). Owns the single [AudioCaptureEngine] instance for
@@ -36,8 +42,14 @@ import cc.machado.audioblackbox.audio.CaptureState
 class RecorderService : Service() {
 
     private lateinit var audioManager: AudioManager
+    private lateinit var focusTracker: AudioFocusTracker
 
-    private var focusRequest: AudioFocusRequest? = null
+    // Service-scoped: collects engine.state reactively (see onCreate) so the notification can
+    // never go stale between the two user-initiated call sites, and hosts the off-main-thread
+    // engine.stop() dispatch (see stopServiceCompletely). SupervisorJob so a failure in one
+    // launched child (there is normally only ever one at a time) cannot cancel the scope itself.
+    // Cancelled in onDestroy.
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     // Ignoring intent: see class doc on the AudioFocus criterion of issue #3 -- losing audio
     // focus must not stop the service. This listener's only job is to prove that a focus-change
@@ -66,8 +78,21 @@ class RecorderService : Service() {
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        focusTracker = AudioFocusTracker(audioManager)
         RecorderNotification.ensureChannel(this)
         audioManager.registerAudioRecordingCallback(recordingCallback, null)
+        // Reactive notification refresh (PR #23 review, `@sec` finding 1 / `@rev` finding 2):
+        // nothing about a single explicit refresh call site can catch every way engine.state
+        // changes asynchronously -- a read error on the capture thread, the mic being silenced by
+        // recordingCallback above, or a permission revoked mid-session. Collecting the StateFlow
+        // itself, instead of only refreshing from onStartCommand/handleStart(), covers the general
+        // case: any state transition, from anywhere, posts an up-to-date notification. A
+        // StateFlow replays its latest value to a new collector, so this also immediately
+        // reconciles the notification with whatever engine.state already is at the moment this
+        // collector attaches.
+        serviceScope.launch {
+            engine.state.collect { refreshNotification() }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -77,43 +102,57 @@ class RecorderService : Service() {
         // deadline runs from process start, not from whenever we get around to it, so this is
         // called first, synchronously, before looking at the Intent's action or touching the
         // engine at all. It also covers the two cases with no useful action to inspect: intent ==
-        // null (the OS restarting this service per the START_STICKY contract, see below) and an
-        // unrecognized action -- both still need an up-to-date notification posted promptly.
+        // null (an OS-initiated restart, see below) and an unrecognized action -- both still need
+        // an up-to-date notification posted promptly.
         startForeground(RecorderNotification.NOTIFICATION_ID, currentNotification())
 
         when (intent?.action) {
             ACTION_START -> handleStart()
-            ACTION_STOP -> {
-                handleStop()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
-            }
+            ACTION_STOP -> stopServiceCompletely()
             ACTION_SAVE -> handleSave()
-            else -> Unit // null intent (OS restart) or unknown action: notification above already covers it.
+            null -> stopServiceCompletely() // OS-initiated restart: see START_NOT_STICKY note below.
+            else -> Unit // unrecognized action: notification above already covers it, nothing to do.
         }
 
-        // START_STICKY: if the OS kills this process to reclaim memory, recreate the service
-        // (with a null Intent) rather than leaving the user silently unprotected -- the whole
-        // point of this service is "the recorder keeps running unless the user explicitly stops
-        // it". We deliberately do NOT use START_REDELIVER_INTENT: the start Intent carries no
-        // extras whose loss would matter (ACTION_START/STOP/SAVE are each idempotent against the
-        // engine's current state), so redelivering the exact same Intent buys nothing over
-        // START_STICKY's null-intent restart, which already re-invokes startForeground() above.
-        // Note this cannot resurrect the RAM ring buffer itself -- that is unavoidably lost on
-        // process death regardless of onStartCommand's return value, since it only ever lived in
-        // this process's heap; recovering from that is out of scope for this service (there is
-        // nothing on disk to recover from without persistence work no module in this codebase
-        // does yet).
-        return START_STICKY
+        // START_NOT_STICKY (PR #23 review, `@techlead` adjudication -- overrules this service's
+        // original START_STICKY choice). An OS-initiated restart after this process was killed to
+        // reclaim memory would deliver a null Intent here, and START_STICKY's contract would have
+        // this service settle into a permanent idle foreground state (or, in an earlier draft,
+        // silently resume capture) -- both wrong for this product:
+        //   1. There is nothing to restore: the ring buffer is RAM-only, so an auto-restart cannot
+        //      recover a single second of the audio that died with the process. It would only ever
+        //      start a *new* capture, not resume the old one.
+        //   2. An OS-initiated restart is a background start. Silently reopening the microphone
+        //      from the background is restricted on API 34+ (a `microphone`-typed FGS cannot be
+        //      started from the background there) and is the wrong default regardless -- an
+        //      ambient-audio recorder must never reopen the mic without a user action that
+        //      triggered it.
+        //   3. A zombie idle foreground service with a notification the user never asked to see
+        //      again, and that nothing ever tears down, is worse than not restarting at all.
+        // So instead: null-Intent delivery tears the service down immediately (see
+        // stopServiceCompletely()) rather than idling forever. Consequence, stated plainly: after
+        // a process death, capture stays stopped until the user starts it again -- that is honest,
+        // not a regression, since there was never anything to actually resume.
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         audioManager.unregisterAudioRecordingCallback(recordingCallback)
-        abandonAudioFocus()
-        // Idempotent no-op if already Idle (e.g. ACTION_STOP already called this) -- defensive
-        // cleanup so AudioRecord is never left open if the service is destroyed some other way.
-        engine.stop()
+        focusTracker.abandon()
+        // Defensive cleanup for the case where this service is destroyed some other way than
+        // through stopServiceCompletely() (e.g. the OS force-destroys it directly). In the common
+        // case stopServiceCompletely() has already driven engine.stop() to completion before ever
+        // calling stopSelf(), so this is an idempotent no-op. It is dispatched on its own daemon
+        // thread rather than blocked on synchronously, for the same ANR reason as
+        // stopServiceCompletely(): the join + RingBuffer.clear() must not run on this callback's
+        // main thread. A raw Thread (not serviceScope, which is cancelled right below, and would
+        // cancel this along with it) so it survives both that cancellation and this Service
+        // instance being destroyed -- engine's own capture thread is likewise independent of both.
+        Thread({ engine.stop() }, "RecorderService-onDestroy-stop").apply {
+            isDaemon = true
+            start()
+        }
+        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -134,12 +173,33 @@ class RecorderService : Service() {
         }
         requestAudioFocus()
         engine.start()
-        refreshNotification()
+        // No explicit refreshNotification() call here: the serviceScope collector registered in
+        // onCreate() reacts to the engine.state emission engine.start() just produced. Relying on
+        // that single reactive path (rather than this call site plus the collector) is the point
+        // of the fix -- see onCreate()'s comment.
     }
 
-    private fun handleStop() {
-        engine.stop()
-        abandonAudioFocus()
+    /** Shared teardown for both an explicit [ACTION_STOP] and a null-Intent OS restart (see
+     * [onStartCommand]'s `START_NOT_STICKY` note) -- both want the same thing: stop capture, then
+     * remove the notification and the service.
+     *
+     * `engine.stop()` blocks until the capture thread's cleanup -- including [RingBuffer.clear],
+     * an `Arrays.fill` over the whole ring buffer -- has fully run, which is small at the default
+     * retention window but can be seconds at a long one. Dispatched on [serviceScope] with
+     * [Dispatchers.Default] so that join never happens on this Service's main thread (PR #23
+     * review, `@rev` finding 3), then hops back to Main to remove the notification and stop the
+     * service only once capture has actually finished -- never before, so the persistent
+     * notification (and the service itself) never disappear while the mic might still be open.
+     */
+    private fun stopServiceCompletely() {
+        serviceScope.launch(Dispatchers.Default) {
+            engine.stop()
+            withContext(Dispatchers.Main.immediate) {
+                focusTracker.abandon()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+        }
     }
 
     private fun handleSave() {
@@ -152,21 +212,19 @@ class RecorderService : Service() {
     }
 
     private fun requestAudioFocus() {
-        val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
-            .build()
-        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            .setAudioAttributes(attributes)
-            .setOnAudioFocusChangeListener(focusChangeListener)
-            .build()
-        focusRequest = request
-        audioManager.requestAudioFocus(request)
-    }
-
-    private fun abandonAudioFocus() {
-        focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-        focusRequest = null
+        // focusTracker.request() abandons any request it already holds before installing this
+        // one, so a repeated ACTION_START (duplicate tap, redelivered intent) can never leak a
+        // prior registration with AudioManager (PR #23 review, `@rev` finding 4).
+        focusTracker.request {
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
+                .build()
+            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(attributes)
+                .setOnAudioFocusChangeListener(focusChangeListener)
+                .build()
+        }
     }
 
     private fun currentNotification() =

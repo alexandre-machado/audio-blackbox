@@ -2,9 +2,14 @@ package cc.machado.audioblackbox.audio
 
 import android.media.AudioRecord
 import java.util.Arrays
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -168,6 +173,47 @@ class AudioCaptureEngineTest {
             }
         }
     }
+
+    // ---- PR #23 review, @sec finding 1 / @rev finding 2: a StateFlow collector observes every
+    // async transition on its own, with no explicit refresh call from the caller. This is the
+    // engine-level contract RecorderService's fix (a serviceScope collector on engine.state,
+    // instead of only refreshing from two explicit call sites) depends on; RecorderService itself
+    // -- and therefore the NotificationManager glue on top of it -- extends android.app.Service
+    // and cannot be instantiated in a plain JUnit test without Robolectric (this module's
+    // convention deliberately avoids it), so that top-level wiring is not unit-testable here. ----
+
+    @Test
+    fun `a collector attached before start() observes every state transition including the async read-error one, with no explicit refresh`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(AudioRecord.ERROR_DEAD_OBJECT)
+            val engine = AudioCaptureEngine(config = fastConfig, audioRecordFactory = { _, _ -> record })
+
+            val observedStates = Collections.synchronizedList(mutableListOf<CaptureState>())
+            val collectorScope = CoroutineScope(Dispatchers.Default)
+            collectorScope.launch {
+                engine.state.collect { observedStates.add(it) }
+            }
+            try {
+                // Nothing below ever calls refreshNotification()-equivalent logic or polls
+                // engine.state.value directly to "discover" the error -- the assertion is purely on
+                // what the collector captured on its own, mirroring how RecorderService's
+                // serviceScope collector is expected to behave against the exact same async
+                // read-error path (see AudioCaptureEngine.captureLoop's error branch).
+                engine.start()
+                val deadline = System.currentTimeMillis() + 2_000
+                while (System.currentTimeMillis() < deadline && observedStates.none { it is CaptureState.Error }) {
+                    Thread.sleep(1)
+                }
+                assertTrue(
+                    "collector should have observed Idle -> Recording -> Error on its own",
+                    observedStates.contains(CaptureState.Recording) && observedStates.any { it is CaptureState.Error },
+                )
+            } finally {
+                collectorScope.cancel()
+                engine.stop()
+            }
+        }
 
     // ---- stop() during the Error window joins the capture thread; no orphaned AudioRecord ----
 
@@ -459,7 +505,16 @@ class AudioCaptureEngineTest {
     fun `pause is a no-op outside Recording and resume is a no-op outside Paused`() = withMinBufferSizeMocked {
         val record = fakeAudioRecord()
         whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
-        val engine = AudioCaptureEngine(config = fastConfig, audioRecordFactory = { _, _ -> record })
+        // Deterministic clock so the second, no-op pause() can be proven not to have moved the
+        // gap's recorded start forward (see @rev PR #23 review, finding 5: the previous version of
+        // this test only asserted gaps.value.size == 1, which a broken guard that let the second
+        // pause() silently overwrite pauseStartMillis would still have passed).
+        val clockMillis = AtomicLong(10_000L)
+        val engine = AudioCaptureEngine(
+            config = fastConfig,
+            clock = { clockMillis.get() },
+            audioRecordFactory = { _, _ -> record },
+        )
 
         // Idle: neither call should do anything or throw.
         engine.pause()
@@ -474,16 +529,68 @@ class AudioCaptureEngineTest {
         assertEquals(CaptureState.Recording, engine.state.value)
         assertEquals(0, engine.gaps.value.size)
 
-        engine.pause()
+        engine.pause() // gap start recorded at clock = 10_000
         awaitState(engine, description = "Paused") { it is CaptureState.Paused }
 
-        // pause() while already Paused is a no-op (must not overwrite the gap start).
+        // Advance the clock, then pause() again while already Paused: this must be a no-op and
+        // must NOT move pauseStartMillis forward to 20_000.
+        clockMillis.set(20_000L)
         engine.pause()
         assertEquals(CaptureState.Paused, engine.state.value)
 
+        clockMillis.set(30_000L)
         engine.resume()
-        assertEquals(1, engine.gaps.value.size)
+        val gaps = engine.gaps.value
+        assertEquals(1, gaps.size)
+        val gap = gaps.single()
+        assertEquals(
+            "the no-op pause() at clock=20_000 must not have overwritten the original gap start",
+            10_000L,
+            gap.startTimestampMillis,
+        )
+        assertEquals(30_000L, gap.endTimestampMillis)
+        assertEquals(20_000L, gap.durationMillis)
 
         engine.stop()
     }
+
+    // ---- PR #23 review, @sec finding 3 / @rev finding 6: gaps is bounded by the retention window ----
+
+    @Test
+    fun `gaps that have scrolled out of the retention window are pruned as newer ones are appended`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+            val clockMillis = AtomicLong(0L)
+            // fastConfig.bufferDurationMinutes == 1, so the retention window is 60_000ms.
+            val engine = AudioCaptureEngine(
+                config = fastConfig,
+                clock = { clockMillis.get() },
+                audioRecordFactory = { _, _ -> record },
+            )
+
+            engine.start()
+            awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+            engine.pause() // gap #1 start = 0
+            clockMillis.set(1_000L)
+            engine.resume() // gap #1 = [0, 1_000]
+            awaitState(engine, description = "Recording after first gap") { it is CaptureState.Recording }
+            assertEquals(1, engine.gaps.value.size)
+
+            // Advance well past the 60s retention window before the next pause/resume cycle, so
+            // gap #1's end (1_000) has scrolled entirely out of the ring buffer's retained audio
+            // by the time gap #2 is appended.
+            clockMillis.set(121_000L)
+            engine.pause() // gap #2 start = 121_000
+            clockMillis.set(122_000L)
+            engine.resume() // gap #2 = [121_000, 122_000]
+            awaitState(engine, description = "Recording after second gap") { it is CaptureState.Recording }
+
+            val gaps = engine.gaps.value
+            assertEquals("gap #1 should have been pruned once it aged out of the retention window", 1, gaps.size)
+            assertEquals(121_000L, gaps.single().startTimestampMillis)
+
+            engine.stop()
+        }
 }
