@@ -1,6 +1,7 @@
 *.iml
 .gradle/
 build/
+# Local, machine-specific SDK path — never commit an absolute SDK path.
 local.properties
 .idea/*
 !.idea/runConfigurations/
