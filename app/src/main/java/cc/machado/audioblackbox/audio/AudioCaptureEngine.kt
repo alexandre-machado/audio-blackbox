@@ -208,15 +208,22 @@ class AudioCaptureEngine(
      * this returns. */
     fun stop() {
         var threadToJoin: Thread? = null
+        var wasError = false
+        var myGeneration = -1L
         synchronized(lock) {
             when (_state.value) {
                 is CaptureState.Idle -> return
                 is CaptureState.Error -> {
-                    _state.value = CaptureState.Idle
-                    // The capture thread already exited its read loop (that's why state is
-                    // Error) but may not have reached its `finally` cleanup yet -- join it too so
-                    // every path away from a non-Idle state deterministically waits for that
-                    // cleanup (see PR #20 review, finding 2). Instant if it already finished.
+                    // Do NOT write Idle here. The capture thread already exited its read loop
+                    // (that's why state is Error) but has not released `AudioRecord`/cleared the
+                    // ring buffer yet -- that happens later, in its own `finally`, guarded by
+                    // `lock`. Writing Idle before that cleanup runs would let a third thread
+                    // observe state == Idle while snapshot() still returns real, un-cleared PCM,
+                    // violating Idle's documented "no AudioRecord held" contract (see PR #20
+                    // review, second-round finding). We instead join first and write Idle
+                    // afterward, once cleanup is guaranteed complete -- see below.
+                    wasError = true
+                    myGeneration = generation
                     threadToJoin = captureThread
                 }
                 else -> {
@@ -229,6 +236,19 @@ class AudioCaptureEngine(
         // Joined outside the lock: the capture thread's cleanup below acquires `lock` itself,
         // and joining while holding it would deadlock.
         threadToJoin?.join()
+        if (wasError) {
+            synchronized(lock) {
+                // Only stamp Idle if no newer start() has superseded this session in the
+                // meantime (same guard the capture thread's own cleanup uses -- see PR #20
+                // review, finding 2). The capture thread's `finally` deliberately leaves Error
+                // in place instead of overwriting it with Idle, so this is the only place that
+                // ever performs this transition, and only after `threadToJoin?.join()` above has
+                // proven cleanup (release + ring buffer clear) already ran.
+                if (generation == myGeneration && _state.value is CaptureState.Error) {
+                    _state.value = CaptureState.Idle
+                }
+            }
+        }
     }
 
     /** Suspends writes into the ring buffer without closing `AudioRecord` (Module 2: phone

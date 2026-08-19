@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.audio
 
 import android.media.AudioRecord
 import java.util.Arrays
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -208,6 +210,64 @@ class AudioCaptureEngineTest {
 
         assertNull("ring buffer reference must be gone after stop(), not merely emptied", engine.snapshot(1_000))
     }
+
+    @Test
+    fun `stop() from Error state never lets another thread see Idle while AudioRecord is still held`() =
+        withMinBufferSizeMocked {
+            // Note on the oracle: the obvious probe -- "does snapshot() still return PCM while
+            // state reads Idle?" -- cannot fire, because captureLoop's `finally` runs
+            // buffer.clear() BEFORE it takes `lock`, and clear() holds the ring buffer's own
+            // internal lock for its whole duration, so a concurrent snapshot() either blocks or
+            // sees an already-empty buffer. The PCM is therefore already safe (that was finding 3
+            // of the previous round). What is NOT safe is the `AudioRecord` itself: stop()'s Error
+            // branch writes Idle, drops `lock`, and only then joins, while the capture thread is
+            // still inside its own `synchronized(lock)` cleanup calling record.stop()/release().
+            // CaptureState.Idle documents "no AudioRecord held", so observing Idle before
+            // release() has run is the real contract violation -- and that is what we assert on.
+            //
+            // Two widenings, both real work rather than sleeps injected into production code:
+            //   * slowClearConfig makes buffer.clear() (outside `lock`) take ~150 MB of
+            //     Arrays.fill, so the test thread reliably wins the race to `lock` and reaches
+            //     the Idle write first -- the ordering that exposes the bug at all;
+            //   * a slow mocked record.stop() (inside `lock`, before release()) then holds the
+            //     window open long enough for the watcher thread to sample it.
+            val released = AtomicBoolean(false)
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(AudioRecord.ERROR_DEAD_OBJECT)
+            whenever(record.stop()).thenAnswer { Thread.sleep(200) }
+            whenever(record.release()).thenAnswer { released.set(true) }
+            val engine = AudioCaptureEngine(config = slowClearConfig, audioRecordFactory = { _, _ -> record })
+
+            engine.start()
+            awaitState(engine, description = "Error before racing stop()") { it is CaptureState.Error }
+
+            val sawViolation = AtomicBoolean(false)
+            val watcherRunning = AtomicBoolean(true)
+            val watcherThread = Thread({
+                while (watcherRunning.get()) {
+                    if (engine.state.value is CaptureState.Idle) {
+                        if (!released.get()) sawViolation.set(true)
+                        watcherRunning.set(false)
+                    }
+                }
+            }, "test-watcher")
+            watcherThread.start()
+
+            engine.stop()
+            watcherRunning.set(false)
+            watcherThread.join(3_000)
+
+            assertTrue(
+                "CaptureState.Idle must never be observable before AudioRecord.release() has " +
+                    "run -- Idle's documented contract is 'no AudioRecord held', so a third " +
+                    "thread that sees Idle must be able to assume the mic is already free",
+                !sawViolation.get(),
+            )
+            // Sanity: the window really was exercised, i.e. the engine did reach Idle and did
+            // release the record, rather than the assertion passing because nothing happened.
+            assertTrue("engine should be Idle after stop()", engine.state.value is CaptureState.Idle)
+            assertTrue("AudioRecord should be released after stop()", released.get())
+        }
 
     // ---- start()/stop() idempotency ----
 
