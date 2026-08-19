@@ -30,12 +30,26 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.AudioBlackbox">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          foregroundServiceType="microphone" is mandatory on API 29+ for a service that records
+          audio in the background (see minSdk in app/build.gradle.kts, chosen specifically so this
+          type is always available). android:exported="false": only this app ever starts it, via
+          explicit Intents built by RecorderService.startIntent()/stopIntent()/saveIntent(), never
+          through an external Intent (see issue #3: a foreground service must be started from a
+          visible, user-initiated context, not from the background).
+        -->
+        <service
+            android:name=".service.RecorderService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 
 </manifest>

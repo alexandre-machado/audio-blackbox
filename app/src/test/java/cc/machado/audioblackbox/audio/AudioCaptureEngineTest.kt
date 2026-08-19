@@ -4,6 +4,7 @@ import android.media.AudioRecord
 import java.util.Arrays
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -376,4 +377,113 @@ class AudioCaptureEngineTest {
             engine.stop()
             verify(freshRecord).release()
         }
+
+    // ---- issue #3: interruption state machine (Recording -> Paused -> Recording) records a
+    // wall-clock gap whose duration matches the simulated pause ----
+
+    @Test
+    fun `pause then resume on mic-taken-then-released records a gap matching the simulated pause duration`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+            // Deterministic fake clock (constructor-injection seam, no wall-clock sleep needed to
+            // assert on timing) standing in for the fake recording-callback source: a real
+            // AudioManager.AudioRecordingCallback would call pause()/resume() the same way this
+            // test does directly, just triggered by a system event (mic taken by a phone call)
+            // instead of a test thread.
+            val clockMillis = AtomicLong(1_000_000L)
+            val engine = AudioCaptureEngine(
+                config = fastConfig,
+                clock = { clockMillis.get() },
+                audioRecordFactory = { _, _ -> record },
+            )
+
+            engine.start()
+            awaitState(engine, description = "Recording before the mic is taken") { it is CaptureState.Recording }
+            assertEquals(0, engine.gaps.value.size)
+
+            engine.pause() // simulates AudioRecordingCallback observing isClientSilenced == true
+            awaitState(engine, description = "Paused while the mic is held by a higher-priority client") {
+                it is CaptureState.Paused
+            }
+
+            clockMillis.addAndGet(45_000L) // simulate a 45s phone call
+
+            engine.resume() // simulates AudioRecordingCallback observing isClientSilenced == false
+            awaitState(engine, description = "Recording after the mic is released") { it is CaptureState.Recording }
+
+            val gaps = engine.gaps.value
+            assertEquals(1, gaps.size)
+            val gap = gaps.single()
+            assertEquals(1_000_000L, gap.startTimestampMillis)
+            assertEquals(1_045_000L, gap.endTimestampMillis)
+            assertEquals(45_000L, gap.durationMillis)
+
+            engine.stop()
+        }
+
+    @Test
+    fun `multiple pause-resume cycles append one gap each, in order`() = withMinBufferSizeMocked {
+        val record = fakeAudioRecord()
+        whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+        val clockMillis = AtomicLong(0L)
+        val engine = AudioCaptureEngine(
+            config = fastConfig,
+            clock = { clockMillis.get() },
+            audioRecordFactory = { _, _ -> record },
+        )
+
+        engine.start()
+        awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+        engine.pause()
+        clockMillis.addAndGet(1_000L)
+        engine.resume()
+        awaitState(engine, description = "Recording after first gap") { it is CaptureState.Recording }
+
+        clockMillis.addAndGet(5_000L) // uninterrupted recording between the two calls
+        engine.pause()
+        clockMillis.addAndGet(2_000L)
+        engine.resume()
+        awaitState(engine, description = "Recording after second gap") { it is CaptureState.Recording }
+
+        val gaps = engine.gaps.value
+        assertEquals(2, gaps.size)
+        assertEquals(1_000L, gaps[0].durationMillis)
+        assertEquals(2_000L, gaps[1].durationMillis)
+
+        engine.stop()
+    }
+
+    @Test
+    fun `pause is a no-op outside Recording and resume is a no-op outside Paused`() = withMinBufferSizeMocked {
+        val record = fakeAudioRecord()
+        whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+        val engine = AudioCaptureEngine(config = fastConfig, audioRecordFactory = { _, _ -> record })
+
+        // Idle: neither call should do anything or throw.
+        engine.pause()
+        engine.resume()
+        assertEquals(CaptureState.Idle, engine.state.value)
+
+        engine.start()
+        awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+        // resume() while already Recording is a no-op.
+        engine.resume()
+        assertEquals(CaptureState.Recording, engine.state.value)
+        assertEquals(0, engine.gaps.value.size)
+
+        engine.pause()
+        awaitState(engine, description = "Paused") { it is CaptureState.Paused }
+
+        // pause() while already Paused is a no-op (must not overwrite the gap start).
+        engine.pause()
+        assertEquals(CaptureState.Paused, engine.state.value)
+
+        engine.resume()
+        assertEquals(1, engine.gaps.value.size)
+
+        engine.stop()
+    }
 }

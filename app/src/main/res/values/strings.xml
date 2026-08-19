@@ -35,4 +35,15 @@
     <!-- Main screen -->
     <string name="main_start_engine">Iniciar gravação</string>
     <string name="main_start_engine_disabled_reason">Permissão de microfone necessária para iniciar a gravação.</string>
+
+    <!-- Recorder foreground service notification -->
+    <string name="recorder_notification_channel_name">Gravação em segundo plano</string>
+    <string name="recorder_notification_channel_description">Mostra o estado da gravação contínua enquanto o Audio Blackbox está ativo.</string>
+    <string name="recorder_notification_state_recording">Gravando</string>
+    <string name="recorder_notification_state_paused">Pausado (microfone em uso)</string>
+    <string name="recorder_notification_state_idle">Parado</string>
+    <string name="recorder_notification_state_error">Erro na gravação</string>
+    <string name="recorder_notification_buffered">Buffer: %1$s</string>
+    <string name="recorder_notification_action_save">Salvar últimos 30 min</string>
+    <string name="recorder_notification_action_stop">Parar motor</string>
 </resources>

@@ -26,6 +26,18 @@ sealed interface CaptureState {
     data class Error(val reason: CaptureErrorReason, val message: String) : CaptureState
 }
 
+/**
+ * A completed [AudioCaptureEngine.pause]/[AudioCaptureEngine.resume] cycle, recorded as
+ * wall-clock boundaries rather than a duration alone so a consumer (Module 3's export gap
+ * handler) can place the injected silence at the right offset in the exported timeline, not
+ * just size it correctly. Exposed as data on [AudioCaptureEngine.gaps] -- deliberately not
+ * something the foreground service tracks privately, since the engine is the only thing that
+ * knows exactly when writes stopped/resumed being written into the ring buffer.
+ */
+data class PauseGap(val startTimestampMillis: Long, val endTimestampMillis: Long) {
+    val durationMillis: Long get() = endTimestampMillis - startTimestampMillis
+}
+
 /** Why [CaptureState.Error] happened, so callers can decide whether retrying makes sense. */
 enum class CaptureErrorReason {
     /** `AudioRecord.getMinBufferSize` returned an error for this [AudioConfig]. */
@@ -71,6 +83,12 @@ class AudioCaptureEngine(
     private val _state = MutableStateFlow<CaptureState>(CaptureState.Idle)
     val state: StateFlow<CaptureState> = _state.asStateFlow()
 
+    // Completed pause/resume cycles for the *current* session, oldest first. Reset to empty by
+    // start() so a new session never carries a stale gap from a previous one forward (see
+    // start()). Written only inside `synchronized(lock)`, from pause()/resume()/start().
+    private val _gaps = MutableStateFlow<List<PauseGap>>(emptyList())
+    val gaps: StateFlow<List<PauseGap>> = _gaps.asStateFlow()
+
     // Guards state transitions and the fields below. Only `write()`-equivalent work (the
     // capture loop's read/write) happens outside this lock, on the dedicated capture thread.
     private val lock = Any()
@@ -90,6 +108,11 @@ class AudioCaptureEngine(
 
     @Volatile private var stopRequested = false
     @Volatile private var paused = false
+
+    // Wall-clock start of the pause currently in progress, set by pause() and consumed by
+    // resume() to close out a PauseGap. Only meaningful while `paused` is true; only ever
+    // written/read inside `synchronized(lock)`.
+    private var pauseStartMillis = 0L
 
     // Incremented under `lock` every time start() installs a new session. The capture thread's
     // own cleanup (captureLoop's `finally`) captures the generation it was started with and only
@@ -111,6 +134,22 @@ class AudioCaptureEngine(
      * after [stop] (see [RingBuffer.clear] -- capture is not considered stopped until the raw
      * PCM is unreachable through this method). */
     fun snapshot(durationMillis: Long): AudioSnapshot? = ringBuffer?.snapshot(durationMillis)
+
+    /** How much audio the ring buffer currently holds, in milliseconds, or `null` before the
+     * first [start] / after [stop]. Used by the foreground service's notification to show
+     * elapsed buffered duration (issue #3) -- not persisted anywhere, purely derived from the
+     * live buffer on demand. */
+    fun bufferedDurationMillis(): Long? {
+        val bufferedBytes = ringBuffer?.bufferedBytes() ?: return null
+        return (bufferedBytes * MILLIS_PER_SECOND) / config.bytesPerSecond
+    }
+
+    /** The current session's `AudioRecord.getAudioSessionId()`, or `null` when not
+     * Recording/Paused. Lets the foreground service match this engine's session against
+     * `AudioManager.AudioRecordingCallback`'s `AudioRecordingConfiguration` list to detect when
+     * *this* capture (as opposed to some unrelated app's) has been silenced by a higher-priority
+     * client. */
+    val audioSessionId: Int? get() = synchronized(lock) { audioRecord?.audioSessionId }
 
     /**
      * Starts a capture session: allocates the ring buffer, opens `AudioRecord`, and launches the
@@ -190,6 +229,7 @@ class AudioCaptureEngine(
             audioRecord = record
             stopRequested = false
             paused = false
+            _gaps.value = emptyList()
             generation += 1
             val myGeneration = generation
             _state.value = CaptureState.Recording
@@ -252,21 +292,26 @@ class AudioCaptureEngine(
     }
 
     /** Suspends writes into the ring buffer without closing `AudioRecord` (Module 2: phone
-     * call interruption). No-op unless currently [CaptureState.Recording]. */
+     * call interruption). No-op unless currently [CaptureState.Recording]. Records the wall-clock
+     * start of the gap; see [resume] for where it is closed out. */
     fun pause() {
         synchronized(lock) {
             if (_state.value is CaptureState.Recording) {
                 paused = true
+                pauseStartMillis = clock()
                 _state.value = CaptureState.Paused
             }
         }
     }
 
-    /** Resumes writes into the ring buffer. No-op unless currently [CaptureState.Paused]. */
+    /** Resumes writes into the ring buffer. No-op unless currently [CaptureState.Paused].
+     * Appends a [PauseGap] spanning [pauseStartMillis] to now onto [gaps] -- the wall-clock
+     * duration the export gap handler (Module 3) needs to inject the right amount of silence. */
     fun resume() {
         synchronized(lock) {
             if (_state.value is CaptureState.Paused) {
                 paused = false
+                _gaps.value = _gaps.value + PauseGap(pauseStartMillis, clock())
                 _state.value = CaptureState.Recording
             }
         }
@@ -324,6 +369,8 @@ class AudioCaptureEngine(
     }
 
     private companion object {
+        const val MILLIS_PER_SECOND = 1000L
+
         fun mapReadError(code: Int): CaptureErrorReason = when (code) {
             AudioRecord.ERROR_INVALID_OPERATION -> CaptureErrorReason.READ_INVALID_OPERATION
             AudioRecord.ERROR_BAD_VALUE -> CaptureErrorReason.READ_BAD_VALUE
