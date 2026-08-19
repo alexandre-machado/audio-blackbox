@@ -1,0 +1,20 @@
+# mARC team binding — Audio Blackbox (Android audio dashcam)
+
+[github]
+org = "alexandre-machado"
+repo = "audio-blackbox"
+project_number = 2   # https://github.com/users/alexandre-machado/projects/2
+
+[repo]
+workspace_dir = ".agents/artifacts"
+
+[stack]
+platform    = "android"
+language    = "kotlin"
+ui          = "jetpack-compose"
+build       = "gradle-kts"
+min_sdk     = 29
+target_sdk  = 36
+
+[validation]
+command = "./gradlew testDebugUnitTest lintDebug"
