@@ -4,6 +4,7 @@ import android.media.AudioRecord
 import java.util.Arrays
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -167,6 +168,29 @@ class AudioCaptureEngineTest {
             }
         }
     }
+
+    // ---- PR #23 round 2, @techlead adjudication: removed
+    // `a collector attached before start() observes every state transition...`.
+    // That test asserted a StateFlow collector observes *every* intermediate state
+    // (Idle -> Recording -> Error), but MutableStateFlow conflates by design -- it only
+    // guarantees the latest value, not delivery of every transition to a slow collector.
+    // Here the stubbed read() drove Idle -> Recording -> Error faster than the
+    // Dispatchers.Default collector got scheduled, so Recording was dropped and the test
+    // failed intermittently (reproduced by @sec 3/3, @rev 7/7, and CI). Making it pass would
+    // require faking a guarantee StateFlow doesn't provide (e.g. delay/yield/Thread.sleep
+    // tuning or an UnconfinedTestDispatcher), which proves nothing about production behavior.
+    // It was also vacuous even before that: it would have passed equally against the
+    // pre-fix RecorderService.kt, so it never actually covered the notification fix it was
+    // written for.
+    //
+    // The reactive notification wiring it was meant to guard lives in RecorderService, which
+    // extends android.app.Service and can't be instantiated in a plain JUnit test without
+    // Robolectric (a dependency this module deliberately avoids). It's covered instead by
+    // code review and the repo owner's physical-device pass, not by a unit test here.
+    // @rev separately confirmed RecorderService.refreshNotification() re-reads
+    // engine.state.value fresh at call time rather than trusting a flow-emitted parameter, so
+    // StateFlow conflation is harmless in production by construction -- do not re-add a
+    // collector-observes-every-transition test as a substitute for that Service-level check.
 
     // ---- stop() during the Error window joins the capture thread; no orphaned AudioRecord ----
 
@@ -375,5 +399,175 @@ class AudioCaptureEngineTest {
 
             engine.stop()
             verify(freshRecord).release()
+        }
+
+    // ---- issue #3: interruption state machine (Recording -> Paused -> Recording) records a
+    // wall-clock gap whose duration matches the simulated pause ----
+
+    @Test
+    fun `pause then resume on mic-taken-then-released records a gap matching the simulated pause duration`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+            // Deterministic fake clock (constructor-injection seam, no wall-clock sleep needed to
+            // assert on timing) standing in for the fake recording-callback source: a real
+            // AudioManager.AudioRecordingCallback would call pause()/resume() the same way this
+            // test does directly, just triggered by a system event (mic taken by a phone call)
+            // instead of a test thread.
+            val clockMillis = AtomicLong(1_000_000L)
+            val engine = AudioCaptureEngine(
+                config = fastConfig,
+                clock = { clockMillis.get() },
+                audioRecordFactory = { _, _ -> record },
+            )
+
+            engine.start()
+            awaitState(engine, description = "Recording before the mic is taken") { it is CaptureState.Recording }
+            assertEquals(0, engine.gaps.value.size)
+
+            engine.pause() // simulates AudioRecordingCallback observing isClientSilenced == true
+            awaitState(engine, description = "Paused while the mic is held by a higher-priority client") {
+                it is CaptureState.Paused
+            }
+
+            clockMillis.addAndGet(45_000L) // simulate a 45s phone call
+
+            engine.resume() // simulates AudioRecordingCallback observing isClientSilenced == false
+            awaitState(engine, description = "Recording after the mic is released") { it is CaptureState.Recording }
+
+            val gaps = engine.gaps.value
+            assertEquals(1, gaps.size)
+            val gap = gaps.single()
+            assertEquals(1_000_000L, gap.startTimestampMillis)
+            assertEquals(1_045_000L, gap.endTimestampMillis)
+            assertEquals(45_000L, gap.durationMillis)
+
+            engine.stop()
+        }
+
+    @Test
+    fun `multiple pause-resume cycles append one gap each, in order`() = withMinBufferSizeMocked {
+        val record = fakeAudioRecord()
+        whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+        val clockMillis = AtomicLong(0L)
+        val engine = AudioCaptureEngine(
+            config = fastConfig,
+            clock = { clockMillis.get() },
+            audioRecordFactory = { _, _ -> record },
+        )
+
+        engine.start()
+        awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+        engine.pause()
+        clockMillis.addAndGet(1_000L)
+        engine.resume()
+        awaitState(engine, description = "Recording after first gap") { it is CaptureState.Recording }
+
+        clockMillis.addAndGet(5_000L) // uninterrupted recording between the two calls
+        engine.pause()
+        clockMillis.addAndGet(2_000L)
+        engine.resume()
+        awaitState(engine, description = "Recording after second gap") { it is CaptureState.Recording }
+
+        val gaps = engine.gaps.value
+        assertEquals(2, gaps.size)
+        assertEquals(1_000L, gaps[0].durationMillis)
+        assertEquals(2_000L, gaps[1].durationMillis)
+
+        engine.stop()
+    }
+
+    @Test
+    fun `pause is a no-op outside Recording and resume is a no-op outside Paused`() = withMinBufferSizeMocked {
+        val record = fakeAudioRecord()
+        whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+        // Deterministic clock so the second, no-op pause() can be proven not to have moved the
+        // gap's recorded start forward (see @rev PR #23 review, finding 5: the previous version of
+        // this test only asserted gaps.value.size == 1, which a broken guard that let the second
+        // pause() silently overwrite pauseStartMillis would still have passed).
+        val clockMillis = AtomicLong(10_000L)
+        val engine = AudioCaptureEngine(
+            config = fastConfig,
+            clock = { clockMillis.get() },
+            audioRecordFactory = { _, _ -> record },
+        )
+
+        // Idle: neither call should do anything or throw.
+        engine.pause()
+        engine.resume()
+        assertEquals(CaptureState.Idle, engine.state.value)
+
+        engine.start()
+        awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+        // resume() while already Recording is a no-op.
+        engine.resume()
+        assertEquals(CaptureState.Recording, engine.state.value)
+        assertEquals(0, engine.gaps.value.size)
+
+        engine.pause() // gap start recorded at clock = 10_000
+        awaitState(engine, description = "Paused") { it is CaptureState.Paused }
+
+        // Advance the clock, then pause() again while already Paused: this must be a no-op and
+        // must NOT move pauseStartMillis forward to 20_000.
+        clockMillis.set(20_000L)
+        engine.pause()
+        assertEquals(CaptureState.Paused, engine.state.value)
+
+        clockMillis.set(30_000L)
+        engine.resume()
+        val gaps = engine.gaps.value
+        assertEquals(1, gaps.size)
+        val gap = gaps.single()
+        assertEquals(
+            "the no-op pause() at clock=20_000 must not have overwritten the original gap start",
+            10_000L,
+            gap.startTimestampMillis,
+        )
+        assertEquals(30_000L, gap.endTimestampMillis)
+        assertEquals(20_000L, gap.durationMillis)
+
+        engine.stop()
+    }
+
+    // ---- PR #23 review, @sec finding 3 / @rev finding 6: gaps is bounded by the retention window ----
+
+    @Test
+    fun `gaps that have scrolled out of the retention window are pruned as newer ones are appended`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+            val clockMillis = AtomicLong(0L)
+            // fastConfig.bufferDurationMinutes == 1, so the retention window is 60_000ms.
+            val engine = AudioCaptureEngine(
+                config = fastConfig,
+                clock = { clockMillis.get() },
+                audioRecordFactory = { _, _ -> record },
+            )
+
+            engine.start()
+            awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+            engine.pause() // gap #1 start = 0
+            clockMillis.set(1_000L)
+            engine.resume() // gap #1 = [0, 1_000]
+            awaitState(engine, description = "Recording after first gap") { it is CaptureState.Recording }
+            assertEquals(1, engine.gaps.value.size)
+
+            // Advance well past the 60s retention window before the next pause/resume cycle, so
+            // gap #1's end (1_000) has scrolled entirely out of the ring buffer's retained audio
+            // by the time gap #2 is appended.
+            clockMillis.set(121_000L)
+            engine.pause() // gap #2 start = 121_000
+            clockMillis.set(122_000L)
+            engine.resume() // gap #2 = [121_000, 122_000]
+            awaitState(engine, description = "Recording after second gap") { it is CaptureState.Recording }
+
+            val gaps = engine.gaps.value
+            assertEquals("gap #1 should have been pruned once it aged out of the retention window", 1, gaps.size)
+            assertEquals(121_000L, gaps.single().startTimestampMillis)
+
+            engine.stop()
         }
 }

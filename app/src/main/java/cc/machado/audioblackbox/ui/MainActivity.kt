@@ -37,7 +37,9 @@ import cc.machado.audioblackbox.permissions.PermissionResolver
 import cc.machado.audioblackbox.permissions.PermissionResolverInput
 import cc.machado.audioblackbox.permissions.PermissionSystem
 import cc.machado.audioblackbox.permissions.SharedPrefsOnboardingPreferences
+import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.ui.onboarding.OnboardingScreen
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
                             onRequestBatteryExemption = {
                                 batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this))
                             },
+                            onStartEngine = { startRecordingEngine() },
                         )
                     } else {
                         OnboardingScreen(
@@ -164,6 +167,25 @@ class MainActivity : ComponentActivity() {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", packageName, null)
         }
+
+    /**
+     * Starts [RecorderService], the source of truth for whether capture is actually running.
+     * Deliberately re-queries [PermissionSystem.recordAudioGranted] here rather than trusting
+     * [recordAudioGrantedState] (a Composable-recomposition snapshot that can go stale between
+     * frames): the user can revoke RECORD_AUDIO from system Settings while this Activity is
+     * alive, and recording must never be able to start from that stale "granted" value (see
+     * issue #3 PR description / `@sec`'s PR #20 review finding). [RecorderService.handleStart]
+     * re-checks the same permission again as defense in depth, but this is the check that
+     * decides whether the user sees a route back into onboarding instead of a silently-ignored
+     * tap.
+     */
+    private fun startRecordingEngine() {
+        if (permissionSystem.recordAudioGranted()) {
+            ContextCompat.startForegroundService(this, RecorderService.startIntent(this))
+        } else {
+            refreshStep()
+        }
+    }
 }
 
 @Composable
@@ -172,13 +194,14 @@ fun MainScreen(
     recordAudioGranted: Boolean = true,
     isIgnoringBatteryOptimizations: Boolean = true,
     onRequestBatteryExemption: () -> Unit = {},
+    onStartEngine: () -> Unit = {},
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(text = stringResource(id = R.string.app_name))
                 Column(modifier = Modifier.padding(top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Button(onClick = {}, enabled = recordAudioGranted) {
+                    Button(onClick = onStartEngine, enabled = recordAudioGranted) {
                         Text(text = stringResource(id = R.string.main_start_engine))
                     }
                     if (!recordAudioGranted) {
