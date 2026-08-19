@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "cc.machado.audioblackbox"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "cc.machado.audioblackbox"
@@ -34,6 +34,13 @@ android {
 
     buildFeatures {
         compose = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        // Kept in sync with compileOptions.sourceCompatibility/targetCompatibility above.
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
