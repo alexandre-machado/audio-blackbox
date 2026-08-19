@@ -198,17 +198,34 @@ one connected device, and launches its main activity via `monkey -p
 <applicationId> -c android.intent.category.LAUNCHER`. It fails loudly if:
 - `adb` can't be found (checks `$ADB_BIN`, then `$PATH`, then
   `sdk.dir` in `local.properties`),
-- no JDK can be found for `gradlew` (checks `$JAVA_HOME`, then `$PATH`),
-- no device is in `device` state (distinguishing `unauthorized` and
-  `offline` with an actionable message for each),
-- genuinely different devices are attached at once (set `ANDROID_SERIAL` to
-  disambiguate) — a single phone listed twice under two transports (live
-  `ip:port` + mDNS service name) is detected and collapsed to one target
-  automatically, it is not treated as "multiple devices",
-- `gradlew` or `app/build.gradle(.kts)` aren't present yet,
+- `$JAVA_HOME` is set but `$JAVA_HOME/bin/java` doesn't exist or isn't
+  executable, or neither `$JAVA_HOME` nor `java` on `$PATH` is available,
+- no device ends up in `device` state,
 - the `applicationId` parsed out of the build file doesn't match the
   Android package-name charset (defense in depth before it's passed to
   `adb shell`, since `adb shell` re-joins argv for the remote shell).
+
+Device resolution handles the messy reality of wireless debugging rather
+than aborting on it:
+- A stale `offline`/`unauthorized`/`no permissions (...)` entry (left
+  behind by, say, a phone reboot that changed the connect port, with the
+  old transport still listed) does **not** abort the run as long as at
+  least one device is in `device` state — it's skipped with a `WARNING` on
+  stderr naming the stale transport and its state. Only if **no** device
+  ends up ready does the run fail, and then the error names the actual
+  blocking state per transport (`unauthorized` → accept the prompt on the
+  phone; `offline` → reconnect) instead of a generic message.
+- Among the ready (`device`-state) transports, physical identity is
+  resolved by hardware serial (`adb shell getprop ro.serialno`, falling
+  back to `ro.boot.serialno`), not by `product:`/`model:`/`device:` fields
+  — two different phones of the same model report identical
+  product/model/device strings, so only the actual serial can tell them
+  apart. Transports that resolve to the same serial (e.g. a phone's live
+  `ip:port` connection and its mDNS service name, both listed at once) are
+  collapsed to one target; transports with genuinely different serials
+  abort with "Multiple distinct devices found" and ask you to set
+  `ANDROID_SERIAL`. If a serial can't be read at all, the run aborts
+  rather than guessing it matches another entry.
 
 **[verified, 2026-08-19, first real run against physical hardware]** Ran
 end-to-end against the paired S25 with a clean shell (no `adb`/`java` on

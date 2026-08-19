@@ -34,7 +34,10 @@ log "Using adb: $ADB_BIN"
 # --- Locate a JDK for gradlew -------------------------------------------
 # gradlew needs a JVM on PATH or JAVA_HOME set; neither is guaranteed in a
 # fresh shell even when the SDK/JDK were installed per the docs.
-if [[ -z "${JAVA_HOME:-}" ]] && ! command -v java >/dev/null 2>&1; then
+if [[ -n "${JAVA_HOME:-}" ]]; then
+  [[ -x "$JAVA_HOME/bin/java" ]] || fail \
+    "JAVA_HOME=$JAVA_HOME is set but $JAVA_HOME/bin/java is missing or not executable."
+elif ! command -v java >/dev/null 2>&1; then
   fail "No Java runtime found (JAVA_HOME unset and 'java' not on \$PATH). Install JDK 17 per docs/development/running-on-device.md and export JAVA_HOME, or add it to \$PATH."
 fi
 
@@ -46,10 +49,11 @@ fi
 #
 # A single physical device using wireless debugging can legitimately be
 # listed TWICE: once by its live ip:port transport and once by its mDNS
-# service name (adb-<serial>-xxxx._adb-tls-connect._tcp). Both entries
-# report identical product/model/device fields for the same phone, just
-# different transport_ids. We must collapse that case to one target
-# without ever silently guessing between two genuinely different phones.
+# service name (adb-<serial>-xxxx._adb-tls-connect._tcp). It can also leave
+# behind a STALE offline/unauthorized entry from a previous session after a
+# reboot or Wi-Fi change. Neither case should abort a run that also has a
+# perfectly usable device listed -- only fail hard once no usable device
+# remains, or once we can prove two genuinely different phones are present.
 mapfile -t DEVICE_LINES < <("$ADB_BIN" devices -l | tail -n +2 | sed '/^$/d')
 
 if [[ "${#DEVICE_LINES[@]}" -eq 0 ]]; then
@@ -57,25 +61,45 @@ if [[ "${#DEVICE_LINES[@]}" -eq 0 ]]; then
 fi
 
 READY_SERIALS=()
-READY_FINGERPRINTS=()
+BLOCKED_DESCRIPTIONS=()
 for line in "${DEVICE_LINES[@]}"; do
   serial="$(awk '{print $1}' <<<"$line")"
-  state="$(awk '{print $2}' <<<"$line")"
-  case "$state" in
+  # "rest" is everything after the serial column, unsplit -- states like
+  # "no permissions (missing udev rules? ...)" are multiple words, and
+  # splitting on whitespace and keeping only the first token (the old bug)
+  # truncated that down to just "no", losing the actionable detail.
+  rest="$(sed -E 's/^[^[:space:]]+[[:space:]]*//' <<<"$line")"
+  state_word="$(awk '{print $1}' <<<"$rest")"
+  case "$state_word" in
     device)
-      # Fingerprint = product:/model:/device: fields (everything after
-      # state, minus transport_id which differs per transport of the same
-      # phone). Two lines with the same fingerprint are the same physical
-      # device seen over two transports.
-      fingerprint="$(sed -E 's/^[^ ]+[[:space:]]+[^ ]+[[:space:]]*//; s/transport_id:[0-9]+//' <<<"$line" | tr -s '[:space:]')"
       READY_SERIALS+=("$serial")
-      READY_FINGERPRINTS+=("$fingerprint")
       ;;
-    unauthorized) fail "Device $serial is unauthorized. Check the phone screen for the 'Allow debugging?' / pairing dialog and accept it, then re-run." ;;
-    offline) fail "Device $serial is offline. Try: adb disconnect $serial && adb connect <ip>:<port> (get the current port from Wireless debugging settings)." ;;
-    *) fail "Device $serial is in unexpected state '$state'." ;;
+    unauthorized)
+      BLOCKED_DESCRIPTIONS+=("$serial: unauthorized -- check the phone screen for the 'Allow debugging?' / pairing dialog and accept it, then re-run")
+      ;;
+    offline)
+      BLOCKED_DESCRIPTIONS+=("$serial: offline -- try: adb disconnect $serial && adb connect <ip>:<port> (get the current port from Wireless debugging settings)")
+      ;;
+    *)
+      # Covers "no permissions (...)" and any other unexpected state; keep
+      # the full remainder of the line instead of a truncated first word.
+      BLOCKED_DESCRIPTIONS+=("$serial: $rest")
+      ;;
   esac
 done
+
+if [[ "${#READY_SERIALS[@]}" -eq 0 ]]; then
+  for desc in "${BLOCKED_DESCRIPTIONS[@]}"; do
+    printf '[run-on-device] ERROR: %s\n' "$desc" >&2
+  done
+  fail "No device in 'device' state. See the per-device detail above."
+fi
+
+if [[ "${#BLOCKED_DESCRIPTIONS[@]}" -gt 0 ]]; then
+  for desc in "${BLOCKED_DESCRIPTIONS[@]}"; do
+    printf '[run-on-device] WARNING: skipping stale/unusable entry -- %s\n' "$desc" >&2
+  done
+fi
 
 if [[ -n "${ANDROID_SERIAL:-}" ]]; then
   TARGET="$ANDROID_SERIAL"
@@ -87,22 +111,39 @@ if [[ -n "${ANDROID_SERIAL:-}" ]]; then
 elif [[ "${#READY_SERIALS[@]}" -eq 1 ]]; then
   TARGET="${READY_SERIALS[0]}"
 else
-  # More than one ready serial. Check whether they are all the same
-  # physical device (identical fingerprint) or genuinely different phones.
-  SEEN_FINGERPRINTS=()
-  distinct_fingerprints=0
-  for fp in "${READY_FINGERPRINTS[@]}"; do
+  # More than one ready serial. Identify the underlying physical device by
+  # its actual hardware serial (ro.serialno, falling back to
+  # ro.boot.serialno), not by model-level product/model/device fields --
+  # two genuinely different phones of the same model produce identical
+  # strings there and would otherwise get silently collapsed onto one
+  # target.
+  DEVICE_SERIALS=()
+  for s in "${READY_SERIALS[@]}"; do
+    devserial="$("$ADB_BIN" -s "$s" shell getprop ro.serialno 2>/dev/null | tr -d '\r\n')"
+    if [[ -z "$devserial" ]]; then
+      devserial="$("$ADB_BIN" -s "$s" shell getprop ro.boot.serialno 2>/dev/null | tr -d '\r\n')"
+    fi
+    # Fail closed: an empty/unreadable serial must never be treated as
+    # "matches everything else" -- a blank-equals-blank comparison is
+    # exactly the bug this replaces.
+    [[ -n "$devserial" ]] || fail "Could not read a hardware serial (ro.serialno / ro.boot.serialno) for transport $s; refusing to guess whether it is the same physical device as the others listed (${READY_SERIALS[*]})."
+    DEVICE_SERIALS+=("$devserial")
+  done
+
+  SEEN_DEVICE_SERIALS=()
+  distinct_devices=0
+  for ds in "${DEVICE_SERIALS[@]}"; do
     is_new=1
-    for seen in "${SEEN_FINGERPRINTS[@]:-}"; do
-      [[ "$fp" == "$seen" ]] && is_new=0 && break
+    for seen in "${SEEN_DEVICE_SERIALS[@]:-}"; do
+      [[ "$ds" == "$seen" ]] && is_new=0 && break
     done
     if [[ "$is_new" -eq 1 ]]; then
-      SEEN_FINGERPRINTS+=("$fp")
-      distinct_fingerprints=$((distinct_fingerprints + 1))
+      SEEN_DEVICE_SERIALS+=("$ds")
+      distinct_devices=$((distinct_devices + 1))
     fi
   done
 
-  if [[ "$distinct_fingerprints" -gt 1 ]]; then
+  if [[ "$distinct_devices" -gt 1 ]]; then
     fail "Multiple distinct devices found (${READY_SERIALS[*]}). Set ANDROID_SERIAL to pick one."
   fi
 
@@ -122,6 +163,11 @@ else
 fi
 
 log "Target device: $TARGET"
+
+if [[ -n "${RUN_ON_DEVICE_DRY_RUN:-}" ]]; then
+  log "Dry run (RUN_ON_DEVICE_DRY_RUN set): stopping before build/install/launch."
+  exit 0
+fi
 
 # --- Build + install via Gradle ----------------------------------------
 [[ -x "$REPO_ROOT/gradlew" ]] || fail "gradlew not found at repo root. Is the Android project skeleton (#8) present on this branch?"
