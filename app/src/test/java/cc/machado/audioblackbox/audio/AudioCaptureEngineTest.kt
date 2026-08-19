@@ -2,14 +2,9 @@ package cc.machado.audioblackbox.audio
 
 import android.media.AudioRecord
 import java.util.Arrays
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -174,46 +169,28 @@ class AudioCaptureEngineTest {
         }
     }
 
-    // ---- PR #23 review, @sec finding 1 / @rev finding 2: a StateFlow collector observes every
-    // async transition on its own, with no explicit refresh call from the caller. This is the
-    // engine-level contract RecorderService's fix (a serviceScope collector on engine.state,
-    // instead of only refreshing from two explicit call sites) depends on; RecorderService itself
-    // -- and therefore the NotificationManager glue on top of it -- extends android.app.Service
-    // and cannot be instantiated in a plain JUnit test without Robolectric (this module's
-    // convention deliberately avoids it), so that top-level wiring is not unit-testable here. ----
-
-    @Test
-    fun `a collector attached before start() observes every state transition including the async read-error one, with no explicit refresh`() =
-        withMinBufferSizeMocked {
-            val record = fakeAudioRecord()
-            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(AudioRecord.ERROR_DEAD_OBJECT)
-            val engine = AudioCaptureEngine(config = fastConfig, audioRecordFactory = { _, _ -> record })
-
-            val observedStates = Collections.synchronizedList(mutableListOf<CaptureState>())
-            val collectorScope = CoroutineScope(Dispatchers.Default)
-            collectorScope.launch {
-                engine.state.collect { observedStates.add(it) }
-            }
-            try {
-                // Nothing below ever calls refreshNotification()-equivalent logic or polls
-                // engine.state.value directly to "discover" the error -- the assertion is purely on
-                // what the collector captured on its own, mirroring how RecorderService's
-                // serviceScope collector is expected to behave against the exact same async
-                // read-error path (see AudioCaptureEngine.captureLoop's error branch).
-                engine.start()
-                val deadline = System.currentTimeMillis() + 2_000
-                while (System.currentTimeMillis() < deadline && observedStates.none { it is CaptureState.Error }) {
-                    Thread.sleep(1)
-                }
-                assertTrue(
-                    "collector should have observed Idle -> Recording -> Error on its own",
-                    observedStates.contains(CaptureState.Recording) && observedStates.any { it is CaptureState.Error },
-                )
-            } finally {
-                collectorScope.cancel()
-                engine.stop()
-            }
-        }
+    // ---- PR #23 round 2, @techlead adjudication: removed
+    // `a collector attached before start() observes every state transition...`.
+    // That test asserted a StateFlow collector observes *every* intermediate state
+    // (Idle -> Recording -> Error), but MutableStateFlow conflates by design -- it only
+    // guarantees the latest value, not delivery of every transition to a slow collector.
+    // Here the stubbed read() drove Idle -> Recording -> Error faster than the
+    // Dispatchers.Default collector got scheduled, so Recording was dropped and the test
+    // failed intermittently (reproduced by @sec 3/3, @rev 7/7, and CI). Making it pass would
+    // require faking a guarantee StateFlow doesn't provide (e.g. delay/yield/Thread.sleep
+    // tuning or an UnconfinedTestDispatcher), which proves nothing about production behavior.
+    // It was also vacuous even before that: it would have passed equally against the
+    // pre-fix RecorderService.kt, so it never actually covered the notification fix it was
+    // written for.
+    //
+    // The reactive notification wiring it was meant to guard lives in RecorderService, which
+    // extends android.app.Service and can't be instantiated in a plain JUnit test without
+    // Robolectric (a dependency this module deliberately avoids). It's covered instead by
+    // code review and the repo owner's physical-device pass, not by a unit test here.
+    // @rev separately confirmed RecorderService.refreshNotification() re-reads
+    // engine.state.value fresh at call time rather than trusting a flow-emitted parameter, so
+    // StateFlow conflation is harmless in production by construction -- do not re-add a
+    // collector-observes-every-transition test as a substitute for that Service-level check.
 
     // ---- stop() during the Error window joins the capture thread; no orphaned AudioRecord ----
 
