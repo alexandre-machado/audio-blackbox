@@ -5,6 +5,10 @@ plugins {
 
 android {
     namespace = "cc.machado.audioblackbox"
+    // compileSdk major must match the minor platform package installed in CI
+    // (.github/workflows/ci.yml, "Install SDK platform and build-tools" step). AGP resolves
+    // the bare major here to whichever minor is installed on the runner; there is no bare
+    // "android-37" SDK package. Bump both together. (see PR #8 review comment)
     compileSdk = 37
 
     defaultConfig {

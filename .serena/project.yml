@@ -35,7 +35,12 @@ project_name: "audio-blackbox"
 # When using multiple language servers, the first language server that supports a given file will be used for that file.
 # The first language server is the default language and the respective language server will be used as a fallback.
 # Note that when using the JetBrains backend, language servers are not used and this list is correspondingly ignored.
-language_servers: []
+# Verified 2026-08-19 against https://oraios.github.io/serena/01-about/020_programming-languages.html:
+# Serena does support "kotlin" (backed by the pre-alpha official Kotlin LS, github.com/Kotlin/kotlin-lsp;
+# upstream docs warn "some issues may appear"). main now has a real Kotlin/Android source tree, so we
+# enable it here despite the pre-alpha caveat — no symbol support at all is worse than a flaky one.
+language_servers:
+- kotlin
 
 # the encoding used by text files in the project
 # For a list of possible encodings, see https://docs.python.org/3.11/library/codecs.html#standard-encodings

@@ -25,6 +25,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
+      # The installed platform minor here must satisfy app/build.gradle.kts' compileSdk major
+      # (currently 37); Google versions platforms as e.g. 37.0/37.1 and there is no bare
+      # "android-37" package. When compileSdk's major bumps, bump the minor installed here too.
       - name: Install SDK platform and build-tools
         run: sdkmanager "platforms;android-37.1" "build-tools;37.0.0"
 

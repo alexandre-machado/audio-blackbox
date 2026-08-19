@@ -176,11 +176,10 @@ one connected device, and launches its main activity via `monkey -p
 - more than one device is attached (set `ANDROID_SERIAL` to disambiguate),
 - `gradlew` or `app/build.gradle(.kts)` aren't present yet.
 
-The last of those is currently the actual blocker end-to-end: the Gradle
-project skeleton (issue #1 / PR #8) isn't merged into `main` yet, so
-`./gradlew installDebug` has nothing to build. The no-device failure path
-**is** verified [verified] — running the script with no phone attached
-produces:
+The Gradle project skeleton (issue #1 / PR #8) is merged into `main`, so
+`gradlew` and `app/build.gradle.kts` are present and `./gradlew installDebug`
+has a real app to build and install. The no-device failure path **is**
+verified [verified] — running the script with no phone attached produces:
 
 ```
 [run-on-device] Using adb: /home/<you>/android-sdk-tools/sdk/platform-tools/adb
