@@ -88,6 +88,19 @@ sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
   "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 ```
 
+**[verified, 2026-08-19, first real build]** The app's `compileSdk` is `37`,
+one ahead of what step above installs. `./gradlew assembleDebug` fails at
+resource processing until you also install the SDK 37 platform and matching
+build-tools. Note the package IDs are `platforms;android-37.0` and
+`build-tools;37.0.0`, not the plain `platforms;android-37` you'd guess by
+analogy with the SDK 36 packages — `sdkmanager --list` is the source of
+truth if a future `compileSdk` bump 404s again:
+
+```bash
+sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
+  "platforms;android-37.0" "build-tools;37.0.0"
+```
+
 Add the `export` lines (with your real paths) to `~/.bashrc`/`~/.zshrc` so
 every shell picks up `adb`, `java`, etc.
 
@@ -140,26 +153,39 @@ adb connect <ip>:<connect_port>    # connect_port shown on the main
 adb devices                        # should list the phone as "device"
 ```
 
-**This step could not be completed or verified in this session** — it
-requires the developer to read the pairing code and port off the phone
-screen and type them in. Everything up to and including `adb devices`
-showing the S25 as `device` is the actual acceptance bar for this issue and
-is outstanding until the developer runs step 2 and 3.
+**[verified, 2026-08-19]** Completed once by the developer (one-time
+phone-side taps: enable Developer options, toggle Wireless debugging, pair
+with the 6-digit code). After that, `adb devices` lists the S25 as `device`
+and stays that way across the whole session — this is the actual acceptance
+bar for this issue and is now met.
+
+`adb devices -l` legitimately lists the **same physical phone twice** once
+paired: once by its live `ip:port` transport, once by its mDNS service name
+(`adb-<serial>-xxxx._adb-tls-connect._tcp`). Both lines report the same
+`product:`/`model:`/`device:` fields, just different `transport_id`s. This
+is normal — don't treat it as "two devices attached".
 
 ## Per-session reconnect
 
-Wireless debugging's connect port changes after the phone reboots or
-Wi-Fi reconnects (this is documented Android behavior, [unverified] on this
-specific device since no session has been established yet). Each new
-session:
+**[verified, 2026-08-19]** Wireless debugging's connect port changes after
+the phone reboots or reconnects to Wi-Fi. Pairing itself is persistent
+across reboots — you do **not** need to read a new pairing code off the
+phone each session. What you need is the current connect port, and mDNS
+discovery gets it without touching the phone at all:
 
-1. On the phone: **Developer options → Wireless debugging** (leave the
-   toggle on; if it's already on you'll just see the current IP:port).
-2. `adb connect <ip>:<port>` with the current port shown on that screen.
-   Pairing (`adb pair`) is a one-time step per network — you do not need to
-   re-pair unless you tapped "Forget" or "Revoke adb debugging
-   authorizations".
-3. `adb devices` to confirm `device` state (not `unauthorized`/`offline`).
+```bash
+adb mdns services
+# List of discovered mdns services
+# adb-<serial>-xxxx  _adb-tls-connect._tcp  <phone-ip>:<current-port>
+adb connect <phone-ip>:<current-port>
+adb devices          # confirm `device` state
+```
+
+If `adb mdns services` prints nothing, mDNS discovery itself has dropped
+(e.g. Wireless debugging got toggled off, or the phone left the LAN); only
+then do you need to go to the phone's **Developer options → Wireless
+debugging** screen and read the IP:port directly, or re-pair from scratch
+if "Forget" / "Revoke adb debugging authorizations" was tapped.
 
 ## Running the app
 
@@ -170,11 +196,76 @@ session:
 This builds the debug APK via `./gradlew installDebug`, installs it on the
 one connected device, and launches its main activity via `monkey -p
 <applicationId> -c android.intent.category.LAUNCHER`. It fails loudly if:
-- `adb` can't be found,
-- no device is in `device` state (distinguishing `unauthorized` and
-  `offline` with an actionable message for each),
-- more than one device is attached (set `ANDROID_SERIAL` to disambiguate),
-- `gradlew` or `app/build.gradle(.kts)` aren't present yet.
+- `adb` can't be found (checks `$ADB_BIN`, then `$PATH`, then
+  `sdk.dir` in `local.properties`),
+- `$JAVA_HOME` is set but `$JAVA_HOME/bin/java` doesn't exist or isn't
+  executable, or neither `$JAVA_HOME` nor `java` on `$PATH` is available,
+- no device ends up in `device` state,
+- the `applicationId` parsed out of the build file doesn't match the
+  Android package-name charset (defense in depth before it's passed to
+  `adb shell`, since `adb shell` re-joins argv for the remote shell).
+
+Device resolution handles the messy reality of wireless debugging rather
+than aborting on it:
+- A stale `offline`/`unauthorized`/`no permissions (...)` entry (left
+  behind by, say, a phone reboot that changed the connect port, with the
+  old transport still listed) does **not** abort the run as long as at
+  least one device is in `device` state — it's skipped with a `WARNING` on
+  stderr naming the stale transport and its state. Only if **no** device
+  ends up ready does the run fail, and then the error names the actual
+  blocking state per transport (`unauthorized` → accept the prompt on the
+  phone; `offline` → reconnect) instead of a generic message.
+- Among the ready (`device`-state) transports, physical identity is
+  resolved by hardware serial (`adb shell getprop ro.serialno`, falling
+  back to `ro.boot.serialno`), not by `product:`/`model:`/`device:` fields
+  — two different phones of the same model report identical
+  product/model/device strings, so only the actual serial can tell them
+  apart. Transports that resolve to the same serial (e.g. a phone's live
+  `ip:port` connection and its mDNS service name, both listed at once) are
+  collapsed to one target; transports with genuinely different serials
+  abort with "Multiple distinct devices found" and ask you to set
+  `ANDROID_SERIAL`. If a serial can't be read at all -- or reads back as
+  empty/whitespace-only, or contains characters outside the expected
+  serial charset (letters, digits, `-`, `_`, `.`) -- the run aborts rather
+  than guessing it matches another entry.
+
+### Dry-running device resolution without a phone
+
+Set `RUN_ON_DEVICE_DRY_RUN=1` and the script stops right after picking a
+target device, before the build/install/launch step:
+
+```bash
+RUN_ON_DEVICE_DRY_RUN=1 ./scripts/run-on-device.sh
+```
+
+It exits 0 in this mode but prints an explicit `STOPPED EARLY` line on
+stderr saying nothing was built, installed, or launched -- a dry run can
+never be mistaken for a completed deploy. This exists so the device-
+selection logic (stale-transport handling, same-device-vs-different-device
+disambiguation) can be exercised against a stub `adb` without a paired
+phone; it runs after all safety/validation checks, so it cannot be used to
+skip any of them.
+
+**[verified, 2026-08-19, first real run against physical hardware]** Ran
+end-to-end against the paired S25 with a clean shell (no `adb`/`java` on
+`$PATH`, relying purely on `local.properties`/`$JAVA_HOME` discovery):
+
+```
+[run-on-device] Using adb: /home/<you>/android-sdk-tools/sdk/platform-tools/adb
+[run-on-device] Note: device listed under multiple transports (<ip>:<port> adb-<serial>._adb-tls-connect._tcp); using <ip>:<port>.
+[run-on-device] Target device: <ip>:<port>
+[run-on-device] Building and installing debug APK (./gradlew installDebug)...
+...
+Installed on 1 device.
+BUILD SUCCESSFUL
+[run-on-device] Launching cc.machado.audioblackbox on <ip>:<port>...
+[run-on-device] Done. cc.machado.audioblackbox is installed and launched on <ip>:<port>.
+```
+
+Confirmed the app was actually running (not just "launched" per monkey's
+exit code) via `adb -s <serial> shell pidof cc.machado.audioblackbox`
+returning a live PID, and a `logcat -d --pid=<pid>` slice showing
+`MainActivity` composing and drawing its first frame.
 
 The Gradle project skeleton (issue #1 / PR #8) is merged into `main`, so
 `gradlew` and `app/build.gradle.kts` are present and `./gradlew installDebug`
