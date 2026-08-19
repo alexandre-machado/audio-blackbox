@@ -37,6 +37,9 @@ Kotlin · Jetpack Compose · Material 3 (stable 1.4.0) · Gradle Kotlin DSL
 
 The full feature specification lives in [`docs/`](docs/README.md), one document per module.
 
+For running the app on a physical device, see
+[Running on a physical device from WSL](docs/development/running-on-device.md).
+
 ## Recording laws
 
 Recording conversations may require the consent of the participants depending on your
