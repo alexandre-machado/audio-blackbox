@@ -50,6 +50,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var batteryOptimizationLauncher: ActivityResultLauncher<Intent>
 
     private var stepState by mutableStateOf(OnboardingStep.DONE)
+    private var recordAudioGrantedState by mutableStateOf(false)
+    private var isIgnoringBatteryOptimizationsState by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,7 +82,11 @@ class MainActivity : ComponentActivity() {
                     if (stepState == OnboardingStep.DONE) {
                         MainScreen(
                             modifier = Modifier.padding(innerPadding),
-                            recordAudioGranted = permissionSystem.recordAudioGranted(),
+                            recordAudioGranted = recordAudioGrantedState,
+                            isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizationsState,
+                            onRequestBatteryExemption = {
+                                batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this))
+                            },
                         )
                     } else {
                         OnboardingScreen(
@@ -124,9 +130,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshStep() {
+        // Queried once per refresh and kept in observable state (rather than re-read directly
+        // inside the Composable) so the main screen recomposes -- e.g. the battery-optimization
+        // warning disappears -- even on a resume where stepState itself doesn't change (already
+        // DONE before and after). Re-querying the live system state here, not the persisted
+        // "skipped" flag, is what lets a later exemption granted through system Settings (i.e.
+        // never routed back through onboarding) still clear the warning.
+        val recordAudioGranted = permissionSystem.recordAudioGranted()
+        val isIgnoringBatteryOptimizations = permissionSystem.isIgnoringBatteryOptimizations()
+        recordAudioGrantedState = recordAudioGranted
+        isIgnoringBatteryOptimizationsState = isIgnoringBatteryOptimizations
+
         val input = PermissionResolverInput(
             recordAudioStatus = PermissionResolver.resolvePermissionStatus(
-                granted = permissionSystem.recordAudioGranted(),
+                granted = recordAudioGranted,
                 shouldShowRationale = permissionSystem.shouldShowRecordAudioRationale(),
                 hasRequestedBefore = preferences.hasRequestedRecordAudio,
             ),
@@ -136,7 +153,7 @@ class MainActivity : ComponentActivity() {
                 hasRequestedBefore = preferences.hasRequestedPostNotifications,
             ),
             apiLevel = permissionSystem.apiLevel,
-            isIgnoringBatteryOptimizations = permissionSystem.isIgnoringBatteryOptimizations(),
+            isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations,
             hasSeenLegalNotice = preferences.hasSeenLegalNotice,
             hasSkippedBatteryOptimization = preferences.hasSkippedBatteryOptimization,
         )
@@ -150,7 +167,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(modifier: Modifier = Modifier, recordAudioGranted: Boolean = true) {
+fun MainScreen(
+    modifier: Modifier = Modifier,
+    recordAudioGranted: Boolean = true,
+    isIgnoringBatteryOptimizations: Boolean = true,
+    onRequestBatteryExemption: () -> Unit = {},
+) {
     Surface(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -165,6 +187,24 @@ fun MainScreen(modifier: Modifier = Modifier, recordAudioGranted: Boolean = true
                         }
                     }
                 }
+                // Visible, persistent warning for a user who skipped the battery-optimization
+                // exemption (the app must stay usable, per issue #4, but the risk of the OS
+                // killing background recording must stay visible). Gated on the live
+                // PowerManager state, not the stored "skipped" flag, so it disappears on its
+                // own if the exemption is later granted from system Settings.
+                if (!isIgnoringBatteryOptimizations) {
+                    Column(
+                        modifier = Modifier.padding(top = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(text = stringResource(id = R.string.onboarding_battery_warning))
+                        Column(modifier = Modifier.padding(top = 8.dp)) {
+                            Button(onClick = onRequestBatteryExemption) {
+                                Text(text = stringResource(id = R.string.onboarding_battery_grant))
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -175,5 +215,13 @@ fun MainScreen(modifier: Modifier = Modifier, recordAudioGranted: Boolean = true
 fun MainScreenPreview() {
     MaterialTheme {
         MainScreen()
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MainScreenBatteryWarningPreview() {
+    MaterialTheme {
+        MainScreen(isIgnoringBatteryOptimizations = false)
     }
 }
