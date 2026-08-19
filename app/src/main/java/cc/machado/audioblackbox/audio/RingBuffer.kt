@@ -48,6 +48,16 @@ data class AudioSnapshot(
  * torn reads: a [snapshot] never observes a byte range or marker that [write] is mid-copying.
  * Because audio chunks are small (typically tens of milliseconds of PCM) and reads are
  * infrequent relative to writes, contention on this lock is negligible in practice.
+ *
+ * One caveat, called out explicitly rather than assumed away: [snapshot] holds this lock across
+ * a full `System.arraycopy` of up to [capacityBytes], which blocks the writer for that duration.
+ * At the default 16 kHz/mono config (~57.6 MB / 30 min) this is a copy well under
+ * [AudioCaptureEngine]'s internal `AudioRecord` headroom (`minBufferSize * 3`) on typical mobile
+ * memory bandwidth, so it is not expected to drop frames in practice. At larger configs (e.g.
+ * 44.1 kHz stereo, ~317 MB) the same reasoning is less confident: this has not been measured
+ * against real hardware/GC pressure, and a lock redesign to avoid holding it across the full
+ * copy was deliberately not attempted here without that measurement (see PR #20 review, finding
+ * 5) -- track as a follow-up if that config sees real use.
  */
 class RingBuffer(
     val capacityBytes: Int,
@@ -77,6 +87,26 @@ class RingBuffer(
 
     /** Bytes currently held in the buffer (<= [capacityBytes]). */
     fun bufferedBytes(): Long = synchronized(lock) { minOf(totalWritten, capacityBytes.toLong()) }
+
+    /**
+     * Zeroes the backing array and resets the buffer to empty, without reallocating (the
+     * no-allocation-after-construction guarantee still holds -- this is `Arrays.fill` plus
+     * counter resets, no new arrays). Also resets the marker ring so no stale timing data
+     * survives. After this call, [snapshot] returns an empty [AudioSnapshot] until the next
+     * [write]. Intended for [AudioCaptureEngine.stop]: "stop means stop" is a product guarantee
+     * here, not just hygiene -- raw mic PCM must not stay resident and queryable once capture
+     * has ended.
+     */
+    fun clear() {
+        synchronized(lock) {
+            java.util.Arrays.fill(data, 0)
+            java.util.Arrays.fill(markerOffsets, 0)
+            java.util.Arrays.fill(markerTimestamps, 0)
+            totalWritten = 0L
+            markerCount = 0
+            markerNextSlot = 0
+        }
+    }
 
     /**
      * Copies [length] bytes from [source] starting at [offset] into the buffer, overwriting the

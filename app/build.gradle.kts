@@ -62,6 +62,11 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // mockito-core 5+ ships the inline mock maker by default, so final Android framework
+    // classes (AudioRecord) and its static methods (getMinBufferSize) are mockable without
+    // Robolectric -- used by AudioCaptureEngineTest's state-machine tests (see PR #20 review).
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.kotlin)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -77,12 +77,39 @@ class AudioCaptureEngine(
 
     private var audioRecord: AudioRecord? = null
     private var captureThread: Thread? = null
-    private var ringBuffer: RingBuffer? = null
+
+    // Written only inside `synchronized(lock)` (start()/captureLoop's finally), but read from
+    // arbitrary caller threads by snapshot() without taking `lock` (export/UI call this from
+    // their own threads, and routing every snapshot() through `lock` would serialize them behind
+    // whatever the capture thread is doing). @Volatile is sufficient -- not a full lock -- because
+    // the only cross-thread requirement here is that a write to this reference by the capture
+    // thread become visible to a reader thread; RingBuffer itself is independently thread-safe
+    // (its own intrinsic lock guards `write`/`snapshot`), so there is no multi-field invariant
+    // between `ringBuffer` and other fields that a reader needs a consistent view of.
+    @Volatile private var ringBuffer: RingBuffer? = null
 
     @Volatile private var stopRequested = false
     @Volatile private var paused = false
 
-    /** The buffer the capture thread is writing into, or `null` before the first [start]. */
+    // Incremented under `lock` every time start() installs a new session. The capture thread's
+    // own cleanup (captureLoop's `finally`) captures the generation it was started with and only
+    // mutates `audioRecord`/`captureThread`/`ringBuffer`/`state` if that generation is still
+    // current -- otherwise it means a newer start() has already superseded this thread, and
+    // touching those fields would clobber the newer session (see PR #20 review, finding 2).
+    private var generation = 0L
+
+    // Set (under `lock`) by stop() to the thread it is about to join, and cleared by that
+    // thread's own cleanup once done. @Volatile so start() can wait on it *without* holding
+    // `lock` (joining while holding `lock` would deadlock against the capture thread's own
+    // `synchronized(lock)` use in its `finally`). This closes the window where a start() arriving
+    // between stop() releasing `lock` and the capture thread's `finally` completing would
+    // otherwise see stale "still Recording" state and silently no-op instead of starting a new
+    // session (see PR #20 review, finding 4).
+    @Volatile private var teardownThread: Thread? = null
+
+    /** The buffer the capture thread is writing into, or `null` before the first [start] or
+     * after [stop] (see [RingBuffer.clear] -- capture is not considered stopped until the raw
+     * PCM is unreachable through this method). */
     fun snapshot(durationMillis: Long): AudioSnapshot? = ringBuffer?.snapshot(durationMillis)
 
     /**
@@ -93,6 +120,12 @@ class AudioCaptureEngine(
      */
     @SuppressLint("MissingPermission")
     fun start() {
+        // Wait out any teardown still in flight from a previous stop()/read-error before
+        // deciding whether to start a new session -- otherwise this call could race a stale
+        // cleanup (finding 2) or be silently dropped because it still observes the old
+        // Recording/Paused state (finding 4). Deliberately outside `lock`: see `teardownThread`.
+        teardownThread?.join()
+
         synchronized(lock) {
             when (_state.value) {
                 is CaptureState.Recording, is CaptureState.Paused -> return
@@ -157,9 +190,12 @@ class AudioCaptureEngine(
             audioRecord = record
             stopRequested = false
             paused = false
+            generation += 1
+            val myGeneration = generation
             _state.value = CaptureState.Recording
 
-            val thread = Thread({ captureLoop(record, buffer, minBufferSize) }, "AudioCaptureEngine")
+            val thread =
+                Thread({ captureLoop(record, buffer, minBufferSize, myGeneration) }, "AudioCaptureEngine")
             thread.isDaemon = true
             captureThread = thread
             thread.start()
@@ -167,8 +203,9 @@ class AudioCaptureEngine(
     }
 
     /** Stops capture and releases `AudioRecord`. No-op if already [CaptureState.Idle]. Blocks
-     * until the capture thread has fully exited, so it is safe to assume no leak immediately
-     * after this returns. */
+     * until the capture thread has fully exited (including the [CaptureState.Error] case, where
+     * the thread may still be mid-cleanup), so it is safe to assume no leak immediately after
+     * this returns. */
     fun stop() {
         var threadToJoin: Thread? = null
         synchronized(lock) {
@@ -176,13 +213,18 @@ class AudioCaptureEngine(
                 is CaptureState.Idle -> return
                 is CaptureState.Error -> {
                     _state.value = CaptureState.Idle
-                    return
+                    // The capture thread already exited its read loop (that's why state is
+                    // Error) but may not have reached its `finally` cleanup yet -- join it too so
+                    // every path away from a non-Idle state deterministically waits for that
+                    // cleanup (see PR #20 review, finding 2). Instant if it already finished.
+                    threadToJoin = captureThread
                 }
                 else -> {
                     stopRequested = true
                     threadToJoin = captureThread
                 }
             }
+            teardownThread = threadToJoin
         }
         // Joined outside the lock: the capture thread's cleanup below acquires `lock` itself,
         // and joining while holding it would deadlock.
@@ -210,7 +252,7 @@ class AudioCaptureEngine(
         }
     }
 
-    private fun captureLoop(record: AudioRecord, buffer: RingBuffer, minBufferSize: Int) {
+    private fun captureLoop(record: AudioRecord, buffer: RingBuffer, minBufferSize: Int, myGeneration: Long) {
         // Scratch array allocated once, outside the loop, and reused for every read().
         val scratch = ByteArray(minBufferSize)
         try {
@@ -231,6 +273,10 @@ class AudioCaptureEngine(
                 // bytesRead == 0: nothing available yet, loop again.
             }
         } finally {
+            // "Stop means stop": zero the raw PCM this session buffered, regardless of whether a
+            // newer session has already superseded this thread -- it's this thread's own buffer,
+            // never shared, so clearing it is always safe (see PR #20 review, finding 3).
+            buffer.clear()
             synchronized(lock) {
                 try {
                     record.stop()
@@ -238,10 +284,20 @@ class AudioCaptureEngine(
                     // Already stopped/uninitialized; release() below still runs.
                 }
                 record.release()
-                audioRecord = null
-                captureThread = null
-                if (_state.value !is CaptureState.Error) {
-                    _state.value = CaptureState.Idle
+                // Only touch the shared fields if this thread's session is still the current
+                // one. If a newer start() already ran (generation moved on) while this thread was
+                // between its read-error and this cleanup, those fields now belong to the newer
+                // session -- nulling them here would orphan it (see PR #20 review, finding 2).
+                if (generation == myGeneration) {
+                    audioRecord = null
+                    captureThread = null
+                    ringBuffer = null
+                    if (_state.value !is CaptureState.Error) {
+                        _state.value = CaptureState.Idle
+                    }
+                }
+                if (teardownThread === Thread.currentThread()) {
+                    teardownThread = null
                 }
             }
         }

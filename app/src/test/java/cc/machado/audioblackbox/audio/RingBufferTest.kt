@@ -128,6 +128,33 @@ class RingBufferTest {
     }
 
     @Test
+    fun `clear zeroes the buffer and snapshot after clear returns no residual audio`() {
+        val buffer = RingBuffer(capacityBytes = 5, bytesPerSecond = 1000)
+        buffer.write(byteArrayOf(1, 2, 3, 4, 5))
+
+        buffer.clear()
+        val result = buffer.snapshot(durationMillis = 1000)
+
+        assertEquals(0, result.data.size)
+        assertEquals(0L, buffer.bufferedBytes())
+    }
+
+    @Test
+    fun `clear does not reallocate the backing array`() {
+        // Regression guard for the no-allocation-after-construction guarantee: write, clear,
+        // then write again and confirm the buffer still behaves like a fixed-capacity ring
+        // rather than, say, silently growing.
+        val buffer = RingBuffer(capacityBytes = 4, bytesPerSecond = 1000)
+        buffer.write(byteArrayOf(1, 2, 3, 4))
+        buffer.clear()
+        buffer.write(byteArrayOf(9, 9, 9, 9, 8))
+
+        val result = buffer.snapshot(durationMillis = 1000)
+
+        assertArrayEquals(byteArrayOf(9, 9, 9, 8), result.data)
+    }
+
+    @Test
     fun `concurrent writer and reader never observe a torn frame`() {
         val frameSize = 4
         val bufferedFrames = 256
