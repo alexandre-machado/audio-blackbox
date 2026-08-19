@@ -4,7 +4,11 @@
 # the device (see docs/development/running-on-device.md for one-time and
 # per-session setup).
 #
-# Fails loudly and does nothing destructive if no device is attached.
+# Fails loudly and does nothing destructive if no device is attached. Set
+# RUN_ON_DEVICE_DRY_RUN=1 to stop after device resolution, before any
+# build/install/launch step -- useful for exercising this script's device-
+# selection logic without a paired phone. A dry run says so explicitly on
+# stderr so it is never mistaken for a completed install/launch.
 
 set -euo pipefail
 
@@ -120,13 +124,25 @@ else
   DEVICE_SERIALS=()
   for s in "${READY_SERIALS[@]}"; do
     devserial="$("$ADB_BIN" -s "$s" shell getprop ro.serialno 2>/dev/null | tr -d '\r\n')"
+    # Trim ALL leading/trailing whitespace (not just \r\n) before the
+    # emptiness test -- a whitespace-only value (space/tab with no CR/LF)
+    # would otherwise sail past a bare `[[ -n ]]` check and could compare
+    # equal to another whitespace-only value from a genuinely different
+    # transport, which is the same wrong-device bug in a narrower form.
+    devserial="$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<<"$devserial")"
     if [[ -z "$devserial" ]]; then
       devserial="$("$ADB_BIN" -s "$s" shell getprop ro.boot.serialno 2>/dev/null | tr -d '\r\n')"
+      devserial="$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<<"$devserial")"
     fi
-    # Fail closed: an empty/unreadable serial must never be treated as
-    # "matches everything else" -- a blank-equals-blank comparison is
-    # exactly the bug this replaces.
-    [[ -n "$devserial" ]] || fail "Could not read a hardware serial (ro.serialno / ro.boot.serialno) for transport $s; refusing to guess whether it is the same physical device as the others listed (${READY_SERIALS[*]})."
+    # Fail closed: an empty/unreadable/malformed serial must never be
+    # treated as "matches everything else" -- a blank-equals-blank (or
+    # garbage-equals-garbage) comparison is exactly the bug this replaces.
+    # Require the trimmed value to look like a real device serial
+    # (alphanumeric plus the usual `-`/`_`/`.` separators) before it is
+    # ever used in an equality comparison.
+    if [[ -z "$devserial" || ! "$devserial" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+      fail "Could not read a valid hardware serial (ro.serialno / ro.boot.serialno) for transport $s; refusing to guess whether it is the same physical device as the others listed (${READY_SERIALS[*]})."
+    fi
     DEVICE_SERIALS+=("$devserial")
   done
 
@@ -165,7 +181,7 @@ fi
 log "Target device: $TARGET"
 
 if [[ -n "${RUN_ON_DEVICE_DRY_RUN:-}" ]]; then
-  log "Dry run (RUN_ON_DEVICE_DRY_RUN set): stopping before build/install/launch."
+  printf '[run-on-device] STOPPED EARLY: RUN_ON_DEVICE_DRY_RUN is set, so nothing was built, installed, or launched. Unset it to run for real.\n' >&2
   exit 0
 fi
 

@@ -224,8 +224,27 @@ than aborting on it:
   `ip:port` connection and its mDNS service name, both listed at once) are
   collapsed to one target; transports with genuinely different serials
   abort with "Multiple distinct devices found" and ask you to set
-  `ANDROID_SERIAL`. If a serial can't be read at all, the run aborts
-  rather than guessing it matches another entry.
+  `ANDROID_SERIAL`. If a serial can't be read at all -- or reads back as
+  empty/whitespace-only, or contains characters outside the expected
+  serial charset (letters, digits, `-`, `_`, `.`) -- the run aborts rather
+  than guessing it matches another entry.
+
+### Dry-running device resolution without a phone
+
+Set `RUN_ON_DEVICE_DRY_RUN=1` and the script stops right after picking a
+target device, before the build/install/launch step:
+
+```bash
+RUN_ON_DEVICE_DRY_RUN=1 ./scripts/run-on-device.sh
+```
+
+It exits 0 in this mode but prints an explicit `STOPPED EARLY` line on
+stderr saying nothing was built, installed, or launched -- a dry run can
+never be mistaken for a completed deploy. This exists so the device-
+selection logic (stale-transport handling, same-device-vs-different-device
+disambiguation) can be exercised against a stub `adb` without a paired
+phone; it runs after all safety/validation checks, so it cannot be used to
+skip any of them.
 
 **[verified, 2026-08-19, first real run against physical hardware]** Ran
 end-to-end against the paired S25 with a clean shell (no `adb`/`java` on
