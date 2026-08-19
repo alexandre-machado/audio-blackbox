@@ -9,22 +9,51 @@
   API 31+. Do not remove either mechanism thinking the other makes it
   redundant.
 
-  Residual gap on API 29-30 (this app's minSdk is 29): dataExtractionRules
-  is API 31+ only and has no effect below that. The legacy
-  android:fullBackupContent mechanism governs backup content on 29-30, but
-  it does not control OEM device-to-device transfer at all; Smart
-  Switch-style transfers on 29-30 are outside the scope of both
-  fullBackupContent and dataExtractionRules. On 29-30 this app relies on
-  allowBackup="false" alone, which is a known, deliberate, accepted
-  tradeoff: raising minSdk to 31 to close this gap would cost real device
-  reach, and the residual exposure requires physical access to an unlocked
-  device plus a deliberate user-initiated transfer.
+  Domain coverage: per the doc above, domain="root" only covers the
+  getFilesDir()/getDatabasePath()/SharedPreferences subtree; it does NOT
+  cover domain="external" (getExternalFilesDir()) or the device-protected
+  storage domains (device_root, device_file, device_database,
+  device_sharedpref); those are sibling domains, not children of root.
+  Each is excluded explicitly below in both sections so none of the app's
+  storage areas are missed.
+
+  Known gap this file cannot close: exported recordings written to shared
+  storage (per the README, Music/Recordings via MediaStore) live outside
+  every domain listed above; MediaStore/shared storage is not part of
+  the dataExtractionRules domain model at all. If those exports need to be
+  excluded from cloud backup or device transfer, that is a separate
+  decision to be made in the export path itself (e.g. how/where it writes),
+  not something this file can express.
+
+  Residual gap on API 29-30 (this app's minSdk; see the minSdk value in
+  app/build.gradle.kts, which is the source of truth; if it is raised to
+  31+ this whole comment block should be revisited): dataExtractionRules is
+  API 31+ only and has no effect below that. The legacy
+  android:fullBackupContent mechanism governs backup *content* on 29-30 (it
+  is not documented, in the page cited above or elsewhere we've checked, to
+  control OEM device-to-device transfer specifically; treat that as
+  unconfirmed rather than settled). On 29-30 this app relies on
+  allowBackup="false" alone for the device-to-device transfer path, which
+  is a known, deliberate, accepted tradeoff: raising minSdk to 31 to close
+  this gap would cost real device reach, and the residual exposure requires
+  physical access to an unlocked device plus a deliberate user-initiated
+  transfer.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="root" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
     </device-transfer>
 </data-extraction-rules>

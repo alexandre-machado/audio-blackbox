@@ -13,8 +13,10 @@
       transfer (Samsung Smart Switch, Google Quick Start) on API 31+. The
       dataExtractionRules file adds an explicit device-transfer exclusion
       for that path. Do not remove either one; see
-      app/src/main/res/xml/data_extraction_rules.xml for the full rationale
-      and the documented residual gap on API 29-30 (this app's minSdk).
+      app/src/main/res/xml/data_extraction_rules.xml for the full domain
+      coverage, the documented residual gaps (API 29-30, see minSdk in
+      app/build.gradle.kts; and exported/shared-storage recordings), and
+      what remains unconfirmed vs. documentation-confirmed.
     -->
     <application
         android:allowBackup="false"
