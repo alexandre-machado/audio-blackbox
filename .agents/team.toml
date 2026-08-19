@@ -9,12 +9,14 @@ project_number = 2   # https://github.com/users/alexandre-machado/projects/2
 workspace_dir = ".agents/artifacts"
 
 [stack]
-platform    = "android"
-language    = "kotlin"
-ui          = "jetpack-compose"
-build       = "gradle-kts"
-min_sdk     = 29
-target_sdk  = 36
+platform           = "android"
+language           = "kotlin"
+ui                 = "jetpack-compose"
+build              = "gradle-kts"
+min_sdk            = 29
+target_sdk         = 36
+design_system      = "material3"   # stock M3, native-Android look — not themed/Duolingo-inspired (see #9)
+design_min_version = "1.4.0"       # Material 3 stable only, no Material 3 Expressive for now (see #9)
 
 [validation]
 command = "./gradlew testDebugUnitTest lintDebug"
