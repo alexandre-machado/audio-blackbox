@@ -100,6 +100,15 @@ if ! wait_for_marker; then
 fi
 log "Recording confirmed. Driving two simulated GSM calls..."
 
+# `adb emu gsm call` alone only rings the simulated call -- it never becomes ACTIVE, and the
+# framework only silences other apps' microphone clients once a call actually goes off-hook
+# (confirmed empirically against a booted AVD: `dumpsys audio`'s RecordActivityMonitor line for
+# our session stays `silenced:false` through ringing, flips to `silenced:true` only after the
+# call is answered, and back to `false` on hangup). The emulator's console has no "answer an
+# inbound call" subcommand (`adb emu gsm accept` is documented as outbound-call-only), but the
+# stock google_apis image does ship a real Telecom/Dialer stack, and `KEYCODE_CALL` answers a
+# ringing call through it the same way a hardware call button would on a real phone.
+#
 # Generous fixed margins: real telephony state changes (ringing -> answered/active -> ended)
 # take a couple of seconds to propagate through the emulator's radio stack to
 # AudioManager.AudioRecordingCallback. The test itself does not depend on this exact timing --
@@ -108,14 +117,20 @@ log "Recording confirmed. Driving two simulated GSM calls..."
 sleep 3
 log "Call 1: ringing..."
 "${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-sleep 5
+sleep 2
+log "Call 1: answering..."
+"${ADB[@]}" shell input keyevent KEYCODE_CALL
+sleep 4
 log "Call 1: ending..."
 "${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
 sleep 5
 
 log "Call 2: ringing..."
 "${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-sleep 5
+sleep 2
+log "Call 2: answering..."
+"${ADB[@]}" shell input keyevent KEYCODE_CALL
+sleep 4
 log "Call 2: ending..."
 "${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
 sleep 5

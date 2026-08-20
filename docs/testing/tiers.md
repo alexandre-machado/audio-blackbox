@@ -71,14 +71,28 @@ process) issuing `am force-stop` and then checking from outside — that is Tier
 S25, done deliberately by hand per this task's device-safety constraints (an agent must not
 force-stop a device that may be mid-session).
 
-Mic content injection (the `ToneGenerator`/`GoertzelDetector` pair from #21, driving a genuine
-tone-in/tone-out assertion) was not wired into Tier 1: GitHub-hosted runners are headless with no
-host audio device behind the emulator's virtual microphone, so `AudioRecord` reads silence
-regardless of what a "virtual mic" config claims to route — an end-to-end frequency assertion in
-CI would not actually be testing anything. `InterruptionSpliceTest` gets its value instead from
-proving the *real interruption trigger path* fires correctly (real GSM call →
-`isClientSilenced` → `pause()`/`resume()` → correct gap count/ordering/duration), which is what
-had never run before this issue, independent of what's in the audio.
+**Two empirical findings from getting this running, recorded here rather than assumed:**
+
+- **Mic content injection did not work, and was not pursued further.** Confirmed by observation
+  (the booted AVD logs `Could not init 'pa' audio driver` on start): this headless emulator has
+  no host audio backend behind its virtual microphone, so `AudioRecord` reads silence regardless
+  of what a "virtual mic" config claims to route. Wiring the `ToneGenerator`/`GoertzelDetector`
+  pair from #21 into a tone-in/tone-out assertion here would not actually be testing anything, so
+  it was not attempted for CI. It stays useful for a human running the JVM-fixture-driven
+  `GoertzelDetectorTest` or a future manual pass on hardware with a real mic.
+- **The interruption trigger itself does not need real audio content to be genuine, and getting
+  it to fire took one non-obvious step.** `adb emu gsm call` alone only rings a simulated call —
+  confirmed via `dumpsys audio`'s `RecordActivityMonitor` line for the app's session, it stays
+  `silenced:false` through ringing. The call has to actually be answered before
+  `AudioManager.AudioRecordingCallback.isClientSilenced` flips to `true` (and back to `false` on
+  hangup) for another app's mic session. The emulator console has no "answer an inbound call"
+  subcommand, but the stock `google_apis` image ships a real Telecom/Dialer stack, and
+  `adb shell input keyevent KEYCODE_CALL` answers a ringing call through it exactly like a
+  hardware call button would — see `scripts/ci/run-instrumented-tier.sh`'s call schedule for
+  where this is used. `InterruptionSpliceTest` gets its value from proving this real trigger path
+  fires correctly, twice (real GSM call → answered → `isClientSilenced` →
+  `pause()`/`resume()` → correct gap count/ordering/duration), independent of what's in the
+  audio — that path had never run before this issue.
 
 ## Tier 2 — scripted smoke run against the physical S25, on demand
 

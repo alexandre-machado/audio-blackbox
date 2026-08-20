@@ -3,6 +3,7 @@ package cc.machado.audioblackbox
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.os.Build
 import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -26,7 +27,7 @@ import org.junit.runner.RunWith
  * test.
  *
  * A real incoming call is raised via `adb emu gsm call` / `adb emu gsm cancel`, driven by
- * `scripts/ci/run-interruption-scenario.sh` on the CI *host* -- that command talks to the
+ * `scripts/ci/run-instrumented-tier.sh` on the CI *host* -- that command talks to the
  * emulator's console port and is unreachable from on-device instrumentation, so this test cannot
  * issue the calls itself. It synchronizes with the host script via exactly one logcat marker
  * (see [MARKER_READY]) once recording is confirmed to have actually started, then only *observes*
@@ -46,10 +47,21 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class InterruptionSpliceTest {
 
+    // POST_NOTIFICATIONS is a runtime permission only from API 33 (Tiramisu); it does not exist
+    // as a grantable permission on the API 30 floor this tier targets (see scripts/ci/avd.env),
+    // and GrantPermissionRule.grant() throws SecurityException/IllegalArgumentException
+    // ("Unknown permission") if asked to grant it there -- so it is only requested when it
+    // actually exists on the running OS.
     @get:Rule
     val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(
-        Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.POST_NOTIFICATIONS,
+        *(
+            listOf(Manifest.permission.RECORD_AUDIO) +
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    listOf(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    emptyList()
+                }
+            ).toTypedArray()
     )
 
     private val context: Context
@@ -78,7 +90,7 @@ class InterruptionSpliceTest {
 
         assertTrue(
             "expected exactly 2 PauseGaps from 2 real incoming calls, timed out waiting " +
-                "(see scripts/ci/run-interruption-scenario.sh for the call schedule)",
+                "(see scripts/ci/run-instrumented-tier.sh for the call schedule)",
             pollUntil(timeoutMillis = 120_000) { RecorderService.engine.gaps.value.size == 2 },
         )
         assertTrue(
