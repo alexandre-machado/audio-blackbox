@@ -56,6 +56,11 @@ class RecorderService : Service() {
     // Cancelled in onDestroy.
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    // See PeriodicNotificationRefresher's doc: supplies the "keep refreshing while Recording
+    // doesn't transition" tick the collector below cannot, since engine.state only emits on a
+    // transition and buffered duration keeps changing without one (issue #30).
+    private val notificationRefresher = PeriodicNotificationRefresher(engine.state)
+
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
     // (MediaStoreSink -> ContentResolver), which is only available once this Service instance is
     // attached. Reads `engine.snapshot()`/`engine.gaps.value` at export time via method
@@ -110,6 +115,12 @@ class RecorderService : Service() {
         // collector attaches.
         serviceScope.launch {
             engine.state.collect { refreshNotification() }
+        }
+        // Periodic tick, alongside (not instead of) the transition-driven collector above --
+        // see PeriodicNotificationRefresher's class doc for cadence/cost/lifecycle reasoning
+        // (issue #30).
+        serviceScope.launch {
+            notificationRefresher.run { refreshNotification() }
         }
         // Same reactive pattern, applied to ExportEngine's own StateFlow (PR #28 review,
         // `@sec`/`@techlead` finding 4): Exporting/Success/Error each need to reach the
