@@ -22,14 +22,18 @@ import java.io.ByteArrayOutputStream
  * the silence at the right offset and trimming the result back to the requested window.
  *
  * ## Offset math
- * A gap's position in the *output* stream is `(gap.startTimestampMillis -
- * snapshot.startTimestampMillis) * bytesPerSecond / 1000`, aligned down to a frame boundary
- * ([AudioConfig.bytesPerFrame]) -- writing silence at a non-frame-aligned offset would split a
- * multi-byte sample or a stereo pair, corrupting every sample after it. This formula is valid
- * uniformly across the whole output, including after earlier gaps have already been filled:
- * both real audio and inserted silence advance the output by exactly [AudioConfig.bytesPerSecond]
- * bytes per second of wall-clock time, so "wall-clock offset from the snapshot start" always maps
- * to the same output byte offset regardless of how many gaps precede it.
+ * A gap's position in the *raw* (pre-fill) snapshot is `(gap.startTimestampMillis -
+ * snapshot.startTimestampMillis - cumulativeDurationOfEarlierGaps) * bytesPerSecond / 1000`,
+ * aligned down to a frame boundary ([AudioConfig.bytesPerFrame]) -- writing silence at a
+ * non-frame-aligned offset would split a multi-byte sample or a stereo pair, corrupting every
+ * sample after it.
+ *
+ * The `cumulativeDurationOfEarlierGaps` subtraction matters because [AudioSnapshot.data] is a
+ * *compressed* stream: no bytes exist in it for time spent paused, so every second consumed by an
+ * earlier gap must be subtracted back out of the wall-clock delta before it is converted into a
+ * raw-array index. Skipping that subtraction (using the raw wall-clock delta directly) is correct
+ * for the first gap only -- from the second gap onward it overshoots by the running sum of prior
+ * gaps' silence bytes, splicing the wrong raw bytes into the output.
  *
  * Gaps that start before the snapshot window or end after it are clipped to the window first, so
  * only the overlapping portion is injected. Gaps entirely outside the window contribute nothing.
@@ -71,22 +75,33 @@ object GapFiller {
 
         val out = ByteArrayOutputStream(data.size)
         var rawPos = 0
+        var cumulativeGapMillis = 0L
         for (gap in relevantGaps) {
-            var rawOffset = alignDown(bytesFor(gap.startTimestampMillis - windowStart, bytesPerSecond), bytesPerFrame)
+            // The raw snapshot is a *compressed* stream -- it has no bytes for time spent
+            // paused. So a raw-array offset must be measured against wall-clock time with every
+            // prior gap's duration subtracted back out first; only then does it land on the same
+            // byte that the wall-clock delta would reach in the (uncompressed) output stream.
+            val wallClockDeltaMillis = gap.startTimestampMillis - windowStart - cumulativeGapMillis
+            var rawOffset = alignDown(bytesFor(wallClockDeltaMillis, bytesPerSecond), bytesPerFrame)
             rawOffset = rawOffset.coerceIn(rawPos, data.size)
             out.write(data, rawPos, rawOffset - rawPos)
             rawPos = rawOffset
 
             val silenceBytes = alignDown(bytesFor(gap.durationMillis, bytesPerSecond), bytesPerFrame)
             if (silenceBytes > 0) out.write(ByteArray(silenceBytes))
+            cumulativeGapMillis += gap.durationMillis
         }
         out.write(data, rawPos, data.size - rawPos)
 
         val result = out.toByteArray()
         val targetBytes = alignDown(bytesFor(targetDurationMillis, bytesPerSecond), bytesPerFrame)
         return if (result.size > targetBytes) {
-            // Keep the most recent targetBytes -- drop the oldest excess, not the newest.
-            result.copyOfRange(result.size - targetBytes, result.size)
+            // Keep the most recent targetBytes -- drop the oldest excess, not the newest -- then
+            // zero the untrimmed copy: it's a full duplicate of raw PCM (including the excess
+            // that didn't make the cut) that would otherwise sit unzeroed on the heap until GC.
+            val trimmed = result.copyOfRange(result.size - targetBytes, result.size)
+            java.util.Arrays.fill(result, 0)
+            trimmed
         } else {
             result
         }

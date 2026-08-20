@@ -110,6 +110,13 @@ class RecorderService : Service() {
         serviceScope.launch {
             engine.state.collect { refreshNotification() }
         }
+        // Same reactive pattern, applied to ExportEngine's own StateFlow (PR #28 review,
+        // `@sec`/`@techlead` finding 4): Exporting/Success/Error each need to reach the
+        // notification the instant they happen, not just Logcat -- see handleSave() and
+        // RecorderNotification.build's exportState parameter.
+        serviceScope.launch {
+            exportEngine.state.collect { refreshNotification() }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -226,6 +233,13 @@ class RecorderService : Service() {
         // write are real disk/IPC work). engine.snapshot()/engine.gaps.value are read from this
         // background thread; both are documented safe to call from any thread (see
         // AudioCaptureEngine's field docs).
+        //
+        // No explicit refreshNotification() call here, same reasoning as handleStart(): the
+        // serviceScope collector on exportEngine.state registered in onCreate() reacts to every
+        // Exporting/Success/Error transition export() below produces, including the
+        // EXPORT_ALREADY_IN_PROGRESS rejection ExportEngine itself now returns for a concurrent
+        // call (double-tap on the notification's Save action, or an OS-redelivered Intent) --
+        // that rejection still surfaces to the user as an Error state, it just isn't logged twice.
         serviceScope.launch(Dispatchers.Default) {
             val bufferMinutes = captureConfig.bufferDurationMinutes
             val result = exportEngine.export(
@@ -258,8 +272,12 @@ class RecorderService : Service() {
         }
     }
 
-    private fun currentNotification() =
-        RecorderNotification.build(this, engine.state.value, engine.bufferedDurationMillis())
+    private fun currentNotification() = RecorderNotification.build(
+        this,
+        engine.state.value,
+        engine.bufferedDurationMillis(),
+        exportEngine.state.value,
+    )
 
     private fun refreshNotification() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager

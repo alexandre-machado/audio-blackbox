@@ -9,6 +9,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.ui.MainActivity
 import java.util.Locale
 
@@ -46,11 +47,17 @@ object RecorderNotification {
         manager.createNotificationChannel(channel)
     }
 
-    /** Builds the current notification content for [state]/[bufferedDurationMillis]. Called on
-     * every [RecorderService.onStartCommand] so the shown state and buffered duration stay
-     * fresh, and via `NotificationManager.notify` whenever [RecorderService] observes a state
-     * change while already running. */
-    fun build(context: Context, state: CaptureState, bufferedDurationMillis: Long?): Notification {
+    /** Builds the current notification content for [state]/[bufferedDurationMillis]/[exportState].
+     * Called on every [RecorderService.onStartCommand] so the shown state and buffered duration
+     * stay fresh, and via `NotificationManager.notify` whenever [RecorderService] observes a
+     * [CaptureState] or [ExportState] change while already running (issue #5's "failure surfaces
+     * a user-visible error, never a silent no-op" criterion -- this is that surface). */
+    fun build(
+        context: Context,
+        state: CaptureState,
+        bufferedDurationMillis: Long?,
+        exportState: ExportState = ExportState.Idle,
+    ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
             REQUEST_CODE_CONTENT,
@@ -80,11 +87,24 @@ object RecorderNotification {
             R.string.recorder_notification_buffered,
             formatDuration(bufferedDurationMillis ?: 0L),
         )
+        // exportState reflects ExportEngine's own StateFlow (see RecorderService's serviceScope
+        // collector) -- Idle never adds anything, so a session that never taps Save looks exactly
+        // like it did before this field existed. Exporting/Success/Error each get a short,
+        // user-visible line ahead of the buffered-duration text, which is how a failed or
+        // in-flight export becomes visible instead of only ever reaching Logcat.
+        val exportText = when (exportState) {
+            is ExportState.Idle -> null
+            is ExportState.Exporting -> context.getString(R.string.recorder_notification_export_exporting)
+            is ExportState.Success ->
+                context.getString(R.string.recorder_notification_export_success, exportState.displayName)
+            is ExportState.Error -> context.getString(R.string.recorder_notification_export_error)
+        }
+        val contentText = if (exportText != null) "$exportText · $bufferedText" else bufferedText
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_mic)
             .setContentTitle(stateText)
-            .setContentText(bufferedText)
+            .setContentText(contentText)
             .setOngoing(true)
             // Suppresses a fresh heads-up/sound on every content refresh (e.g. the buffered
             // duration ticking up) -- only the very first post of this notification should ever

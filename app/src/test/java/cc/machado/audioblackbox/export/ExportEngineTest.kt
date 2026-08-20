@@ -34,7 +34,9 @@ class ExportEngineTest {
 
     private class FakeSink(private val target: FakeTarget, private val failOpen: Boolean = false) : ExportSink {
         var openedWith: String? = null
+        var openCount = 0
         override fun open(displayName: String): ExportTarget {
+            openCount++
             if (failOpen) throw IOException("insert rejected")
             openedWith = displayName
             return target
@@ -139,6 +141,41 @@ class ExportEngineTest {
         assertEquals(ExportFailureReason.CANCELLED, (result as ExportState.Error).reason)
         assertTrue(target.aborted)
         assertTrue(!target.committed)
+    }
+
+    @Test
+    fun `a concurrent export call while one is in flight is rejected without touching the sink`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        lateinit var engine: ExportEngine
+        var reentrantResult: ExportState? = null
+        engine = ExportEngine(
+            config,
+            // Simulates a second ACTION_SAVE dispatch racing in while this export is still
+            // mid-flight (double-tap on the notification's Save action, or an OS-redelivered
+            // Intent -- the scenario `@sec` flagged for RecorderService.handleSave()). export()
+            // sets _state to Exporting before calling snapshotProvider, so by the time this runs
+            // the outer call has already claimed the "in progress" slot; this recursive call must
+            // observe that and bail out instead of racing cancelRequested/_state with it.
+            snapshotProvider = {
+                reentrantResult = engine.export(durationMillis = 1000, minutesLabel = 1)
+                AudioSnapshot(ByteArray(1000), 0L)
+            },
+            gapsProvider = { emptyList() },
+            sink = sink,
+        )
+
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
+
+        assertTrue("outer (first) export must still succeed", result is ExportState.Success)
+        assertTrue(reentrantResult is ExportState.Error)
+        assertEquals(
+            ExportFailureReason.EXPORT_ALREADY_IN_PROGRESS,
+            (reentrantResult as ExportState.Error).reason,
+        )
+        // The rejected call must never reach the sink -- only the outer export's single open()
+        // call, never a second one that could produce a duplicate MediaStore row.
+        assertEquals(1, sink.openCount)
     }
 
     @Test

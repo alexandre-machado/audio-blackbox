@@ -10,42 +10,77 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Proves capture writes are not dropped while a snapshot is being taken (issue #5 mandatory
- * test). Exercises [RingBuffer] directly -- the real production dependency [ExportEngine.export]
- * calls through `snapshotProvider` -- rather than [cc.machado.audioblackbox.audio.AudioCaptureEngine],
- * both because that class is owned by a concurrent PR (issue #26) and because the property under
- * test ("does snapshot() ever cause write() to lose a frame") lives entirely inside
- * [RingBuffer]'s own locking, which this test drives directly with a real writer thread racing
- * real snapshot calls.
+ * Proves capture writes are not dropped or corrupted while a snapshot is being taken (issue #5
+ * mandatory test). Exercises [RingBuffer] directly -- the real production dependency
+ * [ExportEngine.export] calls through `snapshotProvider` -- rather than
+ * [cc.machado.audioblackbox.audio.AudioCaptureEngine], both because that class is owned by a
+ * concurrent PR (issue #26) and because the property under test ("does snapshot() ever cause
+ * write() to lose or corrupt a frame") lives entirely inside [RingBuffer]'s own locking, which
+ * this test drives directly with a real writer thread racing real snapshot calls.
  *
- * A broken implementation this test would catch: any change that makes `snapshot()` skip taking
- * the lock (or a `write()` that silently drops a chunk when contended) would either throw a
- * `ConcurrentModificationException`-style corruption assertion below, or make the final
- * written-byte accounting not match what the writer thread actually wrote -- this test asserts
- * both.
+ * ## Why the total-write count stays under capacity (PR #28 review, `@rev` finding 3)
+ * An earlier version of this test wrote 8x the buffer's capacity (2000 writes of 320 bytes into
+ * an 80,000-byte buffer) and asserted `bufferedBytes() == minOf(totalWritten, capacityBytes)`.
+ * `bufferedBytes()`'s own saturating `minOf` meant that assertion evaluated to `capacityBytes` on
+ * *both* a correct implementation and one with a silent per-write byte undercount, or even with
+ * `RingBuffer`'s locking removed entirely -- the assertion could not distinguish them, and neither
+ * perturbation made the test fail (verified by actually applying both, one at a time, to the
+ * unmodified `RingBuffer.kt` under test, observing this test still pass, then reverting -- see
+ * PR #28 review comments). `RingBuffer` itself is untouched by this PR and out of scope to modify
+ * (issue #22), so the fix has to live entirely in what this test asks of it.
+ *
+ * This version keeps `writesToPerform * chunkSize` strictly below `capacityBytes`, so the buffer
+ * never wraps and `bufferedBytes()` can never saturate -- it is provably exactly
+ * `totalBytesWritten` on a correct implementation, and *not* equal to it the moment a single byte
+ * is silently dropped or miscounted anywhere in `write()`. On top of the byte count, every chunk
+ * carries its own write index and a content marker, and the final full snapshot is checked chunk
+ * by chunk against the exact sequence `write()` was called with -- catching not just a dropped
+ * byte but a reordered or corrupted one, which a bare length check cannot.
  */
 class CaptureContinuesDuringSnapshotTest {
 
     @Test
-    fun `writer thread completes all writes with no drops while snapshots run concurrently`() {
+    fun `writer thread completes all writes with no drops or corruption while snapshots run concurrently`() {
         val bytesPerSecond = 16_000 // matches AudioConfig's 16kHz mono default
-        val capacityBytes = bytesPerSecond * 5 // 5 seconds of retention -- small enough to wrap repeatedly
-        val buffer = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = bytesPerSecond)
+        val capacityBytes = bytesPerSecond * 5 // 80,000 bytes -- 5 seconds of retention
 
         val chunkSize = 320 // ~20ms of audio at 16kHz/16-bit mono, same order as a real AudioRecord.read()
-        val writesToPerform = 2000
+        // Deliberately well under capacityBytes (64,000 < 80,000): see the class doc for why
+        // staying under capacity, not wrapping past it, is what makes the final assertions below
+        // load-bearing instead of saturation-masked.
+        val writesToPerform = 200
+        check(writesToPerform.toLong() * chunkSize < capacityBytes) {
+            "test setup invariant: total writes must stay under capacityBytes, or bufferedBytes() saturates"
+        }
+
+        val buffer = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = bytesPerSecond)
+
         val totalBytesWritten = AtomicLong(0)
         val writerDone = AtomicBoolean(false)
         val writerFailure = AtomicBoolean(false)
         val startLatch = CountDownLatch(1)
 
+        // Every chunk encodes its own write index (first 4 bytes, big-endian) plus a repeating
+        // content marker (index mod 256) filling the rest -- lets the final check below prove the
+        // buffer's retained bytes are the *exact*, *in-order*, *uncorrupted* sequence of writes,
+        // not merely the right total length.
+        fun chunkFor(index: Int): ByteArray {
+            val chunk = ByteArray(chunkSize)
+            chunk[0] = (index ushr 24).toByte()
+            chunk[1] = (index ushr 16).toByte()
+            chunk[2] = (index ushr 8).toByte()
+            chunk[3] = index.toByte()
+            val marker = (index % 256).toByte()
+            for (i in 4 until chunkSize) chunk[i] = marker
+            return chunk
+        }
+
         val writer = Thread({
             startLatch.await()
-            val chunk = ByteArray(chunkSize) { 1 } // non-zero payload, but content isn't asserted here
             try {
-                repeat(writesToPerform) {
-                    buffer.write(chunk)
-                    totalBytesWritten.addAndGet(chunk.size.toLong())
+                repeat(writesToPerform) { index ->
+                    buffer.write(chunkFor(index))
+                    totalBytesWritten.addAndGet(chunkSize.toLong())
                 }
             } catch (e: Throwable) {
                 writerFailure.set(true)
@@ -85,11 +120,22 @@ class CaptureContinuesDuringSnapshotTest {
         assertTrue("snapshotter thread threw", !snapshotFailure.get())
         assertTrue("expected at least one concurrent snapshot to have run", snapshotsTaken.get() > 0)
 
-        // No dropped frames: every byte the writer thread produced was accepted by write() (the
-        // ring buffer overwrites old bytes once full, it never refuses/drops a write call), so the
-        // buffer's own accounting of total bytes ever written must match exactly what was sent.
-        assertEquals(writesToPerform.toLong() * chunkSize, totalBytesWritten.get())
-        val expectedBuffered = minOf(totalBytesWritten.get(), capacityBytes.toLong())
-        assertEquals(expectedBuffered, buffer.bufferedBytes())
+        val expectedTotalBytes = writesToPerform.toLong() * chunkSize
+        assertEquals(expectedTotalBytes, totalBytesWritten.get())
+
+        // No saturation possible here (expectedTotalBytes < capacityBytes, enforced by the
+        // `check` above), so this is an exact equality, not a "clamped to capacity" one -- a
+        // silent per-write undercount anywhere in RingBuffer.write() would make these differ.
+        assertEquals(expectedTotalBytes, buffer.bufferedBytes())
+
+        // Full-content proof: every chunk the writer sent must be present, in order, unmodified.
+        val finalSnapshot = buffer.snapshot(durationMillis = (capacityBytes.toLong() * 1000) / bytesPerSecond)
+        assertEquals(expectedTotalBytes.toInt(), finalSnapshot.data.size)
+        for (index in 0 until writesToPerform) {
+            val offset = index * chunkSize
+            val expected = chunkFor(index)
+            val actual = finalSnapshot.data.copyOfRange(offset, offset + chunkSize)
+            assertTrue("chunk $index does not match what write() was called with", expected.contentEquals(actual))
+        }
     }
 }
