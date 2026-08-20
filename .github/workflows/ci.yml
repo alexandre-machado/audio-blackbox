@@ -97,7 +97,11 @@ jobs:
 
       - name: Load AVD definition
         id: avd
-        run: cat scripts/ci/avd.env >> "$GITHUB_ENV"
+        # scripts/ci/avd.env is a heavily-commented, human-readable definition (see that file's
+        # own header for why each value was picked) -- $GITHUB_ENV only accepts bare KEY=VALUE
+        # lines, so comments/blank lines are filtered out here rather than removed from the file
+        # itself.
+        run: grep -E '^[A-Z_]+=' scripts/ci/avd.env >> "$GITHUB_ENV"
 
       - name: Enable KVM group perms
         run: |
