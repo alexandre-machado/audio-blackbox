@@ -580,8 +580,10 @@ class AudioCaptureEngineTest {
      * starting from wherever the previous call left off, and returns `0` (not an error, no more
      * data yet) once [source] is exhausted -- so the capture thread's read loop keeps spinning
      * harmlessly, same as the existing `thenReturn(0)`-forever pattern used elsewhere in this
-     * file, until the test calls `stop()`. */
-    private fun feedSequentially(record: AudioRecord, source: ByteArray) {
+     * file, until the test calls `stop()`. Returns the position tracker so callers can observe
+     * exactly how much of [source] has been fed out, independent of anything the buffer does with
+     * it -- see [awaitSourceDrained]. */
+    private fun feedSequentially(record: AudioRecord, source: ByteArray): AtomicInteger {
         val position = AtomicInteger(0)
         whenever(record.read(any<ByteArray>(), any(), any())).thenAnswer { invocation ->
             val destination = invocation.getArgument<ByteArray>(0)
@@ -594,6 +596,7 @@ class AudioCaptureEngineTest {
             position.addAndGet(toCopy)
             toCopy
         }
+        return position
     }
 
     private fun awaitBufferedDurationAtLeast(engine: AudioCaptureEngine, millis: Long, description: String) {
@@ -603,6 +606,22 @@ class AudioCaptureEngineTest {
             Thread.sleep(1)
         }
         fail("timed out waiting for $description, last bufferedDurationMillis was ${engine.bufferedDurationMillis()}")
+    }
+
+    /** Waits for [feedSequentially]'s [sourcePosition] tracker to reach [sourceSizeBytes], i.e.
+     * for the fake source itself to be fully drained through `AudioRecord.read()`. Unlike
+     * [awaitBufferedDurationAtLeast], this stays meaningful even once the ring buffer is full:
+     * the buffer's fill level plateaus at capacity, but the source can still have bytes pending
+     * (issue #26) -- this condition is a property of the source, not of the buffer, so it keeps
+     * distinguishing "fully fed" from "buffer just happens to be full" right up to the moment the
+     * wrap test cares about. */
+    private fun awaitSourceDrained(sourcePosition: AtomicInteger, sourceSizeBytes: Int, description: String) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            if (sourcePosition.get() >= sourceSizeBytes) return
+            Thread.sleep(1)
+        }
+        fail("timed out waiting for $description, last source position was ${sourcePosition.get()} of $sourceSizeBytes")
     }
 
     @Test
@@ -658,11 +677,15 @@ class AudioCaptureEngineTest {
                 tone.size.toLong() > config.totalBufferBytes)
 
             val record = fakeAudioRecord()
-            feedSequentially(record, tone)
+            val sourcePosition = feedSequentially(record, tone)
             val engine = AudioCaptureEngine(config = config, audioRecordFactory = { _, _ -> record })
 
             engine.start()
-            awaitBufferedDurationAtLeast(engine, bufferDurationMillis, "the ring buffer to fill and wrap")
+            // Wait on the source being fully drained, not on bufferedDurationMillis(): the buffer
+            // fills to capacity (60s) well before all 66s of tone have necessarily been fed
+            // through it, so bufferedDurationMillis() plateaus early and is not a safe proxy for
+            // "the wrap has actually happened with the full tone" (issue #26).
+            awaitSourceDrained(sourcePosition, tone.size, "the full 66s tone to be fed through AudioRecord.read()")
 
             val recovered = engine.snapshot(bufferDurationMillis)?.data
             assertTrue("expected a snapshot back", recovered != null)
