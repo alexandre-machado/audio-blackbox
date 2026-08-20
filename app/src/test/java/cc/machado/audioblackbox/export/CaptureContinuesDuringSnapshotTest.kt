@@ -59,6 +59,14 @@ class CaptureContinuesDuringSnapshotTest {
         val writerDone = AtomicBoolean(false)
         val writerFailure = AtomicBoolean(false)
         val startLatch = CountDownLatch(1)
+        // Counted down by the snapshotter the first time it completes a real snapshot() call.
+        // The writer blocks on this once, after its first write, so "at least one concurrent
+        // snapshot ran" is guaranteed by synchronization rather than by hoping the OS scheduler
+        // gives the snapshotter thread a timeslice before the writer -- which does 200 fast,
+        // in-memory, no-I/O writes -- finishes on its own. On a contended/fewer-core machine the
+        // snapshotter thread's first scheduling can lag long enough for the writer to finish
+        // first, making `snapshotsTaken` legitimately zero without this: that was the flake.
+        val firstSnapshotLatch = CountDownLatch(1)
 
         // Every chunk encodes its own write index (first 4 bytes, big-endian) plus a repeating
         // content marker (index mod 256) filling the rest -- lets the final check below prove the
@@ -81,6 +89,18 @@ class CaptureContinuesDuringSnapshotTest {
                 repeat(writesToPerform) { index ->
                     buffer.write(chunkFor(index))
                     totalBytesWritten.addAndGet(chunkSize.toLong())
+                    if (index == 0) {
+                        // Force at least one real snapshot() to complete concurrently, with the
+                        // remaining 199 writes still pending, before the writer is allowed to
+                        // race ahead and finish. Bounded wait is a stuck-test failure guard only
+                        // (fails loudly instead of hanging) -- it does not change how likely the
+                        // concurrent snapshot is, it is required before the writer may proceed.
+                        if (!firstSnapshotLatch.await(30, TimeUnit.SECONDS)) {
+                            throw AssertionError(
+                                "snapshotter thread never completed a concurrent snapshot"
+                            )
+                        }
+                    }
                 }
             } catch (e: Throwable) {
                 writerFailure.set(true)
@@ -103,6 +123,7 @@ class CaptureContinuesDuringSnapshotTest {
                     // always hold.
                     if (snap.data.size > capacityBytes) throw AssertionError("snapshot exceeded capacity")
                     snapshotsTaken.incrementAndGet()
+                    firstSnapshotLatch.countDown()
                 }
             } catch (e: Throwable) {
                 snapshotFailure.set(true)
