@@ -179,6 +179,89 @@ class ExportEngineTest {
     }
 
     @Test
+    fun `an unexpected non-IOException during export surfaces as an error and does not strand the engine`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        var shouldThrow = true
+        val engine = ExportEngine(
+            config,
+            snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
+            // Simulates a genuinely unexpected failure (a future regression, an OOM, ...) from
+            // somewhere inside runExport() -- gapsProvider() is called first, before any state
+            // that would need special zeroing exists yet.
+            gapsProvider = {
+                if (shouldThrow) throw IllegalStateException("boom") else emptyList()
+            },
+            sink = sink,
+        )
+
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
+
+        assertTrue("a non-IOException must surface as an Error, never escape export()", result is ExportState.Error)
+        assertEquals(ExportFailureReason.UNEXPECTED_FAILURE, (result as ExportState.Error).reason)
+        assertTrue("state must reflect the same error, not be stranded on Exporting", engine.state.value is ExportState.Error)
+
+        // The real user-visible consequence of a stranded Exporting state: every later export()
+        // call gets permanently rejected with EXPORT_ALREADY_IN_PROGRESS. Prove a normal export
+        // right after the failure still succeeds.
+        shouldThrow = false
+        val retry = engine.export(durationMillis = 1000, minutesLabel = 1)
+        assertTrue(
+            "a stranded Exporting state would reject this with EXPORT_ALREADY_IN_PROGRESS -- " +
+                "export() must still be usable after an unexpected failure",
+            retry is ExportState.Success,
+        )
+    }
+
+    @Test
+    fun `acknowledgeTerminalState resets a terminal outcome to Idle so it cannot linger forever`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val engine = ExportEngine(
+            config,
+            snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
+            gapsProvider = { emptyList() },
+            sink = sink,
+        )
+
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
+        assertTrue(result is ExportState.Success)
+        // The outcome must remain visible immediately after export() returns -- nothing should
+        // have cleared it yet.
+        assertTrue("terminal outcome must be visible before being acknowledged", engine.state.value is ExportState.Success)
+
+        engine.acknowledgeTerminalState()
+
+        assertEquals(
+            "once acknowledged, a terminal outcome must not linger and be reasserted by an " +
+                "unrelated later refresh",
+            ExportState.Idle,
+            engine.state.value,
+        )
+    }
+
+    @Test
+    fun `acknowledgeTerminalState is a no-op while an export is in flight`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        lateinit var engine: ExportEngine
+        engine = ExportEngine(
+            config,
+            snapshotProvider = {
+                // Mid-export, state is Exporting -- an acknowledge racing in here (e.g. a delayed
+                // acknowledge from a previous export still pending) must not clear it.
+                engine.acknowledgeTerminalState()
+                assertEquals(ExportState.Exporting, engine.state.value)
+                AudioSnapshot(ByteArray(1000), 0L)
+            },
+            gapsProvider = { emptyList() },
+            sink = sink,
+        )
+
+        engine.export(durationMillis = 1000, minutesLabel = 1)
+    }
+
+    @Test
     fun `padding requests extra raw audio equal to the sum of gap durations`() {
         var requestedDurationMillis = -1L
         val target = FakeTarget()

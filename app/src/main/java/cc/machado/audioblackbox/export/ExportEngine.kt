@@ -8,6 +8,7 @@ import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,13 @@ enum class ExportFailureReason {
      * same class of duplicate dispatch this codebase already guards
      * [cc.machado.audioblackbox.service.RecorderService]'s `requestAudioFocus()` against). */
     EXPORT_ALREADY_IN_PROGRESS,
+
+    /** Something other than the failure modes above threw while exporting (a future regression,
+     * an `OutOfMemoryError` on a very large snapshot, ...). Caught so [export] can honour its
+     * "never throws" contract and [state] can never strand on [ExportState.Exporting] -- see
+     * [export]'s doc comment and PR #28 review round 3 (`@rev` finding 5 / `@techlead`
+     * adjudication item 1). */
+    UNEXPECTED_FAILURE,
 }
 
 /**
@@ -90,10 +98,40 @@ class ExportEngine(
         cancelRequested = true
     }
 
+    /** Resets [state] back to [ExportState.Idle] once a terminal [ExportState.Success]/
+     * [ExportState.Error] outcome has actually been surfaced to the user (e.g. rendered once in
+     * the persistent notification) -- otherwise nothing ever writes [ExportState.Idle] back, and
+     * a later, unrelated notification refresh (a phone-call pause hours after a save) would
+     * reassert that stale outcome indefinitely, for the rest of the service's lifetime (PR #28
+     * review, `@sec`/`@rev` finding, `@techlead` round-3 adjudication item 2).
+     *
+     * No-op unless [state] is currently [ExportState.Success] or [ExportState.Error] -- in
+     * particular it never clears [ExportState.Idle] or [ExportState.Exporting], so calling this
+     * after a newer export has already started can't stomp on it. Callers must only invoke this
+     * after actually showing the outcome to the user; calling it immediately after [export]
+     * returns would mean the outcome is never visible at all -- see
+     * [cc.machado.audioblackbox.service.RecorderService]'s collector for the deliberate visible
+     * window before it calls this. */
+    fun acknowledgeTerminalState() {
+        synchronized(exportLock) {
+            val current = _state.value
+            if (current is ExportState.Success || current is ExportState.Error) {
+                _state.value = ExportState.Idle
+            }
+        }
+    }
+
     /**
      * Runs one export of the last [durationMillis] of audio, labeling the filename with
      * [minutesLabel] (e.g. `30` for `..._30min.wav`). Blocking; always leaves [state] (and its
-     * own return value) in [ExportState.Success] or [ExportState.Error] -- never throws.
+     * own return value) in [ExportState.Success] or [ExportState.Error] -- never throws:
+     * [runExport]/[writeAndFinish] catch any unexpected `Throwable` internally and convert it to
+     * [ExportFailureReason.UNEXPECTED_FAILURE]; the `try`/`finally` below is the backstop that
+     * still guarantees [state] is set even if that internal guarantee were ever violated by a
+     * future change -- without it, an exception escaping [runExport] would leave [state] stranded
+     * on [ExportState.Exporting] forever, which -- because the check above keys off exactly that
+     * state -- would permanently reject every later [export] call on this instance (PR #28
+     * review, `@rev` finding 5 / `@techlead` round-3 adjudication item 1).
      *
      * If an export is already running on this instance, returns
      * [ExportFailureReason.EXPORT_ALREADY_IN_PROGRESS] immediately without touching
@@ -111,48 +149,76 @@ class ExportEngine(
             cancelRequested = false
             _state.value = ExportState.Exporting
         }
-        val result = runExport(durationMillis, minutesLabel)
-        _state.value = result
+        var result: ExportState = ExportState.Error(
+            ExportFailureReason.UNEXPECTED_FAILURE,
+            "export did not complete",
+        )
+        try {
+            result = runExport(durationMillis, minutesLabel)
+        } finally {
+            _state.value = result
+        }
         return result
     }
 
     private fun runExport(durationMillis: Long, minutesLabel: Int): ExportState {
-        val gaps = gapsProvider()
-        // Request extra raw audio up front to compensate for gap time: RingBuffer.snapshot()
-        // returns audio-time, not wall-clock time (see GapFiller's doc), so without padding a
-        // window containing interruptions would come back short.
-        val paddingMillis = gaps.sumOf { it.durationMillis }.coerceAtLeast(0L)
-        val rawSnapshot = snapshotProvider(durationMillis + paddingMillis)
-            ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
-        if (rawSnapshot.data.isEmpty()) {
-            return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "nothing buffered yet")
+        // Tracked outside the try below (rather than declared inside it) so the catch(Throwable)
+        // branch can still zero it if it was ever assigned -- an exception from gapsProvider()
+        // itself, or from snapshotProvider(), means there's nothing to zero yet, which is fine.
+        var rawSnapshotForCleanup: AudioSnapshot? = null
+        return try {
+            val gaps = gapsProvider()
+            // Request extra raw audio up front to compensate for gap time: RingBuffer.snapshot()
+            // returns audio-time, not wall-clock time (see GapFiller's doc), so without padding a
+            // window containing interruptions would come back short.
+            val paddingMillis = gaps.sumOf { it.durationMillis }.coerceAtLeast(0L)
+            val rawSnapshot = snapshotProvider(durationMillis + paddingMillis)
+                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
+            rawSnapshotForCleanup = rawSnapshot
+            if (rawSnapshot.data.isEmpty()) {
+                return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "nothing buffered yet")
+            }
+
+            val payload = GapFiller.fill(rawSnapshot, gaps, config, durationMillis)
+            // rawSnapshot.data is a fresh copy of raw mic PCM (RingBuffer.snapshot()); GapFiller.fill
+            // has already consumed it into payload, so nothing here needs it again. Zero it rather
+            // than leaving it to GC, matching the "stop means stop" residue posture RingBuffer itself
+            // already holds to (see RingBuffer.clear).
+            java.util.Arrays.fill(rawSnapshot.data, 0)
+            val displayName = filenameFor(rawSnapshot.startTimestampMillis, minutesLabel)
+
+            val target = try {
+                sink.open(displayName)
+            } catch (e: IOException) {
+                return ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, e.message ?: "sink open failed")
+            }
+
+            writeAndFinish(target, payload, displayName)
+        } catch (e: CancellationException) {
+            throw e // preserve normal coroutine cancellation semantics, don't swallow it as a failure
+        } catch (e: Throwable) {
+            // Anything unexpected (a future regression in GapFiller, an OutOfMemoryError on a very
+            // large snapshot, a throw from gapsProvider()/snapshotProvider() itself, ...) must
+            // still leave rawSnapshot.data zeroed (if it exists yet) and export() free to run
+            // again on the next call, not silently stranded -- see export()'s doc comment.
+            rawSnapshotForCleanup?.data?.let { java.util.Arrays.fill(it, 0) }
+            ExportState.Error(ExportFailureReason.UNEXPECTED_FAILURE, e.message ?: e.javaClass.simpleName)
         }
-
-        val payload = GapFiller.fill(rawSnapshot, gaps, config, durationMillis)
-        // rawSnapshot.data is a fresh copy of raw mic PCM (RingBuffer.snapshot()); GapFiller.fill
-        // has already consumed it into payload, so nothing here needs it again. Zero it rather
-        // than leaving it to GC, matching the "stop means stop" residue posture RingBuffer itself
-        // already holds to (see RingBuffer.clear).
-        java.util.Arrays.fill(rawSnapshot.data, 0)
-        val displayName = filenameFor(rawSnapshot.startTimestampMillis, minutesLabel)
-
-        val target = try {
-            sink.open(displayName)
-        } catch (e: IOException) {
-            return ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, e.message ?: "sink open failed")
-        }
-
-        return writeAndFinish(target, payload, displayName)
     }
 
     private fun writeAndFinish(target: ExportTarget, payload: ByteArray, displayName: String): ExportState {
-        var writeFailure: IOException? = null
+        var writeFailure: Throwable? = null
         try {
             target.outputStream.use { out ->
                 WavWriter.writeHeader(out, config, payload.size)
                 writeInChunks(out, payload)
             }
-        } catch (e: IOException) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Broadened from IOException-only (round 2) to any Throwable: a non-IOException here
+            // must still abort the target and zero payload below, not propagate and skip both
+            // (PR #28 review round 3, same finding as export()'s try/finally).
             writeFailure = e
         }
 
@@ -160,7 +226,10 @@ class ExportEngine(
         val state = when {
             writeFailure != null -> {
                 target.abort()
-                ExportState.Error(ExportFailureReason.WRITE_FAILED, writeFailure.message ?: "write failed")
+                ExportState.Error(
+                    ExportFailureReason.WRITE_FAILED,
+                    writeFailure.message ?: writeFailure.javaClass.simpleName,
+                )
             }
             cancelRequested -> {
                 target.abort()

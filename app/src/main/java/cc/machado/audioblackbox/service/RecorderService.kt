@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -114,8 +115,27 @@ class RecorderService : Service() {
         // `@sec`/`@techlead` finding 4): Exporting/Success/Error each need to reach the
         // notification the instant they happen, not just Logcat -- see handleSave() and
         // RecorderNotification.build's exportState parameter.
+        //
+        // Success/Error are terminal but not permanent: after this refresh has actually shown the
+        // outcome, exportEngine.acknowledgeTerminalState() resets it back to Idle so a later,
+        // unrelated notification refresh (e.g. a phone-call pause hours after a save) can't keep
+        // reasserting a stale export outcome forever (PR #28 review round 2, `@sec`/`@rev`
+        // finding; `@techlead` round-3 adjudication item 2). The delay is deliberate, not
+        // incidental: resetting immediately after refreshNotification() would race the very next
+        // refresh -- exportEngine.state is a StateFlow, which conflates rapid updates for a slow
+        // collector, so an immediate Idle write here could mean the user never actually sees
+        // "Exported: ..."/"Falha ao salvar" at all. EXPORT_OUTCOME_VISIBLE_MILLIS is long enough
+        // for a glance at the notification shade; acknowledgeTerminalState() is itself a no-op if
+        // a newer export has since started (state would be Exporting, not the acknowledged
+        // Success/Error), so this can't stomp on a later call.
         serviceScope.launch {
-            exportEngine.state.collect { refreshNotification() }
+            exportEngine.state.collect { state ->
+                refreshNotification()
+                if (state is ExportState.Success || state is ExportState.Error) {
+                    delay(EXPORT_OUTCOME_VISIBLE_MILLIS)
+                    exportEngine.acknowledgeTerminalState()
+                }
+            }
         }
     }
 
@@ -287,6 +307,10 @@ class RecorderService : Service() {
     companion object {
         private const val TAG = "RecorderService"
         private const val MILLIS_PER_MINUTE = 60_000L
+
+        // How long a Save outcome (Success/Error) stays reflected in the persistent notification
+        // before exportEngine's state is reset to Idle -- see the onCreate() collector comment.
+        private const val EXPORT_OUTCOME_VISIBLE_MILLIS = 8_000L
 
         const val ACTION_START = "cc.machado.audioblackbox.service.action.START"
         const val ACTION_STOP = "cc.machado.audioblackbox.service.action.STOP"
