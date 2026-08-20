@@ -14,7 +14,11 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.content.ContextCompat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
+import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.export.ExportEngine
+import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.MediaStoreSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,6 +54,19 @@ class RecorderService : Service() {
     // launched child (there is normally only ever one at a time) cannot cancel the scope itself.
     // Cancelled in onDestroy.
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    // Built lazily (not in the companion, unlike `engine`) because it needs a Context
+    // (MediaStoreSink -> ContentResolver), which is only available once this Service instance is
+    // attached. Reads `engine.snapshot()`/`engine.gaps.value` at export time via method
+    // references, so it always sees whatever session is current -- not a stale one captured here.
+    private val exportEngine by lazy {
+        ExportEngine(
+            config = captureConfig,
+            snapshotProvider = engine::snapshot,
+            gapsProvider = { engine.gaps.value },
+            sink = MediaStoreSink(applicationContext),
+        )
+    }
 
     // Ignoring intent: see class doc on the AudioFocus criterion of issue #3 -- losing audio
     // focus must not stop the service. This listener's only job is to prove that a focus-change
@@ -203,12 +220,26 @@ class RecorderService : Service() {
     }
 
     private fun handleSave() {
-        // TODO(#5): wire to the export engine once it exists. The notification action, the
-        // PendingIntent plumbing, and this dispatch point are fully wired and exercised by this
-        // module; the actual "copy the last 30 min to a .wav" logic is Module 3's responsibility
-        // and does not exist in this codebase yet, so there is nothing to trigger beyond this log
-        // line today.
-        Log.i(TAG, "handleSave(): export engine not implemented yet (see issue #5)")
+        // Dispatched off this Service's main thread for the same ANR reason as
+        // stopServiceCompletely(): ExportEngine.export() is blocking I/O (ring buffer copy-out is
+        // already bounded/off-thread by the time it gets here, but the WAV encode + MediaStore
+        // write are real disk/IPC work). engine.snapshot()/engine.gaps.value are read from this
+        // background thread; both are documented safe to call from any thread (see
+        // AudioCaptureEngine's field docs).
+        serviceScope.launch(Dispatchers.Default) {
+            val bufferMinutes = captureConfig.bufferDurationMinutes
+            val result = exportEngine.export(
+                durationMillis = bufferMinutes.toLong() * MILLIS_PER_MINUTE,
+                minutesLabel = bufferMinutes,
+            )
+            when (result) {
+                is ExportState.Success ->
+                    Log.i(TAG, "handleSave(): wrote ${result.displayName} (${result.bytesWritten} bytes)")
+                is ExportState.Error ->
+                    Log.w(TAG, "handleSave(): export failed (${result.reason}): ${result.message}")
+                else -> Unit
+            }
+        }
     }
 
     private fun requestAudioFocus() {
@@ -237,16 +268,22 @@ class RecorderService : Service() {
 
     companion object {
         private const val TAG = "RecorderService"
+        private const val MILLIS_PER_MINUTE = 60_000L
 
         const val ACTION_START = "cc.machado.audioblackbox.service.action.START"
         const val ACTION_STOP = "cc.machado.audioblackbox.service.action.STOP"
         const val ACTION_SAVE = "cc.machado.audioblackbox.service.action.SAVE"
 
+        // Shared with the exportEngine instance property (see above) so the WAV header
+        // ExportEngine writes always matches the config the ring buffer was actually captured
+        // at -- never a hardcoded/independent copy.
+        private val captureConfig = AudioConfig()
+
         // Single engine instance for the process lifetime, deliberately not scoped to a Service
         // instance: this is what makes the ring buffer survive Activity destruction (rotation,
         // recents-swipe) -- only losing the whole process kills it, which is unavoidable for a
         // RAM-only buffer regardless of where the reference lives.
-        val engine = AudioCaptureEngine()
+        val engine = AudioCaptureEngine(config = captureConfig)
 
         fun startIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_START)
