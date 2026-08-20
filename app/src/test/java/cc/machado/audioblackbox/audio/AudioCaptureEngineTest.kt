@@ -570,4 +570,116 @@ class AudioCaptureEngineTest {
 
             engine.stop()
         }
+
+    // ---- issue #21: a generated, known signal fed through the audioRecordFactory seam survives
+    // capture intact -- proof that RingBuffer/AudioCaptureEngine do not corrupt, reorder, or
+    // truncate real audio, using a signal precise enough to detect any of those defects. ----
+
+    /** Feeds [source] out through repeated `AudioRecord.read()` calls, exactly like a real
+     * device delivering audio in `minBufferSize`-ish chunks: each call copies up to `len` bytes
+     * starting from wherever the previous call left off, and returns `0` (not an error, no more
+     * data yet) once [source] is exhausted -- so the capture thread's read loop keeps spinning
+     * harmlessly, same as the existing `thenReturn(0)`-forever pattern used elsewhere in this
+     * file, until the test calls `stop()`. */
+    private fun feedSequentially(record: AudioRecord, source: ByteArray) {
+        val position = AtomicInteger(0)
+        whenever(record.read(any<ByteArray>(), any(), any())).thenAnswer { invocation ->
+            val destination = invocation.getArgument<ByteArray>(0)
+            val length = invocation.getArgument<Int>(2)
+            val pos = position.get()
+            val remaining = source.size - pos
+            if (remaining <= 0) return@thenAnswer 0
+            val toCopy = minOf(length, remaining)
+            System.arraycopy(source, pos, destination, 0, toCopy)
+            position.addAndGet(toCopy)
+            toCopy
+        }
+    }
+
+    private fun awaitBufferedDurationAtLeast(engine: AudioCaptureEngine, millis: Long, description: String) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            if ((engine.bufferedDurationMillis() ?: 0L) >= millis) return
+            Thread.sleep(1)
+        }
+        fail("timed out waiting for $description, last bufferedDurationMillis was ${engine.bufferedDurationMillis()}")
+    }
+
+    @Test
+    fun `a generated tone fed through audioRecordFactory is recovered byte-identical via snapshot()`() =
+        withMinBufferSizeMocked(value = 4_000) {
+            val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1, bufferDurationMinutes = 1)
+            val tone = ToneGenerator.tone(frequencyHz = 1_000.0, sampleRateHz = 16_000, durationMillis = 500)
+            // Sanity: this signal must comfortably fit inside one minute of buffer without
+            // wrapping, so this test is really exercising "no corruption/reordering", not
+            // accidentally exercising the wrap path covered by the test below.
+            assertTrue(tone.size < config.totalBufferBytes)
+
+            val record = fakeAudioRecord()
+            feedSequentially(record, tone)
+            val engine = AudioCaptureEngine(config = config, audioRecordFactory = { _, _ -> record })
+
+            engine.start()
+            awaitBufferedDurationAtLeast(engine, 500, "the full 500ms tone to be buffered")
+
+            val recovered = engine.snapshot(500)?.data
+            assertTrue("expected a snapshot back", recovered != null)
+            assertTrue(
+                "recovered PCM must be byte-identical to the generated tone -- any reordering, " +
+                    "truncation, or off-by-one in RingBuffer's write/snapshot path would corrupt " +
+                    "this comparison",
+                tone.contentEquals(recovered),
+            )
+            // Independent confirmation via the detector oracle: the recovered bytes still read as
+            // a clean 1kHz tone, not just an accidental byte match.
+            val energy = GoertzelDetector.energyAt(recovered!!, targetFrequencyHz = 1_000.0, sampleRateHz = 16_000)
+            assertEquals(2047.5, energy, 0.01)
+
+            engine.stop()
+        }
+
+    @Test
+    fun `a tone spanning a ring-buffer wrap is recovered as exactly its tail via snapshot()`() =
+        withMinBufferSizeMocked(value = 2_000) {
+            // A low sample rate keeps the minimum-representable buffer (bufferDurationMinutes
+            // can't go below 1, i.e. 60 seconds) small enough to hold in memory and iterate
+            // quickly, while still comfortably exceeding twice the detected tone's frequency
+            // (Nyquist) for the Goertzel check below.
+            val sampleRateHz = 1_000
+            val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1, bufferDurationMinutes = 1)
+            val bufferDurationMillis = 60_000L
+            val toneDurationMillis = 66_000L // 6s beyond capacity: forces a genuine wrap, not just a fill
+            val tone = ToneGenerator.tone(
+                frequencyHz = 200.0,
+                sampleRateHz = sampleRateHz,
+                durationMillis = toneDurationMillis,
+            )
+            assertTrue("this test only proves what it claims if the tone actually overflows the buffer",
+                tone.size.toLong() > config.totalBufferBytes)
+
+            val record = fakeAudioRecord()
+            feedSequentially(record, tone)
+            val engine = AudioCaptureEngine(config = config, audioRecordFactory = { _, _ -> record })
+
+            engine.start()
+            awaitBufferedDurationAtLeast(engine, bufferDurationMillis, "the ring buffer to fill and wrap")
+
+            val recovered = engine.snapshot(bufferDurationMillis)?.data
+            assertTrue("expected a snapshot back", recovered != null)
+            // Only the most recent bufferDurationMillis of the 66s tone should have survived --
+            // i.e. exactly its tail. A wrap bug (wrong start offset, off-by-one at the wrap
+            // boundary, stale bytes left over from the pre-wrap pass) would desync this from the
+            // real tail and fail this byte-exact comparison.
+            val expectedTail = tone.copyOfRange(tone.size - recovered!!.size, tone.size)
+            assertTrue(
+                "recovered PCM must equal exactly the tone's tail once the ring buffer has " +
+                    "wrapped -- any stale/misaligned bytes at the wrap boundary would break this",
+                expectedTail.contentEquals(recovered),
+            )
+            val energy = GoertzelDetector.energyAt(recovered, targetFrequencyHz = 200.0, sampleRateHz = sampleRateHz)
+            val energyOffTarget = GoertzelDetector.energyAt(recovered, targetFrequencyHz = 350.0, sampleRateHz = sampleRateHz)
+            assertTrue("recovered signal across the wrap should still read as a clean 200Hz tone", energy > energyOffTarget * 100)
+
+            engine.stop()
+        }
 }
