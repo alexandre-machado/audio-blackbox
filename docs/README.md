@@ -11,6 +11,13 @@ The full feature breakdown, one document per module:
 | 3 — Export Engine | [features/03-export-engine.md](features/03-export-engine.md) | [#5](https://github.com/alexandre-machado/audio-blackbox/issues/5) |
 | 4 — User Interface | [features/04-user-interface.md](features/04-user-interface.md) | [#6](https://github.com/alexandre-machado/audio-blackbox/issues/6), [#7](https://github.com/alexandre-machado/audio-blackbox/issues/7) |
 
+## Testing
+
+[testing/tiers.md](testing/tiers.md) — the three test tiers (JVM unit, emulator-based
+instrumented, scripted S25 smoke), what each covers, and the single command to run each one.
+See also [development/running-on-device.md](development/running-on-device.md) for connecting to
+the S25 in the first place.
+
 ## Decisions
 
 - **Design system** — stock Material 3, stable 1.4.0 line. Recorded in [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9), with the evidence brief that rejected the alternatives.
