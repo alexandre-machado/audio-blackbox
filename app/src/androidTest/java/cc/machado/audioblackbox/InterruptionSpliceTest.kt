@@ -32,8 +32,8 @@ import org.junit.runner.RunWith
  * issue the calls itself. It synchronizes with the host script via exactly one logcat marker
  * (see [MARKER_READY]) once recording is confirmed to have actually started, then only *observes*
  * what the OS/engine did in response -- polling real state with bounded timeouts, never a fixed
- * sleep standing in for an assertion, and no retry/`@FlakyTest` wrapper (AGENTS.md's flake rule /
- * issue #26).
+ * sleep standing in for an assertion, and no retry/`@FlakyTest` wrapper (this repo's flake
+ * policy, established on issue #26 / PR #28 round 4).
  *
  * What this proves that the JVM suite structurally cannot: that a real telephony interruption is
  * detected at all, twice, through `AudioManager.AudioRecordingCallback.isClientSilenced`

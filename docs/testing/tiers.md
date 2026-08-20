@@ -49,7 +49,7 @@ Local runs need hardware acceleration (`/dev/kvm` readable/writable by your user
 script's own comments for the one-time `usermod`/re-login step it deliberately does not attempt
 itself). Without that, CI is the verification loop.
 
-**A flaky instrumented test is a blocking defect, not a nuisance** (see AGENTS.md and issue #26 /
+**A flaky instrumented test is a blocking defect, not a nuisance** (established on issue #26 /
 PR #28 round 4). None of these tests use a retry wrapper, a bare `sleep` standing in for an
 assertion, or `@FlakyTest` — they poll real, bounded state (`CaptureState`, `PauseGap` count, a
 committed `MediaStore` row) with generous timeouts instead.
@@ -58,8 +58,8 @@ committed `MediaStore` row) with generous timeouts instead.
 
 | Candidate test (issue #34) | Where |
 | --- | --- |
-| Two simulated calls, then export — splice placement | `InterruptionSpliceTest` (Tier 1) |
-| Notification buffered duration advances + pins at saturation (#30) | `NotificationBufferedDurationTest` (Tier 1) |
+| Two real interruptions detected (correct gap count/ordering), then export commits | `InterruptionSpliceTest` (Tier 1) |
+| Posted notification text keeps refreshing with no `CaptureState` transition (#30) | `NotificationBufferedDurationTest` (Tier 1) |
 | Export lands at expected MediaStore path, `IS_PENDING` cleared, duration matches | `InterruptionSpliceTest` (Tier 1, folded into the same run) |
 | Foreground service declares `FOREGROUND_SERVICE_TYPE_MICROPHONE`; notification not dismissible | `ForegroundServiceDeclarationTest` (Tier 1) |
 | Force-stop releases the mic; service does not restart (`START_NOT_STICKY`) | **Tier 2 only** — see below for why |
@@ -93,6 +93,18 @@ force-stop a device that may be mid-session).
   fires correctly, twice (real GSM call → answered → `isClientSilenced` →
   `pause()`/`resume()` → correct gap count/ordering/duration), independent of what's in the
   audio — that path had never run before this issue.
+
+**What `InterruptionSpliceTest` proves and does not prove, stated precisely (`@rev` finding,
+PR #35):** it proves a real interruption is detected, that exactly two `PauseGap`s are recorded
+in the correct order with no overlap, and that the subsequent export commits a non-pending
+MediaStore row with a positive declared duration. It does **not** prove the exported audio is
+correctly spliced — a mis-ordering or mis-placement of segments that still adds up to the same
+total length would satisfy every assertion here unnoticed. That byte-level placement claim is
+`GapFillerTest`'s job (a JVM unit test with a synthetic multi-gap fixture it can assert exact
+segment content against); this tier cannot make the same claim about real captured audio because
+the headless CI emulator has no host audio backend behind its virtual microphone (see the
+mic-injection finding above), so there is no distinguishable content here to check placement
+against in the first place.
 
 ## Tier 2 — scripted smoke run against the physical S25, on demand
 

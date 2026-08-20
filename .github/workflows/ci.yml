@@ -56,10 +56,10 @@ jobs:
 
   # Emulator-based instrumented tier (issue #34). Deliberately a separate job from `build`
   # above, which stays the primary required gate: instrumented tests are slower and structurally
-  # riskier (a booted emulator, real telephony simulation) than the JVM suite, and issue #34's
-  # AGENTS.md rule is explicit that a flaky instrumented test is a blocking defect, not a
-  # nuisance to route around with a retry wrapper -- so this job is allowed to fail loudly and
-  # block the PR, but it must never be "fixed" by re-running it green.
+  # riskier (a booted emulator, real telephony simulation) than the JVM suite. This repo's policy
+  # (established on issue #26 / PR #28 round 4) is explicit that a flaky instrumented test is a
+  # blocking defect, not a nuisance to route around with a retry wrapper -- so this job is
+  # allowed to fail loudly and block the PR, but it must never be "fixed" by re-running it green.
   #
   # AVD parameters (API level, target, arch) come from scripts/ci/avd.env, the single source of
   # truth also used by scripts/run-instrumented-tests.sh for local runs -- see that file's
