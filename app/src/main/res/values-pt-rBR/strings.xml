@@ -59,11 +59,15 @@
 
     <string name="dashboard_status_announcement">Estado da gravação: %1$s</string>
 
-    <string name="dashboard_start_engine">Iniciar motor</string>
-    <string name="dashboard_stop_engine">Parar motor</string>
-    <string name="dashboard_start_engine_cd">Iniciar motor de gravação</string>
-    <string name="dashboard_stop_engine_cd">Parar motor de gravação</string>
-    <string name="dashboard_retry_engine">Tentar novamente</string>
+    <!-- Interruptor de gravação contínua (issue #46: um Switch estilo VPN, não um botão Iniciar/Parar) -->
+    <string name="dashboard_engine_switch_label">Gravação contínua</string>
+    <string name="dashboard_engine_switch_state_on">Ligado — gravando continuamente</string>
+    <string name="dashboard_engine_switch_state_off">Desligado — nada está sendo gravado</string>
+    <string name="dashboard_engine_switch_state_paused">Pausado — uma ligação está usando o microfone; a gravação será retomada automaticamente quando ela terminar</string>
+    <string name="dashboard_engine_switch_state_starting">Iniciando…</string>
+    <string name="dashboard_engine_switch_state_stopping">Parando…</string>
+    <string name="dashboard_engine_switch_state_error">Desligado — a gravação parou por causa de um erro</string>
+    <string name="dashboard_engine_switch_announcement">Interruptor de gravação contínua: %1$s</string>
 
     <string name="dashboard_buffer_status">%1$s de %2$s em memória</string>
     <string name="dashboard_buffer_status_cd">Buffer de áudio: %1$s de %2$s em memória</string>

@@ -13,6 +13,48 @@ sealed interface CaptureStatus {
     data class Error(val reason: CaptureErrorReason, val message: String) : CaptureStatus
 }
 
+/**
+ * What the primary Material 3 [androidx.compose.material3.Switch] on the dashboard (issue #46)
+ * should render for one [CaptureStatus], produced by [DashboardViewModel.mapEngineSwitchState] --
+ * the single oracle for "is the switch on, off, disabled, or showing an error" so [DashboardScreen]
+ * never re-derives that from [CaptureStatus] itself.
+ *
+ * ## Paused (the hardest part -- see issue #46)
+ * [CaptureStatus.Paused] maps to [checked] == `true`, not a third visual position: the recording
+ * *mode* the user turned on is still engaged (the engine still holds `AudioRecord` and will resume
+ * writing the instant the phone call ends -- see [cc.machado.audioblackbox.audio.AudioCaptureEngine.resume]),
+ * so telling the user "this switch is off" would be a lie about what happens next. What must not
+ * happen is Paused looking identical to plain Recording: [paused] is `true` only for this state so
+ * the screen can give it its own supporting text/color, distinct from both Recording and Off.
+ *
+ * ## Pending / transitional (the other hard part)
+ * [enabled] is `false` and [pending] is `true` while a user-initiated start/stop is in flight (see
+ * [DashboardViewModel.toggleEngine]) -- this project chose *disabled-while-transitioning* over an
+ * indeterminate third switch position: [checked] is deliberately left at whatever it already was
+ * (the real, last-known [CaptureStatus]) rather than optimistically flipped, so a start that later
+ * fails never has to be silently snapped back -- the switch simply never moved. See
+ * [DashboardViewModel.mapEngineSwitchState]'s doc for exactly how [pending] is cleared once the
+ * real outcome (Recording/Paused/Error/Idle) arrives.
+ */
+data class EngineSwitchUiState(
+    /** Physical on/off position of the [androidx.compose.material3.Switch] thumb. Always derived
+     * from the real [CaptureStatus] -- never set ahead of it (see class doc). */
+    val checked: Boolean,
+    /** `false` while [pending] is `true` (disabled-while-transitioning) -- the user cannot fire a
+     * second toggle before the first one's real outcome is known. */
+    val enabled: Boolean,
+    /** `true` only while a user-initiated start/stop request has been dispatched but
+     * [CaptureStatus] has not yet changed to reflect its outcome. */
+    val pending: Boolean,
+    /** `true` only for [CaptureStatus.Paused] -- see class doc's "Paused" section. */
+    val paused: Boolean,
+    /** Non-null only for [CaptureStatus.Error], carried through unchanged so the screen can show
+     * what failed. The switch stays actionable (flipping it again attempts a fresh start via
+     * [DashboardViewModel.toggleEngine]'s `Idle`/`Error` branch) -- an error never gets swallowed
+     * by the switch simply sitting in the "off" position. */
+    val error: CaptureStatus.Error?,
+)
+
 /** Why a [WindowOption] can't be requested right now. */
 enum class WindowDisabledReason {
     /** The ring buffer simply does not hold this many minutes of audio yet. */
@@ -79,6 +121,7 @@ data class RetentionSectionUiState(
  * this is exactly the function issue #6 requires a unit-tested oracle for. */
 data class DashboardUiState(
     val captureStatus: CaptureStatus,
+    val engineSwitch: EngineSwitchUiState,
     val bufferedMillis: Long,
     val capacityMillis: Long,
     val isBufferFull: Boolean,
