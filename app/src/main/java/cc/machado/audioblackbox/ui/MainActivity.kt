@@ -10,24 +10,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Card
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.permissions.AndroidPermissionSystem
 import cc.machado.audioblackbox.permissions.BatteryOptimization
@@ -38,7 +39,10 @@ import cc.machado.audioblackbox.permissions.PermissionResolverInput
 import cc.machado.audioblackbox.permissions.PermissionSystem
 import cc.machado.audioblackbox.permissions.SharedPrefsOnboardingPreferences
 import cc.machado.audioblackbox.service.RecorderService
+import cc.machado.audioblackbox.ui.dashboard.DashboardRoute
+import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
 import cc.machado.audioblackbox.ui.onboarding.OnboardingScreen
+import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
@@ -79,18 +83,40 @@ class MainActivity : ComponentActivity() {
         refreshStep()
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            AudioBlackboxTheme {
                 Scaffold { innerPadding ->
                     if (stepState == OnboardingStep.DONE) {
-                        MainScreen(
-                            modifier = Modifier.padding(innerPadding),
-                            recordAudioGranted = recordAudioGrantedState,
-                            isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizationsState,
-                            onRequestBatteryExemption = {
-                                batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this))
-                            },
-                            onStartEngine = { startRecordingEngine() },
-                        )
+                        val dashboardViewModelFactory = remember {
+                            viewModelFactory {
+                                initializer {
+                                    DashboardViewModel(
+                                        onStartEngine = { startRecordingEngine() },
+                                        onStopEngine = {
+                                            ContextCompat.startForegroundService(
+                                                this@MainActivity,
+                                                RecorderService.stopIntent(this@MainActivity),
+                                            )
+                                        },
+                                        onSaveIntent = {
+                                            ContextCompat.startForegroundService(
+                                                this@MainActivity,
+                                                RecorderService.saveIntent(this@MainActivity),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                            if (!isIgnoringBatteryOptimizationsState) {
+                                BatteryOptimizationBanner(
+                                    onRequestBatteryExemption = {
+                                        batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
+                                    },
+                                )
+                            }
+                            DashboardRoute(viewModel = viewModel(factory = dashboardViewModelFactory))
+                        }
                     } else {
                         OnboardingScreen(
                             step = stepState,
@@ -188,63 +214,23 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Persistent warning shown above the dashboard for a user who skipped the battery-optimization
+ * exemption (the app must stay usable, per issue #4, but the risk of the OS killing background
+ * recording must stay visible). The caller gates this on the live PowerManager state, not the
+ * stored "skipped" flag, so it disappears on its own if the exemption is later granted from
+ * system Settings.
+ */
 @Composable
-fun MainScreen(
-    modifier: Modifier = Modifier,
-    recordAudioGranted: Boolean = true,
-    isIgnoringBatteryOptimizations: Boolean = true,
-    onRequestBatteryExemption: () -> Unit = {},
-    onStartEngine: () -> Unit = {},
-) {
-    Surface(modifier = modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = stringResource(id = R.string.app_name))
-                Column(modifier = Modifier.padding(top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Button(onClick = onStartEngine, enabled = recordAudioGranted) {
-                        Text(text = stringResource(id = R.string.main_start_engine))
-                    }
-                    if (!recordAudioGranted) {
-                        Column(modifier = Modifier.padding(top = 8.dp)) {
-                            Text(text = stringResource(id = R.string.main_start_engine_disabled_reason))
-                        }
-                    }
-                }
-                // Visible, persistent warning for a user who skipped the battery-optimization
-                // exemption (the app must stay usable, per issue #4, but the risk of the OS
-                // killing background recording must stay visible). Gated on the live
-                // PowerManager state, not the stored "skipped" flag, so it disappears on its
-                // own if the exemption is later granted from system Settings.
-                if (!isIgnoringBatteryOptimizations) {
-                    Column(
-                        modifier = Modifier.padding(top = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(text = stringResource(id = R.string.onboarding_battery_warning))
-                        Column(modifier = Modifier.padding(top = 8.dp)) {
-                            Button(onClick = onRequestBatteryExemption) {
-                                Text(text = stringResource(id = R.string.onboarding_battery_grant))
-                            }
-                        }
-                    }
+fun BatteryOptimizationBanner(onRequestBatteryExemption: () -> Unit, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = stringResource(id = R.string.onboarding_battery_warning))
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                Button(onClick = onRequestBatteryExemption) {
+                    Text(text = stringResource(id = R.string.onboarding_battery_grant))
                 }
             }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenPreview() {
-    MaterialTheme {
-        MainScreen()
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenBatteryWarningPreview() {
-    MaterialTheme {
-        MainScreen(isIgnoringBatteryOptimizations = false)
     }
 }
