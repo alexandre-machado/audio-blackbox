@@ -464,9 +464,11 @@ the feature graphic and phone screenshots.
    `app/src/main/res/values/strings.xml` is off-limits in this PR regardless.
 6. **Not resolved**: privacy-policy hosting location and URL (section A.2) — owner
    decision, blocking everything downstream of it in Play Console.
-7. **Not resolved**: launch locale(s) — the onboarding legal copy is Portuguese-only
-   today; the store listing draft above is English. Pick one consistent set before
-   submission (ties to issue #44).
+7. **Not resolved**: which locale(s) to publish the *store listing* in. Issue
+   #44 is closed (`#65`, `2415ae1`) — the app itself already ships English
+   (default) + Portuguese (pt-rBR); this is no longer an app-localization
+   question. The store listing draft in section E is English-only; decide
+   whether to also publish a pt-BR listing before submission.
 8. **Not attempted in this task, per its own scope**: setting up
    `gradle-play-publisher` or any service-account-based publishing automation.
    That's explicitly deferred to a later, separately authorized step.
