@@ -43,6 +43,7 @@ class GalleryViewModel(
     // null means "the first query hasn't returned yet" -- see GalleryUiState.isLoading's doc.
     private val _recordings = MutableStateFlow<List<RecordingItem>?>(null)
     private val _pendingDelete = MutableStateFlow<RecordingItem?>(null)
+    private val _deleteError = MutableStateFlow<RecordingItem?>(null)
 
     // Polled rather than observed for the same reason DashboardViewModel polls buffered duration:
     // MediaPlayer.getCurrentPosition() is a plain getter, not itself observable, and changes
@@ -60,12 +61,19 @@ class GalleryViewModel(
         player.playback,
         positionTickFlow,
         _pendingDelete,
-    ) { recordings, playback, position, pendingDelete ->
-        buildUiState(recordings, playback, position, pendingDelete)
+        _deleteError,
+    ) { recordings, playback, position, pendingDelete, deleteError ->
+        buildUiState(recordings, playback, position, pendingDelete, deleteError)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-        initialValue = buildUiState(_recordings.value, player.playback.value, 0L, _pendingDelete.value),
+        initialValue = buildUiState(
+            _recordings.value,
+            player.playback.value,
+            0L,
+            _pendingDelete.value,
+            _deleteError.value,
+        ),
     )
 
     init {
@@ -106,20 +114,45 @@ class GalleryViewModel(
         _pendingDelete.value = null
     }
 
+    /** Dismisses a previously surfaced delete failure (see [onDeleteConfirmed]'s doc). No-op if
+     * nothing is currently showing. */
+    fun onDeleteErrorDismissed() {
+        _deleteError.value = null
+    }
+
     /** Deletes the row [onDeleteRequested] chose. If that item is the one currently loaded in
      * [player] (playing or paused), stops it first -- deleting the `MediaStore` row out from under
      * a live [android.media.MediaPlayer] is not something to rely on the platform handling
      * gracefully. Always [refresh]es afterward so the list reflects the real, current `MediaStore`
-     * state rather than this class's own guess of "one row removed". */
+     * state rather than this class's own guess of "one row removed" -- in particular, if
+     * [RecordingsRepository.delete] failed (most likely because this app does not own that row --
+     * see [MediaStoreSink.delete]'s doc, issue #59), the row is simply still there after
+     * [refresh], never optimistically dropped out from under a file that is still on disk.
+     * [_deleteError] surfaces that failure as a real, dismissible, visible state rather than a
+     * silent no-op (issue #29's rule, PR #61 review finding). */
     fun onDeleteConfirmed() {
         val target = _pendingDelete.value ?: return
         _pendingDelete.value = null
+        _deleteError.value = null
         viewModelScope.launch {
             val playing = player.playback.value
             val targetIsLoaded = (playing as? PlaybackState.Playing)?.uri == target.uri ||
                 (playing as? PlaybackState.Paused)?.uri == target.uri
             if (targetIsLoaded) player.stop()
-            withContext(ioDispatcher) { repository.delete(target.uri) }
+            // RecordingsRepository.delete is documented never to throw (MediaStoreSink itself
+            // already catches SecurityException), but this call is still wrapped rather than
+            // trusted blindly: an uncaught exception here would crash this launch{} entirely,
+            // silently skipping both the error surfaced below and the refresh() that keeps the
+            // list honest either way (PR #61 review finding -- delete failures must never be a
+            // silent no-op, whether they come back as `false` or as an unexpected throw).
+            val deleted = try {
+                withContext(ioDispatcher) { repository.delete(target.uri) }
+            } catch (e: Exception) {
+                false
+            }
+            if (!deleted) {
+                _deleteError.value = target
+            }
             refresh()
         }
     }
@@ -166,15 +199,16 @@ class GalleryViewModel(
             }.sortedByDescending { it.capturedAtMillis }
 
         /** The single state-mapping oracle: recordings + shared playback state + polled position
-         * + a pending delete -> the exact [GalleryUiState] the screen renders. Deliberately the
-         * only place that decides which single item (if any) is Playing/Paused -- see
-         * [ItemPlaybackState]'s doc for why this makes two items Playing at once structurally
+         * + a pending delete + a delete failure -> the exact [GalleryUiState] the screen renders.
+         * Deliberately the only place that decides which single item (if any) is Playing/Paused --
+         * see [ItemPlaybackState]'s doc for why this makes two items Playing at once structurally
          * impossible, not just a rule this function happens to follow. */
         fun buildUiState(
             recordings: List<RecordingItem>?,
             playback: PlaybackState,
             positionMillis: Long,
             pendingDelete: RecordingItem?,
+            deleteError: RecordingItem? = null,
         ): GalleryUiState {
             val items = (recordings ?: emptyList()).map { recording ->
                 val itemPlayback: ItemPlaybackState = when {
@@ -186,7 +220,12 @@ class GalleryViewModel(
                 }
                 RecordingListItem(recording, itemPlayback)
             }
-            return GalleryUiState(isLoading = recordings == null, items = items, pendingDelete = pendingDelete)
+            return GalleryUiState(
+                isLoading = recordings == null,
+                items = items,
+                pendingDelete = pendingDelete,
+                deleteError = deleteError,
+            )
         }
 
         /** Standard [ViewModelProvider.Factory] wiring for

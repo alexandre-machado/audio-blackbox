@@ -108,4 +108,7 @@
     <string name="gallery_delete_confirm_body">Esta ação exclui o arquivo permanentemente e não pode ser desfeita.</string>
     <string name="gallery_delete_confirm_action">Excluir</string>
     <string name="gallery_delete_cancel_action">Cancelar</string>
+    <string name="gallery_delete_error_title">Não foi possível excluir</string>
+    <string name="gallery_delete_error_body">Esta gravação não pôde ser excluída. Isso pode acontecer com gravações antigas após reinstalar o aplicativo.</string>
+    <string name="gallery_delete_error_dismiss">OK</string>
 </resources>

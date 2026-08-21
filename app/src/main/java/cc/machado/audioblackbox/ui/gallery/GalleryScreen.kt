@@ -63,6 +63,7 @@ fun GalleryRoute(modifier: Modifier = Modifier) {
         onDeleteRequested = viewModel::onDeleteRequested,
         onDeleteConfirmed = viewModel::onDeleteConfirmed,
         onDeleteCancelled = viewModel::onDeleteCancelled,
+        onDeleteErrorDismissed = viewModel::onDeleteErrorDismissed,
         modifier = modifier,
     )
 }
@@ -93,6 +94,7 @@ fun GalleryScreen(
     onDeleteRequested: (RecordingItem) -> Unit,
     onDeleteConfirmed: () -> Unit,
     onDeleteCancelled: () -> Unit,
+    onDeleteErrorDismissed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -119,6 +121,10 @@ fun GalleryScreen(
                 onConfirm = onDeleteConfirmed,
                 onDismiss = onDeleteCancelled,
             )
+        }
+
+        if (uiState.deleteError != null) {
+            DeleteErrorDialog(onDismiss = onDeleteErrorDismissed)
         }
     }
 }
@@ -291,13 +297,31 @@ private fun DeleteConfirmationDialog(
     )
 }
 
+/** Shown when [RecordingsRepository.delete][cc.machado.audioblackbox.export.RecordingsRepository.delete]
+ * returns `false` -- most likely because this app no longer owns that `MediaStore` row (issue
+ * #59). A real, visible failure rather than the row silently reappearing with no explanation
+ * (issue #29's rule). */
+@Composable
+private fun DeleteErrorDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.gallery_delete_error_title)) },
+        text = { Text(text = stringResource(R.string.gallery_delete_error_body)) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.gallery_delete_error_dismiss))
+            }
+        },
+    )
+}
+
 // ---- Previews ----
 
 @Preview(showBackground = true, name = "Empty")
 @Composable
 private fun GalleryScreenEmptyPreview() {
     AudioBlackboxTheme {
-        GalleryScreen(GalleryUiState(isLoading = false, items = emptyList()), {}, {}, {}, {}, {}, {})
+        GalleryScreen(GalleryUiState(isLoading = false, items = emptyList()), {}, {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -329,7 +353,7 @@ private fun GalleryScreenListPreview() {
                     RecordingListItem(playingRecording, ItemPlaybackState.Playing(120_000L, 900_000L)),
                 ),
             ),
-            {}, {}, {}, {}, {}, {},
+            {}, {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -352,7 +376,30 @@ private fun GalleryScreenDeleteConfirmationPreview() {
                 items = listOf(RecordingListItem(recording, ItemPlaybackState.Stopped)),
                 pendingDelete = recording,
             ),
-            {}, {}, {}, {}, {}, {},
+            {}, {}, {}, {}, {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Delete error")
+@Composable
+private fun GalleryScreenDeleteErrorPreview() {
+    val recording = RecordingItem(
+        uri = "content://media/external/audio/media/1".toUri(),
+        displayName = "blackbox_2025-01-05_23-10-00_30min.wav",
+        mimeType = "audio/wav",
+        sizeBytes = 158_000_000L,
+        durationMillis = 1_800_000L,
+        capturedAtMillis = 1_736_118_600_000L,
+    )
+    AudioBlackboxTheme {
+        GalleryScreen(
+            GalleryUiState(
+                isLoading = false,
+                items = listOf(RecordingListItem(recording, ItemPlaybackState.Stopped)),
+                deleteError = recording,
+            ),
+            {}, {}, {}, {}, {}, {}, {},
         )
     }
 }

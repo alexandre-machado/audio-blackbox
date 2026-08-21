@@ -49,4 +49,9 @@ data class GalleryUiState(
     val isLoading: Boolean = true,
     val items: List<RecordingListItem> = emptyList(),
     val pendingDelete: RecordingItem? = null,
+    // A delete that failed (e.g. RecordingsRepository.delete returned false because this app does
+    // not own that MediaStore row -- see GalleryViewModel.onDeleteConfirmed) -- surfaced as a real,
+    // visible error, never a silent no-op or an optimistic removal of a row still sitting on disk
+    // (issue #29's rule, PR #61 review finding). Dismissed the same way pendingDelete is resolved.
+    val deleteError: RecordingItem? = null,
 )

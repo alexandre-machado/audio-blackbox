@@ -199,6 +199,27 @@ class GalleryMappingTest {
         assertEquals(item, state.pendingDelete)
     }
 
+    @Test
+    fun `buildUiState carries a delete failure through unchanged, and defaults to null when omitted`() {
+        val item = recordingItem("A")
+        val withError = GalleryViewModel.buildUiState(
+            recordings = listOf(item),
+            playback = PlaybackState.Idle,
+            positionMillis = 0L,
+            pendingDelete = null,
+            deleteError = item,
+        )
+        assertEquals(item, withError.deleteError)
+
+        val withoutError = GalleryViewModel.buildUiState(
+            recordings = listOf(item),
+            playback = PlaybackState.Idle,
+            positionMillis = 0L,
+            pendingDelete = null,
+        )
+        assertNull(withoutError.deleteError)
+    }
+
     private fun recordingItem(name: String) = RecordingItem(
         uri = mock(),
         displayName = name,

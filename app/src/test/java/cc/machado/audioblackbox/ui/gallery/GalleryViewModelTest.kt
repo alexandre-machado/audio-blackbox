@@ -187,6 +187,7 @@ class GalleryViewModelTest {
         assertEquals(listOf(item.uri), repository.deleted)
         assertTrue(viewModel.uiState.value.items.isEmpty())
         assertNull(viewModel.uiState.value.pendingDelete)
+        assertNull("a successful delete must not show an error", viewModel.uiState.value.deleteError)
     }
 
     @Test
@@ -204,6 +205,71 @@ class GalleryViewModelTest {
         assertNull(viewModel.uiState.value.pendingDelete)
         assertTrue(repository.deleted.isEmpty())
         assertEquals(1, viewModel.uiState.value.items.size) // never actually deleted
+    }
+
+    // ---- PR #61 review: a delete that fails (row not owned by this app -- issue #59) must be a
+    // real, visible failure, never a silent optimistic removal of a file still on disk ----
+
+    @Test
+    fun `onDeleteConfirmed surfaces a visible error and keeps the item when the repository reports failure`() = runTest {
+        val repository = FakeRecordingsRepository(listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a")))
+        repository.deleteSucceeds = false
+        val viewModel = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(viewModel)
+        val item = viewModel.uiState.value.items.single().recording
+        viewModel.onDeleteRequested(item)
+        runCurrent()
+
+        viewModel.onDeleteConfirmed()
+        runCurrent()
+
+        assertEquals(
+            "a row this app couldn't actually delete must still be in the list -- it is still on disk",
+            1,
+            viewModel.uiState.value.items.size,
+        )
+        assertEquals(item, viewModel.uiState.value.deleteError)
+        assertNull(viewModel.uiState.value.pendingDelete)
+    }
+
+    @Test
+    fun `onDeleteConfirmed does not crash when the repository throws, and still surfaces an error`() = runTest {
+        val repository = FakeRecordingsRepository(listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a")))
+        repository.deleteThrows = true
+        val viewModel = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(viewModel)
+        val item = viewModel.uiState.value.items.single().recording
+        viewModel.onDeleteRequested(item)
+        runCurrent()
+
+        viewModel.onDeleteConfirmed()
+        runCurrent()
+
+        assertEquals(
+            "an unexpected throw from the repository must not silently drop the item from the list",
+            1,
+            viewModel.uiState.value.items.size,
+        )
+        assertEquals(item, viewModel.uiState.value.deleteError)
+    }
+
+    @Test
+    fun `onDeleteErrorDismissed clears a shown delete error`() = runTest {
+        val repository = FakeRecordingsRepository(listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a")))
+        repository.deleteSucceeds = false
+        val viewModel = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(viewModel)
+        val item = viewModel.uiState.value.items.single().recording
+        viewModel.onDeleteRequested(item)
+        runCurrent()
+        viewModel.onDeleteConfirmed()
+        runCurrent()
+        assertEquals(item, viewModel.uiState.value.deleteError)
+
+        viewModel.onDeleteErrorDismissed()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.deleteError)
     }
 
     @Test
