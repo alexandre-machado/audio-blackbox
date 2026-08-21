@@ -1,6 +1,7 @@
 package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
+import cc.machado.audioblackbox.export.ExportFailureReason
 
 /** UI-facing mirror of [cc.machado.audioblackbox.audio.CaptureState], mapped 1:1 by
  * [DashboardViewModel] -- see its `mapCaptureStatus` -- so the screen never needs to import the
@@ -16,14 +17,6 @@ sealed interface CaptureStatus {
 enum class WindowDisabledReason {
     /** The ring buffer simply does not hold this many minutes of audio yet. */
     INSUFFICIENT_BUFFER,
-
-    /** The buffer holds enough audio, but [cc.machado.audioblackbox.service.RecorderService]'s
-     * `ACTION_SAVE` has no way to request less than everything currently buffered -- see the
-     * gap flagged on issue #6/#5. Exporting this option today would either silently produce a
-     * longer file than requested or require the UI to trim audio itself, both of which the
-     * issue explicitly forbids, so it stays disabled with this reason until the service exposes
-     * a window-minutes parameter. */
-    PARTIAL_WINDOW_NOT_SUPPORTED,
 }
 
 /** One entry in the "salvar o passado" window selector. */
@@ -34,14 +27,31 @@ data class WindowOption(
     val disabledReason: WindowDisabledReason?,
 )
 
-/** Observable lifecycle of a save request, as the dashboard screen sees it. Unlike
- * [cc.machado.audioblackbox.export.ExportState] (which [DashboardViewModel] cannot currently
- * observe in real time -- see the gap noted on issue #6), [Requested] only means the intent was
- * sent, not that the export has finished; the real outcome today only surfaces in the
- * persistent notification. */
+/** Observable lifecycle of a save request, as the dashboard screen sees it -- a direct mirror of
+ * [cc.machado.audioblackbox.export.ExportState] (issue #40 item 2: [RecorderService][cc.machado.audioblackbox.service.RecorderService]
+ * now publishes that StateFlow from its companion, the same way it already does for `engine.state`),
+ * minus [cc.machado.audioblackbox.export.ExportState.Idle] and
+ * [cc.machado.audioblackbox.export.ExportState.Exporting] which map 1:1 by name -- see
+ * [DashboardViewModel.mapSaveUiState]. [Success]/[Error] can be individually dismissed by the user
+ * before the service's own [cc.machado.audioblackbox.export.ExportEngine.acknowledgeTerminalState]
+ * timeout resets the underlying [cc.machado.audioblackbox.export.ExportState] back to `Idle` --
+ * see [DashboardViewModel.dismissSaveNotice]. */
 sealed interface SaveUiState {
     data object Idle : SaveUiState
-    data class Requested(val minutes: Int) : SaveUiState
+    data object Exporting : SaveUiState
+
+    /** [displayName] is the filename [cc.machado.audioblackbox.export.ExportEngine] wrote, e.g.
+     * `blackbox_2026-08-21_10-15-00_5min.m4a` -- this is [DashboardScreen]'s on-screen success
+     * confirmation naming the saved file. Deliberately carries nothing more: a direct path to open
+     * the file in the gallery/share it (the rest of issue #6's "success confirmation" criterion)
+     * needs the gallery, which does not exist yet -- see issue #7. Nothing here is a placeholder
+     * that pretends that part is done; it is simply not attempted until #7 lands. */
+    data class Success(val displayName: String) : SaveUiState
+
+    /** [reason]/[message] are [cc.machado.audioblackbox.export.ExportState.Error]'s own fields,
+     * carried through unchanged so a failure is visible on this screen -- not only in the
+     * persistent notification, which was the whole gap issue #40 item 2 closes. */
+    data class Error(val reason: ExportFailureReason, val message: String) : SaveUiState
 }
 
 /** Everything [DashboardScreen] needs to render one frame, produced by

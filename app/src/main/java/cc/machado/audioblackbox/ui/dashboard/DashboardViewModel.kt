@@ -5,9 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.service.RecorderService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,49 +16,55 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Maps [RecorderService]'s observable engine state onto [DashboardUiState] and dispatches the
- * dashboard's user actions back onto the service. Deliberately does not keep any parallel copy
- * of "is it recording" truth: [captureState] defaults to
+ * Maps [RecorderService]'s observable engine/export state onto [DashboardUiState] and dispatches
+ * the dashboard's user actions back onto the service. Deliberately does not keep any parallel
+ * copy of "is it recording" truth: [captureState] defaults to
  * [RecorderService.Companion.engine]'s own `StateFlow`, which is a singleton for the process
  * lifetime (see that class's doc), so a freshly constructed ViewModel -- after rotation, or after
  * the Activity is recreated while the service keeps running in the background -- immediately
  * reflects whatever the service's real state already is, rather than starting from a guess.
+ * [exportState] and [capacityMinutes] follow the same pattern -- see their own docs below.
  *
- * ## The window-selector gap (flagged on issue #6)
- * [RecorderService.saveIntent] takes no window-length parameter; `handleSave()` always exports
- * everything the capture engine currently has buffered, up to [capacityMinutes]. Trimming that
- * down to a shorter window in this ViewModel was considered and rejected -- the issue explicitly
- * forbids duplicating the export engine's windowing logic in the UI layer, and doing so here
- * would silently diverge from whatever [cc.machado.audioblackbox.export.ExportEngine] actually
- * writes (gap handling, WAV header, filename). Until the service exposes a window-minutes extra
- * threaded through to `exportEngine.export(...)`, [computeWindowOptions] can only ever enable the
- * option matching [capacityMinutes] itself, and only once the buffer actually holds that much --
- * see that function's doc for the exact rule.
+ * ## The window selector (issue #40 item 1, closing the gap flagged on issue #6)
+ * [RecorderService.saveIntent] now threads a requested window in minutes through `ACTION_SAVE`
+ * into `exportEngine.export(...)`, so [computeWindowOptions] can enable every option the buffer
+ * actually holds enough audio for, not only the one matching [capacityMinutes]. This ViewModel
+ * still does not trim or duplicate any windowing itself: [requestSave] only ever forwards the
+ * exact minutes value an already-enabled [WindowOption] carries, and
+ * [cc.machado.audioblackbox.export.ExportEngine]/[cc.machado.audioblackbox.audio.RingBuffer.snapshot]
+ * are the only things that ever clamp a request down to what is truly buffered.
  *
- * ## The save-progress gap (flagged on issue #6)
- * [RecorderService] does not expose `exportEngine.state` outside the service instance (it is a
- * `private val`, constructed per-Service-instance because it needs a `Context`) -- only the
- * persistent notification currently renders Exporting/Success/Error. So this ViewModel cannot
- * tell a real "still writing" from "finished" from "failed"; [requestSave] can only record that
- * the intent was sent ([SaveUiState.Requested]) and point the user at the notification for the
- * real outcome. Wiring true progress/success/error into this screen needs
- * [RecorderService] to publish that `StateFlow` the same way it already does for [captureState].
+ * ## Real save progress (issue #40 item 2, closing the gap flagged on issue #6)
+ * [RecorderService] now publishes `exportEngine.state` from its companion object the same way it
+ * already does for `engine.state` (as [exportState]), so [uiState] carries the export's real
+ * [ExportState] -- Exporting/Success/Error -- not just "the intent was sent". [mapSaveUiState]
+ * is the pure oracle for that mapping. Opening the saved file from the success confirmation still
+ * needs the gallery (issue #7) and is not attempted here -- see [SaveUiState.Success]'s doc.
  */
 class DashboardViewModel(
     private val captureState: StateFlow<CaptureState> = RecorderService.engine.state,
     private val bufferedDurationMillisProvider: () -> Long? = RecorderService.engine::bufferedDurationMillis,
-    private val capacityMinutes: Int = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+    // Issue #40 item 3 (`@rev` finding on issue #6): reads RecorderService's real configured
+    // capacity instead of the bare AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES constant this used
+    // to default to -- both are 30 today, but only this keeps them from being able to drift, since
+    // this is the same value captureConfig/engine/exportEngine are all actually built from.
+    private val capacityMinutes: Int = RecorderService.bufferDurationMinutes,
+    private val exportState: StateFlow<ExportState> = RecorderService.exportState,
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
     private val onSaveIntent: (minutes: Int) -> Unit = {},
 ) : ViewModel() {
 
-    private val _saveState = MutableStateFlow<SaveUiState>(SaveUiState.Idle)
+    // The most recent terminal ExportState (Success/Error) the user has explicitly dismissed --
+    // see dismissSaveNotice()/mapSaveUiState(). null means "nothing dismissed yet", which is also
+    // what a freshly constructed ViewModel starts with even if exportState already holds a
+    // terminal value from before this ViewModel existed (e.g. after rotation, right after a save
+    // just finished) -- that outcome is still worth showing once, not swallowed silently.
+    private val _dismissedExportState = MutableStateFlow<ExportState?>(null)
 
     // Polled rather than a StateFlow because AudioCaptureEngine.bufferedDurationMillis() is a
     // plain getter, not itself observable (see that method's doc) -- it changes continuously
@@ -72,12 +79,53 @@ class DashboardViewModel(
         }
     }
 
+    // Guards a rapid double-tap of requestSave() against dispatching onSaveIntent twice for what
+    // was a single user action (issue #40 follow-up -- `@techlead`, off the back of issue #41's
+    // instance-behaviour probe / PR #42, and issue #29's manual "tap Salvar twice" checklist item).
+    //
+    // ExportEngine already refuses a truly concurrent export (EXPORT_ALREADY_IN_PROGRESS) -- no
+    // two exports can ever run at once and no file is at risk regardless of this flag. What this
+    // guards is narrower: without it, a second tap that lands before RecorderService's async
+    // round trip has had any chance to flip `exportState` away from Idle sails past the
+    // `exportState.value !is ExportState.Idle` check below too (both taps still observe Idle) and
+    // reaches onSaveIntent a second time, which -- now that issue #40 item 2 wires the real
+    // ExportState onto this screen -- surfaces ExportEngine's rejection as a user-visible error for
+    // what was just a duplicated tap on a single action.
+    //
+    // Plain (non-Flow) field, not a second StateFlow: every read/write happens on this ViewModel's
+    // own single-threaded dispatcher (Dispatchers.Main.immediate, same as viewModelScope) --
+    // requestSave() is only ever called from Compose's UI thread, and the collector below that
+    // clears it runs on viewModelScope, which is that same dispatcher. No synchronization needed
+    // for a value only ever touched from one thread.
+    //
+    // Must never be able to get stuck at `true` -- a permanent Save lockout was already a blocking
+    // finding once in this project (issue #30's stranded-notification class), and `@techlead`'s
+    // adjudication on PR #43 raised the same risk here: if `onSaveIntent` throws, or the dispatch
+    // otherwise never reaches RecorderService, nothing would ever flip `exportState` away from
+    // Idle to release this flag via the collector below. See requestSave()'s own doc for the two
+    // release paths that cover both failure shapes.
+    private var saveDispatchPending = false
+
+    init {
+        // Clears saveDispatchPending the moment a real, non-Idle ExportState is observed --
+        // deliberately not "once it returns to Idle", which would leave the flag stuck at `true`
+        // forever after the very first save (Idle -> Exporting -> Success/Error -> Idle would
+        // never re-clear it, since it was already cleared going into Exporting and nothing ever
+        // sets it back to true except a fresh requestSave() call).
+        viewModelScope.launch {
+            exportState.collect { state ->
+                if (state !is ExportState.Idle) saveDispatchPending = false
+            }
+        }
+    }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         captureState,
         bufferedMillisFlow,
-        _saveState,
-    ) { capture, bufferedMillis, saveState ->
-        mapUiState(capture, bufferedMillis, capacityMinutes, saveState)
+        exportState,
+        _dismissedExportState,
+    ) { capture, bufferedMillis, export, dismissed ->
+        mapUiState(capture, bufferedMillis, capacityMinutes, mapSaveUiState(export, dismissed))
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -85,7 +133,7 @@ class DashboardViewModel(
             captureState.value,
             bufferedDurationMillisProvider() ?: 0L,
             capacityMinutes,
-            SaveUiState.Idle,
+            mapSaveUiState(exportState.value, _dismissedExportState.value),
         ),
     )
 
@@ -102,30 +150,76 @@ class DashboardViewModel(
     /** Fires the save request for [minutes] if -- and only if -- [uiState] currently reports that
      * option as enabled; a disabled option can only be reached by a stale composition, never by
      * an actual tap on an enabled control, so silently ignoring it here is correct rather than an
-     * error case worth surfacing. */
+     * error case worth surfacing.
+     *
+     * Also ignored while a save is already in flight -- either a real [ExportState.Exporting]
+     * ([exportState] read directly, not through [uiState], so this is accurate even if nothing is
+     * currently collecting [uiState]), or the narrower pre-real-state gap [saveDispatchPending]
+     * covers (see its doc). This is the double-tap guard: without it, two rapid taps before
+     * [RecorderService] has dispatched anything both observe [ExportState.Idle] and both reach
+     * [onSaveIntent], which [cc.machado.audioblackbox.export.ExportEngine] would then reject as
+     * [cc.machado.audioblackbox.export.ExportFailureReason.EXPORT_ALREADY_IN_PROGRESS] -- a
+     * user-visible error for what was just one action.
+     *
+     * [saveDispatchPending] is released two ways, neither of which can leave it stuck (`@techlead`
+     * adjudication on PR #43, raised to blocking -- a permanent Save lockout was already a
+     * blocking finding once in this project, issue #30's stranded-notification class):
+     *   - immediately, via the `finally` below, if [onSaveIntent] itself throws -- a thrown
+     *     dispatch never reached [RecorderService], so there is nothing for the real
+     *     [ExportState] to ever transition on, and the exception is rethrown once the guard is
+     *     released rather than swallowed;
+     *   - after [DISPATCH_TIMEOUT_MILLIS], via the scheduled backstop below, covering the case
+     *     [onSaveIntent] returns normally but the dispatch still never reaches the service (an
+     *     Intent silently dropped, the service failing to start) -- no exception to catch there,
+     *     so only a bounded timeout can recover it. Both releases are safe no-ops once a real,
+     *     genuinely in-flight export is underway: [exportState]'s own `!is Idle` check in the
+     *     guard above already covers that case on its own, independent of this flag.
+     *
+     * Clears any previously dismissed outcome so this new export's own Success/Error is
+     * guaranteed to be shown once it lands, even in the (practically impossible, since filenames
+     * are timestamped) case that it would otherwise compare equal to whatever was last
+     * dismissed. */
     fun requestSave(minutes: Int) {
         val option = uiState.value.windowOptions.firstOrNull { it.minutes == minutes } ?: return
         if (!option.enabled) return
-        onSaveIntent(minutes)
-        _saveState.value = SaveUiState.Requested(minutes)
+        if (saveDispatchPending || exportState.value !is ExportState.Idle) return
+        saveDispatchPending = true
+        _dismissedExportState.value = null
+
         viewModelScope.launch {
-            delay(SAVE_NOTICE_VISIBLE_MILLIS)
-            if (_saveState.value == SaveUiState.Requested(minutes)) {
-                _saveState.value = SaveUiState.Idle
-            }
+            delay(DISPATCH_TIMEOUT_MILLIS)
+            saveDispatchPending = false
+        }
+
+        var dispatchThrew = true
+        try {
+            onSaveIntent(minutes)
+            dispatchThrew = false
+        } finally {
+            if (dispatchThrew) saveDispatchPending = false
         }
     }
 
-    /** Lets the user dismiss the "pedido enviado" notice early instead of waiting out the
-     * auto-hide timeout above. */
+    /** Lets the user dismiss the on-screen Success/Error confirmation early rather than waiting
+     * for [RecorderService]'s own notification-visibility timeout to reset [exportState] back to
+     * [ExportState.Idle]. No-op while [exportState] is [ExportState.Idle]/[ExportState.Exporting]
+     * -- there is nothing to dismiss yet. */
     fun dismissSaveNotice() {
-        _saveState.value = SaveUiState.Idle
+        val current = exportState.value
+        if (current is ExportState.Success || current is ExportState.Error) {
+            _dismissedExportState.value = current
+        }
     }
 
     companion object {
         private const val DEFAULT_TICK_MILLIS = 500L
         private const val STOP_TIMEOUT_MILLIS = 5_000L
-        private const val SAVE_NOTICE_VISIBLE_MILLIS = 6_000L
+
+        // Backstop for requestSave()'s saveDispatchPending guard (see its doc): comfortably
+        // longer than the async round trip normally takes (a coroutine dispatch plus one
+        // Intent/Binder hop to RecorderService.onStartCommand), short enough that a genuine
+        // dispatch failure does not lock the user out of Save for long.
+        private const val DISPATCH_TIMEOUT_MILLIS = 5_000L
 
         /** 1:1 mapping, kept as its own pure function (rather than inlined into [mapUiState]) so
          * it has a single, obvious oracle: every [CaptureState] subtype maps to exactly the
@@ -138,47 +232,50 @@ class DashboardViewModel(
             is CaptureState.Error -> CaptureStatus.Error(state.reason, state.message)
         }
 
+        /** 1:1 mapping from [ExportState] to [SaveUiState] (issue #40 item 2), except that a
+         * terminal [ExportState.Success]/[ExportState.Error] that equals [dismissed] (see
+         * [dismissSaveNotice]) maps to [SaveUiState.Idle] instead -- once the user has acknowledged
+         * an outcome, it must not keep reappearing every time [uiState] recomposes from an
+         * unrelated emission (the buffered-duration tick, in particular, fires every [tickMillis]
+         * regardless of export state). */
+        fun mapSaveUiState(exportState: ExportState, dismissed: ExportState?): SaveUiState = when (exportState) {
+            is ExportState.Idle -> SaveUiState.Idle
+            is ExportState.Exporting -> SaveUiState.Exporting
+            is ExportState.Success ->
+                if (exportState == dismissed) SaveUiState.Idle else SaveUiState.Success(exportState.displayName)
+            is ExportState.Error ->
+                if (exportState == dismissed) SaveUiState.Idle else SaveUiState.Error(exportState.reason, exportState.message)
+        }
+
         /**
-         * Builds the "salvar o passado" window selector from what's actually buffered.
-         *
-         * The engine only ever supports exporting *everything currently buffered, up to
-         * [capacityMinutes]* (see [RecorderService.handleSave] / [DashboardViewModel]'s class
-         * doc) -- there is no way today to request a strictly shorter window without either
-         * risking a silently-truncated file or duplicating the export engine's windowing logic in
-         * this layer, both of which issue #6 forbids. So exactly one rule decides every option's
-         * state:
-         *   - an option is [WindowOption.enabled] only when its `minutes` equals
-         *     [capacityMinutes] **and** the buffer already holds at least that much audio --
-         *     the one case where "export everything buffered" and "export the requested window"
-         *     coincide exactly;
-         *   - otherwise, if the buffer holds less than that option's minutes, the reason is
-         *     [WindowDisabledReason.INSUFFICIENT_BUFFER] (surfaced as "só X min disponíveis" --
-         *     this also covers the [capacityMinutes] option itself while the buffer is still
-         *     filling up);
-         *   - otherwise (enough audio is buffered, but this option isn't the one that matches
-         *     [capacityMinutes]) the reason is [WindowDisabledReason.PARTIAL_WINDOW_NOT_SUPPORTED].
+         * Builds the "salvar o passado" window selector from what's actually buffered (issue #40
+         * item 1). [RecorderService.saveIntent] can now request any window up to what is buffered
+         * -- [ExportEngine][cc.machado.audioblackbox.export.ExportEngine]/
+         * [RingBuffer.snapshot][cc.machado.audioblackbox.audio.RingBuffer.snapshot] clamp down to
+         * what is actually available if a request ever exceeded it -- so the only rule left is:
+         *   - an option is [WindowOption.enabled] once the buffer holds at least that many
+         *     minutes;
+         *   - otherwise it is disabled with [WindowDisabledReason.INSUFFICIENT_BUFFER], carrying
+         *     [WindowOption.availableMinutes] so the UI can say "só X min disponíveis" -- this is
+         *     the guarantee `@rev` verified on issue #6 and that must not regress: an option is
+         *     never enabled unless the buffer can back it in full, so a save can never silently
+         *     come back shorter than what was requested.
          */
         fun computeWindowOptions(
             bufferedMillis: Long,
-            capacityMinutes: Int,
             optionsMinutes: List<Int> = DashboardUiState.WINDOW_OPTION_MINUTES,
         ): List<WindowOption> {
             val availableMinutes = (bufferedMillis / MILLIS_PER_MINUTE).toInt()
             return optionsMinutes.map { minutes ->
-                when {
-                    minutes > availableMinutes -> WindowOption(
+                if (minutes > availableMinutes) {
+                    WindowOption(
                         minutes = minutes,
                         availableMinutes = availableMinutes,
                         enabled = false,
                         disabledReason = WindowDisabledReason.INSUFFICIENT_BUFFER,
                     )
-                    minutes != capacityMinutes -> WindowOption(
-                        minutes = minutes,
-                        availableMinutes = availableMinutes,
-                        enabled = false,
-                        disabledReason = WindowDisabledReason.PARTIAL_WINDOW_NOT_SUPPORTED,
-                    )
-                    else -> WindowOption(
+                } else {
+                    WindowOption(
                         minutes = minutes,
                         availableMinutes = availableMinutes,
                         enabled = true,
@@ -189,7 +286,7 @@ class DashboardViewModel(
         }
 
         /** The single state-mapping oracle issue #6 requires be unit-tested: engine state +
-         * buffered duration (+ the in-flight save notice) -> the exact [DashboardUiState] the
+         * buffered duration (+ the in-flight save outcome) -> the exact [DashboardUiState] the
          * screen renders. */
         fun mapUiState(
             captureState: CaptureState,
@@ -204,7 +301,7 @@ class DashboardViewModel(
                 bufferedMillis = clampedBufferedMillis,
                 capacityMillis = capacityMillis,
                 isBufferFull = clampedBufferedMillis >= capacityMillis,
-                windowOptions = computeWindowOptions(clampedBufferedMillis, capacityMinutes),
+                windowOptions = computeWindowOptions(clampedBufferedMillis),
                 saveState = saveState,
             )
         }

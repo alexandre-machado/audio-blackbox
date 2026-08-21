@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureErrorReason
+import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 
 /**
@@ -91,11 +92,8 @@ fun DashboardScreen(
             BufferSection(uiState)
             EngineToggle(uiState.captureStatus, onToggleEngine)
             SaveSection(uiState, onSelectWindow)
-            if (uiState.saveState is SaveUiState.Requested) {
-                SaveRequestedNotice(
-                    minutes = uiState.saveState.minutes,
-                    onDismiss = onDismissSaveNotice,
-                )
+            if (uiState.saveState != SaveUiState.Idle) {
+                SaveOutcomeNotice(uiState.saveState, onDismissSaveNotice)
             }
         }
     }
@@ -252,10 +250,6 @@ private fun EngineToggle(status: CaptureStatus, onToggleEngine: () -> Unit) {
 
 @Composable
 private fun SaveSection(uiState: DashboardUiState, onSelectWindow: (Int) -> Unit) {
-    val gapNoticeMinutes = uiState.windowOptions
-        .firstOrNull { it.disabledReason == WindowDisabledReason.PARTIAL_WINDOW_NOT_SUPPORTED }
-        ?.let { uiState.capacityMillis / 60_000L }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -266,13 +260,10 @@ private fun SaveSection(uiState: DashboardUiState, onSelectWindow: (Int) -> Unit
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 uiState.windowOptions.forEach { option -> WindowChip(option, onSelectWindow) }
             }
-            if (gapNoticeMinutes != null) {
-                Text(
-                    text = stringResource(R.string.dashboard_save_window_gap_notice, gapNoticeMinutes.toInt()),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            val enabledOption = uiState.windowOptions.firstOrNull { it.enabled }
+            // The largest enabled option, i.e. the most audio a single tap of this primary button
+            // can save right now -- picking a specific shorter window is what the chips above are
+            // for (each one saves immediately on tap once enabled).
+            val enabledOption = uiState.windowOptions.lastOrNull { it.enabled }
             val saveButtonCd = enabledOption?.let {
                 stringResource(R.string.dashboard_save_button_cd, it.minutes)
             } ?: stringResource(R.string.dashboard_save_disabled_no_audio)
@@ -301,13 +292,15 @@ private fun WindowChip(option: WindowOption, onSelectWindow: (Int) -> Unit) {
     val cd = when (option.disabledReason) {
         WindowDisabledReason.INSUFFICIENT_BUFFER ->
             stringResource(R.string.dashboard_save_window_option_cd_insufficient_buffer, option.minutes, option.availableMinutes)
-        WindowDisabledReason.PARTIAL_WINDOW_NOT_SUPPORTED ->
-            stringResource(R.string.dashboard_save_window_option_cd_partial_not_supported, option.minutes)
         null -> stringResource(R.string.dashboard_save_window_option_cd_enabled, option.minutes)
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         FilterChip(
-            selected = option.enabled,
+            // Not a persistent single-choice toggle -- every enabled chip saves immediately on
+            // tap (issue #40 item 1: more than one window can be enabled at once once the buffer
+            // holds enough audio), so `selected` never reflects "the chosen option", only whether
+            // this chip is usable right now.
+            selected = false,
             enabled = option.enabled,
             onClick = { onSelectWindow(option.minutes) },
             label = { Text(text = label) },
@@ -323,14 +316,55 @@ private fun WindowChip(option: WindowOption, onSelectWindow: (Int) -> Unit) {
     }
 }
 
+/** Renders the real save outcome (issue #40 item 2) -- Exporting/Success/Error, sourced from
+ * [cc.machado.audioblackbox.export.ExportEngine]'s own [cc.machado.audioblackbox.export.ExportState]
+ * via [DashboardViewModel], not a bare "intent sent" placeholder. Never called with
+ * [SaveUiState.Idle] -- see [DashboardScreen]'s guard above this call site. Success/Error are
+ * announced to screen readers the same way [StatusSection] announces capture-state transitions,
+ * so a failed save is never silent even without looking at the screen. Success only names the
+ * saved file -- opening it in the gallery/sharing it needs the gallery (issue #7) and is
+ * deliberately not offered here yet. */
 @Composable
-private fun SaveRequestedNotice(minutes: Int, onDismiss: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
+    val titleRes: Int
+    val body: String
+    val dismissible: Boolean
+    when (saveState) {
+        SaveUiState.Idle -> return
+        SaveUiState.Exporting -> {
+            titleRes = R.string.dashboard_save_exporting_title
+            body = stringResource(R.string.dashboard_save_exporting_body)
+            dismissible = false
+        }
+        is SaveUiState.Success -> {
+            titleRes = R.string.dashboard_save_success_title
+            body = stringResource(R.string.dashboard_save_success_body, saveState.displayName)
+            dismissible = true
+        }
+        is SaveUiState.Error -> {
+            titleRes = R.string.dashboard_save_error_title
+            body = saveState.message
+            dismissible = true
+        }
+    }
+    val title = stringResource(titleRes)
+    val announcement = stringResource(R.string.dashboard_save_outcome_announcement, title, body)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = announcement
+            },
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = stringResource(R.string.dashboard_save_requested_title), style = MaterialTheme.typography.titleSmall)
-            Text(text = stringResource(R.string.dashboard_save_requested_body), style = MaterialTheme.typography.bodyMedium)
-            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text(text = stringResource(R.string.dashboard_save_requested_dismiss))
+            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = body, style = MaterialTheme.typography.bodyMedium)
+            if (dismissible) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+                }
             }
         }
     }
@@ -350,7 +384,7 @@ private fun previewState(
     bufferedMillis = bufferedMillis,
     capacityMillis = capacityMillis,
     isBufferFull = bufferedMillis >= capacityMillis,
-    windowOptions = DashboardViewModel.computeWindowOptions(bufferedMillis, (capacityMillis / 60_000L).toInt()),
+    windowOptions = DashboardViewModel.computeWindowOptions(bufferedMillis),
     saveState = saveState,
 )
 
@@ -402,15 +436,48 @@ private fun DashboardScreenBufferFullPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Save requested")
+@Preview(showBackground = true, name = "Save exporting")
 @Composable
-private fun DashboardScreenSaveRequestedPreview() {
+private fun DashboardScreenSaveExportingPreview() {
     AudioBlackboxTheme {
         DashboardScreen(
             previewState(
                 CaptureStatus.Recording,
                 bufferedMillis = 30 * 60_000L,
-                saveState = SaveUiState.Requested(30),
+                saveState = SaveUiState.Exporting,
+            ),
+            {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Save success")
+@Composable
+private fun DashboardScreenSaveSuccessPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(
+            previewState(
+                CaptureStatus.Recording,
+                bufferedMillis = 30 * 60_000L,
+                saveState = SaveUiState.Success("blackbox_2026-08-21_10-15-00_30min.m4a"),
+            ),
+            {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Save error")
+@Composable
+private fun DashboardScreenSaveErrorPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(
+            previewState(
+                CaptureStatus.Recording,
+                bufferedMillis = 30 * 60_000L,
+                saveState = SaveUiState.Error(
+                    ExportFailureReason.SINK_OPEN_FAILED,
+                    "MediaStore insert rejected",
+                ),
             ),
             {}, {}, {},
         )

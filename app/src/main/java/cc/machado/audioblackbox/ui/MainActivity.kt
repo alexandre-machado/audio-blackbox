@@ -97,10 +97,10 @@ class MainActivity : ComponentActivity() {
                                                 RecorderService.stopIntent(this@MainActivity),
                                             )
                                         },
-                                        onSaveIntent = {
+                                        onSaveIntent = { minutes ->
                                             ContextCompat.startForegroundService(
                                                 this@MainActivity,
-                                                RecorderService.saveIntent(this@MainActivity),
+                                                RecorderService.saveIntent(this@MainActivity, minutes),
                                             )
                                         },
                                     )
