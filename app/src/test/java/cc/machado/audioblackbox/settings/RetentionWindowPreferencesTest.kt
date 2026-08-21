@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.core.DataStore
 import cc.machado.audioblackbox.audio.AudioConfig
 import java.io.File
@@ -102,5 +104,32 @@ class RetentionWindowPreferencesTest {
         assertEquals(true, thrown != null)
         // Nothing was written -- still the fallback.
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.currentBufferDurationMinutes())
+    }
+
+    // `@techlead` adjudication on PR #57, item 1 (`@sec` finding): a value that is *present but
+    // out of bounds* is reachable through entirely normal use -- not only a hand-edited/corrupt
+    // file -- e.g. a future release changing AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES combined
+    // with a downgrade, or the option set otherwise shrinking, after a value from the old set was
+    // persisted. This writes directly through a raw DataStore<Preferences> (bypassing
+    // setBufferDurationMinutes's own write-side `require`, which is exactly the point: this
+    // simulates a value that reached disk some other way, not one this class itself would ever
+    // write today) using the identical key name DataStoreRetentionWindowPreferences uses --
+    // Preferences DataStore keys compare by name+type, not instance identity, so this is a real
+    // stand-in for "whatever is on disk", the same as `PreferencesProto` would produce.
+    private val rawKeyBufferDurationMinutes = intPreferencesKey("buffer_duration_minutes")
+
+    @Test
+    fun `a persisted out-of-bounds value degrades to the fallback instead of reaching the caller`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 1000 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(
+            "an out-of-bounds stored value must never reach a caller that will use it to size a buffer",
+            AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+            preferences.currentBufferDurationMinutes(),
+        )
+        assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
     }
 }

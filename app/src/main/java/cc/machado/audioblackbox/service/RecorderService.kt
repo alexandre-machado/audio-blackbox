@@ -388,6 +388,18 @@ class RecorderService : Service() {
         // `var`, not `val`, and mutated only by `rebuildEngineIfIdle` below -- shared with the
         // exportEngine instance property (see above) so the payload encoder always matches the
         // config the ring buffer was actually captured at, never a hardcoded/independent copy.
+        //
+        // `@Volatile` (`@techlead` adjudication on PR #57, item 2): the single writer today is
+        // `rebuildEngineIfIdle`, but readers are not single -- `RecorderService.captureConfig`/
+        // `.engine` are read from `DashboardViewModel` on the main thread and from this service's
+        // own coroutines on `Dispatchers.Default`. Without `@Volatile` a non-synchronized `var`
+        // gives no cross-thread visibility guarantee under the JVM memory model, so a reader on
+        // another thread could keep observing the pre-rebuild reference indefinitely -- the same
+        // family of bug as issue #30 (a frozen notification invisible across four review rounds).
+        // This is defensive, not a fix for an observed bug: it costs nothing at runtime and closes
+        // that class of doubt for the price of one keyword. Not unit-testable (JMM visibility is
+        // not something a single-JVM test can observe either way), so no test is attached to this.
+        @Volatile
         private var _captureConfig = AudioConfig(bufferDurationMinutes = PreloadedRetentionWindow.minutes)
         val captureConfig: AudioConfig get() = _captureConfig
 
@@ -403,6 +415,12 @@ class RecorderService : Service() {
         // happen, and `attachEngineForwarding`/`captureState` for how every other reader of this
         // engine's state stays correct across that replacement instead of latching onto a
         // reference that is about to go stale.
+        //
+        // `@Volatile` -- same reasoning as `_captureConfig` above (`@techlead` adjudication on
+        // PR #57, item 2): `engine` is read from multiple threads, and only the writer
+        // (`rebuildEngineIfIdle`) being single does not give readers on other threads a visibility
+        // guarantee over a plain `var`.
+        @Volatile
         private var _engine = AudioCaptureEngine(config = _captureConfig)
         val engine: AudioCaptureEngine get() = _engine
 

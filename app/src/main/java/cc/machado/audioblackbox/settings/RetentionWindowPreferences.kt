@@ -26,10 +26,17 @@ import kotlinx.coroutines.flow.map
  * `SharedPrefsOnboardingPreferences` is left as-is (not a churn target of this change), but new
  * persisted state goes through `DataStore` from here on.
  *
- * Only [AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES] are ever accepted -- see
- * [setBufferDurationMinutes] -- so a corrupt or hand-edited preferences file can never hand
- * [cc.machado.audioblackbox.service.RecorderService] a value the ring buffer sizing arithmetic
- * was not deliberately bounded for.
+ * Only [AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES] are ever handed out, on both ends:
+ * [setBufferDurationMinutes] rejects a write outside that set, and [bufferDurationMinutesFlow]/
+ * [currentBufferDurationMinutes] fall back to [AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES] on a
+ * *read* that finds a present-but-out-of-bounds value -- not just an absent key. That second guard
+ * (`@techlead` adjudication on PR #57, item 1) matters because an out-of-bounds persisted value is
+ * reachable through normal use, not only a corrupt/hand-edited file: a future release changing
+ * [AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES] combined with a downgrade, or the option set
+ * otherwise shrinking, can leave a value on disk that was valid when written and is not any more.
+ * Without the read-side guard that value would still reach
+ * [cc.machado.audioblackbox.service.RecorderService]'s companion `AudioConfig`/`RingBuffer`'s eager
+ * `ByteArray(capacityBytes)` allocation on every single launch.
  */
 interface RetentionWindowPreferences {
     /** Reactive, defaults to [AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES] until the user has
@@ -63,8 +70,23 @@ interface RetentionWindowPreferences {
  */
 class DataStoreRetentionWindowPreferences(private val dataStore: DataStore<Preferences>) : RetentionWindowPreferences {
 
+    // `@techlead` adjudication on PR #57, item 1 (`@sec` finding): validated on read, not just on
+    // write. A value that is *present but out of bounds* is reachable through entirely normal use
+    // -- not just a hand-edited/corrupt file -- if a future release ever changes
+    // AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES (adds/removes an option) and the app is
+    // downgraded, or the option set otherwise shrinks, after a value from the old set was
+    // persisted. Falling through to the same DEFAULT_BUFFER_DURATION_MINUTES the absent-key case
+    // already uses -- rather than propagating the stored value -- is what stops an out-of-bounds
+    // Int from ever reaching RecorderService's companion `AudioConfig`/`RingBuffer`'s eager
+    // `ByteArray(capacityBytes)` allocation, which would otherwise OOM on every single launch with
+    // nothing pointing at the cause.
     override val bufferDurationMinutesFlow: Flow<Int> = dataStore.data.map { prefs ->
-        prefs[KEY_BUFFER_DURATION_MINUTES] ?: AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+        val stored = prefs[KEY_BUFFER_DURATION_MINUTES]
+        if (stored != null && stored in AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES) {
+            stored
+        } else {
+            AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+        }
     }
 
     override suspend fun currentBufferDurationMinutes(): Int = bufferDurationMinutesFlow.first()
