@@ -10,6 +10,7 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -65,14 +66,24 @@ class RetentionWindowPreferencesTest {
 
     @Test
     fun `a persisted non-default value survives a fresh instance reading the same file (process-death round trip)`() = runTest {
-        val firstScope = CoroutineScope(SupervisorJob())
+        val firstJob = SupervisorJob()
+        val firstScope = CoroutineScope(firstJob)
         val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
         DataStoreRetentionWindowPreferences(firstDataStore).setBufferDurationMinutes(60)
         // Cancelling this scope is what actually stands in for "the process died" -- DataStore
         // refuses a second live instance on the same file otherwise (by design, to catch real
         // multi-instance bugs), so this is not incidental test cleanup, it is the thing that makes
         // the assertion below a real "after a restart" read rather than the same live object.
-        firstScope.cancel()
+        //
+        // `cancelAndJoin`, not `cancel` (found flaky on CI, `@techlead` adjudication on PR #57
+        // round 2): `CoroutineScope.cancel()` requests cancellation but does not wait for it to
+        // finish -- DataStore's own internal teardown (releasing its hold on `file`) is itself
+        // asynchronous, so constructing the second instance immediately after a bare `cancel()`
+        // races that teardown instead of waiting for it. `cancelAndJoin` makes "the previous
+        // instance is provably gone" true before the next line runs, rather than "probably gone by
+        // the time the scheduler gets around to it" -- the same shape as PR #28's CountDownLatch
+        // handshake replacing a probabilistic race.
+        firstJob.cancelAndJoin()
 
         val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
 
