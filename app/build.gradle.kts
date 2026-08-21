@@ -39,6 +39,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        // Issue #44: en (values/) is authored as the universal fallback and pt-rBR carries the
+        // Portuguese translation. Without this, a string added to one locale and not the other
+        // ships silently instead of failing the build.
+        error += setOf("MissingTranslation", "ExtraTranslation")
+    }
 }
 
 kotlin {
