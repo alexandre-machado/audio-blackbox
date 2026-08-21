@@ -11,6 +11,7 @@ import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,6 +127,15 @@ class DashboardViewModel(
     // release paths that cover both failure shapes.
     private var saveDispatchPending = false
 
+    // The currently-live backstop Job scheduled by requestSave() below, or null when no dispatch
+    // is pending (issue #50, `@rev` advisory on PR #43). Cancelled and cleared by every path that
+    // releases saveDispatchPending -- the init collector below, and requestSave()'s own `finally`
+    // -- so at most one backstop timer is ever armed at a time. Without this, an earlier dispatch's
+    // timer (e.g. one released early by a throw) stays scheduled and can later fire during a
+    // *subsequent* dispatch's own in-flight window, clearing that later call's guard before its
+    // own confirmation or its own backstop has actually arrived.
+    private var dispatchTimeoutJob: Job? = null
+
     // Non-null while a retention-window change is waiting on the user's explicit discard
     // confirmation (issue #45) -- set by selectRetentionWindow() when the engine is not Idle,
     // cleared by confirmRetentionWindowChange()/cancelRetentionWindowChange(). See those methods'
@@ -140,7 +150,11 @@ class DashboardViewModel(
         // sets it back to true except a fresh requestSave() call).
         viewModelScope.launch {
             exportState.collect { state ->
-                if (state !is ExportState.Idle) saveDispatchPending = false
+                if (state !is ExportState.Idle) {
+                    saveDispatchPending = false
+                    dispatchTimeoutJob?.cancel()
+                    dispatchTimeoutJob = null
+                }
             }
         }
     }
@@ -217,6 +231,13 @@ class DashboardViewModel(
      *     genuinely in-flight export is underway: [exportState]'s own `!is Idle` check in the
      *     guard above already covers that case on its own, independent of this flag.
      *
+     * The backstop's [Job] is captured in [dispatchTimeoutJob] and explicitly cancelled by every
+     * other release path (the `finally` below, and the `init` collector once a real [ExportState]
+     * arrives) -- issue #50, a `@rev` advisory on PR #43: an uncancelled backstop from an earlier
+     * call stays scheduled and can fire during a *later* call's own in-flight window, releasing
+     * that later call's guard before its own confirmation or its own backstop has arrived. See
+     * [dispatchTimeoutJob]'s own doc.
+     *
      * Clears any previously dismissed outcome so this new export's own Success/Error is
      * guaranteed to be shown once it lands, even in the (practically impossible, since filenames
      * are timestamped) case that it would otherwise compare equal to whatever was last
@@ -228,9 +249,10 @@ class DashboardViewModel(
         saveDispatchPending = true
         _dismissedExportState.value = null
 
-        viewModelScope.launch {
+        dispatchTimeoutJob = viewModelScope.launch {
             delay(DISPATCH_TIMEOUT_MILLIS)
             saveDispatchPending = false
+            dispatchTimeoutJob = null
         }
 
         var dispatchThrew = true
@@ -238,7 +260,11 @@ class DashboardViewModel(
             onSaveIntent(minutes)
             dispatchThrew = false
         } finally {
-            if (dispatchThrew) saveDispatchPending = false
+            if (dispatchThrew) {
+                saveDispatchPending = false
+                dispatchTimeoutJob?.cancel()
+                dispatchTimeoutJob = null
+            }
         }
     }
 

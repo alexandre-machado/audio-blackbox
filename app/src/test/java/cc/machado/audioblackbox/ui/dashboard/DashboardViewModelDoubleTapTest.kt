@@ -185,4 +185,53 @@ class DashboardViewModelDoubleTapTest {
             dispatchCount,
         )
     }
+
+    // ---- issue #50: a stale timeout Job from an earlier dispatch must not release a later
+    // dispatch's guard (`@rev` advisory on PR #43) ----
+
+    @Test
+    fun `a stale timeout from a throwing dispatch does not release a later dispatch's guard early`() = runTest {
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        var dispatchCount = 0
+        var shouldThrow = true
+        val viewModel = newViewModel(exportState) { minutes ->
+            dispatchCount++
+            if (shouldThrow) error("onSaveIntent boom")
+        }
+
+        // t=0: first dispatch throws. Its `finally` releases the guard immediately, but (pre-fix)
+        // also leaves a 5s backstop Job scheduled and uncancelled -- a stale timer armed to fire
+        // at t=5000 regardless of what happens afterwards.
+        assertThrows(IllegalStateException::class.java) { viewModel.requestSave(30) }
+        assertEquals(1, dispatchCount)
+
+        // t=2000: some time later, a second, genuine dispatch is made. It does not throw, so it
+        // re-arms the guard (saveDispatchPending = true) and schedules its own backstop, which
+        // (pre-fix) is unrelated to the stale one above -- both are independent, uncancelled
+        // launch{} coroutines racing to flip the same flag.
+        shouldThrow = false
+        advanceTimeBy(2_000L)
+        runCurrent()
+        viewModel.requestSave(30)
+        assertEquals(2, dispatchCount)
+
+        // t=5000: the FIRST dispatch's stale timer (armed at t=0, 5s duration) fires here. The
+        // second dispatch is still genuinely in flight -- its own confirmation (a real, non-Idle
+        // ExportState) has not arrived, and its own backstop is not due until t=7000. Correct
+        // behaviour is for the guard to remain set, so a third call right now is still rejected.
+        advanceTimeBy(3_000L) // t: 2000 -> 5000
+        runCurrent()
+
+        viewModel.requestSave(30)
+        assertEquals(
+            "a stale backstop Job from the first (thrown) dispatch fired at t=5000 and released " +
+                "the guard belonging to the second, still-in-flight dispatch -- production " +
+                "behaviour that would have to break for this assertion to hold: the uncancelled " +
+                "timeout Job scheduled by the first requestSave() call must never touch " +
+                "saveDispatchPending once that call's own guard has already been released by " +
+                "another path",
+            2,
+            dispatchCount,
+        )
+    }
 }
