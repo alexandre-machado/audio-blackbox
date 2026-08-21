@@ -172,7 +172,7 @@ class DashboardViewModelInstanceTest {
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 30 * 60_000L }, // buffer full at capacity
-            capacityMinutes = 30,
+            capacityMinutesFlow = MutableStateFlow(30),
             exportState = exportState,
             onSaveIntent = { minutes -> dispatched += minutes },
         )
@@ -206,7 +206,7 @@ class DashboardViewModelInstanceTest {
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 0L }, // nothing buffered -- every option disabled
-            capacityMinutes = 30,
+            capacityMinutesFlow = MutableStateFlow(30),
             exportState = exportState,
             onSaveIntent = { minutes -> dispatched += minutes },
         )
@@ -232,7 +232,7 @@ class DashboardViewModelInstanceTest {
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 30 * 60_000L },
-            capacityMinutes = 30,
+            capacityMinutesFlow = MutableStateFlow(30),
             exportState = exportState,
         )
         val observed = mutableListOf<DashboardUiState>()
@@ -259,7 +259,7 @@ class DashboardViewModelInstanceTest {
         val vm = DashboardViewModel(
             captureState = captureState,
             bufferedDurationMillisProvider = { 30 * 60_000L },
-            capacityMinutes = 30,
+            capacityMinutesFlow = MutableStateFlow(30),
             exportState = exportState,
         )
         val observed = mutableListOf<DashboardUiState>()
@@ -304,7 +304,7 @@ class DashboardViewModelInstanceTest {
         val vm = DashboardViewModel(
             captureState = captureState,
             bufferedDurationMillisProvider = { bufferedMillis },
-            capacityMinutes = 30,
+            capacityMinutesFlow = MutableStateFlow(30),
             exportState = MutableStateFlow(ExportState.Idle),
             tickMillis = 100L,
         )

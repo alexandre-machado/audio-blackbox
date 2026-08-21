@@ -6,6 +6,7 @@ import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ExportState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -223,5 +224,38 @@ class DashboardViewModelTest {
         )
         assertEquals(40 * 60_000L, fullAtNonDefaultCapacity.bufferedMillis)
         assertFalse(fullAtNonDefaultCapacity.isBufferFull)
+
+        // issue #45: the retention-window selector must also follow this non-default capacity,
+        // not a second, independently-tracked "which one is selected" value (PR #43's own
+        // "no second source of truth" rule, extended here) -- 45 is deliberately not one of
+        // AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES, so this also proves no option is ever
+        // force-selected when the running capacity doesn't actually match any bounded choice
+        // (e.g. a value persisted by an older build that offered a different bounded set).
+        assertTrue(
+            "none of 5/15/30/60 should be marked selected when the real capacity is 45",
+            state.retentionSection.options.none { it.selected },
+        )
+        assertEquals(listOf(5, 15, 30, 60), state.retentionSection.options.map { it.minutes })
+        assertNull(state.retentionSection.pendingConfirmationMinutes)
+    }
+
+    @Test
+    fun `mapUiState marks the option matching a non-default configured capacity as selected`() {
+        // Complements the 45 min case above (which is deliberately *not* a bounded option) with a
+        // capacity that *is* one -- 60, the upper bound -- to prove the selector doesn't hardcode
+        // 30 as "the selected one" anywhere.
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Idle,
+            bufferedMillis = 0L,
+            capacityMinutes = 60,
+            saveState = SaveUiState.Idle,
+        )
+
+        val selected = state.retentionSection.options.single { it.selected }
+        assertEquals(60, selected.minutes)
+        assertTrue(
+            "60 min should be roughly the documented ~115 MB, not the 30 min figure",
+            selected.approxRamMb in 100..130,
+        )
     }
 }

@@ -20,8 +20,10 @@ import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.MediaStoreSink
+import cc.machado.audioblackbox.PreloadedRetentionWindow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -61,15 +63,25 @@ class RecorderService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     // See PeriodicNotificationRefresher's doc: supplies the "keep refreshing while Recording
-    // doesn't transition" tick the collector below cannot, since engine.state only emits on a
-    // transition and buffered duration keeps changing without one (issue #30).
-    private val notificationRefresher = PeriodicNotificationRefresher(engine.state)
+    // doesn't transition" tick the collector below cannot, since captureState only emits on a
+    // transition and buffered duration keeps changing without one (issue #30). Reads the
+    // companion's forwarded `captureState` -- not `engine.state` directly -- so this keeps working
+    // across a retention-window rebuild (issue #45), which replaces the underlying `engine`
+    // instance wholesale (see `attachEngineForwarding`'s doc).
+    private val notificationRefresher = PeriodicNotificationRefresher(captureState)
 
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
     // (MediaStoreSink -> ContentResolver; AacPayloadEncoder -> cacheDir for its temp file, see its
-    // class doc), which is only available once this Service instance is attached. Reads
-    // `engine.snapshot()`/`engine.gaps.value` at export time via method references, so it always
-    // sees whatever session is current -- not a stale one captured here.
+    // class doc), which is only available once this Service instance is attached.
+    //
+    // snapshotProvider/gapsProvider are lambdas that read the companion's `engine` property fresh
+    // on every call, deliberately not bound method references (`engine::snapshot`) captured once
+    // at this lazy block's first evaluation (issue #45): a retention-window change can replace
+    // `engine` wholesale for the lifetime of this same Service instance (see
+    // `rebuildEngineIfIdle`), and a bound reference would keep exporting from the old, abandoned
+    // engine forever after that. `config` does not need the same treatment -- sampleRateHz/
+    // encoding/channelCount never change across a rebuild, only bufferDurationMinutes, which
+    // ExportEngine never reads (see its own field, private and unused for that purpose).
     //
     // AacPayloadEncoder (`.m4a`, issue #32) is the production default, not WavPayloadEncoder --
     // see issue #32's device evidence for why (176 audio files on the target device, zero WAV).
@@ -77,7 +89,7 @@ class RecorderService : Service() {
     private val exportEngine by lazy {
         ExportEngine(
             config = captureConfig,
-            snapshotProvider = engine::snapshot,
+            snapshotProvider = { durationMillis -> engine.snapshot(durationMillis) },
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
@@ -124,7 +136,7 @@ class RecorderService : Service() {
         // reconciles the notification with whatever engine.state already is at the moment this
         // collector attaches.
         serviceScope.launch {
-            engine.state.collect { refreshNotification() }
+            captureState.collect { refreshNotification() }
         }
         // Periodic tick, alongside (not instead of) the transition-driven collector above --
         // see PeriodicNotificationRefresher's class doc for cadence/cost/lifecycle reasoning
@@ -366,24 +378,105 @@ class RecorderService : Service() {
         // meaning exactly what it always has: "save everything currently buffered".
         const val EXTRA_WINDOW_MINUTES = "cc.machado.audioblackbox.service.extra.WINDOW_MINUTES"
 
-        // Shared with the exportEngine instance property (see above) so the WAV header
-        // ExportEngine writes always matches the config the ring buffer was actually captured
-        // at -- never a hardcoded/independent copy.
-        private val captureConfig = AudioConfig()
+        // Built from PreloadedRetentionWindow.minutes (issue #45), not the bare
+        // AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES constant: AudioBlackboxApplication.onCreate
+        // always runs before anything can touch this companion object, so by the time either
+        // `captureConfig` or `engine` below is first referenced, PreloadedRetentionWindow already
+        // holds whatever was actually persisted (or the constant, on first run / a fresh install --
+        // see PreloadedRetentionWindow's own doc for why that fallback is safe).
+        //
+        // `var`, not `val`, and mutated only by `rebuildEngineIfIdle` below -- shared with the
+        // exportEngine instance property (see above) so the payload encoder always matches the
+        // config the ring buffer was actually captured at, never a hardcoded/independent copy.
+        //
+        // `@Volatile` (`@techlead` adjudication on PR #57, item 2): the single writer today is
+        // `rebuildEngineIfIdle`, but readers are not single -- `RecorderService.captureConfig`/
+        // `.engine` are read from `DashboardViewModel` on the main thread and from this service's
+        // own coroutines on `Dispatchers.Default`. Without `@Volatile` a non-synchronized `var`
+        // gives no cross-thread visibility guarantee under the JVM memory model, so a reader on
+        // another thread could keep observing the pre-rebuild reference indefinitely -- the same
+        // family of bug as issue #30 (a frozen notification invisible across four review rounds).
+        // This is defensive, not a fix for an observed bug: it costs nothing at runtime and closes
+        // that class of doubt for the price of one keyword. Not unit-testable (JMM visibility is
+        // not something a single-JVM test can observe either way), so no test is attached to this.
+        @Volatile
+        private var _captureConfig = AudioConfig(bufferDurationMinutes = PreloadedRetentionWindow.minutes)
+        val captureConfig: AudioConfig get() = _captureConfig
 
         // Single engine instance for the process lifetime, deliberately not scoped to a Service
         // instance: this is what makes the ring buffer survive Activity destruction (rotation,
         // recents-swipe) -- only losing the whole process kills it, which is unavoidable for a
         // RAM-only buffer regardless of where the reference lives.
-        val engine = AudioCaptureEngine(config = captureConfig)
+        //
+        // `var`, not `val` (issue #45): a retention-window change cannot resize the ring buffer in
+        // place (see AudioConfig's class doc -- it is pre-allocated once and never grows), so
+        // changing it means constructing a brand new AudioCaptureEngine and replacing this
+        // reference wholesale. See `rebuildEngineIfIdle` for the one place that is allowed to
+        // happen, and `attachEngineForwarding`/`captureState` for how every other reader of this
+        // engine's state stays correct across that replacement instead of latching onto a
+        // reference that is about to go stale.
+        //
+        // `@Volatile` -- same reasoning as `_captureConfig` above (`@techlead` adjudication on
+        // PR #57, item 2): `engine` is read from multiple threads, and only the writer
+        // (`rebuildEngineIfIdle`) being single does not give readers on other threads a visibility
+        // guarantee over a plain `var`.
+        @Volatile
+        private var _engine = AudioCaptureEngine(config = _captureConfig)
+        val engine: AudioCaptureEngine get() = _engine
+
+        // Forwarded mirror of whatever `_engine.state` currently is (issue #45), re-subscribed by
+        // `attachEngineForwarding` every time `_engine` is replaced. Every caller that used to read
+        // `engine.state` directly (RecorderService's own onCreate() collector,
+        // PeriodicNotificationRefresher, DashboardViewModel) reads this instead, specifically so a
+        // retention-window rebuild mid-process cannot leave any of them permanently watching an
+        // abandoned engine's StateFlow -- a bound reference captured once (the way `engine.state`
+        // used to be handed out) would never see another transition once `_engine` moves on.
+        private val _captureState = MutableStateFlow<CaptureState>(_engine.state.value)
+        val captureState: StateFlow<CaptureState> = _captureState.asStateFlow()
+        private var engineForwardingJob: Job? = null
+
+        // Companion-owned, process-lifetime scope for the forwarding job above -- mirrors
+        // `engine`'s own "lives in Companion, not inside any Activity/Service instance" lifetime
+        // (see class doc) rather than any one Service instance's `serviceScope`, which is cancelled
+        // on that instance's onDestroy() while `engine`/`captureState` must keep working across
+        // Service instance recreation.
+        //
+        // Dispatchers.Unconfined, not Dispatchers.Main.immediate: this companion object is touched
+        // by plain JVM unit tests (no Android `Looper`/`Dispatchers.setMain` available) as well as
+        // the real app process, and forwarding a value from one `MutableStateFlow` into another has
+        // no main-thread-affinity requirement -- `MutableStateFlow.value`'s setter is thread-safe on
+        // its own. Unconfined just means "run the forwarding on whatever thread the source engine's
+        // state actually changed on", which is exactly what happens anyway.
+        private val forwardingScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+        init {
+            attachEngineForwarding(_engine)
+        }
+
+        private fun attachEngineForwarding(newEngine: AudioCaptureEngine) {
+            engineForwardingJob?.cancel()
+            engineForwardingJob = forwardingScope.launch {
+                newEngine.state.collect { _captureState.value = it }
+            }
+        }
+
+        // Reactive mirror of captureConfig.bufferDurationMinutes (issue #45, extending issue #40
+        // item 3's `bufferDurationMinutes` below): DashboardViewModel's retention/capacity display
+        // needs to react to a rebuild without needing its own ViewModel recreated, the same reason
+        // `captureState` exists above instead of a plain `engine.state` reference.
+        private val _bufferDurationMinutesFlow = MutableStateFlow(_captureConfig.bufferDurationMinutes)
+        val bufferDurationMinutesFlow: StateFlow<Int> = _bufferDurationMinutesFlow.asStateFlow()
 
         // Public mirror of captureConfig.bufferDurationMinutes (issue #40 item 3 -- `@rev` finding
         // on issue #6): DashboardViewModel used to default its own capacityMinutes to the bare
         // AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES constant, which happens to match this today
         // but nothing kept the two in sync structurally. Exposing the real value here, the same
         // way `engine` itself is exposed, means the dashboard's denominator can never drift from
-        // whatever capacity this service is actually running with.
-        val bufferDurationMinutes: Int get() = captureConfig.bufferDurationMinutes
+        // whatever capacity this service is actually running with. Kept as a plain `Int` getter
+        // (alongside `bufferDurationMinutesFlow` above) for callers that only need "the current
+        // value right now" and do not want to collect a Flow for it (e.g. `saveIntent`'s default
+        // parameter below).
+        val bufferDurationMinutes: Int get() = _captureConfig.bufferDurationMinutes
 
         // Published mirror of the current Service instance's exportEngine.state (issue #40 item 2
         // -- see the onCreate() collector that forwards into this). Starts at Idle, same as a
@@ -403,9 +496,38 @@ class RecorderService : Service() {
          * that only wants "save everything buffered" (there is none left after this change, but
          * keeping the default avoids a silent behavior change for any future one) still gets
          * exactly that. */
-        fun saveIntent(context: Context, windowMinutes: Int = captureConfig.bufferDurationMinutes): Intent =
+        fun saveIntent(context: Context, windowMinutes: Int = bufferDurationMinutes): Intent =
             Intent(context, RecorderService::class.java)
                 .setAction(ACTION_SAVE)
                 .putExtra(EXTRA_WINDOW_MINUTES, windowMinutes)
+
+        /**
+         * Rebuilds the process-lifetime engine at [newBufferDurationMinutes] (issue #45). Returns
+         * `false` and changes nothing if [captureState] is not currently [CaptureState.Idle] --
+         * this is the enforcement point for "never silently discard buffered audio because the
+         * user opened a settings screen": [CaptureState.Recording]/[CaptureState.Paused] both mean
+         * real audio is sitting in the ring buffer right now, and rebuilding would discard it with
+         * no warning. Callers (see [cc.machado.audioblackbox.ui.dashboard.DashboardViewModel]'s
+         * retention-window flow) are expected to stop the engine and confirm with the user first
+         * when it is not already Idle, then call this once it is.
+         *
+         * Safe to call while genuinely Idle: [AudioCaptureEngine.stop] already tears the ring
+         * buffer down to nothing before a session reaches Idle (see its class doc on
+         * `RingBuffer.clear`), so there is nothing left to lose at that point -- this only ever
+         * discards a buffer that is already empty.
+         */
+        fun rebuildEngineIfIdle(newBufferDurationMinutes: Int): Boolean {
+            require(newBufferDurationMinutes in AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES) {
+                "newBufferDurationMinutes must be one of " +
+                    "${AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES}, was $newBufferDurationMinutes"
+            }
+            if (_captureState.value !is CaptureState.Idle) return false
+            val newConfig = AudioConfig(bufferDurationMinutes = newBufferDurationMinutes)
+            _captureConfig = newConfig
+            _engine = AudioCaptureEngine(config = newConfig)
+            attachEngineForwarding(_engine)
+            _bufferDurationMinutesFlow.value = newBufferDurationMinutes
+            return true
+        }
     }
 }

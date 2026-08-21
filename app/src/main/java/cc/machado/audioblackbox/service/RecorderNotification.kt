@@ -57,6 +57,11 @@ object RecorderNotification {
         state: CaptureState,
         bufferedDurationMillis: Long?,
         exportState: ExportState = ExportState.Idle,
+        // Issue #45: the notification's own Save action always means "save everything currently
+        // buffered" (see RecorderService.onStartCommand's EXTRA_WINDOW_MINUTES handling), so its
+        // label must say the *actual* configured capacity, not a hardcoded "30 min" that would be
+        // silently wrong the moment a user picks a different retention window.
+        capacityMinutes: Int = RecorderService.bufferDurationMinutes,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
@@ -111,7 +116,11 @@ object RecorderNotification {
             // be noticeable, and the channel itself is already IMPORTANCE_LOW/no-sound.
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
-            .addAction(0, context.getString(R.string.recorder_notification_action_save), saveIntent)
+            .addAction(
+                0,
+                context.getString(R.string.recorder_notification_action_save, capacityMinutes),
+                saveIntent,
+            )
             .addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
             .build()
     }

@@ -54,6 +54,26 @@ sealed interface SaveUiState {
     data class Error(val reason: ExportFailureReason, val message: String) : SaveUiState
 }
 
+/** One entry in the retention-window selector (issue #45) -- how many minutes of audio the ring
+ * buffer is *configured* to hold, a different concept from [WindowOption] above (how much of
+ * what's buffered a single "salvar o passado" tap writes to a file). [approxRamMb] is shown
+ * directly in the UI, per the issue's "the user is spending their device's memory" requirement --
+ * see [DashboardViewModel.computeRetentionSection] for the arithmetic. */
+data class RetentionWindowOption(
+    val minutes: Int,
+    val approxRamMb: Int,
+    val selected: Boolean,
+)
+
+/** The retention-window section's full state, including whether a requested change is currently
+ * waiting on the user's explicit discard confirmation (issue #45's core safety requirement:
+ * changing this while the engine is running would discard whatever is buffered, so it must never
+ * apply silently). [pendingConfirmationMinutes] is null unless that confirmation is pending. */
+data class RetentionSectionUiState(
+    val options: List<RetentionWindowOption>,
+    val pendingConfirmationMinutes: Int?,
+)
+
 /** Everything [DashboardScreen] needs to render one frame, produced by
  * [DashboardViewModel.mapUiState] from the engine's raw state plus the buffered duration --
  * this is exactly the function issue #6 requires a unit-tested oracle for. */
@@ -64,6 +84,7 @@ data class DashboardUiState(
     val isBufferFull: Boolean,
     val windowOptions: List<WindowOption>,
     val saveState: SaveUiState,
+    val retentionSection: RetentionSectionUiState,
 ) {
     companion object {
         val WINDOW_OPTION_MINUTES = listOf(5, 15, 30)

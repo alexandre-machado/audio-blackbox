@@ -39,6 +39,7 @@ import cc.machado.audioblackbox.permissions.PermissionResolverInput
 import cc.machado.audioblackbox.permissions.PermissionSystem
 import cc.machado.audioblackbox.permissions.SharedPrefsOnboardingPreferences
 import cc.machado.audioblackbox.service.RecorderService
+import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.ui.dashboard.DashboardRoute
 import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
 import cc.machado.audioblackbox.ui.onboarding.OnboardingScreen
@@ -103,6 +104,7 @@ class MainActivity : ComponentActivity() {
                                                 RecorderService.saveIntent(this@MainActivity, minutes),
                                             )
                                         },
+                                        retentionWindowPreferences = DataStoreRetentionWindowPreferences(this@MainActivity),
                                     )
                                 }
                             }
