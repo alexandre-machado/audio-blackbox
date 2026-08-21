@@ -1,12 +1,48 @@
 package cc.machado.audioblackbox.export
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.IOException
 import java.io.OutputStream
+
+/**
+ * One row read back from `MediaStore` for one of this app's own exported recordings (issue #7).
+ * Carries only what [RecordingsRepository.queryRecordings] reads straight off the row -- duration
+ * and size are populated by the platform itself (confirmed on-device, see issue #7's device pass),
+ * so nothing here re-derives them by opening or parsing the file.
+ */
+data class RecordingRow(
+    val uri: Uri,
+    val displayName: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val durationMillis: Long,
+    val dateAddedMillis: Long,
+)
+
+/**
+ * Seam over the app's `MediaStore` recordings so the gallery UI layer (issue #7) never queries or
+ * deletes `MediaStore` rows itself -- [MediaStoreSink] is the only class that knows the collection,
+ * projection, and filter, the same way it is already the only class [ExportSink] work goes through
+ * to write one.
+ */
+interface RecordingsRepository {
+    /** Every row whose `DISPLAY_NAME` carries this app's own `blackbox_` prefix, across the whole
+     * `MediaStore.Audio.Media` collection -- deliberately not scoped to a `RELATIVE_PATH`, so this
+     * finds recordings in all three locations this app has ever written to
+     * (`Recordings/Blackbox/`, `Music/Blackbox/`, and the legacy pre-#33 `Music/Recordings/`)
+     * without needing to know about any of them individually, and without silently missing a
+     * fourth if the destination ever moves again. Order is unspecified -- callers sort. */
+    fun queryRecordings(): List<RecordingRow>
+
+    /** Deletes the row at [uri]. Returns `true` if a row was actually removed. */
+    fun delete(uri: Uri): Boolean
+}
 
 /**
  * [ExportSink] backed by `MediaStore.Audio`, writing into a per-app subfolder the way the
@@ -34,7 +70,54 @@ import java.io.OutputStream
  * failure [ExportTarget.abort] deletes the row via `ContentResolver.delete` rather than leaving an
  * orphaned pending entry behind -- this is unchanged by issue #32/#33's other changes.
  */
-class MediaStoreSink(private val context: Context) : ExportSink {
+class MediaStoreSink(private val context: Context) : ExportSink, RecordingsRepository {
+
+    override fun queryRecordings(): List<RecordingRow> {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATE_ADDED,
+        )
+        // See RecordingsRepository.queryRecordings's doc: filtered by this app's own filename
+        // prefix across the *entire* collection, not by RELATIVE_PATH -- this is what finds
+        // recordings in all three locations (current API 31+, current API 29-30 fallback, and the
+        // legacy pre-#33 folder) with one query instead of three, and without this class needing a
+        // fourth branch if the destination ever moves again (issue #7).
+        val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ?"
+        val selectionArgs = arrayOf("$APP_FILE_PREFIX%")
+
+        val rows = mutableListOf<RecordingRow>()
+        resolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            while (cursor.moveToNext()) {
+                val displayName = cursor.getString(nameCol) ?: continue
+                val id = cursor.getLong(idCol)
+                rows += RecordingRow(
+                    uri = ContentUris.withAppendedId(collection, id),
+                    displayName = displayName,
+                    // MIME type is read straight from this row, per file -- never a single
+                    // hardcoded constant (issue #7: a .wav shared as audio/mp4 fails to open).
+                    mimeType = cursor.getString(mimeCol) ?: DEFAULT_MIME_TYPE,
+                    sizeBytes = cursor.getLong(sizeCol),
+                    durationMillis = cursor.getLong(durationCol),
+                    dateAddedMillis = cursor.getLong(dateAddedCol) * 1000L,
+                )
+            }
+        }
+        return rows
+    }
+
+    override fun delete(uri: Uri): Boolean = context.contentResolver.delete(uri, null, null) > 0
 
     override fun open(displayName: String, mimeType: String): ExportTarget {
         val resolver = context.contentResolver
@@ -83,5 +166,12 @@ class MediaStoreSink(private val context: Context) : ExportSink {
 
     private companion object {
         const val APP_SUBFOLDER = "Blackbox"
+
+        // Matches ExportEngine.filenameFor's own "blackbox_<timestamp>_<window>min.<ext>" pattern
+        // (unchanged by issue #32/#33 -- only the sink/encoder/location moved), so this same
+        // prefix already covers every file this app has ever written, .wav and .m4a alike.
+        const val APP_FILE_PREFIX = "blackbox_"
+
+        const val DEFAULT_MIME_TYPE = "application/octet-stream"
     }
 }

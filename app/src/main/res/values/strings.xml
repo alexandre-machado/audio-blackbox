@@ -86,4 +86,26 @@
     <string name="dashboard_save_error_title">Falha ao salvar</string>
     <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
     <string name="dashboard_save_notice_dismiss">OK</string>
+
+    <!-- Gallery (Module 4, issue #7) -->
+    <string name="gallery_title">Gravações salvas</string>
+    <string name="gallery_loading">Carregando gravações…</string>
+    <string name="gallery_empty_title">Nenhuma gravação ainda</string>
+    <string name="gallery_empty_body">Quando você salvar um trecho gravado, ele aparece aqui para você ouvir e compartilhar. Toque em \"Salvar o passado\" no painel principal para criar sua primeira gravação.</string>
+    <string name="gallery_item_duration_size">%1$s · %2$s</string>
+    <string name="gallery_play">Reproduzir</string>
+    <string name="gallery_pause">Pausar</string>
+    <string name="gallery_play_cd">Reproduzir gravação de %1$s</string>
+    <string name="gallery_pause_cd">Pausar gravação de %1$s</string>
+    <string name="gallery_seek_cd">Posição da reprodução: %1$s</string>
+    <string name="gallery_elapsed_total">%1$s / %2$s</string>
+    <string name="gallery_share">Compartilhar</string>
+    <string name="gallery_share_cd">Compartilhar gravação de %1$s</string>
+    <string name="gallery_share_chooser_title">Compartilhar gravação</string>
+    <string name="gallery_delete">Excluir</string>
+    <string name="gallery_delete_cd">Excluir gravação de %1$s</string>
+    <string name="gallery_delete_confirm_title">Excluir gravação?</string>
+    <string name="gallery_delete_confirm_body">Esta ação exclui o arquivo permanentemente e não pode ser desfeita.</string>
+    <string name="gallery_delete_confirm_action">Excluir</string>
+    <string name="gallery_delete_cancel_action">Cancelar</string>
 </resources>
