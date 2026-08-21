@@ -32,10 +32,6 @@
     <string name="onboarding_battery_skip">Pular por enquanto</string>
     <string name="onboarding_battery_warning">Sem essa isenção, o sistema pode interromper a gravação em segundo plano. Você pode ativá-la depois nas configurações do aplicativo.</string>
 
-    <!-- Main screen -->
-    <string name="main_start_engine">Iniciar gravação</string>
-    <string name="main_start_engine_disabled_reason">Permissão de microfone necessária para iniciar a gravação.</string>
-
     <!-- Recorder foreground service notification -->
     <string name="recorder_notification_channel_name">Gravação em segundo plano</string>
     <string name="recorder_notification_channel_description">Mostra o estado da gravação contínua enquanto o Audio Blackbox está ativo.</string>
@@ -49,4 +45,43 @@
     <string name="recorder_notification_export_exporting">Salvando gravação…</string>
     <string name="recorder_notification_export_success">Gravação salva: %1$s</string>
     <string name="recorder_notification_export_error">Falha ao salvar a gravação</string>
+
+    <!-- Dashboard (Module 4, issue #6) -->
+    <string name="dashboard_status_idle">Parado</string>
+    <string name="dashboard_status_recording">Gravando</string>
+    <string name="dashboard_status_paused">Pausado</string>
+    <string name="dashboard_status_error">Erro</string>
+
+    <string name="dashboard_idle_explanation">O motor está parado. Nada está sendo gravado agora. Toque em \"Iniciar motor\" para começar a gravação contínua em segundo plano.</string>
+    <string name="dashboard_recording_explanation">O motor está gravando continuamente. Quando o buffer enche, o áudio mais antigo é substituído automaticamente pelo mais recente.</string>
+    <string name="dashboard_paused_explanation">Gravação pausada porque o microfone está sendo usado por uma chamada. A gravação será retomada automaticamente assim que a chamada terminar.</string>
+    <string name="dashboard_error_explanation">Não foi possível continuar gravando: %1$s</string>
+
+    <string name="dashboard_status_announcement">Estado da gravação: %1$s</string>
+
+    <string name="dashboard_start_engine">Iniciar motor</string>
+    <string name="dashboard_stop_engine">Parar motor</string>
+    <string name="dashboard_start_engine_cd">Iniciar motor de gravação</string>
+    <string name="dashboard_stop_engine_cd">Parar motor de gravação</string>
+    <string name="dashboard_retry_engine">Tentar novamente</string>
+
+    <string name="dashboard_buffer_status">%1$s de %2$s em memória</string>
+    <string name="dashboard_buffer_status_cd">Buffer de áudio: %1$s de %2$s em memória</string>
+    <string name="dashboard_buffer_full_notice">Buffer cheio: gravando por cima do áudio mais antigo</string>
+
+    <string name="dashboard_save_title">Salvar o passado</string>
+    <string name="dashboard_save_window_label">Janela para salvar</string>
+    <string name="dashboard_save_window_option">%1$d min</string>
+    <string name="dashboard_save_window_option_cd_enabled">Salvar os últimos %1$d min</string>
+    <string name="dashboard_save_window_option_cd_insufficient_buffer">Salvar %1$d min, indisponível: só %2$d min em memória até agora</string>
+    <string name="dashboard_save_window_option_cd_partial_not_supported">Salvar %1$d min, indisponível: por enquanto só é possível salvar tudo o que está em memória</string>
+    <string name="dashboard_save_window_insufficient_buffer">só %1$d min disponíveis</string>
+    <string name="dashboard_save_window_gap_notice">Por enquanto só é possível salvar tudo o que está em memória (até %1$d min). A seleção de janelas menores chega em breve.</string>
+    <string name="dashboard_save_button">Salvar o passado</string>
+    <string name="dashboard_save_button_cd">Salvar os últimos %1$d min gravados</string>
+    <string name="dashboard_save_disabled_no_audio">Aguarde o buffer encher para poder salvar.</string>
+
+    <string name="dashboard_save_requested_title">Pedido de salvamento enviado</string>
+    <string name="dashboard_save_requested_body">Acompanhe o progresso e o resultado na notificação do Audio Blackbox.</string>
+    <string name="dashboard_save_requested_dismiss">OK</string>
 </resources>
