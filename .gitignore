@@ -11,3 +11,6 @@ captures/
 .cxx/
 *.apk
 *.aab
+
+# WSL/NTFS metadata artifact left behind when a file is copied from Windows
+*:Zone.Identifier
