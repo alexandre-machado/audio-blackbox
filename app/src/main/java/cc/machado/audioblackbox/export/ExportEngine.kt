@@ -52,10 +52,15 @@ enum class ExportFailureReason {
 
 /**
  * Orchestrates one "Save" action end to end: snapshot the ring buffer -> fill interruption gaps
- * with silence -> encode as WAV -> write to an [ExportSink] (issue #5).
+ * with silence -> encode via [payloadEncoder] -> write to an [ExportSink] (issue #5, encoder made
+ * pluggable in issue #32). Gap filling always happens on raw PCM, once, *before* [payloadEncoder]
+ * ever runs -- neither the lossy AAC encoder nor a future encoder sees anything but a single
+ * already-correct timeline (see [GapFiller]/[PayloadEncoder]'s docs).
  *
  * Pure Kotlin plus `StateFlow` for observability -- no direct Android dependency beyond that --
- * so the whole snapshot/gap-fill/encode path is unit-testable without a device;
+ * so the whole snapshot/gap-fill orchestration is unit-testable without a device (the concrete
+ * [payloadEncoder]'s own Android-only work, e.g. [AacPayloadEncoder]'s `MediaCodec`/`MediaMuxer`
+ * use, is covered by the instrumented tier instead -- see `docs/testing/tiers.md`).
  * [snapshotProvider]/[gapsProvider] mirror
  * [cc.machado.audioblackbox.audio.AudioCaptureEngine.snapshot]/`.gaps.value` as plain functions
  * (the same function-seam pattern `AudioCaptureEngine` already uses for `audioRecordFactory`),
@@ -74,6 +79,7 @@ class ExportEngine(
     private val snapshotProvider: (Long) -> AudioSnapshot?,
     private val gapsProvider: () -> List<PauseGap>,
     private val sink: ExportSink,
+    private val payloadEncoder: PayloadEncoder,
 ) {
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
     val state: StateFlow<ExportState> = _state.asStateFlow()
@@ -188,7 +194,7 @@ class ExportEngine(
             val displayName = filenameFor(rawSnapshot.startTimestampMillis, minutesLabel)
 
             val target = try {
-                sink.open(displayName)
+                sink.open(displayName, payloadEncoder.mimeType)
             } catch (e: IOException) {
                 return ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, e.message ?: "sink open failed")
             }
@@ -210,8 +216,12 @@ class ExportEngine(
         var writeFailure: Throwable? = null
         try {
             target.outputStream.use { out ->
-                WavWriter.writeHeader(out, config, payload.size)
-                writeInChunks(out, payload)
+                // payloadEncoder.encode() owns the whole file format (header/frames/container) --
+                // see PayloadEncoder's doc. This also covers encode failures the same way it
+                // already covered write failures: any Throwable here still aborts the sink below
+                // (issue #32 requirement: a pending MediaStore row must not survive a failed
+                // encode).
+                payloadEncoder.encode(config, payload, out) { cancelRequested }
             }
         } catch (e: CancellationException) {
             throw e
@@ -247,24 +257,13 @@ class ExportEngine(
         return state
     }
 
-    private fun writeInChunks(out: OutputStream, payload: ByteArray) {
-        var offset = 0
-        while (offset < payload.size) {
-            if (cancelRequested) return
-            val length = minOf(CHUNK_BYTES, payload.size - offset)
-            out.write(payload, offset, length)
-            offset += length
-        }
-    }
-
     private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int): String {
         val formatter = SimpleDateFormat(FILENAME_TIMESTAMP_PATTERN, Locale.US)
         val timestamp = formatter.format(Date(startTimestampMillis))
-        return "blackbox_${timestamp}_${minutesLabel}min.wav"
+        return "blackbox_${timestamp}_${minutesLabel}min.${payloadEncoder.fileExtension}"
     }
 
     private companion object {
-        const val CHUNK_BYTES = 64 * 1024
         const val FILENAME_TIMESTAMP_PATTERN = "yyyy-MM-dd_HH-mm-ss"
     }
 }

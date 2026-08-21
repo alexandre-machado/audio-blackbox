@@ -17,8 +17,9 @@ happened.
   bypass of aggressive OEM battery killers.
 - **Handles interruptions** — recording pauses during phone calls and resumes automatically,
   and the gap is preserved as real silence so the exported timeline stays accurate.
-- **Save the past** — one action exports the last 5, 15 or 30 minutes as a `.wav` into
-  `Music/Recordings`, while recording continues uninterrupted.
+- **Save the past** — one action exports the last 5, 15 or 30 minutes as an AAC `.m4a` into
+  `Recordings/Blackbox/` (falling back to `Music/Blackbox/` on API 29-30, where the platform's
+  `Recordings/` root doesn't exist), while recording continues uninterrupted.
 - **Play and share** — an in-app gallery lists your saved recordings with an embedded player
   and a share action to send them anywhere.
 
