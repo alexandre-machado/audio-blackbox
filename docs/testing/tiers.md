@@ -32,9 +32,14 @@ lifecycle, and — the reason this tier exists — a **real telephony interrupti
 `AudioManager.AudioRecordingCallback.isClientSilenced` and the exact scenario PR #28's critical
 bug (audio mis-spliced after the *second* interruption) lived in.
 
-Runs in CI on every PR (`.github/workflows/ci.yml`, job `instrumented-tests`), with the AVD boot
-cached (two-step snapshot pattern) so the added wall-clock is bounded — see that job's comments,
-and the PR that introduced it (#34) for the measured number.
+Runs in CI on every PR (`.github/workflows/ci.yml`, job `instrumented-tests`), with a fresh AVD
+created and booted from cold on every run — no boot-snapshot cache. An earlier version of this
+job cached the AVD boot snapshot across runs to bound the added wall-clock, but every run that
+restored that cached snapshot failed to boot (`adb: device offline`, then a boot timeout, before
+any test executed); only a from-scratch AVD ever booted successfully. A restored snapshot's
+reliability across runner instances turned out not to hold on this runner pool, so the cache was
+removed (PR #35 review) rather than kept as a source of unrelated, intermittent red — do not
+reintroduce it without new evidence it boots reliably here.
 
 AVD parameters live in one place, `scripts/ci/avd.env`, read by both the local script above and
 the CI job:

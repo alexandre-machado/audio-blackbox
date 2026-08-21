@@ -65,11 +65,17 @@ jobs:
   # truth also used by scripts/run-instrumented-tests.sh for local runs -- see that file's
   # comments for why API 30 / google_apis / x86_64 were chosen.
   #
-  # Two-step AVD snapshot caching (the pattern documented by
-  # reactivecircus/android-emulator-runner): the first step only creates+boots the AVD once to
-  # generate a boot snapshot, cached by actions/cache; every subsequent run restores that
-  # snapshot and boots from it instead of a cold boot, which is what keeps the added wall-clock
-  # bounded rather than paying full boot time on every PR.
+  # No AVD snapshot cache (PR #35 review, `@techlead` + repo owner decision). A prior version of
+  # this job cached a boot snapshot with actions/cache across the two-step
+  # reactivecircus/android-emulator-runner pattern (create+snapshot once, restore+boot on every
+  # later run) to keep wall-clock bounded. In practice every run that restored that cached
+  # snapshot failed to boot (`adb: device offline`, then a boot timeout, before any test ran);
+  # the only run that ever passed was the one that built the AVD from scratch. A boot snapshot
+  # restored on a different runner instance than the one that generated it is a known fragility,
+  # and this job's own history confirms it rather than merely suspecting it. A CI tier that goes
+  # red at random trains everyone to ignore red, which is worse than the ~4-5 extra minutes a
+  # cold boot costs -- so the cache is gone; do not reintroduce it without new evidence that a
+  # restored snapshot actually boots reliably on this runner pool.
   instrumented-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -135,29 +141,6 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-
-      - name: AVD cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-${{ env.API_LEVEL }}-${{ env.TARGET }}-${{ env.ARCH }}
-
-      - name: Create AVD and generate snapshot for caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: ${{ env.API_LEVEL }}
-          target: ${{ env.TARGET }}
-          arch: ${{ env.ARCH }}
-          profile: ${{ env.PROFILE }}
-          avd-name: ${{ env.AVD_NAME }}
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
-          disable-animations: false
-          script: echo "AVD created; snapshot will be cached."
 
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
