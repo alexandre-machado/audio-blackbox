@@ -1,3 +1,7 @@
 <resources>
     <color name="ic_launcher_background">#1B1B1B</color>
+
+    <!-- App icon (issue #49): neutral capsule body + the single saturated accent. -->
+    <color name="ic_launcher_capsule">#E4E4E4</color>
+    <color name="ic_launcher_accent">#FF5722</color>
 </resources>

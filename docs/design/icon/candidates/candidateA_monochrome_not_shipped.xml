@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NOT SHIPPED — Candidate A monochrome layer (issue #49).
+
+  Same geometry as candidateA_foreground_not_shipped.xml. The system ignores
+  this drawable's own colours and applies its own wallpaper-derived tint, so
+  both paths are plain solid black here — only the alpha/shape matters. The
+  band is still present as a distinct shape (the same evenOdd groove cut
+  used in the colour layer), so the capsule-plus-band silhouette survives
+  being flattened to one colour. Kept as the documented fallback; Candidate
+  B ships as app/src/main/res/drawable/ic_launcher_monochrome.xml instead.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M40,38 L68,38 A16,16 0 0 1 84,54 L84,54 A16,16 0 0 1 68,70 L40,70 A16,16 0 0 1 24,54 L24,54 A16,16 0 0 1 40,38 Z M45,38 L63,38 L63,70 L45,70 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M46.5,38 L61.5,38 L61.5,70 L46.5,70 Z" />
+</vector>

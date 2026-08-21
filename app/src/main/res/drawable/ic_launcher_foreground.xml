@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon foreground layer (issue #49) — Candidate B, the owner's
+  concept traced from icon.3.jpg: capsule + upright box + base plate + one
+  connector nub, pruned of the ventilation grid, bolt holes, nested
+  connector layers and internal seam lines it had at full size. Chosen over
+  Candidate A (the plain banded capsule, kept as the not-shipped fallback
+  in docs/design/icon/candidates/) on the owner's product-identity call:
+  this shape reads as the intended subject, not just as a legible abstract
+  mark, at both 48dp and 72dp — see docs/design/icon/README.md.
+
+  As in Candidate A, the orange band is cut out of the capsule segment as
+  a shape (evenOdd hole) with a thin transparent groove on each side, so it
+  survives being flattened to one colour for the monochrome/themed state.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/ic_launcher_capsule"
+        android:pathData="M59.00,30.00 L77.00,30.00 A6.00,6.00 0 0 1 83.00,36.00 L83.00,50.00 A6.00,6.00 0 0 1 77.00,56.00 L59.00,56.00 A6.00,6.00 0 0 1 53.00,50.00 L53.00,36.00 A6.00,6.00 0 0 1 59.00,30.00 Z" />
+    <path
+        android:fillColor="@color/ic_launcher_capsule"
+        android:pathData="M35.00,68.00 L81.00,68.00 A4.00,4.00 0 0 1 85.00,72.00 L85.00,73.00 A4.00,4.00 0 0 1 81.00,77.00 L35.00,77.00 A4.00,4.00 0 0 1 31.00,73.00 L31.00,72.00 A4.00,4.00 0 0 1 35.00,68.00 Z" />
+    <path
+        android:fillColor="@color/ic_launcher_capsule"
+        android:pathData="M27.00,46.00 L31.00,46.00 A4.00,4.00 0 0 1 35.00,50.00 L35.00,58.00 A4.00,4.00 0 0 1 31.00,62.00 L27.00,62.00 A4.00,4.00 0 0 1 23.00,58.00 L23.00,50.00 A4.00,4.00 0 0 1 27.00,46.00 Z" />
+    <path
+        android:fillColor="@color/ic_launcher_capsule"
+        android:fillType="evenOdd"
+        android:pathData="M41.00,40.00 L59.00,40.00 A10.00,10.00 0 0 1 69.00,50.00 L69.00,58.00 A10.00,10.00 0 0 1 59.00,68.00 L41.00,68.00 A10.00,10.00 0 0 1 31.00,58.00 L31.00,50.00 A10.00,10.00 0 0 1 41.00,40.00 Z M45.00,40.00 L55.00,40.00 L55.00,68.00 L45.00,68.00 Z" />
+    <path
+        android:fillColor="@color/ic_launcher_accent"
+        android:pathData="M46.50,40.00 L53.50,40.00 L53.50,68.00 L46.50,68.00 Z" />
+</vector>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NOT SHIPPED — Candidate A, "banded capsule" (issue #49).
+
+  A single rounded-capsule silhouette (the CSMU housing) in a neutral light
+  fill, centered in the 66dp guaranteed-safe zone, with one inset orange band
+  as the sole saturated accent. The band is cut out of the capsule itself
+  (evenOdd hole) with a thin transparent groove on each side, so the band
+  reads as a distinct raised shape even when this layer is flattened to a
+  single tint for the monochrome/themed-icon state — it does not depend on
+  the hue surviving.
+
+  Kept as the documented fallback: it survives 48dp/72dp slightly more
+  cleanly than the shipped Candidate B, but the repo owner judged that B
+  reads as the intended subject (a flight recorder) where A reads only as
+  a legible abstract shape (a capsule/battery/toggle) — see
+  docs/design/icon/README.md for the full comparison. Candidate B ships as
+  app/src/main/res/drawable/ic_launcher_foreground.xml.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/ic_launcher_capsule"
+        android:fillType="evenOdd"
+        android:pathData="M40,38 L68,38 A16,16 0 0 1 84,54 L84,54 A16,16 0 0 1 68,70 L40,70 A16,16 0 0 1 24,54 L24,54 A16,16 0 0 1 40,38 Z M45,38 L63,38 L63,70 L45,70 Z" />
+    <path
+        android:fillColor="@color/ic_launcher_accent"
+        android:pathData="M46.5,38 L61.5,38 L61.5,70 L46.5,70 Z" />
+</vector>
