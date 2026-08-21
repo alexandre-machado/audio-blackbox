@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Maps [RecorderService]'s observable engine/export state onto [DashboardUiState] and dispatches
@@ -78,6 +79,39 @@ class DashboardViewModel(
         }
     }
 
+    // Guards a rapid double-tap of requestSave() against dispatching onSaveIntent twice for what
+    // was a single user action (issue #40 follow-up -- `@techlead`, off the back of issue #41's
+    // instance-behaviour probe / PR #42, and issue #29's manual "tap Salvar twice" checklist item).
+    //
+    // ExportEngine already refuses a truly concurrent export (EXPORT_ALREADY_IN_PROGRESS) -- no
+    // two exports can ever run at once and no file is at risk regardless of this flag. What this
+    // guards is narrower: without it, a second tap that lands before RecorderService's async
+    // round trip has had any chance to flip `exportState` away from Idle sails past the
+    // `exportState.value !is ExportState.Idle` check below too (both taps still observe Idle) and
+    // reaches onSaveIntent a second time, which -- now that issue #40 item 2 wires the real
+    // ExportState onto this screen -- surfaces ExportEngine's rejection as a user-visible error for
+    // what was just a duplicated tap on a single action.
+    //
+    // Plain (non-Flow) field, not a second StateFlow: every read/write happens on this ViewModel's
+    // own single-threaded dispatcher (Dispatchers.Main.immediate, same as viewModelScope) --
+    // requestSave() is only ever called from Compose's UI thread, and the collector below that
+    // clears it runs on viewModelScope, which is that same dispatcher. No synchronization needed
+    // for a value only ever touched from one thread.
+    private var saveDispatchPending = false
+
+    init {
+        // Clears saveDispatchPending the moment a real, non-Idle ExportState is observed --
+        // deliberately not "once it returns to Idle", which would leave the flag stuck at `true`
+        // forever after the very first save (Idle -> Exporting -> Success/Error -> Idle would
+        // never re-clear it, since it was already cleared going into Exporting and nothing ever
+        // sets it back to true except a fresh requestSave() call).
+        viewModelScope.launch {
+            exportState.collect { state ->
+                if (state !is ExportState.Idle) saveDispatchPending = false
+            }
+        }
+    }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         captureState,
         bufferedMillisFlow,
@@ -109,13 +143,26 @@ class DashboardViewModel(
     /** Fires the save request for [minutes] if -- and only if -- [uiState] currently reports that
      * option as enabled; a disabled option can only be reached by a stale composition, never by
      * an actual tap on an enabled control, so silently ignoring it here is correct rather than an
-     * error case worth surfacing. Clears any previously dismissed outcome so this new export's own
-     * Success/Error is guaranteed to be shown once it lands, even in the (practically impossible,
-     * since filenames are timestamped) case that it would otherwise compare equal to whatever was
-     * last dismissed. */
+     * error case worth surfacing.
+     *
+     * Also ignored while a save is already in flight -- either a real [ExportState.Exporting]
+     * ([exportState] read directly, not through [uiState], so this is accurate even if nothing is
+     * currently collecting [uiState]), or the narrower pre-real-state gap [saveDispatchPending]
+     * covers (see its doc). This is the double-tap guard: without it, two rapid taps before
+     * [RecorderService] has dispatched anything both observe [ExportState.Idle] and both reach
+     * [onSaveIntent], which [cc.machado.audioblackbox.export.ExportEngine] would then reject as
+     * [cc.machado.audioblackbox.export.ExportFailureReason.EXPORT_ALREADY_IN_PROGRESS] -- a
+     * user-visible error for what was just one action.
+     *
+     * Clears any previously dismissed outcome so this new export's own Success/Error is
+     * guaranteed to be shown once it lands, even in the (practically impossible, since filenames
+     * are timestamped) case that it would otherwise compare equal to whatever was last
+     * dismissed. */
     fun requestSave(minutes: Int) {
         val option = uiState.value.windowOptions.firstOrNull { it.minutes == minutes } ?: return
         if (!option.enabled) return
+        if (saveDispatchPending || exportState.value !is ExportState.Idle) return
+        saveDispatchPending = true
         _dismissedExportState.value = null
         onSaveIntent(minutes)
     }
