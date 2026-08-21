@@ -51,10 +51,17 @@ interface RetentionWindowPreferences {
     suspend fun setBufferDurationMinutes(minutes: Int)
 }
 
-/** Production [RetentionWindowPreferences], backed by a dedicated [DataStore] file. */
-class DataStoreRetentionWindowPreferences(context: Context) : RetentionWindowPreferences {
-
-    private val dataStore: DataStore<Preferences> = context.applicationContext.retentionWindowDataStore
+/**
+ * Production [RetentionWindowPreferences], backed by a dedicated [DataStore] file.
+ *
+ * Takes the [DataStore] itself, not a [Context] (see the secondary `operator fun invoke` below
+ * for the [Context]-based factory [cc.machado.audioblackbox.ui.MainActivity] actually calls) --
+ * this is the seam that lets a JVM unit test (`RetentionWindowPreferencesTest`) exercise the real
+ * persistence/round-trip logic against a `PreferenceDataStoreFactory`-built [DataStore] pointed at
+ * a temp file, with no `Context`/Robolectric/instrumented test required, while production code
+ * still only ever constructs this from a real `Context`.
+ */
+class DataStoreRetentionWindowPreferences(private val dataStore: DataStore<Preferences>) : RetentionWindowPreferences {
 
     override val bufferDurationMinutesFlow: Flow<Int> = dataStore.data.map { prefs ->
         prefs[KEY_BUFFER_DURATION_MINUTES] ?: AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
@@ -71,6 +78,13 @@ class DataStoreRetentionWindowPreferences(context: Context) : RetentionWindowPre
 
     companion object {
         private val KEY_BUFFER_DURATION_MINUTES = intPreferencesKey("buffer_duration_minutes")
+
+        /** Production factory: builds the real, disk-backed [DataStoreRetentionWindowPreferences]
+         * from a [Context] -- the constructor above stays [Context]-free for testability (see its
+         * doc). [cc.machado.audioblackbox.ui.MainActivity] calls this, not the constructor
+         * directly. */
+        operator fun invoke(context: Context): DataStoreRetentionWindowPreferences =
+            DataStoreRetentionWindowPreferences(context.applicationContext.retentionWindowDataStore)
     }
 }
 

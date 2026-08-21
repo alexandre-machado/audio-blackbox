@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Audio Blackbox</string>
 
     <!-- Legal / consent notice -->
@@ -91,7 +91,11 @@
     <string name="dashboard_retention_title">Retenção em memória</string>
     <string name="dashboard_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória.</string>
     <string name="dashboard_retention_option">%1$d min (~%2$d MB)</string>
-    <string name="dashboard_retention_option_cd">Manter %1$d minutos em memória, aproximadamente %2$d megabytes</string>
+    <!-- Not a plural: AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES is 5/15/30/60, never 1, so the
+         "minutos" (plural) form is always correct here, see that constant's bounds comment.
+         Real pluralization is issue #44's job for all locale-sensitive copy in this app, not a
+         one-off plurals resource for this string alone. -->
+    <string name="dashboard_retention_option_cd" tools:ignore="PluralsCandidate">Manter %1$d minutos em memória, aproximadamente %2$d megabytes</string>
     <string name="dashboard_retention_confirm_title">Trocar a retenção agora?</string>
     <string name="dashboard_retention_confirm_body">Trocar para %1$d min exige parar o motor, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
     <string name="dashboard_retention_confirm_accept">Parar e trocar</string>
