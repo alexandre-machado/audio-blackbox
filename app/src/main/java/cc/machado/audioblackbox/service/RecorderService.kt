@@ -25,6 +25,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -146,8 +149,17 @@ class RecorderService : Service() {
         // for a glance at the notification shade; acknowledgeTerminalState() is itself a no-op if
         // a newer export has since started (state would be Exporting, not the acknowledged
         // Success/Error), so this can't stomp on a later call.
+        // Also forwarded into the companion's `_exportState` (issue #40 item 2 -- `@design`/`@rev`
+        // finding on issue #6): unlike `engine.state`, `exportEngine` used to be a private,
+        // per-Service-instance property, so nothing outside this Service could ever observe a real
+        // Exporting/Success/Error transition -- the dashboard's "saving" state meant only "intent
+        // sent". Forwarding here (rather than exposing this instance's `exportEngine` directly)
+        // keeps `ExportEngine`'s own Context-dependent construction exactly as it was (still lazy,
+        // still per-instance) while still giving external observers a StateFlow that survives this
+        // Service instance being recreated, matching `engine.state`'s companion-object visibility.
         serviceScope.launch {
             exportEngine.state.collect { state ->
+                _exportState.value = state
                 refreshNotification()
                 if (state is ExportState.Success || state is ExportState.Error) {
                     delay(EXPORT_OUTCOME_VISIBLE_MILLIS)
@@ -171,7 +183,16 @@ class RecorderService : Service() {
         when (intent?.action) {
             ACTION_START -> handleStart()
             ACTION_STOP -> stopServiceCompletely()
-            ACTION_SAVE -> handleSave()
+            ACTION_SAVE -> handleSave(
+                // Absent for the notification's own Save action (RecorderNotification builds a
+                // bare ACTION_SAVE Intent with no extra) -- that action has always meant "save
+                // everything currently buffered", so falling back to the full configured capacity
+                // here preserves that behavior exactly. Present when MainActivity dispatches
+                // RecorderService.saveIntent(context, minutes) from the dashboard's window
+                // selector (issue #40 item 1).
+                intent?.getIntExtra(EXTRA_WINDOW_MINUTES, captureConfig.bufferDurationMinutes)
+                    ?: captureConfig.bufferDurationMinutes,
+            )
             null -> stopServiceCompletely() // OS-initiated restart: see START_NOT_STICKY note below.
             else -> Unit // unrecognized action: notification above already covers it, nothing to do.
         }
@@ -264,7 +285,13 @@ class RecorderService : Service() {
         }
     }
 
-    private fun handleSave() {
+    /** [requestedMinutes] is the window the caller asked for -- 5/15/30 from the dashboard's
+     * selector, or the full configured capacity for the notification's own Save action (see
+     * [onStartCommand]'s [EXTRA_WINDOW_MINUTES] handling). Passed straight through to
+     * [ExportEngine.export] with no clamping here: [ExportEngine]/[cc.machado.audioblackbox.audio.RingBuffer.snapshot]
+     * already clamp to whatever is actually buffered if [requestedMinutes] exceeds it (issue #40
+     * item 1 -- no engine change needed), so this method never has to duplicate that logic. */
+    private fun handleSave(requestedMinutes: Int) {
         // Dispatched off this Service's main thread for the same ANR reason as
         // stopServiceCompletely(): ExportEngine.export() is blocking I/O (ring buffer copy-out is
         // already bounded/off-thread by the time it gets here, but the WAV encode + MediaStore
@@ -279,10 +306,9 @@ class RecorderService : Service() {
         // call (double-tap on the notification's Save action, or an OS-redelivered Intent) --
         // that rejection still surfaces to the user as an Error state, it just isn't logged twice.
         serviceScope.launch(Dispatchers.Default) {
-            val bufferMinutes = captureConfig.bufferDurationMinutes
             val result = exportEngine.export(
-                durationMillis = bufferMinutes.toLong() * MILLIS_PER_MINUTE,
-                minutesLabel = bufferMinutes,
+                durationMillis = requestedMinutes.toLong() * MILLIS_PER_MINUTE,
+                minutesLabel = requestedMinutes,
             )
             when (result) {
                 is ExportState.Success ->
@@ -334,6 +360,12 @@ class RecorderService : Service() {
         const val ACTION_STOP = "cc.machado.audioblackbox.service.action.STOP"
         const val ACTION_SAVE = "cc.machado.audioblackbox.service.action.SAVE"
 
+        // Requested window length, in minutes, for an ACTION_SAVE Intent (issue #40 item 1). Only
+        // MainActivity's dashboard wiring sets this; RecorderNotification's own Save action
+        // deliberately does not (see onStartCommand's handling), so a missing extra there keeps
+        // meaning exactly what it always has: "save everything currently buffered".
+        const val EXTRA_WINDOW_MINUTES = "cc.machado.audioblackbox.service.extra.WINDOW_MINUTES"
+
         // Shared with the exportEngine instance property (see above) so the WAV header
         // ExportEngine writes always matches the config the ring buffer was actually captured
         // at -- never a hardcoded/independent copy.
@@ -345,13 +377,35 @@ class RecorderService : Service() {
         // RAM-only buffer regardless of where the reference lives.
         val engine = AudioCaptureEngine(config = captureConfig)
 
+        // Public mirror of captureConfig.bufferDurationMinutes (issue #40 item 3 -- `@rev` finding
+        // on issue #6): DashboardViewModel used to default its own capacityMinutes to the bare
+        // AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES constant, which happens to match this today
+        // but nothing kept the two in sync structurally. Exposing the real value here, the same
+        // way `engine` itself is exposed, means the dashboard's denominator can never drift from
+        // whatever capacity this service is actually running with.
+        val bufferDurationMinutes: Int get() = captureConfig.bufferDurationMinutes
+
+        // Published mirror of the current Service instance's exportEngine.state (issue #40 item 2
+        // -- see the onCreate() collector that forwards into this). Starts at Idle, same as a
+        // freshly constructed ExportEngine would, so a dashboard observing this before the service
+        // has ever been created sees exactly what it would see after -- no export has happened.
+        private val _exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        val exportState: StateFlow<ExportState> = _exportState.asStateFlow()
+
         fun startIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_START)
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_STOP)
 
-        fun saveIntent(context: Context): Intent =
-            Intent(context, RecorderService::class.java).setAction(ACTION_SAVE)
+        /** [windowMinutes] is the requested "salvar o passado" window (5/15/30 from the
+         * dashboard's selector) -- defaults to the full configured capacity so any existing caller
+         * that only wants "save everything buffered" (there is none left after this change, but
+         * keeping the default avoids a silent behavior change for any future one) still gets
+         * exactly that. */
+        fun saveIntent(context: Context, windowMinutes: Int = captureConfig.bufferDurationMinutes): Intent =
+            Intent(context, RecorderService::class.java)
+                .setAction(ACTION_SAVE)
+                .putExtra(EXTRA_WINDOW_MINUTES, windowMinutes)
     }
 }

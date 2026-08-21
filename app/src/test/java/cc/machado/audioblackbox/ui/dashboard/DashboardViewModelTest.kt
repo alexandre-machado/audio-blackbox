@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.export.ExportFailureReason
+import cc.machado.audioblackbox.export.ExportState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,6 +15,12 @@ import org.junit.Test
  * renders. Each test pins an exact expected value (not a re-derivation of the production
  * arithmetic), so a broken mapping -- e.g. Paused rendered as Recording, or a window option
  * enabled when it shouldn't be -- fails these tests, not just an unrelated smoke check.
+ *
+ * Extended for issue #40: [computeWindowOptions] no longer takes a `capacityMinutes` parameter
+ * (every window up to what is buffered is now enabled -- see that function's doc for why capacity
+ * doesn't need to gate it separately any more), [mapSaveUiState] is the new oracle for the
+ * real-progress mapping, and one `mapUiState` test now exercises a deliberately non-default
+ * capacity to prove the mapping isn't hardcoded to 30 anywhere.
  */
 class DashboardViewModelTest {
 
@@ -42,11 +50,11 @@ class DashboardViewModelTest {
         assertEquals(CaptureStatus.Error(CaptureErrorReason.READ_DEAD_OBJECT, "AudioRecord.read() returned -6"), mapped)
     }
 
-    // ---- computeWindowOptions: the window-selector gap's exact enable/disable rule ----
+    // ---- computeWindowOptions: the window-selector fix (issue #40 item 1) ----
 
     @Test
     fun `all options are disabled with INSUFFICIENT_BUFFER when nothing has been buffered yet`() {
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 0L, capacityMinutes = 30)
+        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 0L)
 
         assertEquals(3, options.size)
         options.forEach { option ->
@@ -59,7 +67,7 @@ class DashboardViewModelTest {
     @Test
     fun `the mandatory case -- a requested window longer than what is buffered -- is disabled with the available minutes attached`() {
         // 12 minutes buffered: the 15 and 30 min options both request more than is available.
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L, capacityMinutes = 30)
+        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L)
 
         val fifteen = options.single { it.minutes == 15 }
         assertFalse(fifteen.enabled)
@@ -73,31 +81,78 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `a shorter option within the buffered amount is disabled as not-yet-supported, not silently allowed`() {
-        // 12 minutes buffered: the 5 min option has enough audio behind it, but the engine has
-        // no way to export a window shorter than everything buffered (issue #6 gap) -- this must
-        // never be silently enabled, which would risk producing a shorter file than requested.
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L, capacityMinutes = 30)
+    fun `a shorter option within the buffered amount is now enabled, closing issue #40's gap`() {
+        // 12 minutes buffered: the 5 min option has enough audio behind it, and the service can
+        // now honour that exact window (issue #40 item 1) -- this must be enabled, not disabled.
+        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L)
 
         val five = options.single { it.minutes == 5 }
-        assertFalse(five.enabled)
-        assertEquals(WindowDisabledReason.PARTIAL_WINDOW_NOT_SUPPORTED, five.disabledReason)
+        assertTrue(five.enabled)
+        assertEquals(null, five.disabledReason)
+        assertEquals(12, five.availableMinutes)
     }
 
     @Test
-    fun `only the option matching capacity becomes enabled, and only once the buffer holds that much`() {
-        val notYetFull = DashboardViewModel.computeWindowOptions(bufferedMillis = 29 * 60_000L, capacityMinutes = 30)
-        assertFalse(notYetFull.single { it.minutes == 30 }.enabled)
-        assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, notYetFull.single { it.minutes == 30 }.disabledReason)
+    fun `every option becomes enabled once the buffer holds enough for all of them`() {
+        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 30 * 60_000L)
 
-        val full = DashboardViewModel.computeWindowOptions(bufferedMillis = 30 * 60_000L, capacityMinutes = 30)
-        val thirty = full.single { it.minutes == 30 }
-        assertTrue(thirty.enabled)
-        assertEquals(null, thirty.disabledReason)
-        // The 5 and 15 options stay disabled even once the buffer is full -- the engine still
-        // cannot honor a shorter request, only a full one.
-        assertFalse(full.single { it.minutes == 5 }.enabled)
-        assertFalse(full.single { it.minutes == 15 }.enabled)
+        options.forEach { option ->
+            assertTrue("option $option should be enabled", option.enabled)
+            assertEquals(null, option.disabledReason)
+        }
+    }
+
+    @Test
+    fun `an option becomes enabled at the exact minute it is first fully buffered, not one minute early`() {
+        val notYet = DashboardViewModel.computeWindowOptions(bufferedMillis = 15 * 60_000L - 1L)
+        assertFalse(notYet.single { it.minutes == 15 }.enabled)
+
+        val exact = DashboardViewModel.computeWindowOptions(bufferedMillis = 15 * 60_000L)
+        assertTrue(exact.single { it.minutes == 15 }.enabled)
+    }
+
+    // ---- mapSaveUiState: the real-progress oracle (issue #40 item 2) ----
+
+    @Test
+    fun `mapSaveUiState maps Idle and Exporting through unchanged`() {
+        assertEquals(SaveUiState.Idle, DashboardViewModel.mapSaveUiState(ExportState.Idle, dismissed = null))
+        assertEquals(SaveUiState.Exporting, DashboardViewModel.mapSaveUiState(ExportState.Exporting, dismissed = null))
+    }
+
+    @Test
+    fun `mapSaveUiState surfaces a fresh Success with the saved file name`() {
+        val export = ExportState.Success(displayName = "blackbox_2026-08-21_10-00-00_5min.m4a", bytesWritten = 1234)
+        val mapped = DashboardViewModel.mapSaveUiState(export, dismissed = null)
+        assertEquals(SaveUiState.Success("blackbox_2026-08-21_10-00-00_5min.m4a"), mapped)
+    }
+
+    @Test
+    fun `mapSaveUiState surfaces a fresh Error with its reason and message`() {
+        val export = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        val mapped = DashboardViewModel.mapSaveUiState(export, dismissed = null)
+        assertEquals(SaveUiState.Error(ExportFailureReason.WRITE_FAILED, "disk full"), mapped)
+    }
+
+    @Test
+    fun `mapSaveUiState hides a Success that has already been dismissed`() {
+        val export = ExportState.Success(displayName = "blackbox_2026-08-21_10-00-00_5min.m4a", bytesWritten = 1234)
+        val mapped = DashboardViewModel.mapSaveUiState(export, dismissed = export)
+        assertEquals(SaveUiState.Idle, mapped)
+    }
+
+    @Test
+    fun `mapSaveUiState hides an Error that has already been dismissed`() {
+        val export = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        val mapped = DashboardViewModel.mapSaveUiState(export, dismissed = export)
+        assertEquals(SaveUiState.Idle, mapped)
+    }
+
+    @Test
+    fun `mapSaveUiState still surfaces a new Error even if a different Error was previously dismissed`() {
+        val dismissedError = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        val newError = ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, "insert rejected")
+        val mapped = DashboardViewModel.mapSaveUiState(newError, dismissed = dismissedError)
+        assertEquals(SaveUiState.Error(ExportFailureReason.SINK_OPEN_FAILED, "insert rejected"), mapped)
     }
 
     // ---- mapUiState: the full oracle end to end ----
@@ -130,16 +185,43 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `mapUiState maps Paused distinctly and carries the save-request state through untouched`() {
-        val requested = SaveUiState.Requested(minutes = 30)
+    fun `mapUiState maps Paused distinctly and carries the save state through untouched`() {
+        val exporting = SaveUiState.Exporting
         val state = DashboardViewModel.mapUiState(
             captureState = CaptureState.Paused,
             bufferedMillis = 10 * 60_000L,
             capacityMinutes = 30,
-            saveState = requested,
+            saveState = exporting,
         )
 
         assertEquals(CaptureStatus.Paused, state.captureStatus)
-        assertEquals(requested, state.saveState)
+        assertEquals(exporting, state.saveState)
+    }
+
+    @Test
+    fun `mapUiState reflects a non-default configured capacity, not a hardcoded 30 (issue #40 item 3)`() {
+        // A test that only ever exercises capacityMinutes = 30 cannot catch a regression where
+        // this value gets hardcoded back to the default constant -- see issue #40's testing bar.
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 10 * 60_000L,
+            capacityMinutes = 45,
+            saveState = SaveUiState.Idle,
+        )
+
+        assertEquals(45 * 60_000L, state.capacityMillis)
+        assertFalse("10 min of 45 must not be reported as full", state.isBufferFull)
+
+        // The 30 min window option must be enabled here (10 min buffered is nowhere near it, so
+        // this isn't the assertion -- the point is that a 45 min capacity does not clamp
+        // bufferedMillis at 30 min the way a hardcoded default would).
+        val fullAtNonDefaultCapacity = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 40 * 60_000L,
+            capacityMinutes = 45,
+            saveState = SaveUiState.Idle,
+        )
+        assertEquals(40 * 60_000L, fullAtNonDefaultCapacity.bufferedMillis)
+        assertFalse(fullAtNonDefaultCapacity.isBufferFull)
     }
 }

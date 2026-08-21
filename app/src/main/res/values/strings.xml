@@ -74,14 +74,16 @@
     <string name="dashboard_save_window_option">%1$d min</string>
     <string name="dashboard_save_window_option_cd_enabled">Salvar os últimos %1$d min</string>
     <string name="dashboard_save_window_option_cd_insufficient_buffer">Salvar %1$d min, indisponível: só %2$d min em memória até agora</string>
-    <string name="dashboard_save_window_option_cd_partial_not_supported">Salvar %1$d min, indisponível: por enquanto só é possível salvar tudo o que está em memória</string>
     <string name="dashboard_save_window_insufficient_buffer">só %1$d min disponíveis</string>
-    <string name="dashboard_save_window_gap_notice">Por enquanto só é possível salvar tudo o que está em memória (até %1$d min). A seleção de janelas menores chega em breve.</string>
     <string name="dashboard_save_button">Salvar o passado</string>
     <string name="dashboard_save_button_cd">Salvar os últimos %1$d min gravados</string>
     <string name="dashboard_save_disabled_no_audio">Aguarde o buffer encher para poder salvar.</string>
 
-    <string name="dashboard_save_requested_title">Pedido de salvamento enviado</string>
-    <string name="dashboard_save_requested_body">Acompanhe o progresso e o resultado na notificação do Audio Blackbox.</string>
-    <string name="dashboard_save_requested_dismiss">OK</string>
+    <string name="dashboard_save_exporting_title">Salvando…</string>
+    <string name="dashboard_save_exporting_body">Gravando a janela selecionada no armazenamento do aparelho.</string>
+    <string name="dashboard_save_success_title">Gravação salva</string>
+    <string name="dashboard_save_success_body">Arquivo: %1$s</string>
+    <string name="dashboard_save_error_title">Falha ao salvar</string>
+    <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
+    <string name="dashboard_save_notice_dismiss">OK</string>
 </resources>
