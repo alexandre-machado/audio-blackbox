@@ -20,6 +20,7 @@
       what remains unconfirmed vs. documentation-confirmed.
     -->
     <application
+        android:name=".AudioBlackboxApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
