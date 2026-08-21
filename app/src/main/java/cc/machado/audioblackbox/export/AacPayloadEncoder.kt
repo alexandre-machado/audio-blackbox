@@ -95,11 +95,20 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
             setInteger(MediaFormat.KEY_BIT_RATE, bitRateBps)
         }
 
+        // Created inside a try whose finally always releases it -- MediaMuxer's constructor
+        // itself throws IOException (e.g. tempDir full/unwritable, a realistic condition for an
+        // app writing large audio files), and MediaCodec instances are a system-wide limited
+        // resource: leaking one because muxer construction failed after the codec was already
+        // created would have been a real denial-of-service on the device's media stack, not just
+        // a leaked object (`@techlead` adjudication on PR #37, finding 1).
         val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-        val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         var codecStarted = false
+        var muxerRef: MediaMuxer? = null
         var muxerStarted = false
         try {
+            val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxerRef = muxer // visible to the finally block below even if construction above throws
+
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec.start()
             codecStarted = true
@@ -181,8 +190,11 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
             // throws IllegalStateException if start() was never called.
             if (codecStarted) runCatching { codec.stop() }
             codec.release()
-            if (muxerStarted) runCatching { muxer.stop() }
-            muxer.release()
+            // muxerRef is null only if MediaMuxer's own constructor threw (the leak this fix
+            // closes -- `@techlead` adjudication on PR #37, finding 1); nothing to stop/release
+            // in that case since it was never successfully constructed.
+            if (muxerStarted) runCatching { muxerRef?.stop() }
+            muxerRef?.release()
         }
     }
 
