@@ -9,21 +9,34 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Exercises the exact wiring [cc.machado.audioblackbox.service.RecorderService.handleSave] now
- * drives for issue #40 item 1: a requested window in minutes becomes
- * `durationMillis = requestedMinutes * 60_000L` passed straight into [ExportEngine.export], with
- * no clamping in [cc.machado.audioblackbox.service.RecorderService] itself -- only
- * [RingBuffer.snapshot] (via [ExportEngine]'s `snapshotProvider`) clamps down to what is actually
- * buffered. A real [RingBuffer] backs [ExportEngine] here (not a stubbed `snapshotProvider`, the
- * way most of [ExportEngineTest] does it) specifically so this proves the collaboration between
- * the two classes, not either one's contract in isolation.
+ * Corrected per `@techlead` adjudication on PR #43: an earlier version of this doc claimed this
+ * class exercised the wiring "the same way `handleSave()` now drives them". It does not, and
+ * cannot from a plain JVM unit test: `RecorderService.handleSave` is `private` and hosted on an
+ * Android `Service`, reachable only through `onStartCommand`/a real or instrumented `Intent`
+ * dispatch. Claiming that coverage here would have been worse than no comment at all -- the next
+ * person reading it would trust it and skip writing the real test.
  *
- * The expected byte counts below are computed independently from [config]'s own
- * `sampleRateHz`/`channelCount` (2000 bytes/sec), not read back from any production formula --
- * e.g. "5 minutes" is asserted against `5 * 60 * 2000`, a plain arithmetic fact about how much
- * audio 5 minutes of this config actually is, so a regression in either
- * [RecorderService.handleSave]'s duration math or [RingBuffer.snapshot]'s clamping would fail
- * this test.
+ * ## What this class actually proves
+ * [ExportEngine]/[RingBuffer] correctly collaborate on a requested window in minutes: a real
+ * [RingBuffer] (not a stubbed `snapshotProvider`, the way most of [ExportEngineTest] does it)
+ * backs [ExportEngine], and requesting `durationMillis = requestedMinutes * 60_000L` for 5, 15,
+ * and 30 minutes -- plus the case where the request exceeds what is buffered -- produces exactly
+ * the expected number of bytes, computed independently from [config]'s own
+ * `sampleRateHz`/`channelCount` (2000 bytes/sec: e.g. "5 minutes" is asserted against
+ * `5 * 60 * 2000`, a plain arithmetic fact about how much audio 5 minutes of this config actually
+ * is), not read back from any production formula.
+ *
+ * ## What this class does *not* prove, and where that gap actually lives
+ * The intent -> `RecorderService.onStartCommand` -> `handleSave(requestedMinutes)` ->
+ * `exportEngine.export(...)` wiring issue #40 item 1 introduced -- i.e. that a real `ACTION_SAVE`
+ * Intent carrying `RecorderService.EXTRA_WINDOW_MINUTES` actually reaches this same
+ * [ExportEngine]/[RingBuffer] collaboration with the right value -- is untested by this class and,
+ * as far as this PR goes, untested anywhere else either. Closing that gap needs either
+ * `RecorderService`'s Service-hosted logic to be reachable from a plain unit test (a production
+ * seam this PR does not introduce) or an instrumented test dispatching a real `Intent` -- the
+ * latter was deliberately not attempted in this PR (per `@techlead`'s adjudication): the smallest
+ * window this app supports is 5 minutes of real time, a poor fit for CI, and worth deciding on
+ * separately rather than improvising here.
  */
 class WindowedSaveExportTest {
 

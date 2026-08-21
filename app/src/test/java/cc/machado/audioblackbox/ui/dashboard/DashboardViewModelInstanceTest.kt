@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.export.ExportState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +15,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -26,14 +26,58 @@ import org.junit.Test
  * [DashboardFormatTest], which pin the companion object's pure mapping functions (issue #41,
  * following up on `@rev`'s finding on PR #38).
  *
- * All constructor collaborators ([CaptureState] source, the buffered-duration poll, and the
- * start/stop/save dispatch callbacks) are already injectable via constructor defaults, so no
- * production seam was needed to reach the ViewModel at the instance level.
+ * All constructor collaborators ([CaptureState] source, the buffered-duration poll, the real
+ * [ExportState] source, and the start/stop/save dispatch callbacks) are already injectable via
+ * constructor defaults, so no production seam was needed to reach the ViewModel at the instance
+ * level. Every test injects its own `exportState` `MutableStateFlow` rather than relying on the
+ * constructor's default ([cc.machado.audioblackbox.service.RecorderService.exportState]) -- that
+ * default is a companion-object singleton shared with every other consumer in this test JVM
+ * process (real production code, same as `RecorderService.engine`), and this suite mutates
+ * `ExportState` directly, so sharing it here would leak state across tests.
  *
  * [DashboardViewModel.uiState] is built on `viewModelScope`, which resolves to
  * `Dispatchers.Main.immediate`; [setUp]/[tearDown] install a [StandardTestDispatcher] as Main so
- * every test drives that scope's virtual time explicitly (via `runCurrent`/`advanceTimeBy`) rather
- * than relying on real delays -- no `sleep`, no flakiness.
+ * every test drives that scope's virtual time explicitly (via `runCurrent`) rather than relying on
+ * real delays -- no `sleep`, no flakiness.
+ *
+ * ## Ported from issue #41/PR #42 for issue #40 (`@techlead` adjudication on PR #43)
+ * PR #42 landed on `main` while PR #43 was rewriting [SaveUiState] from a single
+ * `Idle | Requested(minutes)` pair (only ever meaning "the intent was sent") into a real mirror of
+ * [ExportState] -- `Idle | Exporting | Success | Error` -- so every test below that touched
+ * `SaveUiState.Requested` needed re-deriving against the new model, not just a mechanical rename.
+ * Accounting for every one of PR #42's 10 tests, since dropping coverage silently is exactly what
+ * `@techlead` is blocking on:
+ *   - the 4 `toggleEngine` tests: **kept unchanged** -- `SaveUiState` never enters into them.
+ *   - `requestSave dispatches ... transitions to Requested`: **ported** as
+ *     `requestSave dispatches the save intent, and the real ExportState.Exporting becomes
+ *     visible once RecorderService's round trip lands` -- the meaningful assertion (a dispatched
+ *     save eventually becomes visible as an in-progress state on `uiState`) still holds, now
+ *     against the real `ExportState` this PR wires in rather than a same-tick local flag.
+ *   - `requestSave silently ignores a disabled option`: **kept**, same assertion, now with an
+ *     explicit injected `exportState`.
+ *   - `requestSave auto-hides the notice after the visible window elapses`: **dropped, and this
+ *     is a genuine behavior change, not a quiet coverage loss.** `SAVE_NOTICE_VISIBLE_MILLIS` and
+ *     the ViewModel-owned reset coroutine it tested no longer exist -- issue #40 item 2 moved
+ *     outcome-visibility timing to [cc.machado.audioblackbox.service.RecorderService]'s own
+ *     `EXPORT_OUTCOME_VISIBLE_MILLIS`/`exportEngine.acknowledgeTerminalState()`, which is
+ *     service-owned and out of this ViewModel's reach entirely (this ViewModel only ever sees
+ *     whatever `ExportState` the service's `StateFlow` hands it). That timing lives server-side
+ *     now and needs its own (already-existing, in `RecorderNotification`/`RecorderService`
+ *     coverage) test, not a ViewModel one.
+ *   - `dismissSaveNotice clears the notice immediately, ahead of the auto-hide timeout`:
+ *     **ported** as `dismissSaveNotice clears a Success notice immediately`, replacing the fake
+ *     `Requested` state with a real `ExportState.Success`.
+ *   - `dismissSaveNotice's Idle survives both the stale auto-hide timer and a later unrelated
+ *     capture-state change`: **ported**, minus the now-nonexistent auto-hide-timer half (see
+ *     above), keeping exactly the sticky-state assertion `@techlead` called out by name: an
+ *     unrelated `CaptureState` transition must never resurrect a dismissed outcome. This is the
+ *     same regression class as issue #30/PR #28 round 3.
+ *   - `uiState reflects buffered-duration and capture-state changes independently`: **kept
+ *     unchanged** -- `SaveUiState` never enters into it either.
+ *
+ * [DashboardViewModelDoubleTapTest] (added by this same PR) is a separate concern -- the
+ * *dispatch-guard* behavior of a rapid double-tap -- and does not overlap any test here: nothing
+ * in this file calls `requestSave` twice.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelInstanceTest {
@@ -119,15 +163,17 @@ class DashboardViewModelInstanceTest {
         assertEquals(1, stopCalls)
     }
 
-    // ---- requestSave: transitions SaveUiState and gates on the option actually being enabled ----
+    // ---- requestSave: dispatches, and the real ExportState becomes visible on uiState ----
 
     @Test
-    fun `requestSave dispatches the save intent and transitions to Requested when the option is enabled`() = runTest(testDispatcher) {
+    fun `requestSave dispatches the save intent, and the real ExportState Exporting becomes visible once RecorderService's round trip lands`() = runTest(testDispatcher) {
         val dispatched = mutableListOf<Int>()
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 30 * 60_000L }, // buffer full at capacity
             capacityMinutes = 30,
+            exportState = exportState,
             onSaveIntent = { minutes -> dispatched += minutes },
         )
         val observed = mutableListOf<DashboardUiState>()
@@ -138,7 +184,17 @@ class DashboardViewModelInstanceTest {
         runCurrent()
 
         assertEquals(listOf(30), dispatched)
-        assertEquals(SaveUiState.Requested(30), observed.last().saveState)
+        // The dispatch alone does not flip the screen's state -- unlike the old fake `Requested`,
+        // there is nothing to show yet until RecorderService's own async round trip actually
+        // starts the export (issue #40 item 2: no more "intent sent" placeholder state).
+        assertEquals(SaveUiState.Idle, observed.last().saveState)
+
+        // Simulates RecorderService's exportState StateFlow (published from its companion, see
+        // issue #40 item 2) actually transitioning once the export starts.
+        exportState.value = ExportState.Exporting
+        runCurrent()
+
+        assertEquals(SaveUiState.Exporting, observed.last().saveState)
 
         job.cancel()
     }
@@ -146,10 +202,12 @@ class DashboardViewModelInstanceTest {
     @Test
     fun `requestSave silently ignores a disabled option -- no dispatch, no state change`() = runTest(testDispatcher) {
         val dispatched = mutableListOf<Int>()
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 0L }, // nothing buffered -- every option disabled
             capacityMinutes = 30,
+            exportState = exportState,
             onSaveIntent = { minutes -> dispatched += minutes },
         )
         val observed = mutableListOf<DashboardUiState>()
@@ -165,50 +223,26 @@ class DashboardViewModelInstanceTest {
         job.cancel()
     }
 
-    @Test
-    fun `requestSave auto-hides the notice after the visible window elapses, driven by virtual time`() = runTest(testDispatcher) {
-        val vm = DashboardViewModel(
-            captureState = MutableStateFlow(CaptureState.Recording),
-            bufferedDurationMillisProvider = { 30 * 60_000L },
-            capacityMinutes = 30,
-            onSaveIntent = {},
-        )
-        val observed = mutableListOf<DashboardUiState>()
-        val job = launch { vm.uiState.collect { observed += it } }
-        runCurrent()
-
-        vm.requestSave(30)
-        runCurrent()
-        assertEquals(SaveUiState.Requested(30), observed.last().saveState)
-
-        // SAVE_NOTICE_VISIBLE_MILLIS (6_000L in DashboardViewModel) elapses -- the scheduled
-        // reset coroutine fires and clears the notice on its own, without another user action.
-        advanceTimeBy(6_001L)
-        runCurrent()
-
-        assertEquals(SaveUiState.Idle, observed.last().saveState)
-
-        job.cancel()
-    }
-
     // ---- dismissSaveNotice: clears the notice, and a later unrelated emission must not
     // resurrect it -- the exact sticky-state bug class from issue #30 / PR #28 round 3. ----
 
     @Test
-    fun `dismissSaveNotice clears the notice immediately, ahead of the auto-hide timeout`() = runTest(testDispatcher) {
+    fun `dismissSaveNotice clears a Success notice immediately`() = runTest(testDispatcher) {
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 30 * 60_000L },
             capacityMinutes = 30,
-            onSaveIntent = {},
+            exportState = exportState,
         )
         val observed = mutableListOf<DashboardUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
         runCurrent()
 
-        vm.requestSave(30)
+        val success = ExportState.Success(displayName = "blackbox_2026-08-21_10-00-00_30min.m4a", bytesWritten = 1234)
+        exportState.value = success
         runCurrent()
-        assertEquals(SaveUiState.Requested(30), observed.last().saveState)
+        assertEquals(SaveUiState.Success("blackbox_2026-08-21_10-00-00_30min.m4a"), observed.last().saveState)
 
         vm.dismissSaveNotice()
         runCurrent()
@@ -219,40 +253,36 @@ class DashboardViewModelInstanceTest {
     }
 
     @Test
-    fun `dismissSaveNotice's Idle survives both the stale auto-hide timer and a later unrelated capture-state change`() = runTest(testDispatcher) {
+    fun `dismissSaveNotice's Idle survives a later unrelated capture-state change`() = runTest(testDispatcher) {
         val captureState = MutableStateFlow<CaptureState>(CaptureState.Recording)
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = DashboardViewModel(
             captureState = captureState,
             bufferedDurationMillisProvider = { 30 * 60_000L },
             capacityMinutes = 30,
-            onSaveIntent = {},
+            exportState = exportState,
         )
         val observed = mutableListOf<DashboardUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
         runCurrent()
 
-        vm.requestSave(30)
+        val success = ExportState.Success(displayName = "blackbox_2026-08-21_10-00-00_30min.m4a", bytesWritten = 1234)
+        exportState.value = success
         runCurrent()
-        assertEquals(SaveUiState.Requested(30), observed.last().saveState)
+        assertEquals(SaveUiState.Success("blackbox_2026-08-21_10-00-00_30min.m4a"), observed.last().saveState)
 
         vm.dismissSaveNotice()
         runCurrent()
         assertEquals(
-            "dismiss must clear the notice on the live uiState, not just the internal field",
+            "dismiss must clear the notice on the live uiState, not just an internal field",
             SaveUiState.Idle,
             observed.last().saveState,
         )
 
-        // The reset coroutine scheduled by requestSave(30) above is still pending; if it did not
-        // guard against a state that has since moved on, it would stomp Idle back to Idle here
-        // (harmless) -- but a broken guard that instead *set* Requested(30) unconditionally would
-        // resurrect the dismissed notice. This is exactly what must not happen.
-        advanceTimeBy(6_001L)
-        runCurrent()
-        assertEquals(SaveUiState.Idle, observed.last().saveState)
-
-        // An unrelated emission (capture state flips, nothing to do with saving) must not carry a
-        // stale Requested value back onto the screen either.
+        // An unrelated emission (capture state flips, nothing to do with saving) must not carry
+        // the dismissed outcome back onto the screen either -- the exact sticky-state bug class
+        // that hit issue #30/PR #28 round 3: a broken guard here would resurrect Success on any
+        // later, unrelated recomposition rather than staying cleared.
         captureState.value = CaptureState.Paused
         runCurrent()
         assertEquals(CaptureStatus.Paused, observed.last().captureStatus)
@@ -275,6 +305,7 @@ class DashboardViewModelInstanceTest {
             captureState = captureState,
             bufferedDurationMillisProvider = { bufferedMillis },
             capacityMinutes = 30,
+            exportState = MutableStateFlow(ExportState.Idle),
             tickMillis = 100L,
         )
         val observed = mutableListOf<DashboardUiState>()

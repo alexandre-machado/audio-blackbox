@@ -5,12 +5,14 @@ import cc.machado.audioblackbox.export.ExportState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 
@@ -119,6 +121,66 @@ class DashboardViewModelDoubleTapTest {
         assertEquals(
             "a later, genuinely new save request must not be blocked by a guard that only " +
                 "ever existed to cover the previous save's pre-Exporting gap",
+            2,
+            dispatchCount,
+        )
+    }
+
+    // ---- the guard must never survive a failed dispatch (`@techlead` adjudication on PR #43,
+    // raised to blocking -- a permanent Save lockout was already a blocking finding once in this
+    // project, issue #30's stranded-notification class) ----
+
+    @Test
+    fun `a dispatch that throws leaves Save usable for the next call`() = runTest {
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        var dispatchCount = 0
+        var shouldThrow = true
+        val viewModel = newViewModel(exportState) { minutes ->
+            dispatchCount++
+            if (shouldThrow) error("onSaveIntent boom")
+        }
+
+        // The exception is a real failure of the first dispatch -- it is expected to propagate
+        // (requestSave() does not swallow it), but it must not leave the guard permanently set on
+        // this same ViewModel instance: nothing will ever move exportState away from Idle for a
+        // dispatch that never reached RecorderService, so if the guard survived this it would
+        // survive forever.
+        assertThrows(IllegalStateException::class.java) { viewModel.requestSave(30) }
+        assertEquals(1, dispatchCount)
+
+        shouldThrow = false
+        viewModel.requestSave(30)
+        assertEquals(
+            "a throwing dispatch must not permanently lock Save out -- the very next call on " +
+                "the same instance (here, effectively immediately, no virtual time needed) must " +
+                "still be able to dispatch",
+            2,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `a dispatch that silently never reaches the service is released by the timeout backstop`() = runTest {
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        var dispatchCount = 0
+        val viewModel = newViewModel(exportState) { dispatchCount++ }
+
+        viewModel.requestSave(30)
+        assertEquals(1, dispatchCount)
+
+        // No exception, and exportState never moves -- simulates onSaveIntent returning
+        // normally (e.g. ContextCompat.startForegroundService() didn't throw) but the Intent
+        // never actually reaching RecorderService.onStartCommand. Advancing past
+        // DashboardViewModel's own DISPATCH_TIMEOUT_MILLIS (5_000L; not importable here since
+        // it is private -- this must stay >= that value) is the only thing that can release the
+        // guard in this scenario, since nothing else ever will.
+        advanceTimeBy(5_001L)
+        runCurrent()
+
+        viewModel.requestSave(30)
+        assertEquals(
+            "a dispatch that never produces a real ExportState transition must still release " +
+                "the guard once the timeout backstop elapses, not lock Save out forever",
             2,
             dispatchCount,
         )

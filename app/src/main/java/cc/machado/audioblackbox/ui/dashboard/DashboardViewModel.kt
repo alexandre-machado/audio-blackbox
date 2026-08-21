@@ -97,6 +97,13 @@ class DashboardViewModel(
     // requestSave() is only ever called from Compose's UI thread, and the collector below that
     // clears it runs on viewModelScope, which is that same dispatcher. No synchronization needed
     // for a value only ever touched from one thread.
+    //
+    // Must never be able to get stuck at `true` -- a permanent Save lockout was already a blocking
+    // finding once in this project (issue #30's stranded-notification class), and `@techlead`'s
+    // adjudication on PR #43 raised the same risk here: if `onSaveIntent` throws, or the dispatch
+    // otherwise never reaches RecorderService, nothing would ever flip `exportState` away from
+    // Idle to release this flag via the collector below. See requestSave()'s own doc for the two
+    // release paths that cover both failure shapes.
     private var saveDispatchPending = false
 
     init {
@@ -154,6 +161,20 @@ class DashboardViewModel(
      * [cc.machado.audioblackbox.export.ExportFailureReason.EXPORT_ALREADY_IN_PROGRESS] -- a
      * user-visible error for what was just one action.
      *
+     * [saveDispatchPending] is released two ways, neither of which can leave it stuck (`@techlead`
+     * adjudication on PR #43, raised to blocking -- a permanent Save lockout was already a
+     * blocking finding once in this project, issue #30's stranded-notification class):
+     *   - immediately, via the `finally` below, if [onSaveIntent] itself throws -- a thrown
+     *     dispatch never reached [RecorderService], so there is nothing for the real
+     *     [ExportState] to ever transition on, and the exception is rethrown once the guard is
+     *     released rather than swallowed;
+     *   - after [DISPATCH_TIMEOUT_MILLIS], via the scheduled backstop below, covering the case
+     *     [onSaveIntent] returns normally but the dispatch still never reaches the service (an
+     *     Intent silently dropped, the service failing to start) -- no exception to catch there,
+     *     so only a bounded timeout can recover it. Both releases are safe no-ops once a real,
+     *     genuinely in-flight export is underway: [exportState]'s own `!is Idle` check in the
+     *     guard above already covers that case on its own, independent of this flag.
+     *
      * Clears any previously dismissed outcome so this new export's own Success/Error is
      * guaranteed to be shown once it lands, even in the (practically impossible, since filenames
      * are timestamped) case that it would otherwise compare equal to whatever was last
@@ -164,7 +185,19 @@ class DashboardViewModel(
         if (saveDispatchPending || exportState.value !is ExportState.Idle) return
         saveDispatchPending = true
         _dismissedExportState.value = null
-        onSaveIntent(minutes)
+
+        viewModelScope.launch {
+            delay(DISPATCH_TIMEOUT_MILLIS)
+            saveDispatchPending = false
+        }
+
+        var dispatchThrew = true
+        try {
+            onSaveIntent(minutes)
+            dispatchThrew = false
+        } finally {
+            if (dispatchThrew) saveDispatchPending = false
+        }
     }
 
     /** Lets the user dismiss the on-screen Success/Error confirmation early rather than waiting
@@ -181,6 +214,12 @@ class DashboardViewModel(
     companion object {
         private const val DEFAULT_TICK_MILLIS = 500L
         private const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        // Backstop for requestSave()'s saveDispatchPending guard (see its doc): comfortably
+        // longer than the async round trip normally takes (a coroutine dispatch plus one
+        // Intent/Binder hop to RecorderService.onStartCommand), short enough that a genuine
+        // dispatch failure does not lock the user out of Save for long.
+        private const val DISPATCH_TIMEOUT_MILLIS = 5_000L
 
         /** 1:1 mapping, kept as its own pure function (rather than inlined into [mapUiState]) so
          * it has a single, obvious oracle: every [CaptureState] subtype maps to exactly the
