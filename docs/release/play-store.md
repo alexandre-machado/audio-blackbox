@@ -60,13 +60,18 @@ can complete until these land.
    screen recording showing the feature being triggered by the user (see section
    F). This has to be recorded against a real build on a real device — it cannot be
    fabricated or skipped.
-7. **Store listing decisions**: category, target audience/age, countries,
-   pricing (free vs. paid), and launch locale(s). Given the current onboarding
-   legal notice is Portuguese-only (`app/src/main/res/values/strings.xml`,
-   `onboarding_legal_body`) while the README and code comments are English, the
-   owner needs to decide the launch locale set before the listing text in section E
-   is finalized. This overlaps issue #44 (localization) — resolve the locale
-   question there or here, but resolve it once.
+7. **Store listing locale decision**: category, target audience/age, countries,
+   pricing (free vs. paid), and which locale(s) to publish the *store listing*
+   in. Issue #44 (localization) has since **shipped and closed** (`#65`,
+   `2415ae1`): the app itself now ships English as the default locale
+   (`app/src/main/res/values/strings.xml`) with a complete Portuguese (Brazil)
+   translation (`app/src/main/res/values-pt-rBR/strings.xml`), and
+   `app/build.gradle.kts` now treats `MissingTranslation`/`ExtraTranslation` as
+   lint errors, so the two string sets can't silently drift apart again. The
+   remaining decision is narrower than "is the app localized" — it's a Play
+   Console decision about which locale(s) to publish the *store listing text
+   and screenshots* in (EN only, pt-BR only, or both), independent of the app
+   itself already supporting both.
 8. **Jurisdiction/consent legal review** (optional but flagged, as issue #48
    itself flags it) — whether to get actual legal advice on describing an ambient
    audio recorder given one-party vs. all-party consent laws vary by country. This
@@ -199,7 +204,15 @@ in place first, per issue #48's own stated sequencing.
 - **Does your app collect or share any of the required user data types?** Yes —
   audio.
 - **Audio (Audio recordings)**
-  - Collected: **Yes.**
+  - Collected: **Yes.** (Play's own Data safety guidance has a "not in scope
+    for data collection" carve-out for data "processed locally on the user's
+    device and not sent off device," which, read literally, could arguably let
+    this app answer "No" here, since audio never leaves the device. I chose
+    the conservative **Yes** anyway: over-disclosing isn't a policy violation,
+    under-disclosing is, and "Yes, collected, but never shared, never
+    transmitted, on-device only" is a stronger and safer story to tell a
+    reviewer than omitting the data type entirely. Flagging the alternative
+    reading here so the owner isn't blindsided if a reviewer raises it.)
   - Shared with third parties: **No.**
   - Processed ephemerally: **No** (it's not ephemeral in the Play Console technical
     sense — the export feature persists it to device storage on user action — but
@@ -265,8 +278,9 @@ foreground-service type:
 
 Draft functionality description for that form:
 
-> Audio Blackbox continuously buffers a short rolling window (5–30 minutes,
-> user-configurable) of ambient audio in device RAM, similar to a dashcam. Nothing
+> Audio Blackbox continuously buffers a short rolling window (5, 15, 30, or 60
+> minutes, user-configurable, per `AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES`)
+> of ambient audio in device RAM, similar to a dashcam. Nothing
 > is written to disk automatically. The user starts and stops capture explicitly
 > via an in-app toggle, sees a persistent notification the entire time capture is
 > active, and can export the recent buffer to a file on demand. If the foreground
@@ -294,12 +308,14 @@ able to explicitly accept or decline rather than just tapping through.
 (https://support.google.com/googleplay/android-developer/answer/11150561,
 retrieved 2026-08-21)
 
-The current copy (translated from the Portuguese in the repo):
+The current English-default copy (`app/src/main/res/values/strings.xml`,
+`onboarding_legal_body`; the app now ships this bilingual — see section A.7 — and
+the Portuguese `values-pt-rBR/strings.xml` copy carries the same content):
 
-> "The Audio Blackbox app records audio continuously in the background. Recording
-> conversations may require the consent of the people involved, depending on your
-> jurisdiction's laws. You are responsible for using this app in compliance with
-> applicable law."
+> "Audio Blackbox continuously records audio in the background. Recording
+> conversations may require the consent of everyone involved, depending on the
+> laws of your jurisdiction. You are responsible for using this app in
+> accordance with applicable law."
 
 This covers the legal/consent angle but **does not clearly state the "what" and
 "how"** Play's disclosure policy asks for: that audio is kept only in a rolling
@@ -313,9 +329,9 @@ for whoever next touches that string:
 > to a file only when you tap Save."
 
 I did not verify whether the current onboarding screen requires an explicit
-two-option accept/decline action (vs. a single "Entendi, continuar" / "Got it,
-continue" button) — that's a UI-flow check, not a strings check, and is listed as
-an open question in section F.
+two-option accept/decline action (vs. a single "I understand, continue" /
+"Entendi, continuar" button, per locale) — that's a UI-flow check, not a
+strings check, and is listed as an open question in section F.
 
 ## E. Store listing
 
@@ -331,9 +347,9 @@ an open question in section F.
 > last several minutes of ambient audio in memory — nothing is written to disk
 > until you decide to keep it.
 >
-> Start capture, and the app keeps a rolling buffer of the most recent audio (5 to
-> 30 minutes, your choice) in RAM, always overwriting the oldest audio as new audio
-> comes in. If something worth keeping just happened, tap Save and the last few
+> Start capture, and the app keeps a rolling buffer of the most recent audio
+> (5, 15, 30, or 60 minutes, your choice) in RAM, always overwriting the oldest
+> audio as new audio comes in. If something worth keeping just happened, tap Save and the last few
 > minutes are exported as an audio file you can play back or share — capturing the
 > past, after the fact.
 >
@@ -349,10 +365,15 @@ an open question in section F.
 > involved, depending on the laws where you are. You're responsible for using this
 > app in accordance with applicable law.
 
-This is a draft for the owner to approve, adjust in tone, and translate per the
-launch-locale decision in section A.6. It intentionally leads with the privacy
-story per issue #48's guidance, since it's the strongest, most verifiable claim
-available.
+This is a draft for the owner to approve and adjust in tone. It's written in
+English only, matching the app's default locale. Since the app itself now
+ships a complete Portuguese (Brazil) translation (`#65`, section A.7 above), a
+pt-BR store listing is a reasonable pairing if the owner decides to publish
+that locale — I did not draft one, since translating store-listing copy well
+is a judgment call about tone and idiom that shouldn't be templated from a
+machine translation of the paragraph above. It intentionally leads with the
+privacy story per issue #48's guidance, since it's the strongest, most
+verifiable claim available.
 
 ### Graphical assets — the 512x512 Play listing icon is already done; feature graphic and screenshots are not
 
