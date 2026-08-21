@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureErrorReason
+import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 
@@ -66,6 +69,9 @@ fun DashboardRoute(
         onToggleEngine = viewModel::toggleEngine,
         onSelectWindow = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
+        onSelectRetentionWindow = viewModel::selectRetentionWindow,
+        onConfirmRetentionWindowChange = viewModel::confirmRetentionWindowChange,
+        onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
         modifier = modifier,
     )
 }
@@ -76,6 +82,9 @@ fun DashboardScreen(
     onToggleEngine: () -> Unit,
     onSelectWindow: (Int) -> Unit,
     onDismissSaveNotice: () -> Unit,
+    onSelectRetentionWindow: (Int) -> Unit,
+    onConfirmRetentionWindowChange: () -> Unit,
+    onCancelRetentionWindowChange: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(modifier = modifier) { innerPadding ->
@@ -95,7 +104,15 @@ fun DashboardScreen(
             if (uiState.saveState != SaveUiState.Idle) {
                 SaveOutcomeNotice(uiState.saveState, onDismissSaveNotice)
             }
+            RetentionSection(uiState.retentionSection, onSelectRetentionWindow)
         }
+    }
+    uiState.retentionSection.pendingConfirmationMinutes?.let { pendingMinutes ->
+        RetentionDiscardDialog(
+            pendingMinutes = pendingMinutes,
+            onConfirm = onConfirmRetentionWindowChange,
+            onCancel = onCancelRetentionWindowChange,
+        )
     }
 }
 
@@ -370,6 +387,65 @@ private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
     }
 }
 
+/** The retention-window selector (issue #45) -- how many minutes of audio the ring buffer is
+ * *configured* to hold, distinct from [SaveSection]'s "salvar o passado" window (how much of
+ * what's currently buffered a save writes to a file). Shows each bounded option's approximate RAM
+ * cost per the issue's "the user is spending their device's memory" requirement -- see
+ * [DashboardViewModel.computeRetentionSection] for the arithmetic that number comes from. */
+@Composable
+private fun RetentionSection(section: RetentionSectionUiState, onSelectRetentionWindow: (Int) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = stringResource(R.string.dashboard_retention_title), style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(R.string.dashboard_retention_explanation), style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                section.options.forEach { option -> RetentionChip(option, onSelectRetentionWindow) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RetentionChip(option: RetentionWindowOption, onSelectRetentionWindow: (Int) -> Unit) {
+    val label = stringResource(R.string.dashboard_retention_option, option.minutes, option.approxRamMb)
+    val cd = stringResource(R.string.dashboard_retention_option_cd, option.minutes, option.approxRamMb)
+    FilterChip(
+        selected = option.selected,
+        enabled = !option.selected,
+        onClick = { onSelectRetentionWindow(option.minutes) },
+        label = { Text(text = label) },
+        colors = FilterChipDefaults.filterChipColors(),
+        modifier = Modifier.semantics { contentDescription = cd },
+    )
+}
+
+/** Blocks a retention-window change from ever applying silently (issue #45's core safety
+ * requirement): shown whenever [RetentionSectionUiState.pendingConfirmationMinutes] is non-null,
+ * i.e. the user picked a different window while the engine was still Recording/Paused with real
+ * audio buffered. Dismissing (tapping outside, or the back gesture) is treated the same as
+ * [onCancel] -- there is no safe default other than "nothing changes". */
+@Composable
+private fun RetentionDiscardDialog(pendingMinutes: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(text = stringResource(R.string.dashboard_retention_confirm_title)) },
+        text = { Text(text = stringResource(R.string.dashboard_retention_confirm_body, pendingMinutes)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.dashboard_retention_confirm_accept))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(text = stringResource(R.string.dashboard_retention_confirm_cancel))
+            }
+        },
+    )
+}
+
 private fun CaptureErrorReason.readable(): String = name.lowercase().replace('_', ' ')
 
 // ---- Previews: one per mandatory state (issue #6) ----
@@ -377,22 +453,27 @@ private fun CaptureErrorReason.readable(): String = name.lowercase().replace('_'
 private fun previewState(
     status: CaptureStatus,
     bufferedMillis: Long = 0L,
-    capacityMillis: Long = 30 * 60_000L,
+    capacityMinutes: Int = 30,
     saveState: SaveUiState = SaveUiState.Idle,
-): DashboardUiState = DashboardUiState(
-    captureStatus = status,
+    pendingRetentionConfirmationMinutes: Int? = null,
+): DashboardUiState = DashboardViewModel.mapUiState(
+    captureState = when (status) {
+        is CaptureStatus.Idle -> CaptureState.Idle
+        is CaptureStatus.Recording -> CaptureState.Recording
+        is CaptureStatus.Paused -> CaptureState.Paused
+        is CaptureStatus.Error -> CaptureState.Error(status.reason, status.message)
+    },
     bufferedMillis = bufferedMillis,
-    capacityMillis = capacityMillis,
-    isBufferFull = bufferedMillis >= capacityMillis,
-    windowOptions = DashboardViewModel.computeWindowOptions(bufferedMillis),
+    capacityMinutes = capacityMinutes,
     saveState = saveState,
+    pendingRetentionConfirmationMinutes = pendingRetentionConfirmationMinutes,
 )
 
 @Preview(showBackground = true, name = "Idle")
 @Composable
 private fun DashboardScreenIdlePreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Idle), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Idle), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -400,7 +481,7 @@ private fun DashboardScreenIdlePreview() {
 @Composable
 private fun DashboardScreenRecordingPreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Recording, bufferedMillis = 12 * 60_000L + 34_000L), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Recording, bufferedMillis = 12 * 60_000L + 34_000L), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -408,7 +489,7 @@ private fun DashboardScreenRecordingPreview() {
 @Composable
 private fun DashboardScreenPausedPreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Paused, bufferedMillis = 8 * 60_000L), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Paused, bufferedMillis = 8 * 60_000L), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -420,7 +501,7 @@ private fun DashboardScreenErrorPreview() {
             previewState(
                 CaptureStatus.Error(CaptureErrorReason.AUDIO_RECORD_INIT_FAILED, "AudioRecord.state = 0"),
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -431,7 +512,7 @@ private fun DashboardScreenBufferFullPreview() {
     AudioBlackboxTheme {
         DashboardScreen(
             previewState(CaptureStatus.Recording, bufferedMillis = 30 * 60_000L),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -446,7 +527,7 @@ private fun DashboardScreenSaveExportingPreview() {
                 bufferedMillis = 30 * 60_000L,
                 saveState = SaveUiState.Exporting,
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -461,7 +542,7 @@ private fun DashboardScreenSaveSuccessPreview() {
                 bufferedMillis = 30 * 60_000L,
                 saveState = SaveUiState.Success("blackbox_2026-08-21_10-15-00_30min.m4a"),
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -479,7 +560,22 @@ private fun DashboardScreenSaveErrorPreview() {
                     "MediaStore insert rejected",
                 ),
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Retention discard confirmation")
+@Composable
+private fun DashboardScreenRetentionConfirmPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(
+            previewState(
+                CaptureStatus.Recording,
+                bufferedMillis = 12 * 60_000L,
+                pendingRetentionConfirmationMinutes = 60,
+            ),
+            {}, {}, {}, {}, {}, {},
         )
     }
 }

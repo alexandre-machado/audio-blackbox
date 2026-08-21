@@ -51,7 +51,7 @@ class DashboardViewModelDoubleTapTest {
     ) = DashboardViewModel(
         captureState = MutableStateFlow(CaptureState.Recording),
         bufferedDurationMillisProvider = { 30 * 60_000L },
-        capacityMinutes = 30,
+        capacityMinutesFlow = MutableStateFlow(30),
         exportState = exportState,
         onSaveIntent = onSaveIntent,
     )
