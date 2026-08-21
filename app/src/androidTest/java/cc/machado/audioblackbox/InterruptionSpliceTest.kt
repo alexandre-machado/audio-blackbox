@@ -3,14 +3,15 @@ package cc.machado.audioblackbox
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.service.RecorderService
-import java.io.InputStream
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -114,10 +115,20 @@ class InterruptionSpliceTest {
         assertNotNull("export never landed a committed MediaStore row", row)
         checkNotNull(row)
         assertEquals("IS_PENDING must be cleared once export commits", 0, row.isPending)
-        assertTrue("declared WAV duration must be positive (found ${row.wavDurationMillis}ms)", row.wavDurationMillis > 0)
+        assertTrue("declared duration must be positive (found ${row.durationMillis}ms)", row.durationMillis > 0)
+        // This tier runs at API 30 (see scripts/ci/avd.env) -- below the API 31 floor
+        // MediaStoreSink requires for the top-level `Recordings/` root (issue #33) -- so this is
+        // exactly the OS range that exercises the documented `Music/Blackbox/` fallback, not the
+        // API 31+ path. A future bump of this tier's AVD to API 31+ should update this expectation
+        // to `Recordings/Blackbox/` alongside it.
+        assertEquals(
+            "issue #33's API 29-30 fallback location",
+            "${Environment.DIRECTORY_MUSIC}/Blackbox/",
+            row.relativePath,
+        )
     }
 
-    private data class ExportedRow(val isPending: Int, val wavDurationMillis: Long)
+    private data class ExportedRow(val isPending: Int, val durationMillis: Long, val relativePath: String?)
 
     private fun pollForExportedRow(sinceMillis: Long, timeoutMillis: Long): ExportedRow? {
         val deadline = System.currentTimeMillis() + timeoutMillis
@@ -128,6 +139,7 @@ class InterruptionSpliceTest {
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.IS_PENDING,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.RELATIVE_PATH,
         )
         while (System.currentTimeMillis() < deadline) {
             resolver.query(collection, projection, null, null, "${MediaStore.Audio.Media.DATE_ADDED} DESC")?.use { cursor ->
@@ -135,6 +147,7 @@ class InterruptionSpliceTest {
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val pendingCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_PENDING)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameCol)
                     val pending = cursor.getInt(pendingCol)
@@ -142,8 +155,9 @@ class InterruptionSpliceTest {
                     if (name.startsWith("blackbox_") && dateAddedSeconds * 1000 >= sinceMillis - 5_000 && pending == 0) {
                         val id = cursor.getLong(idCol)
                         val uri = ContentUris.withAppendedId(collection, id)
-                        val duration = resolver.openInputStream(uri)?.use(::readWavDurationMillis) ?: 0L
-                        return ExportedRow(pending, duration)
+                        val duration = readDurationMillis(uri)
+                        val relativePath = cursor.getString(pathCol)
+                        return ExportedRow(pending, duration, relativePath)
                     }
                 }
             }
@@ -152,26 +166,18 @@ class InterruptionSpliceTest {
         return null
     }
 
-    /** Parses just enough of the 44-byte canonical header to recover the declared duration,
-     * independent of `WavWriter` itself -- this test must not pass merely because it re-derives
-     * the same arithmetic the production code used to write the header. */
-    private fun readWavDurationMillis(input: InputStream): Long {
-        val header = ByteArray(44)
-        var read = 0
-        while (read < header.size) {
-            val n = input.read(header, read, header.size - read)
-            if (n < 0) break
-            read += n
+    /** Reads the container's own declared duration via `MediaMetadataRetriever`, independent of
+     * any production encoder/writer class -- this test must not pass merely because it re-derives
+     * the same arithmetic production code used to write the file, whichever format that is
+     * ([cc.machado.audioblackbox.export.AacPayloadEncoder] by default as of issue #32). */
+    private fun readDurationMillis(uri: android.net.Uri): Long {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } finally {
+            retriever.release()
         }
-        if (read < 44) return 0L
-        fun leInt(offset: Int) = (header[offset].toInt() and 0xFF) or
-            ((header[offset + 1].toInt() and 0xFF) shl 8) or
-            ((header[offset + 2].toInt() and 0xFF) shl 16) or
-            ((header[offset + 3].toInt() and 0xFF) shl 24)
-        val byteRate = leInt(28)
-        val dataSize = leInt(40)
-        if (byteRate <= 0) return 0L
-        return dataSize.toLong() * 1000L / byteRate
     }
 
     private fun pollUntil(timeoutMillis: Long, intervalMillis: Long = 250, condition: () -> Boolean): Boolean {

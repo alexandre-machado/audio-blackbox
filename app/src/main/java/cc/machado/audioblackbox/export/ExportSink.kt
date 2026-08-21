@@ -10,14 +10,15 @@ import java.io.OutputStream
 interface ExportSink {
 
     /**
-     * Opens a new pending destination named [displayName]. The returned [ExportTarget] must be
-     * created in a "pending"/not-yet-visible state if the underlying store supports one, so a
-     * reader never observes a half-written file.
+     * Opens a new pending destination named [displayName], declared as [mimeType] (issue #32:
+     * this varies by [PayloadEncoder], so it is no longer a sink-level constant). The returned
+     * [ExportTarget] must be created in a "pending"/not-yet-visible state if the underlying store
+     * supports one, so a reader never observes a half-written file.
      *
      * @throws IOException if the destination cannot be created (store rejected the insert, no
      *   space, permission denied).
      */
-    fun open(displayName: String): ExportTarget
+    fun open(displayName: String, mimeType: String): ExportTarget
 }
 
 /**

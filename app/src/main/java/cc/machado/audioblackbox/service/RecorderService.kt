@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.MediaStoreSink
@@ -62,15 +63,21 @@ class RecorderService : Service() {
     private val notificationRefresher = PeriodicNotificationRefresher(engine.state)
 
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
-    // (MediaStoreSink -> ContentResolver), which is only available once this Service instance is
-    // attached. Reads `engine.snapshot()`/`engine.gaps.value` at export time via method
-    // references, so it always sees whatever session is current -- not a stale one captured here.
+    // (MediaStoreSink -> ContentResolver; AacPayloadEncoder -> cacheDir for its temp file, see its
+    // class doc), which is only available once this Service instance is attached. Reads
+    // `engine.snapshot()`/`engine.gaps.value` at export time via method references, so it always
+    // sees whatever session is current -- not a stale one captured here.
+    //
+    // AacPayloadEncoder (`.m4a`, issue #32) is the production default, not WavPayloadEncoder --
+    // see issue #32's device evidence for why (176 audio files on the target device, zero WAV).
+    // WavPayloadEncoder stays available for a future user-facing lossless setting.
     private val exportEngine by lazy {
         ExportEngine(
             config = captureConfig,
             snapshotProvider = engine::snapshot,
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
+            payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
         )
     }
 

@@ -67,6 +67,8 @@ committed `MediaStore` row) with generous timeouts instead.
 | Posted notification text keeps refreshing with no `CaptureState` transition (#30) | `NotificationBufferedDurationTest` (Tier 1) |
 | Export lands at expected MediaStore path, `IS_PENDING` cleared, duration matches | `InterruptionSpliceTest` (Tier 1, folded into the same run) |
 | Foreground service declares `FOREGROUND_SERVICE_TYPE_MICROPHONE`; notification not dismissible | `ForegroundServiceDeclarationTest` (Tier 1) |
+| AAC/`.m4a` round-trip: container sample rate/channel count/duration, decoded tone survives lossy encoding (issue #32) | `AacRoundTripTest` (Tier 1) |
+| Gap-filled silence lands at the correct offset after the AAC encode/decode round-trip, bounding any encoder priming-delay timeline shift (issue #32) | `AacGapOffsetTest` (Tier 1) |
 | Force-stop releases the mic; service does not restart (`START_NOT_STICKY`) | **Tier 2 only** — see below for why |
 
 Force-stop is not testable from `androidTest`: instrumentation shares the target app's process,
@@ -85,6 +87,13 @@ force-stop a device that may be mid-session).
   pair from #21 into a tone-in/tone-out assertion here would not actually be testing anything, so
   it was not attempted for CI. It stays useful for a human running the JVM-fixture-driven
   `GoertzelDetectorTest` or a future manual pass on hardware with a real mic.
+
+  This limitation does not block `AacRoundTripTest`/`AacGapOffsetTest` (issue #32): both feed a
+  generated tone directly into `AacPayloadEncoder`'s `MediaCodec`/`MediaMuxer` pipeline, the same
+  way `ExportEngine` feeds it the ring buffer's already-captured PCM -- neither ever goes through
+  `AudioRecord`/the virtual mic, so the missing host audio backend is irrelevant to what these two
+  tests exercise (real encode/decode via `MediaCodec`/`MediaMuxer`/`MediaExtractor`, which the
+  headless emulator's audio *backend* has no bearing on).
 - **The interruption trigger itself does not need real audio content to be genuine, and getting
   it to fire took one non-obvious step.** `adb emu gsm call` alone only rings a simulated call —
   confirmed via `dumpsys audio`'s `RecordActivityMonitor` line for the app's session, it stays

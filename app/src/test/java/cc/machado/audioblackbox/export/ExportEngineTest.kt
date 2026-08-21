@@ -14,6 +14,13 @@ import org.junit.Test
  * Orchestration tests for [ExportEngine] (issue #5): snapshot-null/empty surfaces a real error
  * (never a silent no-op), a sink-open failure surfaces as an error and never calls commit, and a
  * cancelled export aborts the sink instead of committing a partial file.
+ *
+ * Uses [WavPayloadEncoder] throughout (not the production default [AacPayloadEncoder], which is
+ * `MediaCodec`/`MediaMuxer`-backed and covered by the instrumented tier instead -- see
+ * `docs/testing/tiers.md`): everything asserted here is [ExportEngine]'s own orchestration, which
+ * does not depend on which concrete [PayloadEncoder] is plugged in. `filenameExtensionMatchesEncoder`
+ * below is the one test that specifically proves the filename/MIME-type wiring is driven by
+ * whatever [PayloadEncoder] is injected (issue #32), not hardcoded to `.wav`.
  */
 class ExportEngineTest {
 
@@ -34,11 +41,13 @@ class ExportEngineTest {
 
     private class FakeSink(private val target: FakeTarget, private val failOpen: Boolean = false) : ExportSink {
         var openedWith: String? = null
+        var openedWithMimeType: String? = null
         var openCount = 0
-        override fun open(displayName: String): ExportTarget {
+        override fun open(displayName: String, mimeType: String): ExportTarget {
             openCount++
             if (failOpen) throw IOException("insert rejected")
             openedWith = displayName
+            openedWithMimeType = mimeType
             return target
         }
     }
@@ -47,7 +56,13 @@ class ExportEngineTest {
     fun `null snapshot surfaces NO_AUDIO_BUFFERED, never a silent no-op`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val engine = ExportEngine(config, snapshotProvider = { null }, gapsProvider = { emptyList() }, sink = sink)
+        val engine = ExportEngine(
+            config,
+            snapshotProvider = { null },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            payloadEncoder = WavPayloadEncoder,
+        )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
 
@@ -65,6 +80,7 @@ class ExportEngineTest {
             snapshotProvider = { AudioSnapshot(ByteArray(0), 0L) },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -82,6 +98,7 @@ class ExportEngineTest {
             snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -101,6 +118,7 @@ class ExportEngineTest {
             snapshotProvider = { AudioSnapshot(rawData, 0L) },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -133,6 +151,7 @@ class ExportEngineTest {
             snapshotProvider = { engine.cancel(); AudioSnapshot(rawData, 0L) },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1_000_000, minutesLabel = 1)
@@ -163,6 +182,7 @@ class ExportEngineTest {
             },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -193,6 +213,7 @@ class ExportEngineTest {
                 if (shouldThrow) throw IllegalStateException("boom") else emptyList()
             },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -222,6 +243,7 @@ class ExportEngineTest {
             snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -256,6 +278,7 @@ class ExportEngineTest {
             },
             gapsProvider = { emptyList() },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -275,10 +298,47 @@ class ExportEngineTest {
             },
             gapsProvider = { gaps },
             sink = sink,
+            payloadEncoder = WavPayloadEncoder,
         )
 
         engine.export(durationMillis = 1000, minutesLabel = 1)
 
         assertEquals(1250L, requestedDurationMillis)
+    }
+
+    /** A minimal non-WAV [PayloadEncoder] fake, so [filenameExtensionMatchesEncoder] proves the
+     * filename/MIME-type wiring reads from whatever encoder is injected rather than being
+     * hardcoded to WAV's `.wav`/`audio/wav` -- the exact wiring bug that would let a production
+     * `.m4a` file be created with a `.wav` filename or vice versa. */
+    private class FakeEncoder : PayloadEncoder {
+        override val mimeType: String = "audio/x-fake"
+        override val fileExtension: String = "fake"
+        var encodeCalls = 0
+        override fun encode(config: AudioConfig, payload: ByteArray, out: OutputStream, isCancelled: () -> Boolean) {
+            encodeCalls++
+            out.write(payload)
+        }
+    }
+
+    @Test
+    fun `filename extension and sink MIME type follow the injected PayloadEncoder, not a hardcoded format`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val encoder = FakeEncoder()
+        val engine = ExportEngine(
+            config,
+            snapshotProvider = { AudioSnapshot(ByteArray(100), 0L) },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            payloadEncoder = encoder,
+        )
+
+        val result = engine.export(durationMillis = 1000, minutesLabel = 5)
+
+        assertTrue(result is ExportState.Success)
+        assertEquals(1, encoder.encodeCalls)
+        assertEquals("audio/x-fake", sink.openedWithMimeType)
+        val name = requireNotNull(sink.openedWith)
+        assertTrue("expected the injected encoder's extension, got $name", name.endsWith("_5min.fake"))
     }
 }
