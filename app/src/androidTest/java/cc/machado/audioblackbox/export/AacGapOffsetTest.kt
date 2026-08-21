@@ -23,11 +23,25 @@ import org.junit.runner.RunWith
  * actually drops out and resumes -- rather than trusting byte offsets, which lossy encoding does
  * not preserve.
  *
- * [twoGapsBothLandAtTheCorrectOffset] exists specifically because a single-gap test cannot catch
- * PR #28's critical defect class (audio mis-spliced only after the *second* interruption, with
- * total length staying correct) -- `@techlead` adjudication on PR #37, finding 2. It reuses
+ * [twoGapsBothLandAtTheCorrectOffset] exists because a single-gap test cannot prove ordering
+ * across multiple gaps at all -- `@techlead` adjudication on PR #37, finding 2. It reuses
  * [assertGapOffsets]'s shared machinery so both cases are checked against the exact same tolerance
  * derivation, not a loosened one for the harder case.
+ *
+ * **What this class proves, stated precisely (`@rev`/`@techlead`, PR #37 follow-up):** that
+ * silence lands at the correct offsets -- for one gap and for two, in order -- after surviving the
+ * AAC encode/decode round trip, within a tolerance derived from the measured 2048-sample encoder
+ * priming delay (see [AacPayloadEncoder]'s class doc). **What it does not prove:** that the audio
+ * content on either side of a gap is the *correct* content. It uses a uniform tone throughout, so
+ * every real segment is indistinguishable from every other real segment to the Goertzel scan here
+ * -- it can only ever detect a wrong silence *position*, never wrong *content* spliced in from
+ * elsewhere. PR #28's critical defect was exactly a content-mapping error (audio from the wrong
+ * region spliced in, with total length staying correct), which this class structurally cannot
+ * catch. That defect class is covered at the PCM layer by `GapFillerTest`'s multi-gap test, which
+ * uses a distinguishable byte-counting pattern precisely so it can assert on segment *content*,
+ * not just position -- see that test's own doc for how it reproduces the pre-fix mis-splice. This
+ * class is untouched, unrelated coverage: the AAC encode/decode round trip and the priming-delay
+ * timeline shift it exists to bound.
  */
 @RunWith(AndroidJUnit4::class)
 class AacGapOffsetTest {
@@ -54,10 +68,11 @@ class AacGapOffsetTest {
     fun twoGapsBothLandAtTheCorrectOffset() {
         // Same scenario shape as GapFillerTest's own two-gap PCM-level test (0-23s raw audio, a
         // 30s requested window, gap1 [10s,15s) 5s + gap2 [20s,22s) 2s) -- carrying that
-        // already-proven PCM-level case through the AAC encode/decode round-trip is exactly what
-        // this test adds over the single-gap case: it can catch a mis-splice that only appears
-        // after the second interruption while total length stays correct, which a single gap
-        // structurally cannot (`@techlead` adjudication on PR #37, finding 2).
+        // already-proven PCM-level case through the AAC encode/decode round-trip is what this test
+        // adds over the single-gap case: proof that both gaps' silence lands at the correct offset,
+        // in order, after the round trip (`@techlead` adjudication on PR #37, finding 2). See this
+        // class's doc comment for what that does and does not prove about PR #28's original
+        // content-mapping defect -- a uniform tone cannot exercise that class's own test again.
         assertGapOffsets(
             requestedMillis = 30_000L,
             rawAudioMillis = 23_000L,
