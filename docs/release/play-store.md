@@ -20,11 +20,17 @@ before submission if this document is more than a few months old.
 These cannot be done by an agent or from this repo. Nothing else in this checklist
 can complete until these land.
 
-1. **Play Console developer account verification.** New accounts (created after
-   Nov 2023) go through an identity-verification step (individual or organization)
-   before any app can be published, and Google has added phone/ID/D-U-N-S checks
-   that can take days. Confirm this finished — a stuck verification silently blocks
-   every later step. (https://support.google.com/googleplay/android-developer/answer/13487100, retrieved 2026-08-21)
+1. **Play Console developer account verification.** New accounts go through an
+   identity-verification step (individual or organization) before any app can be
+   published, and Google has added phone/ID/D-U-N-S checks that can take days.
+   Confirm this finished — a stuck verification silently blocks every later step.
+   **Citation note:** I could not locate a live, correctly-numbered
+   `support.google.com/googleplay/android-developer/answer/...` page for this
+   specific claim — the URL previously cited here 404'd on re-check, and I was
+   not able to find the correct one within this task's budget. Treat this item's
+   existence as true (it is a well-known, current Play Console requirement) but
+   verify the specifics directly in Play Console's own "Account details" /
+   verification flow rather than trusting a citation here.
 2. **Privacy policy hosting + URL.** Mandatory, no exception, for an app requesting
    `RECORD_AUDIO`. It must be at a stable, publicly reachable URL (not a Google Doc
    link with edit access, not a localhost/staging URL) and it must say, plainly,
@@ -34,28 +40,34 @@ can complete until these land.
    for this (no CMS/domain decision to make on the owner's behalf) — draft copy is
    below in section D so the owner only has to decide *where* to host it (GitHub
    Pages off this repo's `docs/`, a static page, etc.), not *what* it says.
-3. **Signing key strategy decision** — confirm Play App Signing (recommended, see
+3. **Data safety form submission.** Owner-only, submitted directly in Play
+   Console; draft answers are in section D below, but nobody except the account
+   owner can click submit, and issue #48 treats this as a hard blocker in its own
+   right (issue #48, item 2), not a nice-to-have. Must be internally consistent
+   with the privacy policy from item 2 above — an inconsistency between the two is
+   a common rejection cause.
+4. **Signing key strategy decision** — confirm Play App Signing (recommended, see
    B) rather than self-managed signing before the first upload; this cannot be
    changed after the first production release without Play support intervention.
-4. **Content rating questionnaire** — answered in Play Console directly; nobody but
+5. **Content rating questionnaire** — answered in Play Console directly; nobody but
    the account owner can submit it. Given this app records audio with no explicit
    mature content, expect a low rating, but the questionnaire itself asks about the
    app's own behavior (data collection, permissions) and must be answered
    consistently with the Data safety form (section D) — an owner task, not
    something to template blind.
-5. **Foreground service justification video.** Play Console's "Foreground service
+6. **Foreground service justification video.** Play Console's "Foreground service
    permissions" declaration for `FOREGROUND_SERVICE_MICROPHONE` requires a short
    screen recording showing the feature being triggered by the user (see section
    F). This has to be recorded against a real build on a real device — it cannot be
    fabricated or skipped.
-6. **Store listing decisions**: category, target audience/age, countries,
+7. **Store listing decisions**: category, target audience/age, countries,
    pricing (free vs. paid), and launch locale(s). Given the current onboarding
    legal notice is Portuguese-only (`app/src/main/res/values/strings.xml`,
    `onboarding_legal_body`) while the README and code comments are English, the
    owner needs to decide the launch locale set before the listing text in section E
    is finalized. This overlaps issue #44 (localization) — resolve the locale
    question there or here, but resolve it once.
-7. **Jurisdiction/consent legal review** (optional but flagged, as issue #48
+8. **Jurisdiction/consent legal review** (optional but flagged, as issue #48
    itself flags it) — whether to get actual legal advice on describing an ambient
    audio recorder given one-party vs. all-party consent laws vary by country. This
    is the owner's call, not an engineering one.
@@ -214,9 +226,9 @@ in place first, per issue #48's own stated sequencing.
     deletes the in-memory buffer and any saved recordings remain in the user's own
     `Recordings/Blackbox/`/`Music/Blackbox/` folder (i.e. it's the user's own
     device storage, not app-controlled storage the developer needs a deletion
-    mechanism for). The in-app gallery's delete action (if present per issue #7) is
-    the direct in-app path; call that out if #7 ships before this form is
-    submitted.
+    mechanism for). Issue #7's in-app gallery has since merged (`#61`) and
+    includes a delete action — that's the direct in-app path to mention on the
+    form.
 - **Security practices**: no data is transmitted, so most of this section
   (encryption in transit, independent security review) is not applicable — do not
   claim security practices for data flows that don't exist; select "data isn't
@@ -342,20 +354,25 @@ launch-locale decision in section A.6. It intentionally leads with the privacy
 story per issue #48's guidance, since it's the strongest, most verifiable claim
 available.
 
-### Graphical assets required (none of these exist yet beyond the launcher icon)
+### Graphical assets — the 512x512 Play listing icon is already done; feature graphic and screenshots are not
 
-Per current Play Console requirements
+Re-verified every row below directly against the live spec page
 (https://support.google.com/googleplay/android-developer/answer/9866151,
-retrieved 2026-08-21):
+retrieved 2026-08-21) after a prior version of this table swapped the icon and
+feature-graphic alpha requirements — corrected here:
 
-| Asset | Spec | Status |
+| Asset | Spec (verified against the live page) | Status |
 |---|---|---|
-| App icon (launcher, in-app) | 512x512, 32-bit PNG with alpha | **Exists** — issue #49/#58, merged. This is the adaptive-icon resource baked into the APK/AAB, not the separate Console upload below. |
-| **Play Store listing icon** | **512x512 PNG, no alpha, uploaded separately in Play Console** | **Does not exist.** Needs to be exported from the same source art as the launcher icon (flattened, no transparency) — separate asset, separate upload. |
-| **Feature graphic** | **1024x500 PNG or JPEG** | **Does not exist.** No source art for this anywhere in the repo; needs original design work, not just a resize of the launcher icon. |
-| Phone screenshots | Min 2, up to 8; 16:9 or 9:16, each side between 320px and 3840px | **Does not exist.** Needs a working, populated app (ideally post-#7 gallery, post-#29 device-verified export) to screenshot meaningfully. |
+| App icon (launcher, in-app) | 512x512, 32-bit PNG **with alpha** | **Exists** — issue #49/#58, merged. This is the adaptive-icon resource baked into the APK/AAB, not the separate Console upload below. |
+| **Play Store listing icon** | **512x512 PNG, 32-bit, with alpha** — uploaded separately in Play Console | **Already exists**: `docs/design/store/ic_launcher_store_512.png`. Verified directly: 512×512, 8-bit, PNG colour type 6 (RGBA) — i.e. 32-bit with alpha, which matches the real spec above. (A prior draft of this doc incorrectly said this asset needed to be exported "with no alpha" and claimed it didn't exist yet — both wrong; see PR review history. The existing file already satisfies the correct spec.) Note `docs/design/store/ic_store_candidateA_not_shipped_512.png` also exists in the same directory but its filename says `not_shipped` — do not use it. |
+| **Feature graphic** | **1024x500, JPEG or 24-bit PNG, no alpha** | **Does not exist.** No source art for this anywhere in the repo; needs original design work, not just a resize of the launcher icon. |
+| Phone screenshots | Min 2, up to 8; each side between 320px and 3840px (max side ≤ 2× the min side) | **Does not exist.** Needs a working, populated app (ideally post-#7 gallery, post-#29 device-verified export) to screenshot meaningfully. |
 | Short/full description | Text, see above | Draft above. |
 | Promo video (optional) | YouTube link | Not required; skip for launch. |
+
+So the actual gap is narrower than a prior version of this doc stated: the
+512x512 Play Console listing icon is done and correct. What's still missing is
+the feature graphic and phone screenshots.
 
 ## F. Open questions / honest rejection-risk assessment
 
@@ -393,12 +410,20 @@ retrieved 2026-08-21):
    in the Console submission notes rather than let a reviewer draw their own
    conclusion — silence here invites the wrong assumption.
 3. **RECORD_AUDIO is not on Play's list of "restricted permissions"** requiring a
-   separate Permissions Declaration Form (that list, as currently published, covers
-   SMS/Call Log, background location, All Files Access, package visibility,
-   REQUEST_INSTALL_PACKAGES, and the AccessibilityService API —
-   https://support.google.com/googleplay/android-developer/answer/10964491,
-   retrieved 2026-08-21). This is genuinely good news: it means the main review
-   gate is the foreground-service-type declaration (point 1) and the general
+   separate Permissions Declaration Form. The correct source for this is Play's
+   "Permissions and APIs that Access Sensitive Information" hub page
+   (https://support.google.com/googleplay/android-developer/answer/9888170,
+   retrieved 2026-08-21 — corrected citation; a prior version of this doc pointed
+   here at `answer/10964491`, which is actually the single "Use of the
+   AccessibilityService API" sub-article and does not itself enumerate the
+   category list, so it didn't support this claim even though the claim was
+   right). The hub page's enumerated categories are: SMS and Call Log
+   Permissions, Location Permissions, All Files Access, Package (App) Visibility,
+   Accessibility API, Request Install Packages, Body Sensor Permissions, Health
+   Connect by Android Permissions, VPN Service, Exact Alarm, Full-Screen Intent,
+   and the Age Signals API — RECORD_AUDIO/microphone appears in none of them.
+   This is genuinely good news: it means the main review gate is the
+   foreground-service-type declaration (point 1) and the general
    Sensitive-permissions/prominent-disclosure policy (section D), not an additional
    restricted-permission form.
 4. **I could not verify, from documentation, whether Google's human review team
@@ -427,22 +452,47 @@ retrieved 2026-08-21):
 
 ---
 
-**Sources** (all retrieved 2026-08-21; Play policy changes — re-verify before
-submission if this document is stale):
+**Sources.** Retrieval dates below reflect the most recent re-check of each URL
+(initial pass 2026-08-21; a second pass the same day re-fetched every citation
+after review feedback, correcting one wrong citation and confirming the rest).
+Play policy changes — re-verify before submission if this document is stale.
 
-- Foreground service permissions / `TYPE_MICROPHONE` declaration:
+- Foreground service permissions / `TYPE_MICROPHONE` declaration — verified,
+  quoted text matches the live page:
   https://support.google.com/googleplay/android-developer/answer/13392821
-- Restricted permissions overview (confirms RECORD_AUDIO is not in this list):
-  https://support.google.com/googleplay/android-developer/answer/10964491
-- SMS/Call Log restricted permissions, "Call recorder" invalid use case:
+  (retrieved 2026-08-21)
+- Permissions and APIs that Access Sensitive Information — the actual hub page
+  that enumerates restricted-permission categories and confirms RECORD_AUDIO is
+  not one of them (corrected citation, see point F.3):
+  https://support.google.com/googleplay/android-developer/answer/9888170
+  (retrieved 2026-08-21)
+- SMS/Call Log restricted permissions, "Call recorder" invalid use case —
+  verified:
   https://support.google.com/googleplay/android-developer/answer/10208820
-- Prominent disclosure & consent requirement:
+  (retrieved 2026-08-21)
+- Prominent disclosure & consent requirement — re-fetched and verified, quoted
+  text matches:
   https://support.google.com/googleplay/android-developer/answer/11150561
-- Data safety form guidance:
+  (retrieved 2026-08-21)
+- Data safety form guidance — re-fetched and verified (audio-files data type,
+  purposes list, and the "processed ephemerally" definition all confirmed to
+  match the drafted answers in section D):
   https://support.google.com/googleplay/android-developer/answer/10787469
-- Play App Signing:
+  (retrieved 2026-08-21)
+- Play App Signing — re-fetched and verified (upload key vs. app signing key
+  split, upload-key-reset recovery path both confirmed):
   https://support.google.com/googleplay/android-developer/answer/9842756
-- Developer account verification:
-  https://support.google.com/googleplay/android-developer/answer/13487100
-- Graphic asset specifications:
+  (retrieved 2026-08-21)
+- Developer account verification — **unresolved.** The previously cited
+  `answer/13487100` 404s on re-check. I was not able to find the correct URL for
+  this specific claim within this task's budget; see section A item 1. The
+  underlying claim (identity verification is required before publishing) is a
+  known, current Play Console requirement, but it is not backed by a working
+  citation here — verify directly in Play Console rather than trusting this
+  document on this one point.
+- Graphic asset specifications — re-fetched and verified line-by-line against
+  the icon/feature-graphic/screenshot rows in section E (this is the page whose
+  icon-vs-feature-graphic alpha requirements were previously transposed; both
+  rows are now corrected and match this page):
   https://support.google.com/googleplay/android-developer/answer/9866151
+  (retrieved 2026-08-21)
