@@ -12,5 +12,12 @@ captures/
 *.apk
 *.aab
 
+# Play Store signing key material — must never enter the repo (see
+# docs/release/play-store.md section B). No such file exists yet; this is a
+# guard rail for whoever runs `keytool` next.
+*.jks
+*.keystore
+keystore.properties
+
 # WSL/NTFS metadata artifact left behind when a file is copied from Windows
 *:Zone.Identifier
