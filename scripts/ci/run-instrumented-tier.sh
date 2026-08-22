@@ -62,6 +62,9 @@ log "Installing app + test APKs..."
 "${ADB[@]}" install -r -t "$TEST_APK" >/dev/null
 
 # --- Phase 1: everything except InterruptionSpliceTest --------------------
+# Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
+# leftovers from some earlier install/boot activity that happened to log the same tag.
+"${ADB[@]}" logcat -c
 log "Running the non-interruption instrumented tests..."
 set +e
 "${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS" "$RUNNER" \
@@ -72,6 +75,13 @@ if [[ $PHASE1_STATUS -ne 0 ]] || ! grep -q "OK (" /tmp/instrumented-phase1.log; 
   fail "Non-interruption instrumented tests did not report OK -- see the log above."
 fi
 log "Phase 1 OK."
+
+# --- AudioRecord headroom numbers (issue #22) ------------------------------
+# AudioRecordHeadroomInstrumentedTest logs its results under this tag instead of asserting on
+# them (see that test's class doc) -- surface them here so they land in the CI job log where a
+# human reads them, rather than staying buried in the emulator's logcat buffer.
+log "Dumping AudioRecord headroom benchmark results (issue #22)..."
+"${ADB[@]}" logcat -d -s HeadroomBenchmark:I
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
 log "Launching InterruptionSpliceTest in the background..."

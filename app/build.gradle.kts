@@ -91,3 +91,19 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+tasks.withType<Test> {
+    // RingBufferSnapshotLockBenchmarkTest (issue #22) allocates up to two ~635 MB byte arrays at
+    // once (the ring buffer's backing array plus a snapshot's destination array) to benchmark the
+    // hypothetical 44.1kHz/stereo/60min config -- comfortably past the JVM's default test-worker
+    // heap. Bumped for every unit-test task rather than scoped narrowly, since a shared heap size
+    // has no downside for the rest of the suite.
+    maxHeapSize = "4g"
+    // Without this, println() output from that benchmark (and any future one) is swallowed --
+    // Gradle only surfaces it with output turned on, and the whole point of a benchmark that
+    // *reports* instead of *asserts* is that a human reads its printed numbers out of the CI log.
+    testLogging {
+        events("standardOut", "standardError")
+        showStandardStreams = true
+    }
+}
