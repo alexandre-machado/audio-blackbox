@@ -142,6 +142,24 @@ class DashboardViewModel(
     // docs for the full flow; this is only the piece of state [uiState] renders.
     private val _pendingRetentionConfirmationMinutes = MutableStateFlow<Int?>(null)
 
+    // True from the moment toggleEngine() dispatches a start/stop request until captureState is
+    // observed to actually change (issue #46) -- the *only* local state this class keeps for the
+    // engine switch, and it never substitutes for the real CaptureState: it only ever gates
+    // [EngineSwitchUiState.enabled]/[EngineSwitchUiState.pending], never [EngineSwitchUiState.checked]
+    // (see that class's doc for why). Starts `false` unconditionally -- including right after
+    // process death, when this ViewModel is reconstructed fresh -- so there is no stale "pending"
+    // value to reconcile: a freshly built instance has never dispatched anything, so it is simply
+    // never pending until toggleEngine() is called again on the new instance. Reconciled with the
+    // real state by the collector in init below, plus a backstop timeout (see toggleEngine()'s doc)
+    // for the case the dispatch itself never reaches the service.
+    private val _engineTogglePending = MutableStateFlow(false)
+
+    // Mirrors dispatchTimeoutJob (see its doc) for the engine-switch toggle instead of the save
+    // dispatch -- same shape, same reason: at most one backstop timer armed at a time, cancelled by
+    // every path that clears _engineTogglePending so an earlier backstop can never fire during a
+    // later toggle's own in-flight window.
+    private var engineToggleTimeoutJob: Job? = null
+
     init {
         // Clears saveDispatchPending the moment a real, non-Idle ExportState is observed --
         // deliberately not "once it returns to Idle", which would leave the flag stuck at `true`
@@ -157,15 +175,41 @@ class DashboardViewModel(
                 }
             }
         }
+
+        // Clears _engineTogglePending the moment captureState is observed to change to anything
+        // different from what it was the moment collection started (issue #46) -- that first real
+        // transition IS the toggle's outcome, whatever it is (Recording, Paused, Error, or back to
+        // Idle), so there is nothing further to wait for. `previous` starts `null` specifically so
+        // the very first (replayed) emission from this StateFlow never itself counts as "changed" --
+        // otherwise a ViewModel constructed while already pending (there is no such call path today,
+        // but nothing here should rely on that) would clear itself on its own initial read instead of
+        // on a genuine transition. Deliberately does not try to distinguish *which* transition it
+        // was: MutableStateFlow conflates by design (see AGENTS note on this class), so an
+        // intermediate state between two rapid emissions can be skipped entirely, and that is fine --
+        // this only ever needs to know that the real state moved at all.
+        viewModelScope.launch {
+            var previous: CaptureState? = null
+            captureState.collect { current ->
+                if (previous != null && current != previous && _engineTogglePending.value) {
+                    _engineTogglePending.value = false
+                    engineToggleTimeoutJob?.cancel()
+                    engineToggleTimeoutJob = null
+                }
+                previous = current
+            }
+        }
     }
 
-    // Bundles capacityMinutesFlow + the pending-confirmation flag into one Flow<Pair<..>> because
-    // kotlinx.coroutines.flow.combine only has a direct overload up to 5 flows, and this ViewModel
-    // already needs 4 others below (captureState, bufferedMillisFlow, exportState,
-    // _dismissedExportState) -- nesting here keeps the outer combine within that limit rather than
-    // reaching for the vararg overload, which requires every flow to share one element type.
-    private val retentionInputsFlow: Flow<Pair<Int, Int?>> =
-        combine(capacityMinutesFlow, _pendingRetentionConfirmationMinutes) { capacity, pending -> capacity to pending }
+    // Bundles capacityMinutesFlow + the pending-confirmation flag + the engine-switch pending flag
+    // (issue #46) into one Flow<Triple<..>> because kotlinx.coroutines.flow.combine only has a
+    // direct overload up to 5 flows, and this ViewModel already needs 4 others below (captureState,
+    // bufferedMillisFlow, exportState, _dismissedExportState) -- nesting here keeps the outer
+    // combine within that limit rather than reaching for the vararg overload, which requires every
+    // flow to share one element type.
+    private val retentionInputsFlow: Flow<Triple<Int, Int?, Boolean>> =
+        combine(capacityMinutesFlow, _pendingRetentionConfirmationMinutes, _engineTogglePending) {
+            capacity, pendingRetention, enginePending -> Triple(capacity, pendingRetention, enginePending)
+        }
 
     val uiState: StateFlow<DashboardUiState> = combine(
         captureState,
@@ -173,13 +217,14 @@ class DashboardViewModel(
         exportState,
         _dismissedExportState,
         retentionInputsFlow,
-    ) { capture, bufferedMillis, export, dismissed, (capacityMinutes, pendingRetentionMinutes) ->
+    ) { capture, bufferedMillis, export, dismissed, (capacityMinutes, pendingRetentionMinutes, enginePending) ->
         mapUiState(
             capture,
             bufferedMillis,
             capacityMinutes,
             mapSaveUiState(export, dismissed),
             pendingRetentionMinutes,
+            enginePending,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -190,16 +235,50 @@ class DashboardViewModel(
             capacityMinutesFlow.value,
             mapSaveUiState(exportState.value, _dismissedExportState.value),
             _pendingRetentionConfirmationMinutes.value,
+            _engineTogglePending.value,
         ),
     )
 
-    /** Single Start/Stop control: starts the engine unless it is already Recording or Paused (in
-     * either of which "stop" is the correct next action), matching [RecorderService]'s own
-     * idempotent start()/stop() semantics. */
+    /** Single engine switch (issue #46, formerly a Start/Stop button): starts the engine unless it
+     * is already Recording or Paused (in either of which "stop" is the correct next action),
+     * matching [RecorderService]'s own idempotent start()/stop() semantics.
+     *
+     * Ignored outright while [_engineTogglePending] is already `true` -- the dashboard's Switch is
+     * disabled for the same duration (see [mapEngineSwitchState]), so this only guards against a
+     * stale composition reaching this call anyway, the same defensive shape as [requestSave]'s own
+     * guard.
+     *
+     * [_engineTogglePending] is released three ways, none of which can leave it stuck (mirroring
+     * [requestSave]'s own three-way release, for the same reason -- see its doc):
+     *   - the `init` collector above, the instant [captureState] is observed to actually change;
+     *   - immediately, via the `finally` below, if the dispatch itself throws;
+     *   - after [ENGINE_TOGGLE_TIMEOUT_MILLIS], via the scheduled backstop, covering a dispatch
+     *     that returns normally but never reaches [RecorderService] (a dropped Intent, the service
+     *     failing to start).
+     */
     fun toggleEngine() {
-        when (captureState.value) {
-            is CaptureState.Recording, is CaptureState.Paused -> onStopEngine()
-            is CaptureState.Idle, is CaptureState.Error -> onStartEngine()
+        if (_engineTogglePending.value) return
+        _engineTogglePending.value = true
+
+        engineToggleTimeoutJob = viewModelScope.launch {
+            delay(ENGINE_TOGGLE_TIMEOUT_MILLIS)
+            _engineTogglePending.value = false
+            engineToggleTimeoutJob = null
+        }
+
+        var dispatchThrew = true
+        try {
+            when (captureState.value) {
+                is CaptureState.Recording, is CaptureState.Paused -> onStopEngine()
+                is CaptureState.Idle, is CaptureState.Error -> onStartEngine()
+            }
+            dispatchThrew = false
+        } finally {
+            if (dispatchThrew) {
+                _engineTogglePending.value = false
+                engineToggleTimeoutJob?.cancel()
+                engineToggleTimeoutJob = null
+            }
         }
     }
 
@@ -355,6 +434,14 @@ class DashboardViewModel(
         // dispatch failure does not lock the user out of Save for long.
         private const val DISPATCH_TIMEOUT_MILLIS = 5_000L
 
+        // Backstop for toggleEngine()'s _engineTogglePending guard (issue #46, same reasoning as
+        // DISPATCH_TIMEOUT_MILLIS above): AudioCaptureEngine.start()/stop() themselves run
+        // synchronously once RecorderService actually receives the Intent (see that class's doc),
+        // so this only needs to cover the Intent/Binder hop plus foreground-service startup, not
+        // the capture logic itself -- same order of magnitude as the save dispatch, hence the same
+        // value.
+        private const val ENGINE_TOGGLE_TIMEOUT_MILLIS = 5_000L
+
         /** 1:1 mapping, kept as its own pure function (rather than inlined into [mapUiState]) so
          * it has a single, obvious oracle: every [CaptureState] subtype maps to exactly the
          * [CaptureStatus] subtype of the same name, carrying [CaptureState.Error]'s fields
@@ -364,6 +451,28 @@ class DashboardViewModel(
             is CaptureState.Recording -> CaptureStatus.Recording
             is CaptureState.Paused -> CaptureStatus.Paused
             is CaptureState.Error -> CaptureStatus.Error(state.reason, state.message)
+        }
+
+        /**
+         * The oracle issue #46 requires: every [CaptureStatus] maps to exactly one
+         * [EngineSwitchUiState], parameterized only by whether a toggle dispatched by
+         * [DashboardViewModel.toggleEngine] is still awaiting its real outcome. See
+         * [EngineSwitchUiState]'s own doc for why Paused stays `checked` and why a pending toggle
+         * disables the switch instead of moving it.
+         */
+        fun mapEngineSwitchState(status: CaptureStatus, pending: Boolean): EngineSwitchUiState = when (status) {
+            is CaptureStatus.Idle -> EngineSwitchUiState(
+                checked = false, enabled = !pending, pending = pending, paused = false, error = null,
+            )
+            is CaptureStatus.Recording -> EngineSwitchUiState(
+                checked = true, enabled = !pending, pending = pending, paused = false, error = null,
+            )
+            is CaptureStatus.Paused -> EngineSwitchUiState(
+                checked = true, enabled = !pending, pending = pending, paused = true, error = null,
+            )
+            is CaptureStatus.Error -> EngineSwitchUiState(
+                checked = false, enabled = !pending, pending = pending, paused = false, error = status,
+            )
         }
 
         /** 1:1 mapping from [ExportState] to [SaveUiState] (issue #40 item 2), except that a
@@ -453,11 +562,14 @@ class DashboardViewModel(
             capacityMinutes: Int,
             saveState: SaveUiState,
             pendingRetentionConfirmationMinutes: Int? = null,
+            enginePending: Boolean = false,
         ): DashboardUiState {
             val capacityMillis = capacityMinutes.toLong() * MILLIS_PER_MINUTE
             val clampedBufferedMillis = bufferedMillis.coerceIn(0L, capacityMillis)
+            val captureStatus = mapCaptureStatus(captureState)
             return DashboardUiState(
-                captureStatus = mapCaptureStatus(captureState),
+                captureStatus = captureStatus,
+                engineSwitch = mapEngineSwitchState(captureStatus, enginePending),
                 bufferedMillis = clampedBufferedMillis,
                 capacityMillis = capacityMillis,
                 isBufferFull = clampedBufferedMillis >= capacityMillis,

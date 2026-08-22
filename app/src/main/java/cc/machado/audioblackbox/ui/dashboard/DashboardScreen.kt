@@ -29,6 +29,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -99,7 +100,7 @@ fun DashboardScreen(
         ) {
             StatusSection(uiState.captureStatus)
             BufferSection(uiState)
-            EngineToggle(uiState.captureStatus, onToggleEngine)
+            EngineToggle(uiState.engineSwitch, onToggleEngine)
             SaveSection(uiState, onSelectWindow)
             if (uiState.saveState != SaveUiState.Idle) {
                 SaveOutcomeNotice(uiState.saveState, onDismissSaveNotice)
@@ -240,28 +241,67 @@ private fun BufferSection(uiState: DashboardUiState) {
     }
 }
 
+/**
+ * The primary engine control (issue #46): a stock Material 3 [Switch], not a button -- flipping it
+ * on/off communicates "this is a persistent mode you are in", not "perform an action". See
+ * [EngineSwitchUiState]'s doc for how each [cc.machado.audioblackbox.audio.CaptureState] maps onto
+ * this control, in particular Paused (stays checked, distinct color/text) and the pending case
+ * (switch disabled, position unchanged -- never optimistically flipped).
+ *
+ * The merged [Row] carries both the visible label/supporting-text pair *and* the switch's
+ * accessible name/state: [announcement] names what is actually happening ("recording
+ * continuously" / "a call is using the microphone", not just "on"/"off") and is re-announced to a
+ * screen reader on every transition via [LiveRegionMode.Polite] -- the same pattern
+ * [StatusSection] and [SaveOutcomeNotice] already use elsewhere on this screen. This is
+ * deliberately not a bare restatement of the visible label (issue #66): the label is the static
+ * "Continuous recording" title, while [announcement] carries the live state that label alone
+ * doesn't.
+ */
 @Composable
-private fun EngineToggle(status: CaptureStatus, onToggleEngine: () -> Unit) {
-    val isRunning = status is CaptureStatus.Recording || status is CaptureStatus.Paused
-    // Error gets its own label ("Tentar novamente") rather than reusing "Iniciar motor" -- same
-    // underlying action (toggleEngine() starts the engine whenever it isn't Recording/Paused),
-    // but a distinct label makes the action's meaning after a failure explicit, per issue #6's
-    // "Error state is visible and actionable" criterion.
-    val label = stringResource(
-        when {
-            status is CaptureStatus.Error -> R.string.dashboard_retry_engine
-            isRunning -> R.string.dashboard_stop_engine
-            else -> R.string.dashboard_start_engine
-        },
-    )
-    val contentDescriptionText = stringResource(
-        if (isRunning) R.string.dashboard_stop_engine_cd else R.string.dashboard_start_engine_cd,
-    )
-    Button(
-        onClick = onToggleEngine,
-        modifier = Modifier.semantics { contentDescription = contentDescriptionText },
+private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -> Unit) {
+    val stateTextRes = when {
+        engineSwitch.pending && engineSwitch.checked -> R.string.dashboard_engine_switch_state_stopping
+        engineSwitch.pending && !engineSwitch.checked -> R.string.dashboard_engine_switch_state_starting
+        engineSwitch.error != null -> R.string.dashboard_engine_switch_state_error
+        engineSwitch.paused -> R.string.dashboard_engine_switch_state_paused
+        engineSwitch.checked -> R.string.dashboard_engine_switch_state_on
+        else -> R.string.dashboard_engine_switch_state_off
+    }
+    val label = stringResource(R.string.dashboard_engine_switch_label)
+    val stateText = stringResource(stateTextRes)
+    val announcement = stringResource(R.string.dashboard_engine_switch_announcement, stateText)
+    // Paused/Error get their own color so the "neither on nor off" and "actionable failure" cases
+    // are visually distinct from plain On/Off, not just distinguishable by reading the text.
+    val stateColor = when {
+        // Checked first: a retry-from-error dispatch leaves engineSwitch.error non-null (the
+        // status is still CaptureStatus.Error) for the whole window until the real outcome
+        // arrives, so without this ordering "Starting…" would render in error-red while a start
+        // is genuinely in flight -- `@rev`'s finding on PR #67.
+        engineSwitch.pending -> MaterialTheme.colorScheme.onSurfaceVariant
+        engineSwitch.error != null -> MaterialTheme.colorScheme.error
+        engineSwitch.paused -> Color(0xFFF9A825)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = announcement
+            },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label)
+        Column {
+            Text(text = label, style = MaterialTheme.typography.titleMedium)
+            Text(text = stateText, style = MaterialTheme.typography.bodyMedium, color = stateColor)
+        }
+        Switch(
+            checked = engineSwitch.checked,
+            onCheckedChange = { onToggleEngine() },
+            enabled = engineSwitch.enabled,
+        )
     }
 }
 
@@ -456,6 +496,7 @@ private fun previewState(
     capacityMinutes: Int = 30,
     saveState: SaveUiState = SaveUiState.Idle,
     pendingRetentionConfirmationMinutes: Int? = null,
+    enginePending: Boolean = false,
 ): DashboardUiState = DashboardViewModel.mapUiState(
     captureState = when (status) {
         is CaptureStatus.Idle -> CaptureState.Idle
@@ -467,6 +508,7 @@ private fun previewState(
     capacityMinutes = capacityMinutes,
     saveState = saveState,
     pendingRetentionConfirmationMinutes = pendingRetentionConfirmationMinutes,
+    enginePending = enginePending,
 )
 
 @Preview(showBackground = true, name = "Idle")
@@ -501,6 +543,25 @@ private fun DashboardScreenErrorPreview() {
             previewState(
                 CaptureStatus.Error(CaptureErrorReason.AUDIO_RECORD_INIT_FAILED, "AudioRecord.state = 0"),
             ),
+            {}, {}, {}, {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Engine switch starting (pending)")
+@Composable
+private fun DashboardScreenEngineStartingPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(previewState(CaptureStatus.Idle, enginePending = true), {}, {}, {}, {}, {}, {})
+    }
+}
+
+@Preview(showBackground = true, name = "Engine switch stopping (pending)")
+@Composable
+private fun DashboardScreenEngineStoppingPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(
+            previewState(CaptureStatus.Recording, bufferedMillis = 5 * 60_000L, enginePending = true),
             {}, {}, {}, {}, {}, {},
         )
     }

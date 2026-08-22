@@ -52,18 +52,22 @@
     <string name="dashboard_status_paused">Paused</string>
     <string name="dashboard_status_error">Error</string>
 
-    <string name="dashboard_idle_explanation">Recording is stopped. Nothing is being recorded right now. Tap \"Start recording\" to begin continuous background recording.</string>
+    <string name="dashboard_idle_explanation">Recording is stopped. Nothing is being recorded right now. Turn on the switch below to begin continuous background recording.</string>
     <string name="dashboard_recording_explanation">Recording continues in the background. When the buffer fills up, the oldest audio is automatically replaced with the newest.</string>
     <string name="dashboard_paused_explanation">Recording is paused because the microphone is being used by a call. Recording will resume automatically once the call ends.</string>
     <string name="dashboard_error_explanation">Recording couldn\'t continue: %1$s</string>
 
     <string name="dashboard_status_announcement">Recording state: %1$s</string>
 
-    <string name="dashboard_start_engine">Start recording</string>
-    <string name="dashboard_stop_engine">Stop recording</string>
-    <string name="dashboard_start_engine_cd">Start recording</string>
-    <string name="dashboard_stop_engine_cd">Stop recording</string>
-    <string name="dashboard_retry_engine">Try again</string>
+    <!-- Continuous-recording switch (issue #46: a VPN-style Switch, not a Start/Stop button) -->
+    <string name="dashboard_engine_switch_label">Continuous recording</string>
+    <string name="dashboard_engine_switch_state_on">On — recording continuously</string>
+    <string name="dashboard_engine_switch_state_off">Off — nothing is being recorded</string>
+    <string name="dashboard_engine_switch_state_paused">Paused — a call is using the microphone; recording will resume automatically once it ends</string>
+    <string name="dashboard_engine_switch_state_starting">Starting…</string>
+    <string name="dashboard_engine_switch_state_stopping">Stopping…</string>
+    <string name="dashboard_engine_switch_state_error">Off — recording stopped because of an error</string>
+    <string name="dashboard_engine_switch_announcement">Continuous recording switch: %1$s</string>
 
     <string name="dashboard_buffer_status">%1$s of %2$s in memory</string>
     <string name="dashboard_buffer_status_cd">Audio buffer: %1$s of %2$s in memory</string>
