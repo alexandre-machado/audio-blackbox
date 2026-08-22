@@ -50,14 +50,60 @@ data class AudioSnapshot(
  * infrequent relative to writes, contention on this lock is negligible in practice.
  *
  * One caveat, called out explicitly rather than assumed away: [snapshot] holds this lock across
- * a full `System.arraycopy` of up to [capacityBytes], which blocks the writer for that duration.
- * At the default 16 kHz/mono config (~57.6 MB / 30 min) this is a copy well under
- * [AudioCaptureEngine]'s internal `AudioRecord` headroom (`minBufferSize * 3`) on typical mobile
- * memory bandwidth, so it is not expected to drop frames in practice. At larger configs (e.g.
- * 44.1 kHz stereo, ~317 MB) the same reasoning is less confident: this has not been measured
- * against real hardware/GC pressure, and a lock redesign to avoid holding it across the full
- * copy was deliberately not attempted here without that measurement (see PR #20 review, finding
- * 5) -- track as a follow-up if that config sees real use.
+ * its full body, including the destination array's allocation and a `System.arraycopy` of up to
+ * [capacityBytes], which blocks the writer for that duration. **Measured** (issue #22 -- see
+ * `RingBufferSnapshotLockBenchmarkTest` / `AudioRecordHeadroomInstrumentedTest`, PR #69), across
+ * every retention window the UI actually offers, not just the extremes -- restructured below so
+ * the configs that work lead, and the one that does not is impossible to miss:
+ *
+ * | Config | Works today? | snapshot() worst case observed (x86, 6+ runs) | `AudioRecord` headroom |
+ * |---|---|---|---|
+ * | 16 kHz/mono/5 min | Yes | 6.4 -- 7.3 ms | 90 ms (CI emulator) / **120 ms (Samsung S25)** |
+ * | 16 kHz/mono/15 min | Yes | 14.8 -- 18.6 ms | 90 ms / **120 ms** |
+ * | 16 kHz/mono/30 min (today's practical ceiling) | Yes | 30.6 -- 35.5 ms | 90 ms / **120 ms** |
+ * | 16 kHz/mono/60 min (offered by the UI) | **No -- OOMs on real device, issue #72** | 16.1 -- 72.8 ms | 90 ms / **120 ms** |
+ * | 44.1 kHz/stereo/60 min | **Hypothetical -- no UI path sets this** | 66.6 -- 242.9 ms | 91 ms / **121 ms** |
+ *
+ * `AudioRecord` headroom depends only on sample rate/channel count, not on retention window, so
+ * the same 90/120 ms figure applies to every 16 kHz/mono row -- 5/15/30 min all sit comfortably
+ * under it (worst case never exceeds 35.5 ms against a 90+ ms floor). The 60-minute row is the
+ * stress case, and it is also the one row that **does not actually run on the target device**:
+ * `@techlead` confirmed on the repo owner's real Samsung S25 (SM-S931B, arm64-v8a, Android 16)
+ * that allocating this class's ~115.2 MB backing array plus [snapshot]'s ~115.2 MB destination
+ * array together exceeds the app's 256 MB Dalvik heap growth limit (no `android:largeHeap`) --
+ * `OutOfMemoryError` before any lock timing is reachable. Tracked as **issue #72**, deferred
+ * pending a product-design rework; not fixed here. **The ARM copy time at 60 min was therefore
+ * never measured on real hardware at all -- every 60-minute number in this doc is x86-only, and
+ * that gap should not be read as "measured and fine".**
+ *
+ * All worst-case figures above are *ranges*, not single numbers, because they are not a stable
+ * platform characteristic: one CI run (GitHub Actions `ubuntu-latest`, x86_64) measured
+ * 16.1 ms / 66.6 ms for the 60-minute rows, but repeated local runs on two other x86_64 machines
+ * measured up to 72.8 ms and 242.9 ms for the same two configs -- a ~4.5x and ~3.6x swing. The
+ * likely cause (`@rev`'s read, consistent with what is being measured): every iteration allocates
+ * a fresh 9 MB-635 MB destination array, so "worst of 30" mostly measures how unlucky that run's
+ * GC pauses were, not a fixed copy throughput. **Treat "worst of 30" as a GC-sensitivity
+ * indicator, not a hard ceiling** -- medians (observed single-digit-to-low-20s ms for the
+ * 5/15/30/60-minute 16 kHz configs, ~95-115 ms for the hypothetical stereo config) are more
+ * stable, but even they will move with heap pressure on a given device.
+ *
+ * Headroom was measured twice: the CI instrumented tier (API 30 `google_apis` x86_64 emulator)
+ * gives 90 ms / 91 ms; the real Samsung S25 gives *better* numbers, 120 ms / 121 ms -- the real
+ * device has more headroom than the emulator, not less. Both use the real `minBufferSize * 3`
+ * [AudioCaptureEngine] allocates.
+ *
+ * **Verdict for what the app can actually run today (16 kHz/mono, 5/15/30 min): no redesign
+ * needed.** Every observed worst case (up to 35.5 ms at 30 min, the practical ceiling) stays
+ * comfortably under both the emulator headroom (90 ms, ~2.5x margin on the noisiest run) and the
+ * real device headroom (120 ms, ~3.4x margin). The 60-minute option the UI still offers cannot be
+ * given a verdict on real hardware at all -- it fails before the lock is even reached (issue #72).
+ *
+ * **The hypothetical 44.1 kHz/stereo/60 min config leans unsafe, not merely thin-margin**: its
+ * observed worst case (66.6-242.9 ms) exceeds *both* headroom figures (91 ms / 121 ms) in most
+ * runs, not just at the extreme. Not reachable through the UI today, so no locking change is
+ * warranted for the current app -- but if a future change (issue #47, or a sample-rate setting)
+ * ever exposes 44.1 kHz/stereo, `snapshot`'s current lock-the-whole-copy design must be redesigned
+ * *before* that ships, not merely re-evaluated (see follow-up issue #71).
  */
 class RingBuffer(
     val capacityBytes: Int,

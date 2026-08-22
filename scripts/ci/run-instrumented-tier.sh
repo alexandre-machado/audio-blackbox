@@ -62,6 +62,9 @@ log "Installing app + test APKs..."
 "${ADB[@]}" install -r -t "$TEST_APK" >/dev/null
 
 # --- Phase 1: everything except InterruptionSpliceTest --------------------
+# Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
+# leftovers from some earlier install/boot activity that happened to log the same tag.
+"${ADB[@]}" logcat -c
 log "Running the non-interruption instrumented tests..."
 set +e
 "${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS" "$RUNNER" \
@@ -72,6 +75,22 @@ if [[ $PHASE1_STATUS -ne 0 ]] || ! grep -q "OK (" /tmp/instrumented-phase1.log; 
   fail "Non-interruption instrumented tests did not report OK -- see the log above."
 fi
 log "Phase 1 OK."
+
+# --- AudioRecord headroom numbers (issue #22) ------------------------------
+# AudioRecordHeadroomInstrumentedTest logs its results under this tag instead of asserting on
+# them (see that test's class doc) -- surface them here so they land in the CI job log where a
+# human reads them, rather than staying buried in the emulator's logcat buffer.
+#
+# `logcat -d` exits 0 regardless of whether it matched anything (`@rev`'s finding on PR #69): a
+# silently-dropped tag -- app process died before logging, buffer rotated, filter typo -- would
+# otherwise pass a green CI run with the headroom numbers quietly missing. Capture the output and
+# fail loudly if it is empty instead of trusting the exit code.
+log "Dumping AudioRecord headroom benchmark results (issue #22)..."
+HEADROOM_OUTPUT="$("${ADB[@]}" logcat -d -s HeadroomBenchmark:I)"
+if [[ -z "$HEADROOM_OUTPUT" ]]; then
+  fail "HeadroomBenchmark logcat tag produced no output -- AudioRecordHeadroomInstrumentedTest's results were lost (buffer rotated, process died, or the tag/filter drifted). Not treating an empty capture as success."
+fi
+printf '%s\n' "$HEADROOM_OUTPUT"
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
 log "Launching InterruptionSpliceTest in the background..."
