@@ -50,14 +50,36 @@ data class AudioSnapshot(
  * infrequent relative to writes, contention on this lock is negligible in practice.
  *
  * One caveat, called out explicitly rather than assumed away: [snapshot] holds this lock across
- * a full `System.arraycopy` of up to [capacityBytes], which blocks the writer for that duration.
- * At the default 16 kHz/mono config (~57.6 MB / 30 min) this is a copy well under
- * [AudioCaptureEngine]'s internal `AudioRecord` headroom (`minBufferSize * 3`) on typical mobile
- * memory bandwidth, so it is not expected to drop frames in practice. At larger configs (e.g.
- * 44.1 kHz stereo, ~317 MB) the same reasoning is less confident: this has not been measured
- * against real hardware/GC pressure, and a lock redesign to avoid holding it across the full
- * copy was deliberately not attempted here without that measurement (see PR #20 review, finding
- * 5) -- track as a follow-up if that config sees real use.
+ * its full body, including the destination array's allocation and a `System.arraycopy` of up to
+ * [capacityBytes], which blocks the writer for that duration. **Measured** (issue #22 -- see
+ * `RingBufferSnapshotLockBenchmarkTest` / `AudioRecordHeadroomInstrumentedTest`, PR #69):
+ *
+ * | Config | snapshot() worst case | `AudioRecord` headroom | Margin |
+ * |---|---|---|---|
+ * | 16 kHz/mono/60 min (real: max retention the UI offers) | 16.1 ms | 90 ms | ~5.6x |
+ * | 44.1 kHz/stereo/60 min (**hypothetical** -- no UI path sets this today) | 66.6 ms | 91 ms | ~1.37x |
+ *
+ * Measurement platform: `snapshot()` timing is the JVM unit-test tier (GitHub Actions
+ * `ubuntu-latest`, x86_64) -- median/best/worst over 30 iterations after 5 warmup iterations, on
+ * a fully-wrapped buffer forcing a worst-case full-capacity copy every time. Headroom is the
+ * instrumented tier (API 30 `google_apis` x86_64 emulator on the same runner), reading
+ * `AudioRecord.getMinBufferSize()` and multiplying by the `* 3` [AudioCaptureEngine] actually
+ * uses. Neither tier is the repo owner's Samsung S25 (ARM); x86 cloud memory bandwidth and the
+ * emulator's audio HAL do not necessarily match ARM/real-driver numbers.
+ *
+ * **Verdict for the real config (16 kHz/mono, up to 60 min -- the only shape the UI can produce
+ * today): does not exceed headroom, no redesign needed.** The ~5.6x margin is comfortable in
+ * absolute terms (74 ms of slack) but is not an order-of-magnitude margin, so it is not
+ * automatically platform-proof; an on-device confirmation on the S25 is a cheap, non-blocking
+ * follow-up rather than something this measurement can assert with full confidence.
+ *
+ * **The hypothetical 44.1 kHz/stereo/60 min config is a different story: its ~1.37x margin (24 ms
+ * of slack) does not transfer to any other platform with any confidence**, and is exactly the
+ * kind of number a GC pause or a slower ARM memory copy could erase. This config is not reachable
+ * through the UI today, so no locking change is warranted for the current app -- but if a future
+ * change (issue #47, or a sample-rate/channel setting) ever exposes 44.1 kHz/stereo, `snapshot`'s
+ * current lock-the-whole-copy design must be re-evaluated *before* that ships, not after (see
+ * follow-up issue #71).
  */
 class RingBuffer(
     val capacityBytes: Int,
