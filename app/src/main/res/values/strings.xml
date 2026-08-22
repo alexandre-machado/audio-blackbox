@@ -52,7 +52,7 @@
     <string name="dashboard_status_paused">Paused</string>
     <string name="dashboard_status_error">Error</string>
 
-    <string name="dashboard_idle_explanation">Recording is stopped. Nothing is being recorded right now. Tap \"Start recording\" to begin continuous background recording.</string>
+    <string name="dashboard_idle_explanation">Recording is stopped. Nothing is being recorded right now. Turn on the switch below to begin continuous background recording.</string>
     <string name="dashboard_recording_explanation">Recording continues in the background. When the buffer fills up, the oldest audio is automatically replaced with the newest.</string>
     <string name="dashboard_paused_explanation">Recording is paused because the microphone is being used by a call. Recording will resume automatically once the call ends.</string>
     <string name="dashboard_error_explanation">Recording couldn\'t continue: %1$s</string>

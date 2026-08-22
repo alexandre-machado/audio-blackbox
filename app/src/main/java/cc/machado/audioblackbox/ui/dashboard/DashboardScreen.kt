@@ -273,6 +273,11 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
     // Paused/Error get their own color so the "neither on nor off" and "actionable failure" cases
     // are visually distinct from plain On/Off, not just distinguishable by reading the text.
     val stateColor = when {
+        // Checked first: a retry-from-error dispatch leaves engineSwitch.error non-null (the
+        // status is still CaptureStatus.Error) for the whole window until the real outcome
+        // arrives, so without this ordering "Starting…" would render in error-red while a start
+        // is genuinely in flight -- `@rev`'s finding on PR #67.
+        engineSwitch.pending -> MaterialTheme.colorScheme.onSurfaceVariant
         engineSwitch.error != null -> MaterialTheme.colorScheme.error
         engineSwitch.paused -> Color(0xFFF9A825)
         else -> MaterialTheme.colorScheme.onSurfaceVariant
