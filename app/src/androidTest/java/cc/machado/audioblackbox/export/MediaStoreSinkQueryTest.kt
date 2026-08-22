@@ -10,6 +10,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
@@ -31,8 +32,9 @@ import java.util.UUID
  * `queryRecordings()` deliberately filters by `DISPLAY_NAME` prefix only, never by
  * `RELATIVE_PATH` (see its KDoc) -- this is what lets one query find all three without a
  * per-location branch. [queryRecordings_unionsKnownLocations] inserts real rows in the two
- * locations this tier's emulator (API 30 -- `scripts/ci/avd.env`) can actually accept, plus a
- * best-effort attempt at the API-31-only `Recordings/` root; the same documented ceiling
+ * locations this tier's emulator (API 30 -- `scripts/ci/avd.env`) can unconditionally accept;
+ * [queryRecordings_findsRowInApi31OnlyRecordingsRootWhenPlatformAcceptsIt] makes a best-effort,
+ * separately-reported attempt at the API-31-only `Recordings/` root, the same documented ceiling
  * `InterruptionSpliceTest` already works around on this tier.
  *
  * ## Teardown
@@ -120,35 +122,45 @@ class MediaStoreSinkQueryTest {
         )
         assertTrue("Music/Recordings/ insert (legacy pre-#33 location) unexpectedly failed", legacy != null)
 
-        // Recordings/ is only a valid MediaStore top-level root from API 31 -- this tier's
-        // emulator runs API 30 (scripts/ci/avd.env), the same ceiling InterruptionSpliceTest
-        // already documents. Attempt it anyway: if the platform accepts it here, the assertion
-        // below covers the real API 31+ location for real; if rejected (expected on this tier),
-        // that row is simply absent from the union check rather than failing the whole test.
-        val recordingsBlackboxName = "blackbox_${runId}_recordings_blackbox.m4a"
-        val recordingsBlackbox = insertRow(
-            displayName = recordingsBlackboxName,
-            relativePath = "Recordings/Blackbox/",
-            mimeType = "audio/mp4",
-        )
-
         val rows = sink.queryRecordings()
         val displayNames = rows.map { it.displayName }.toSet()
         assertTrue("Music/Blackbox/ row missing from queryRecordings()", musicBlackboxName in displayNames)
         assertTrue("Music/Recordings/ row missing from queryRecordings()", legacyName in displayNames)
-        if (recordingsBlackbox != null) {
-            assertTrue(
-                "this tier's emulator accepted a Recordings/Blackbox/ insert, so " +
-                    "queryRecordings() must return it too",
-                recordingsBlackboxName in displayNames,
-            )
-        }
 
-        // Round-trip sanity beyond mere presence: the MIME type this test asked for must come
-        // back as the row's own declared MIME type, not a single hardcoded constant (issue #7 --
-        // a .wav shared as audio/mp4 fails to open).
+        // Round-trip sanity beyond mere presence: the MIME type must be this row's own, not a
+        // single hardcoded constant (issue #7 -- a .wav shared as audio/mp4 fails to open). Not
+        // asserted as an exact string: MediaProvider recalculates MIME_TYPE from the file
+        // extension itself on insert (confirmed empirically here -- the value this test supplied,
+        // "audio/wav", came back platform-normalized, not verbatim), so the oracle is "still a
+        // real, wav-family type" rather than "identical to what MediaStoreSink.open() would pass",
+        // which is exactly the thing queryRecordings() must read per-row rather than hardcode.
         val legacyRow = rows.first { it.displayName == legacyName }
-        assertTrue("legacy .wav row's MIME type must be its own, not a hardcoded default", legacyRow.mimeType == "audio/wav")
+        assertTrue(
+            "legacy .wav row's MIME type must be its own wav-family type, not a hardcoded " +
+                "default (got '${legacyRow.mimeType}')",
+            legacyRow.mimeType.contains("wav", ignoreCase = true),
+        )
+    }
+
+    @Test
+    fun queryRecordings_findsRowInApi31OnlyRecordingsRootWhenPlatformAcceptsIt() {
+        // Recordings/ is only a valid MediaStore top-level root from API 31 -- this tier's
+        // emulator runs API 30 (scripts/ci/avd.env), the same ceiling InterruptionSpliceTest
+        // already documents for the real export path. This test attempts the real insert and
+        // only asserts on the query result if the platform actually accepted it; otherwise it is
+        // reported by JUnit as skipped (assumption violated), not passed or failed, so CI's
+        // summary makes plain whether this location was genuinely exercised on a given run rather
+        // than silently vacuous.
+        val name = "blackbox_${runId}_recordings_blackbox.m4a"
+        val uri = insertRow(displayName = name, relativePath = "Recordings/Blackbox/", mimeType = "audio/mp4")
+        assumeTrue(
+            "this tier's API 30 emulator rejected the Recordings/ top-level root, as documented " +
+                "above -- not a failure of this test, a platform ceiling",
+            uri != null,
+        )
+
+        val displayNames = sink.queryRecordings().map { it.displayName }.toSet()
+        assertTrue("Recordings/Blackbox/ row missing from queryRecordings()", name in displayNames)
     }
 
     @Test
@@ -166,7 +178,7 @@ class MediaStoreSinkQueryTest {
         // this test's outcome, which is exactly the finding that opened issue #62. It is kept here
         // because it is still a real, correct behavioural guarantee and an explicit acceptance
         // criterion; the test that actually bites when the SQL clause is removed is
-        // queryRecordings_unionsKnownLocations below (see the PR description for the scratch-commit
+        // queryRecordings_unionsKnownLocations above (see the PR description for the scratch-commit
         // proof).
         val wrongName = "blackboxZ${runId}_wrong.m4a"
         val ownName = "blackbox_${runId}_own.m4a"
