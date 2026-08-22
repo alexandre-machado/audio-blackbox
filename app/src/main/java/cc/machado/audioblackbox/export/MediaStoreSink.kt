@@ -97,7 +97,9 @@ class MediaStoreSink(private val context: Context) : ExportSink, RecordingsRepos
         // "blackboxZ2026....m4a" (any single character in that position), not only files this app
         // actually named (PR #61 review, `@rev`/`@sec` finding). ESCAPE '\' makes the following
         // "_" (escaped as "\_" in the arg below) match only the literal underscore character.
-        val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ? ESCAPE '\\'"
+        // DELIBERATE BREAKAGE for issue #62's bite-verification -- see PR description. Reverted
+        // in the very next commit on this branch.
+        val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ?"
         val selectionArgs = arrayOf(APP_FILE_PREFIX_LIKE_PATTERN)
 
         val rows = mutableListOf<RecordingRow>()
