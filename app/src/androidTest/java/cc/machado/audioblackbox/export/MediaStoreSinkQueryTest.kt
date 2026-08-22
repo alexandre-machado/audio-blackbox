@@ -32,10 +32,18 @@ import java.util.UUID
  * `queryRecordings()` deliberately filters by `DISPLAY_NAME` prefix only, never by
  * `RELATIVE_PATH` (see its KDoc) -- this is what lets one query find all three without a
  * per-location branch. [queryRecordings_unionsKnownLocations] inserts real rows in the two
- * locations this tier's emulator (API 30 -- `scripts/ci/avd.env`) can unconditionally accept;
- * [queryRecordings_findsRowInApi31OnlyRecordingsRootWhenPlatformAcceptsIt] makes a best-effort,
- * separately-reported attempt at the API-31-only `Recordings/` root, the same documented ceiling
- * `InterruptionSpliceTest` already works around on this tier.
+ * locations this tier's emulator (API 30 -- `scripts/ci/avd.env`) can unconditionally accept.
+ *
+ * [queryRecordings_findsRowInApi31OnlyRecordingsRootWhenPlatformAcceptsIt] does **not** provide
+ * real coverage of the `Recordings/` root on CI as configured today: `scripts/ci/avd.env` pins the
+ * instrumented tier to API 30, and `Recordings/` is only a valid `MediaStore` top-level root from
+ * API 31 (see [MediaStoreSink]'s own class doc). That combination means this test's insert almost
+ * certainly fails on every run on these runners, and the test `Assume`-skips rather than passing
+ * or failing -- by design, so a rejection is reported honestly as a skip rather than a false pass.
+ * It only becomes real, exercised coverage on an API 31+ device/emulator, e.g. if CI's AVD is ever
+ * raised (a decision deliberately left out of this PR -- see the PR description). The test still
+ * belongs in this suite: `minSdk` is 29, the code path is real production code that ships today,
+ * and it will start actually running the moment the tier it runs on catches up.
  *
  * ## Teardown
  * Every row this test inserts is tracked in [insertedUris] and deleted directly via
@@ -66,8 +74,9 @@ class MediaStoreSinkQueryTest {
         for (uri in insertedUris) {
             try {
                 resolver.delete(uri, null, null)
-            } catch (e: SecurityException) {
-                // Best effort: nothing else this teardown can do about a row it can't delete.
+            } catch (e: Exception) {
+                // Best effort, and deliberately broad: one row this teardown can't delete must
+                // never abort the loop and leak every row after it (`@rev`, PR #70 review).
             }
         }
         insertedUris.clear()
@@ -146,11 +155,12 @@ class MediaStoreSinkQueryTest {
     fun queryRecordings_findsRowInApi31OnlyRecordingsRootWhenPlatformAcceptsIt() {
         // Recordings/ is only a valid MediaStore top-level root from API 31 -- this tier's
         // emulator runs API 30 (scripts/ci/avd.env), the same ceiling InterruptionSpliceTest
-        // already documents for the real export path. This test attempts the real insert and
-        // only asserts on the query result if the platform actually accepted it; otherwise it is
-        // reported by JUnit as skipped (assumption violated), not passed or failed, so CI's
-        // summary makes plain whether this location was genuinely exercised on a given run rather
-        // than silently vacuous.
+        // already documents for the real export path. Given that combination, this insert is
+        // expected to fail on every current CI run, and this test is expected to Assume-skip on
+        // every current CI run -- it provides zero verified coverage of this location today. It
+        // attempts the real insert anyway and only asserts on the query result if the platform
+        // actually accepted it, so the day this runs on an API 31+ tier it becomes real coverage
+        // with no code change required, rather than a silent false pass in the meantime.
         val name = "blackbox_${runId}_recordings_blackbox.m4a"
         val uri = insertRow(displayName = name, relativePath = "Recordings/Blackbox/", mimeType = "audio/mp4")
         assumeTrue(
