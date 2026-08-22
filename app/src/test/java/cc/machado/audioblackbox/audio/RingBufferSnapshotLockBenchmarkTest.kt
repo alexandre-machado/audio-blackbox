@@ -15,9 +15,15 @@ import org.junit.Test
  * step to isolate. This benchmark times the whole call for that reason, not as an approximation.
  *
  * ## Configs measured
- * - 16 kHz / mono / 60 min: the real default sample format at the real maximum retention window
- *   the UI offers today (see [AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES]; the issue's original
- *   "79 min" figure predates the configurable-retention feature and is stale).
+ * All at 16 kHz/mono (the real default sample format) across every window
+ * [AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES] offers (5/15/30/60 min), plus one hypothetical
+ * config:
+ * - 16 kHz / mono / 5, 15, 30, 60 min: every retention window the UI actually lets a user select.
+ *   30 min is today's practical ceiling -- the largest window that both fits the app's Dalvik heap
+ *   and is UI-selectable (60 min hits `OutOfMemoryError` on the real Samsung S25 device -- see
+ *   issue #72 -- so it is *offered* but does not currently *work*). Measuring all four windows,
+ *   not just the two extremes, shows how cost scales with size instead of leaving a reader to
+ *   infer it from two isolated points.
  * - 44.1 kHz / stereo / 60 min: NOT reachable through the UI today -- nothing in this app's UI
  *   or settings ever constructs an [AudioConfig] with a non-default `sampleRateHz`/`channelCount`
  *   (grep confirms every call site only varies `bufferDurationMinutes`). Measured anyway per
@@ -55,22 +61,26 @@ class RingBufferSnapshotLockBenchmarkTest {
     }
 
     @Test
-    fun `benchmark snapshot lock hold time at real max and hypothetical configs`() {
-        val configs = listOf(
+    fun `benchmark snapshot lock hold time at every UI-selectable window plus a hypothetical config`() {
+        // AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES = [5, 15, 30, 60] -- every window the UI
+        // actually lets a user pick, at the real default 16kHz/mono format, plus 60min at a
+        // hypothetical 44.1kHz/stereo format (see class doc for why that one is hypothetical).
+        val uiRetentionWindowsMinutes = listOf(5, 15, 30, 60)
+        val configs = uiRetentionWindowsMinutes.map { minutes ->
             BenchConfig(
-                label = "16kHz/mono/60min (REAL: default sample format, max retention offered by the UI)",
+                label = "16kHz/mono/${minutes}min (REAL: UI-selectable retention window" +
+                    (if (minutes == 60) ", OOMs on real device -- see issue #72" else "") + ")",
                 sampleRateHz = 16_000,
                 channelCount = 1,
-                bufferDurationMinutes = 60,
+                bufferDurationMinutes = minutes,
                 reachableViaUiToday = true,
-            ),
-            BenchConfig(
-                label = "44.1kHz/stereo/60min (HYPOTHETICAL: no UI path sets this today)",
-                sampleRateHz = 44_100,
-                channelCount = 2,
-                bufferDurationMinutes = 60,
-                reachableViaUiToday = false,
-            ),
+            )
+        } + BenchConfig(
+            label = "44.1kHz/stereo/60min (HYPOTHETICAL: no UI path sets this today)",
+            sampleRateHz = 44_100,
+            channelCount = 2,
+            bufferDurationMinutes = 60,
+            reachableViaUiToday = false,
         )
 
         var atLeastOneConfigMeasured = false
