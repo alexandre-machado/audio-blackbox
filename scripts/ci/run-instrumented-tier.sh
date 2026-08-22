@@ -80,8 +80,17 @@ log "Phase 1 OK."
 # AudioRecordHeadroomInstrumentedTest logs its results under this tag instead of asserting on
 # them (see that test's class doc) -- surface them here so they land in the CI job log where a
 # human reads them, rather than staying buried in the emulator's logcat buffer.
+#
+# `logcat -d` exits 0 regardless of whether it matched anything (`@rev`'s finding on PR #69): a
+# silently-dropped tag -- app process died before logging, buffer rotated, filter typo -- would
+# otherwise pass a green CI run with the headroom numbers quietly missing. Capture the output and
+# fail loudly if it is empty instead of trusting the exit code.
 log "Dumping AudioRecord headroom benchmark results (issue #22)..."
-"${ADB[@]}" logcat -d -s HeadroomBenchmark:I
+HEADROOM_OUTPUT="$("${ADB[@]}" logcat -d -s HeadroomBenchmark:I)"
+if [[ -z "$HEADROOM_OUTPUT" ]]; then
+  fail "HeadroomBenchmark logcat tag produced no output -- AudioRecordHeadroomInstrumentedTest's results were lost (buffer rotated, process died, or the tag/filter drifted). Not treating an empty capture as success."
+fi
+printf '%s\n' "$HEADROOM_OUTPUT"
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
 log "Launching InterruptionSpliceTest in the background..."
