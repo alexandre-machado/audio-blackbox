@@ -1,32 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive icon monochrome layer (issue #49), Android 13+ themed icons —
-  Candidate B geometry (see ic_launcher_foreground.xml). The system ignores
-  this drawable's own colours and applies its own wallpaper-derived tint,
-  so every path below is plain solid black — only the alpha/shape matters.
-  The band's groove cut is preserved so it stays a distinct shape even
-  flattened to one colour; see docs/design/icon/README.md for how this
-  held up against Candidate A's monochrome layer in the rendered previews.
+  Adaptive icon monochrome layer (issue #75), Android 13+ themed icons.
+  Hand-authored silhouette matching the shipped foreground (icon.1.jpg,
+  see ic_launcher_foreground.xml / docs/design/icon/README.md), traced
+  against docs/design/icon/icon.3.jpg's composition rather than icon.1
+  directly (icon.3 is already a solid filled silhouette of the same
+  object, with the gloss/text/shading stripped out, exactly the class
+  of source a monochrome layer needs). VectorDrawable is not SVG: no
+  filters, gradients, per-group opacity or non-centered strokes are
+  available, so every shape below is a plain solid-black rounded
+  rectangle/capsule, positioned to match icon.3's isometric layout
+  (upright box, front-left cylinder, connector nub, base plate).
+
+  The system ignores this drawable's own colour and applies its own
+  wallpaper-derived tint, so only alpha/shape matters, every path is
+  #FF000000. The four masses are kept as separate shapes with a small
+  real gap between them (not an evenOdd cut) so they stay legibly
+  distinct once flattened to one colour, the same technique the
+  previous monochrome used for its accent-band groove. An earlier pass
+  fused the whole silhouette into one continuous pixel-traced outline;
+  it read as a featureless blob at 48dp (the same "cloud" failure the
+  README already documents for a fused Candidate B), so the boundary
+  was rebuilt as four distinct primitives instead.
+
+  Safe-zone fix (PR #76 review): the first cut of these coordinates
+  reached 41-43dp from the icon's center (54,54) on three of the four
+  shapes (base plate, upright box, connector nub) against a 33dp
+  guaranteed-safe radius (66dp safe circle) and a 36dp absolute limit
+  (72dp guaranteed circle) - visibly clipped under a circular/squircle
+  themed-icon mask. All four shapes are now the same original layout
+  scaled by 0.74 about the (54,54) center (uniform scale keeps the
+  isometric proportions/recognisability intact, it just shrinks the
+  whole mark rather than distorting it), so the farthest reach is
+  ~31.9dp (base plate), comfortably inside the 33dp safe radius while
+  still filling most of the safe circle. See docs/design/icon/README.md,
+  "Issue #75" section, for the measured before/after per shape.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- base plate -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M59.00,30.00 L77.00,30.00 A6.00,6.00 0 0 1 83.00,36.00 L83.00,50.00 A6.00,6.00 0 0 1 77.00,56.00 L59.00,56.00 A6.00,6.00 0 0 1 53.00,50.00 L53.00,36.00 A6.00,6.00 0 0 1 59.00,30.00 Z" />
+        android:pathData="M31.80,65.84 L76.20,65.84 A2.96,2.96 0 0 1 79.16,68.80 L79.16,72.50 A2.96,2.96 0 0 1 76.20,75.46 L31.80,75.46 A2.96,2.96 0 0 1 28.84,72.50 L28.84,68.80 A2.96,2.96 0 0 1 31.80,65.84 Z" />
+    <!-- upright box -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M35.00,68.00 L81.00,68.00 A4.00,4.00 0 0 1 85.00,72.00 L85.00,73.00 A4.00,4.00 0 0 1 81.00,77.00 L35.00,77.00 A4.00,4.00 0 0 1 31.00,73.00 L31.00,72.00 A4.00,4.00 0 0 1 35.00,68.00 Z" />
+        android:pathData="M62.14,31.06 L72.50,31.06 A4.44,4.44 0 0 1 76.94,35.50 L76.94,63.62 A4.44,4.44 0 0 1 72.50,68.06 L62.14,68.06 A4.44,4.44 0 0 1 57.70,63.62 L57.70,35.50 A4.44,4.44 0 0 1 62.14,31.06 Z" />
+    <!-- horizontal cylinder, front-left -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M27.00,46.00 L31.00,46.00 A4.00,4.00 0 0 1 35.00,50.00 L35.00,58.00 A4.00,4.00 0 0 1 31.00,62.00 L27.00,62.00 A4.00,4.00 0 0 1 23.00,58.00 L23.00,50.00 A4.00,4.00 0 0 1 27.00,46.00 Z" />
+        android:pathData="M40.68,41.42 L46.60,41.42 A8.14,8.14 0 0 1 54.74,49.56 L54.74,49.56 A8.14,8.14 0 0 1 46.60,57.70 L40.68,57.70 A8.14,8.14 0 0 1 32.54,49.56 L32.54,49.56 A8.14,8.14 0 0 1 40.68,41.42 Z" />
+    <!-- connector nub -->
     <path
         android:fillColor="#FF000000"
-        android:fillType="evenOdd"
-        android:pathData="M41.00,40.00 L59.00,40.00 A10.00,10.00 0 0 1 69.00,50.00 L69.00,58.00 A10.00,10.00 0 0 1 59.00,68.00 L41.00,68.00 A10.00,10.00 0 0 1 31.00,58.00 L31.00,50.00 A10.00,10.00 0 0 1 41.00,40.00 Z M45.00,40.00 L55.00,40.00 L55.00,68.00 L45.00,68.00 Z" />
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M46.50,40.00 L53.50,40.00 L53.50,68.00 L46.50,68.00 Z" />
+        android:pathData="M25.88,45.86 L28.84,45.86 A2.22,2.22 0 0 1 31.06,48.08 L31.06,52.52 A2.22,2.22 0 0 1 28.84,54.74 L25.88,54.74 A2.22,2.22 0 0 1 23.66,52.52 L23.66,48.08 A2.22,2.22 0 0 1 25.88,45.86 Z" />
 </vector>

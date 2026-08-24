@@ -295,6 +295,51 @@ virtual assistant") is visibly aimed at assistant-style apps, not standing
 ambient-audio dashcams. See section F — this is a genuine gray area, not a settled
 match.
 
+### AI-generated content declaration (Play Console > App content)
+
+Google Play Console requires developers to self-declare AI-generated visual
+assets used in the store listing. This is established, not inferred —
+"Declaring AI-generated content in Play Console" states it directly:
+
+> Visual assets: Images and videos used in your Store listings, Promotional
+> content, YouTube videos etc.
+> (https://support.google.com/googleplay/android-developer/answer/17262077,
+> retrieved 2026-08-23, per `@research`'s brief on issue #75)
+
+The 512×512 Play Store listing icon (`docs/design/store/ic_launcher_store_512.png`)
+is derived from AI-generated source artwork (`docs/design/icon/icon.1.jpg`,
+adopted in #75), so this declaration applies to it and needs to be made at
+submission time.
+
+Whether the same obligation extends to the in-app launcher icon itself (the
+adaptive-icon foreground baked into the APK/AAB, distinct from the separate
+Console upload above) is a **genuinely open scope question, not an
+unconfirmed obligation** — the obligation itself is settled. The
+AI-content-declaration page enumerates store-listing visual assets but never
+uses the word "icon" anywhere on it. Separately, Play Console's own asset
+taxonomy (https://support.google.com/googleplay/android-developer/answer/9866151)
+places the app icon inside the store listing's Graphics section, alongside
+the feature graphic and screenshots. Combining those two pages makes it a
+reasonable inference that the icon is in scope, but it is an inference
+across two sources, not a single source that says so directly. Whoever
+submits should look for the declaration checkbox at the icon-upload step in
+Console and answer it honestly rather than assume either way. See section F,
+item 9, for the full risk read, the SynthID watermark question, and the
+licensing/trade-dress background this declaration sits on top of.
+
+Two further findings bear on rejection risk and are recorded here so a
+future reader doesn't over- or under-declare:
+
+- **Play's separate "AI-Generated Content" Restricted Content policy does
+  not apply to this app.** That policy governs apps whose *core feature* is
+  generating content for users (chatbots, text-to-image tools, etc.).
+  Audio Blackbox records the user's own audio and generates nothing — it
+  does not fall under that policy, and the questionnaire tied to it should
+  not be answered as though it does.
+- **No attribution requirement was found.** Nothing in Google's terms
+  obliges a "Google" or "Gemini" credit line on the icon or the store
+  listing.
+
 ### Prominent disclosure (separate from the Data safety form and from the OS
 runtime permission dialog)
 
@@ -472,6 +517,66 @@ the feature graphic and phone screenshots.
 8. **Not attempted in this task, per its own scope**: setting up
    `gradle-play-publisher` or any service-account-based publishing automation.
    That's explicitly deferred to a later, separately authorized step.
+9. **AI-generated launcher/store artwork carries an established declaration
+   obligation (with one genuinely open scope question), plus other findings
+   relevant to rejection risk — recorded as a risk acceptance, not a cleared
+   item.** Issue #75 adopted `icon.1.jpg`, AI-generated source artwork, as
+   both the launcher icon and (derived) the 512×512 Play Store listing icon
+   (`docs/design/store/ic_launcher_store_512.png`). The owner elected to
+   ship it with the risk recorded rather than wait on further
+   verification — `@techlead`'s recorded risk acceptance:
+   https://github.com/alexandre-machado/audio-blackbox/pull/76#issuecomment-5395728424.
+   The full reasoning and citations are in `@research`'s **thorough** brief
+   on issue #75, posted 2026-08-24 02:23Z:
+   https://github.com/alexandre-machado/audio-blackbox/issues/75#issuecomment-5389991907.
+   (A second, weaker brief was separately commissioned at 06:30Z the same
+   day, before it was noticed the thorough one already existed:
+   https://github.com/alexandre-machado/audio-blackbox/issues/75#issuecomment-5391552386.
+   Where the two disagree, the 02:23Z brief is the one to trust — it was
+   independently verified against the live Play policy page.) What the
+   02:23Z brief established, and what it left open:
+   - **The declaration itself is established, not unconfirmed.** Google
+     Play Console's own AI-content-declaration page states plainly that
+     "Visual assets: Images and videos used in your Store listings,
+     Promotional content, YouTube videos etc." must be declared. The
+     512×512 store icon qualifies, since it's derived from AI-generated
+     source art. See section D.
+   - **Genuinely open, and open for a specific reason**: whether that
+     obligation also covers the in-app launcher icon. The declaration page
+     never uses the word "icon"; Play Console's asset taxonomy separately
+     places the app icon inside the store listing's Graphics section. That
+     combination supports a reasonable inference of in-scope, but it is an
+     inference from two pages, not a single source saying so. Resolve this
+     against the live Console flow at submission time — look for the
+     checkbox at the icon-upload step and answer honestly rather than
+     assume either way. See section D for the full detail.
+   - **Play's "AI-Generated Content" Restricted Content policy does not
+     apply to this app.** That policy governs apps whose core feature is
+     generating content for users; this app records the user's own audio
+     and generates nothing. Do not answer an unrelated policy questionnaire
+     as though it applies.
+   - **No attribution requirement found.** Nothing obliges a "Google" or
+     "Gemini" credit line on the icon or the listing.
+   - **SynthID — two different questions, not one.** SynthID is an
+     **in-pixel** watermark, not metadata, designed by Google to survive
+     cropping, filtering, and recompression. `@sec`'s PR #76 review found no
+     PNG text chunks, no EXIF, and no C2PA in the shipped assets — but that's
+     a statement about *metadata*; it says nothing about whether an in-pixel
+     mark survived this project's flood-fill-and-re-encode pipeline. Whether
+     it did is **unknown** without running Google's detector; the detector
+     has not been run. Separately, no evidence was found that Play itself
+     performs any automated SynthID/AI-artwork detection on uploaded
+     assets — this is an absence of evidence, not a confirmed "Play does
+     not check."
+   - **No indemnification.** Google does not indemnify Gemini output, so
+     infringement exposure sits with this project, not Google. Practically:
+     the artwork is likely not copyright-protectable under US law (US
+     Copyright Office 2023 guidance — no human authorship), so trade-dress
+     enforcement against a copycat rests on weaker footing than the
+     previously-shipped in-house vector did, which had a human-authored
+     copyright layer behind it. Trademark *registrability* is unaffected by
+     AI origin — marks turn on distinctiveness and use in commerce — but
+     that's a separate axis from copyright and doesn't change the point above.
 
 ---
 
