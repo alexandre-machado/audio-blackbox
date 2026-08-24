@@ -1,32 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive icon monochrome layer (issue #49), Android 13+ themed icons —
-  Candidate B geometry (see ic_launcher_foreground.xml). The system ignores
-  this drawable's own colours and applies its own wallpaper-derived tint,
-  so every path below is plain solid black — only the alpha/shape matters.
-  The band's groove cut is preserved so it stays a distinct shape even
-  flattened to one colour; see docs/design/icon/README.md for how this
-  held up against Candidate A's monochrome layer in the rendered previews.
+  Adaptive icon monochrome layer (issue #75), Android 13+ themed icons.
+  Hand-authored silhouette matching the shipped foreground (icon.1.jpg,
+  see ic_launcher_foreground.xml / docs/design/icon/README.md), traced
+  against docs/design/icon/icon.3.jpg's composition rather than icon.1
+  directly (icon.3 is already a solid filled silhouette of the same
+  object, with the gloss/text/shading stripped out, exactly the class
+  of source a monochrome layer needs). VectorDrawable is not SVG: no
+  filters, gradients, per-group opacity or non-centered strokes are
+  available, so every shape below is a plain solid-black rounded
+  rectangle/capsule, positioned to match icon.3's isometric layout
+  (upright box, front-left cylinder, connector nub, base plate).
+
+  The system ignores this drawable's own colour and applies its own
+  wallpaper-derived tint, so only alpha/shape matters, every path is
+  #FF000000. The four masses are kept as separate shapes with a small
+  real gap between them (not an evenOdd cut) so they stay legibly
+  distinct once flattened to one colour, the same technique the
+  previous monochrome used for its accent-band groove. An earlier pass
+  fused the whole silhouette into one continuous pixel-traced outline;
+  it read as a featureless blob at 48dp (the same "cloud" failure the
+  README already documents for a fused Candidate B), so the boundary
+  was rebuilt as four distinct primitives instead.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- base plate -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M59.00,30.00 L77.00,30.00 A6.00,6.00 0 0 1 83.00,36.00 L83.00,50.00 A6.00,6.00 0 0 1 77.00,56.00 L59.00,56.00 A6.00,6.00 0 0 1 53.00,50.00 L53.00,36.00 A6.00,6.00 0 0 1 59.00,30.00 Z" />
+        android:pathData="M24.00,70.00 L84.00,70.00 A4.00,4.00 0 0 1 88.00,74.00 L88.00,79.00 A4.00,4.00 0 0 1 84.00,83.00 L24.00,83.00 A4.00,4.00 0 0 1 20.00,79.00 L20.00,74.00 A4.00,4.00 0 0 1 24.00,70.00 Z" />
+    <!-- upright box -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M35.00,68.00 L81.00,68.00 A4.00,4.00 0 0 1 85.00,72.00 L85.00,73.00 A4.00,4.00 0 0 1 81.00,77.00 L35.00,77.00 A4.00,4.00 0 0 1 31.00,73.00 L31.00,72.00 A4.00,4.00 0 0 1 35.00,68.00 Z" />
+        android:pathData="M65.00,23.00 L79.00,23.00 A6.00,6.00 0 0 1 85.00,29.00 L85.00,67.00 A6.00,6.00 0 0 1 79.00,73.00 L65.00,73.00 A6.00,6.00 0 0 1 59.00,67.00 L59.00,29.00 A6.00,6.00 0 0 1 65.00,23.00 Z" />
+    <!-- horizontal cylinder, front-left -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M27.00,46.00 L31.00,46.00 A4.00,4.00 0 0 1 35.00,50.00 L35.00,58.00 A4.00,4.00 0 0 1 31.00,62.00 L27.00,62.00 A4.00,4.00 0 0 1 23.00,58.00 L23.00,50.00 A4.00,4.00 0 0 1 27.00,46.00 Z" />
+        android:pathData="M36.00,37.00 L44.00,37.00 A11.00,11.00 0 0 1 55.00,48.00 L55.00,48.00 A11.00,11.00 0 0 1 44.00,59.00 L36.00,59.00 A11.00,11.00 0 0 1 25.00,48.00 L25.00,48.00 A11.00,11.00 0 0 1 36.00,37.00 Z" />
+    <!-- connector nub -->
     <path
         android:fillColor="#FF000000"
-        android:fillType="evenOdd"
-        android:pathData="M41.00,40.00 L59.00,40.00 A10.00,10.00 0 0 1 69.00,50.00 L69.00,58.00 A10.00,10.00 0 0 1 59.00,68.00 L41.00,68.00 A10.00,10.00 0 0 1 31.00,58.00 L31.00,50.00 A10.00,10.00 0 0 1 41.00,40.00 Z M45.00,40.00 L55.00,40.00 L55.00,68.00 L45.00,68.00 Z" />
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M46.50,40.00 L53.50,40.00 L53.50,68.00 L46.50,68.00 Z" />
+        android:pathData="M16.00,43.00 L20.00,43.00 A3.00,3.00 0 0 1 23.00,46.00 L23.00,52.00 A3.00,3.00 0 0 1 20.00,55.00 L16.00,55.00 A3.00,3.00 0 0 1 13.00,52.00 L13.00,46.00 A3.00,3.00 0 0 1 16.00,43.00 Z" />
 </vector>
