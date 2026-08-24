@@ -16,6 +16,94 @@ data class AudioSnapshot(
 }
 
 /**
+ * Outcome of [RingBuffer.readSince]. A sealed type on purpose (issue #51): the PCM only exists on
+ * the [Data] branch, so there is no way to obtain bytes without having written a branch for the
+ * failure cases. A caller cannot accidentally treat lost audio as "a poll that happened to return
+ * fewer bytes" -- the two are different types, not different lengths of the same one. Silent audio
+ * loss is the worst failure this product can have (issue #29: failure must be visible, never a
+ * silent no-op), so the primitive refuses to express it as a clamped length.
+ */
+sealed interface ReadSinceResult {
+
+    /**
+     * PCM read successfully: [bytes] are exactly the stream bytes in `[startCursor, nextCursor)`,
+     * oldest first, with no gap relative to the cursor that was asked for. Pass [nextCursor] to
+     * the next [RingBuffer.readSince] call to continue the stream.
+     *
+     * [remainingBytes] is how much more was already written past [nextCursor] at the instant of
+     * the read -- useful for a drain loop that wants to keep reading immediately instead of
+     * waiting for its next tick. An empty [bytes] with `startCursor == nextCursor` simply means
+     * nothing new has been written yet; it is a normal idle poll, not a failure.
+     */
+    class Data(
+        val bytes: ByteArray,
+        val startCursor: Long,
+        val nextCursor: Long,
+        val remainingBytes: Long,
+    ) : ReadSinceResult {
+        override fun toString(): String =
+            "Data(bytes=${bytes.size}, startCursor=$startCursor, nextCursor=$nextCursor, " +
+                "remainingBytes=$remainingBytes)"
+    }
+
+    /**
+     * The caller fell behind: the ring overwrote bytes it had not read yet, so [lostBytes] bytes
+     * of PCM starting at [requestedCursor] no longer exist anywhere and can never be recovered.
+     * No audio is returned, deliberately -- returning "the part that survived" is precisely the
+     * short read that would make the loss invisible.
+     *
+     * [oldestAvailableCursor] is the oldest byte still buffered, which is where a caller that
+     * chooses to keep going (after surfacing the loss -- that is the consumer's job, issue #54)
+     * should resume from.
+     */
+    data class Lapped(
+        val requestedCursor: Long,
+        val oldestAvailableCursor: Long,
+        val lostBytes: Long,
+    ) : ReadSinceResult
+
+    /**
+     * The cursor points past the end of the stream, which can only mean the stream restarted
+     * under the caller: [RingBuffer.clear] resets the byte counter to zero (it is called on
+     * `stop`, and on the save-then-restart-the-buffer flow). Reported rather than thrown so a
+     * drain thread that outlives a `clear()` fails visibly without dying, and reported separately
+     * from [Lapped] because it is a different event: nothing was overwritten out from under the
+     * caller, the stream it was reading simply no longer exists. Resume from [currentCursor].
+     *
+     * ## Contract, and the precise limit of this detection (PR #86 review, `@rev` finding 2)
+     * Detection is **positional**, not generational: the only evidence that a restart happened is
+     * `cursor > totalWritten`. That evidence expires. Once the restarted stream has been written
+     * past the stale cursor's offset -- `clear()` followed by more than `cursor` bytes of new
+     * writes -- a drain still holding the old cursor falls through to the ordinary [Data] path and
+     * receives **new-stream bytes at old-stream offsets**: gap-free to the caller, spliced across
+     * a stop/start boundary in reality, with the tail of the old stream gone and no signal. So,
+     * stated as a contract for whoever wires up a consumer:
+     *
+     * - A stale cursor is reported as [StreamReset] **only while the restarted stream is shorter
+     *   than that cursor**. Past that point a cleared-and-rewritten buffer is indistinguishable
+     *   from a continuing one.
+     * - Therefore a caller **must not** treat "not [StreamReset]" as proof that no restart
+     *   happened. Knowing whether the buffer was cleared is the consumer's responsibility (it is
+     *   the side that triggers `clear()`), not something this primitive can be asked after the
+     *   fact.
+     *
+     * This is not reachable through today's engine: `AudioCaptureEngine` allocates a fresh
+     * `RingBuffer` per session and clears the old instance only in the capture thread's `finally`,
+     * after which nothing writes to it again -- a stale drain there sees [StreamReset] forever.
+     * The flow that would reach it is issue #47's C2 ("save the past, then restart the buffer"),
+     * i.e. clearing a buffer that keeps being written. The durable fix is a generation counter
+     * bumped by [RingBuffer.clear] and carried in the cursor; that is a real API change and
+     * belongs to the issue that introduces the flow (#54), deliberately not done here so this
+     * stays a primitive-only change. `RingBufferReadSinceTest` pins both directions of the
+     * behaviour above so the limit is a tested, written contract rather than an assumption.
+     */
+    data class StreamReset(
+        val requestedCursor: Long,
+        val currentCursor: Long,
+    ) : ReadSinceResult
+}
+
+/**
  * Fixed-size, pre-allocated circular buffer of PCM bytes. The single source of truth every
  * other module reads from: [AudioCaptureEngine] is the only writer, exporters and UI are
  * readers.
@@ -48,6 +136,16 @@ data class AudioSnapshot(
  * torn reads: a [snapshot] never observes a byte range or marker that [write] is mid-copying.
  * Because audio chunks are small (typically tens of milliseconds of PCM) and reads are
  * infrequent relative to writes, contention on this lock is negligible in practice.
+ *
+ * [readSince] (issue #51) takes the same single lock and adds no new one, so the deadlock-free
+ * -by-construction argument above is unchanged. It differs from [snapshot] in what it holds the
+ * lock for: a copy of only the bytes written since the caller's cursor (capped by its `maxBytes`),
+ * not up to [capacityBytes]. A drain thread polling every 100-250 ms therefore holds the lock for
+ * one poll interval of audio regardless of how large the retention window is -- the cost does not
+ * scale with capacity the way [snapshot]'s does, which is why the table below does not apply to
+ * it. What is *not* yet measured is the three-way case (continuous writes + continuous drains +
+ * an occasional full [snapshot] contending at once); that measurement is issue #22's follow-up and
+ * gates the live-writer consumer, not this primitive.
  *
  * One caveat, called out explicitly rather than assumed away: [snapshot] holds this lock across
  * its full body, including the destination array's allocation and a `System.arraycopy` of up to
@@ -222,6 +320,93 @@ class RingBuffer(
         }
     }
 
+    /**
+     * Stream offset of the write head: the cursor a caller should start from to drain everything
+     * written *from now on*, ignoring what is already buffered.
+     */
+    fun writeCursor(): Long = synchronized(lock) { totalWritten }
+
+    /**
+     * Stream offset of the oldest byte still buffered: the cursor a caller should start from to
+     * drain the retained past first and then continue live (issue #47's "record forward,
+     * including the last N minutes"). Equal to [writeCursor] on an empty buffer.
+     */
+    fun oldestCursor(): Long =
+        synchronized(lock) { totalWritten - minOf(totalWritten, capacityBytes.toLong()) }
+
+    /**
+     * Incremental drain read (issue #51): returns the PCM written since [cursor], up to
+     * [maxBytes], together with the cursor to pass to the next call. Repeated calls threading the
+     * returned `nextCursor` back in produce a gap-free, in-order byte stream.
+     *
+     * This is deliberately **not** [snapshot] under another name. [snapshot] answers "give me the
+     * last N minutes" and copies up to [capacityBytes]; this answers "give me what I have not seen
+     * yet" and copies `min(totalWritten - cursor, maxBytes)` -- for a drain polling every
+     * 100-250 ms that is one poll interval of audio (a few KB), whatever the retention window is.
+     * Two consequences that are the whole point of the primitive: it never allocates a
+     * second full-size copy of the window (issue #72), and **the lock hold is proportional to the
+     * bytes actually copied, not to capacity** -- a caller that keeps up bounds the writer's worst
+     * case at bytes-per-poll, independently of whether retention is 5 minutes or 45.
+     *
+     * [maxBytes] is deliberately **not** defaulted (PR #86 review, `@sec` / `@rev`). An earlier
+     * revision defaulted it to [capacityBytes] and asked callers in this doc to override it when
+     * seeding from [oldestCursor] -- which meant the one call shape the API anticipates,
+     * `readSince(oldestCursor())`, took the capacity-sized allocate-and-copy-under-the-lock path
+     * by omission: exactly the [snapshot]-shaped cost this primitive exists to avoid, and the
+     * shape behind issue #72's OOM. A comment is not a substitute for a signature that cannot be
+     * misused by accident -- the same principle [ReadSinceResult] follows -- so every caller now
+     * states its own bound. A drain on a 100-250 ms cadence wants about one poll interval of
+     * audio, a few KB; a caller catching up from [oldestCursor] loops with the same small bound
+     * rather than asking for the window in one call.
+     *
+     * Falling behind is reported, never smoothed over: if the ring wrapped past [cursor] the
+     * result is [ReadSinceResult.Lapped] with the exact byte count that was lost, and if the
+     * stream was reset under the caller ([clear]) it is [ReadSinceResult.StreamReset]. Neither is
+     * expressible as a shorter [ReadSinceResult.Data], so a short read always means one thing
+     * only: that is all that had been written yet.
+     *
+     * A negative [cursor] or a non-positive [maxBytes] is a programming error, not a runtime
+     * condition -- no legal sequence of calls produces one -- so those throw.
+     */
+    fun readSince(cursor: Long, maxBytes: Int): ReadSinceResult {
+        require(cursor >= 0) { "cursor must not be negative, was $cursor" }
+        require(maxBytes > 0) { "maxBytes must be positive, was $maxBytes" }
+        synchronized(lock) {
+            if (cursor > totalWritten) return ReadSinceResult.StreamReset(cursor, totalWritten)
+
+            val oldestAvailable = totalWritten - minOf(totalWritten, capacityBytes.toLong())
+            if (cursor < oldestAvailable) {
+                return ReadSinceResult.Lapped(
+                    requestedCursor = cursor,
+                    oldestAvailableCursor = oldestAvailable,
+                    lostBytes = oldestAvailable - cursor,
+                )
+            }
+
+            val length = minOf(totalWritten - cursor, maxBytes.toLong()).toInt()
+            if (length == 0) return ReadSinceResult.Data(EMPTY, cursor, cursor, 0L)
+
+            // Allocation + copy are both under the lock, as in snapshot(), but bounded by
+            // `length` (<= maxBytes) rather than by capacityBytes -- see the doc above.
+            val result = ByteArray(length)
+            val startPos = (cursor % capacityBytes).toInt()
+            val firstPart = minOf(length, capacityBytes - startPos)
+            System.arraycopy(data, startPos, result, 0, firstPart)
+            val secondPart = length - firstPart
+            if (secondPart > 0) {
+                System.arraycopy(data, 0, result, firstPart, secondPart)
+            }
+
+            val nextCursor = cursor + length
+            return ReadSinceResult.Data(
+                bytes = result,
+                startCursor = cursor,
+                nextCursor = nextCursor,
+                remainingBytes = totalWritten - nextCursor,
+            )
+        }
+    }
+
     /** Must be called with [lock] held. Interpolates/extrapolates from the closest marker. */
     private fun estimateTimestampLocked(streamOffset: Long): Long {
         if (markerCount == 0) return clock()
@@ -246,5 +431,8 @@ class RingBuffer(
     private companion object {
         const val MARKER_CAPACITY = 8192
         const val MILLIS_PER_SECOND = 1000L
+
+        /** Shared empty payload so an idle [readSince] poll allocates nothing at all. */
+        val EMPTY = ByteArray(0)
     }
 }
