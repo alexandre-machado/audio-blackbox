@@ -50,7 +50,7 @@ class SettingsViewModelTest {
     fun `incrementPending moves by the step and stops at the maximum bound`() = runTest(testDispatcher) {
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Idle),
-            capacityMinutesFlow = MutableStateFlow(55),
+            capacityMinutesFlow = MutableStateFlow(40),
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -58,12 +58,12 @@ class SettingsViewModelTest {
 
         vm.incrementPending()
         runCurrent()
-        assertEquals(60, observed.last().retentionStepper.pendingMinutes)
-        assertFalse("60 is the max -- + must now be disabled", observed.last().retentionStepper.canIncrement)
+        assertEquals(45, observed.last().retentionStepper.pendingMinutes)
+        assertFalse("45 is the interim max (issue #72) -- + must now be disabled", observed.last().retentionStepper.canIncrement)
 
         vm.incrementPending()
         runCurrent()
-        assertEquals("incrementing past the max must not overshoot it", 60, observed.last().retentionStepper.pendingMinutes)
+        assertEquals("incrementing past the max must not overshoot it", 45, observed.last().retentionStepper.pendingMinutes)
 
         job.cancel()
     }
@@ -362,10 +362,10 @@ class SettingsViewModelTest {
 
     @Test
     fun `mapUiState reports approxPendingRamMb from the pending value, not the committed one`() {
-        val state = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 60, pendingConfirmationMinutes = null)
+        val state = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 45, pendingConfirmationMinutes = null)
         assertTrue(
-            "60 min should be roughly the documented ~115 MB, not 30 min's ~58 MB",
-            state.retentionStepper.approxPendingRamMb in 100..130,
+            "45 min should be roughly the documented ~86 MB, not 30 min's ~58 MB",
+            state.retentionStepper.approxPendingRamMb in 75..95,
         )
     }
 

@@ -69,15 +69,26 @@ class RingBufferSnapshotLockBenchmarkTest {
         // [AudioConfig.RETENTION_WINDOW_MIN_MINUTES, AudioConfig.RETENTION_WINDOW_MAX_MINUTES],
         // at the real default 16kHz/mono format, plus 60min at a hypothetical 44.1kHz/stereo
         // format (see class doc for why that one is hypothetical).
-        val uiRetentionWindowsMinutes = listOf(5, 15, 30, 60)
-        val configs = uiRetentionWindowsMinutes.map { minutes ->
+        // 60 is kept in this list even though issue #72's interim clamp (this change) lowered
+        // AudioConfig.RETENTION_WINDOW_MAX_MINUTES to 45, so 60 is no longer UI-selectable -- it
+        // stays here specifically *because* it is the value that OOMs, as a permanent record of the
+        // hazard the clamp exists to avoid (`reachableViaUiToday = false` for it now, unlike before
+        // this change).
+        val benchmarkedRetentionWindowsMinutes = listOf(5, 15, 30, 45, 60)
+        val configs = benchmarkedRetentionWindowsMinutes.map { minutes ->
             BenchConfig(
-                label = "16kHz/mono/${minutes}min (REAL: UI-selectable retention window" +
-                    (if (minutes == 60) ", OOMs on real device -- see issue #72" else "") + ")",
+                label = "16kHz/mono/${minutes}min (" +
+                    (
+                        if (minutes == 60) {
+                            "NO LONGER UI-selectable since issue #72's interim clamp -- OOMs on real device"
+                        } else {
+                            "REAL: UI-selectable retention window"
+                        }
+                        ) + ")",
                 sampleRateHz = 16_000,
                 channelCount = 1,
                 bufferDurationMinutes = minutes,
-                reachableViaUiToday = true,
+                reachableViaUiToday = minutes != 60,
             )
         } + BenchConfig(
             label = "44.1kHz/stereo/60min (HYPOTHETICAL: no UI path sets this today)",

@@ -61,7 +61,7 @@ data class AudioSnapshot(
  * | 16 kHz/mono/5 min | Yes | 6.4 -- 7.3 ms | 90 ms (CI emulator) / **120 ms (Samsung S25)** |
  * | 16 kHz/mono/15 min | Yes | 14.8 -- 18.6 ms | 90 ms / **120 ms** |
  * | 16 kHz/mono/30 min (today's practical ceiling) | Yes | 30.6 -- 35.5 ms | 90 ms / **120 ms** |
- * | 16 kHz/mono/60 min (offered by the UI) | **No -- OOMs on real device, issue #72** | 16.1 -- 72.8 ms | 90 ms / **120 ms** |
+ * | 16 kHz/mono/60 min (no longer offered by the UI -- issue #72's interim clamp lowered the max to 45 min after this table was written) | **No -- OOMs on real device, issue #72** | 16.1 -- 72.8 ms | 90 ms / **120 ms** |
  * | 44.1 kHz/stereo/60 min | **Hypothetical -- no UI path sets this** | 66.6 -- 242.9 ms | 91 ms / **121 ms** |
  *
  * `AudioRecord` headroom depends only on sample rate/channel count, not on retention window, so

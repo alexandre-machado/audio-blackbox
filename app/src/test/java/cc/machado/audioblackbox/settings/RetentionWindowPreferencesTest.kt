@@ -69,7 +69,7 @@ class RetentionWindowPreferencesTest {
         val firstJob = SupervisorJob()
         val firstScope = CoroutineScope(firstJob)
         val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
-        DataStoreRetentionWindowPreferences(firstDataStore).setBufferDurationMinutes(60)
+        DataStoreRetentionWindowPreferences(firstDataStore).setBufferDurationMinutes(45)
         // Cancelling this scope is what actually stands in for "the process died" -- DataStore
         // refuses a second live instance on the same file otherwise (by design, to catch real
         // multi-instance bugs), so this is not incidental test cleanup, it is the thing that makes
@@ -87,8 +87,8 @@ class RetentionWindowPreferencesTest {
 
         val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
 
-        assertEquals(60, reloaded.currentBufferDurationMinutes())
-        assertEquals(60, reloaded.bufferDurationMinutesFlow.first())
+        assertEquals(45, reloaded.currentBufferDurationMinutes())
+        assertEquals(45, reloaded.bufferDurationMinutesFlow.first())
     }
 
     @Test
@@ -161,6 +161,52 @@ class RetentionWindowPreferencesTest {
             preferences.currentBufferDurationMinutes(),
         )
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
+    }
+
+    // ---- Issue #72's interim clamp (RETENTION_WINDOW_MAX_MINUTES: 60 -> 45): the three tests
+    // below are the proof this PR's task description asks for. Each writes a value that a build of
+    // this app *before* the clamp could legitimately have persisted (60 was the old MAX itself;
+    // 50/55 were newly reachable once #73 turned the fixed list into a 5-minute-step range). None
+    // of them may throw on load, and each must resolve to a value that satisfies today's
+    // isValidRetentionMinutes -- i.e. at or below the new MAX of 45. Reverting the clamp handling
+    // in RetentionWindowPreferences.kt (resolveStoredRetentionMinutes) while keeping
+    // AudioConfig.RETENTION_WINDOW_MAX_MINUTES at 45 makes these fail: without that handling,
+    // isValidRetentionMinutes(60/55/50) is false and the old code path fell through to
+    // DEFAULT_BUFFER_DURATION_MINUTES (30), not the clamped 45 these assert -- so these tests also
+    // fail against a naive "just lower MAX" change with no migration handling, which is exactly
+    // what they are meant to catch.
+
+    @Test
+    fun `a persisted 60 (the pre-clamp MAX) loads without throwing and clamps down to the new MAX of 45`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(45, preferences.currentBufferDurationMinutes())
+        assertEquals(45, preferences.bufferDurationMinutesFlow.first())
+    }
+
+    @Test
+    fun `a persisted 55 (valid pre-clamp, now above MAX) clamps down to 45 instead of resetting to the default`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 55 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(45, preferences.currentBufferDurationMinutes())
+        assertEquals(45, preferences.bufferDurationMinutesFlow.first())
+    }
+
+    @Test
+    fun `a persisted 50 (valid pre-clamp, now above MAX) clamps down to 45 instead of resetting to the default`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 50 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(45, preferences.currentBufferDurationMinutes())
+        assertEquals(45, preferences.bufferDurationMinutesFlow.first())
     }
 
     @Test
