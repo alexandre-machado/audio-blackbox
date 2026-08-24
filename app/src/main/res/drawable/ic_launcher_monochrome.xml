@@ -22,6 +22,19 @@
   it read as a featureless blob at 48dp (the same "cloud" failure the
   README already documents for a fused Candidate B), so the boundary
   was rebuilt as four distinct primitives instead.
+
+  Safe-zone fix (PR #76 review): the first cut of these coordinates
+  reached 41-43dp from the icon's center (54,54) on three of the four
+  shapes (base plate, upright box, connector nub) against a 33dp
+  guaranteed-safe radius (66dp safe circle) and a 36dp absolute limit
+  (72dp guaranteed circle) - visibly clipped under a circular/squircle
+  themed-icon mask. All four shapes are now the same original layout
+  scaled by 0.74 about the (54,54) center (uniform scale keeps the
+  isometric proportions/recognisability intact, it just shrinks the
+  whole mark rather than distorting it), so the farthest reach is
+  ~31.9dp (base plate), comfortably inside the 33dp safe radius while
+  still filling most of the safe circle. See docs/design/icon/README.md,
+  "Issue #75" section, for the measured before/after per shape.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -31,17 +44,17 @@
     <!-- base plate -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M24.00,70.00 L84.00,70.00 A4.00,4.00 0 0 1 88.00,74.00 L88.00,79.00 A4.00,4.00 0 0 1 84.00,83.00 L24.00,83.00 A4.00,4.00 0 0 1 20.00,79.00 L20.00,74.00 A4.00,4.00 0 0 1 24.00,70.00 Z" />
+        android:pathData="M31.80,65.84 L76.20,65.84 A2.96,2.96 0 0 1 79.16,68.80 L79.16,72.50 A2.96,2.96 0 0 1 76.20,75.46 L31.80,75.46 A2.96,2.96 0 0 1 28.84,72.50 L28.84,68.80 A2.96,2.96 0 0 1 31.80,65.84 Z" />
     <!-- upright box -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M65.00,23.00 L79.00,23.00 A6.00,6.00 0 0 1 85.00,29.00 L85.00,67.00 A6.00,6.00 0 0 1 79.00,73.00 L65.00,73.00 A6.00,6.00 0 0 1 59.00,67.00 L59.00,29.00 A6.00,6.00 0 0 1 65.00,23.00 Z" />
+        android:pathData="M62.14,31.06 L72.50,31.06 A4.44,4.44 0 0 1 76.94,35.50 L76.94,63.62 A4.44,4.44 0 0 1 72.50,68.06 L62.14,68.06 A4.44,4.44 0 0 1 57.70,63.62 L57.70,35.50 A4.44,4.44 0 0 1 62.14,31.06 Z" />
     <!-- horizontal cylinder, front-left -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M36.00,37.00 L44.00,37.00 A11.00,11.00 0 0 1 55.00,48.00 L55.00,48.00 A11.00,11.00 0 0 1 44.00,59.00 L36.00,59.00 A11.00,11.00 0 0 1 25.00,48.00 L25.00,48.00 A11.00,11.00 0 0 1 36.00,37.00 Z" />
+        android:pathData="M40.68,41.42 L46.60,41.42 A8.14,8.14 0 0 1 54.74,49.56 L54.74,49.56 A8.14,8.14 0 0 1 46.60,57.70 L40.68,57.70 A8.14,8.14 0 0 1 32.54,49.56 L32.54,49.56 A8.14,8.14 0 0 1 40.68,41.42 Z" />
     <!-- connector nub -->
     <path
         android:fillColor="#FF000000"
-        android:pathData="M16.00,43.00 L20.00,43.00 A3.00,3.00 0 0 1 23.00,46.00 L23.00,52.00 A3.00,3.00 0 0 1 20.00,55.00 L16.00,55.00 A3.00,3.00 0 0 1 13.00,52.00 L13.00,46.00 A3.00,3.00 0 0 1 16.00,43.00 Z" />
+        android:pathData="M25.88,45.86 L28.84,45.86 A2.22,2.22 0 0 1 31.06,48.08 L31.06,52.52 A2.22,2.22 0 0 1 28.84,54.74 L25.88,54.74 A2.22,2.22 0 0 1 23.66,52.52 L23.66,48.08 A2.22,2.22 0 0 1 25.88,45.86 Z" />
 </vector>
