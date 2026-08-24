@@ -51,27 +51,42 @@ data class AudioConfig(
         // constant only matters before the user has ever chosen anything.
         const val DEFAULT_BUFFER_DURATION_MINUTES = 30
 
-        // Bounded retention-window choices (issue #45). At the default 16 kHz/mono/16-bit config
-        // this is 1.92 MB/minute (sampleRateHz=16_000 * bytesPerFrame=2 * 60 / 1_000_000), so:
+        // Retention-window bounds (issue #73, superseding the fixed-list
+        // RETENTION_WINDOW_OPTIONS_MINUTES from #45/#57): the stepper's domain is a range with a
+        // step, not a set of four choices, so it is expressed as MIN/MAX/STEP here instead of an
+        // enumerated list. A valid value is any multiple of [RETENTION_WINDOW_STEP_MINUTES] in
+        // `[RETENTION_WINDOW_MIN_MINUTES, RETENTION_WINDOW_MAX_MINUTES]` -- see
+        // [cc.machado.audioblackbox.settings.RetentionWindowPreferences] for where that exact
+        // predicate is enforced on both the read and the write side.
+        //
+        // At the default 16 kHz/mono/16-bit config this is 1.92 MB/minute
+        // (sampleRateHz=16_000 * bytesPerFrame=2 * 60 / 1_000_000), so:
         //   5 min  ~= 9.6 MB   -- floor: below this the buffer covers less than the time it takes
         //                         to notice something worth keeping and react.
-        //   15 min ~= 28.8 MB
-        //   30 min ~= 57.6 MB  -- the original hardcoded default, kept as a mid-range option.
-        //   60 min ~= 115.2 MB -- ceiling. This is deliberately the *last* option, not gated
-        //                         behind an extra warning: RecorderService is a foreground
-        //                         service with FOREGROUND_SERVICE_MICROPHONE, which Android keeps
-        //                         at an elevated oom_adj (perceptible/foreground) rather than the
-        //                         cached-process band the low-memory killer clears first, so
-        //                         ~115 MB of resident heap is a poor trade only on very
-        //                         memory-constrained devices, not correctness-breaking on typical
-        //                         hardware. This is asserted from documented Android process
-        //                         priority behavior, not measured on the target device -- that
-        //                         on-device confirmation is `@techlead`'s task, not this change's.
-        // Nothing above 60 is offered: doubling again to 120 min (~230 MB) crosses into territory
-        // where a single background service holding that much RAM becomes a plausible kill target
-        // even at foreground priority, and this product's entire value is "the buffer survives
-        // until the user acts" -- so the bound stops one step short of that risk.
-        val RETENTION_WINDOW_OPTIONS_MINUTES = listOf(5, 15, 30, 60)
+        //   30 min ~= 57.6 MB  -- the original hardcoded default, kept as DEFAULT_BUFFER_DURATION_MINUTES.
+        //   60 min ~= 115.2 MB -- ceiling. Kept at parity with what #45/#57 already offered.
+        //
+        // ## Known hazard this MAX widens -- issue #72 (open, deferred by owner decision)
+        // Before this change only 5/15/30/60 were reachable, so only the exact value 60 could
+        // ever hit issue #72's OOM: `RingBuffer.snapshot()` allocates a second full-size copy on
+        // save, so peak memory is 2x the retention window, not 1x. A 5-minute-step stepper makes
+        // every intermediate value in range reachable for the first time, including 35/40/45/50/55,
+        // which previously could not be selected at all. Measured on a real Samsung S25
+        // (dalvik.vm.heapgrowthlimit=256m):
+        //   30 min -> ~115 MB total (backing + snapshot copy) -- fits
+        //   45 min -> ~173 MB -- likely fits
+        //   50 min -> ~192 MB -- tight
+        //   55 min -> ~211 MB -- tight, may fail
+        //   60 min -> ~230 MB -- fails, OOM observed on-device
+        // This is *not* fixed here: #72 is deferred pending a product-design rework of the export
+        // path (streaming instead of a whole-buffer snapshot copy). MAX is kept at 60 rather than
+        // narrowed to hide the newly-reachable failures, on explicit owner instruction -- the
+        // owner is aware of this trade-off and can move MAX once #72 lands or if the trade-off
+        // changes. Whoever revisits this bound should re-run #72's arithmetic against whatever the
+        // then-current audio config (sample rate/channel count) is, not just copy this table.
+        const val RETENTION_WINDOW_MIN_MINUTES = 5
+        const val RETENTION_WINDOW_MAX_MINUTES = 60
+        const val RETENTION_WINDOW_STEP_MINUTES = 5
 
         private const val BITS_PER_BYTE = 8
         private const val SECONDS_PER_MINUTE = 60

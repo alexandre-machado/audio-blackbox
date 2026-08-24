@@ -21,6 +21,7 @@ import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.PreloadedRetentionWindow
+import cc.machado.audioblackbox.settings.isValidRetentionMinutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -517,9 +518,10 @@ class RecorderService : Service() {
          * discards a buffer that is already empty.
          */
         fun rebuildEngineIfIdle(newBufferDurationMinutes: Int): Boolean {
-            require(newBufferDurationMinutes in AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES) {
-                "newBufferDurationMinutes must be one of " +
-                    "${AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES}, was $newBufferDurationMinutes"
+            require(isValidRetentionMinutes(newBufferDurationMinutes)) {
+                "newBufferDurationMinutes must be in " +
+                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} " +
+                    "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
             }
             if (_captureState.value !is CaptureState.Idle) return false
             val newConfig = AudioConfig(bufferDurationMinutes = newBufferDurationMinutes)

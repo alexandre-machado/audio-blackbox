@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -43,6 +44,8 @@ import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.ui.dashboard.DashboardRoute
 import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
 import cc.machado.audioblackbox.ui.onboarding.OnboardingScreen
+import cc.machado.audioblackbox.ui.settings.SettingsRoute
+import cc.machado.audioblackbox.ui.settings.SettingsViewModel
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import androidx.core.content.ContextCompat
 
@@ -85,30 +88,71 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AudioBlackboxTheme {
-                Scaffold { innerPadding ->
+                // Issue #73, PR #74 round 2: hoisted here (not inside MainScreenWithBottomBar,
+                // which no longer exists) so both Scaffold's `bottomBar` slot and its `content`
+                // slot below can read/drive the same selected tab -- Scaffold requires the bar and
+                // the content it insets to be siblings passed to it directly, not nested inside a
+                // Box the way the previous, buggy layout had it.
+                var selectedDestination by rememberSaveable { mutableStateOf(Destination.DASHBOARD) }
+
+                Scaffold(
+                    bottomBar = {
+                        // Only shown once past onboarding -- same gate the content slot below uses.
+                        // Scaffold measures this composable structurally on every layout pass and
+                        // derives the content slot's `innerPadding` from that real measurement (see
+                        // FloatingBottomBar's class doc for why this replaced a manual `Box` +
+                        // `onSizeChanged` overlay that PR #74 review found left the bar drawn over
+                        // Dashboard content on a real device).
+                        if (stepState == OnboardingStep.DONE) {
+                            FloatingBottomBar(
+                                selected = selectedDestination,
+                                onSelect = { selectedDestination = it },
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                    },
+                ) { innerPadding ->
                     if (stepState == OnboardingStep.DONE) {
+                        val stopEngine: () -> Unit = {
+                            ContextCompat.startForegroundService(
+                                this@MainActivity,
+                                RecorderService.stopIntent(this@MainActivity),
+                            )
+                        }
                         val dashboardViewModelFactory = remember {
                             viewModelFactory {
                                 initializer {
                                     DashboardViewModel(
                                         onStartEngine = { startRecordingEngine() },
-                                        onStopEngine = {
-                                            ContextCompat.startForegroundService(
-                                                this@MainActivity,
-                                                RecorderService.stopIntent(this@MainActivity),
-                                            )
-                                        },
+                                        onStopEngine = stopEngine,
                                         onSaveIntent = { minutes ->
                                             ContextCompat.startForegroundService(
                                                 this@MainActivity,
                                                 RecorderService.saveIntent(this@MainActivity, minutes),
                                             )
                                         },
+                                    )
+                                }
+                            }
+                        }
+                        // Issue #73: the retention control moved off the dashboard into its own
+                        // Settings screen/ViewModel -- only SettingsViewModel needs
+                        // retentionWindowPreferences now, DashboardViewModel no longer touches it.
+                        val settingsViewModelFactory = remember {
+                            viewModelFactory {
+                                initializer {
+                                    SettingsViewModel(
+                                        onStopEngine = stopEngine,
                                         retentionWindowPreferences = DataStoreRetentionWindowPreferences(this@MainActivity),
                                     )
                                 }
                             }
                         }
+                        // A single `.padding(innerPadding)` here -- covering the system-bar insets
+                        // *and* the floating bar's real measured height in one value Scaffold
+                        // computed itself -- is the entire fix for "content must not be obscured by
+                        // the bar": neither screen below needs its own contentPadding plumbing for
+                        // this bar, since this Column already reserves the space above it.
                         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                             if (!isIgnoringBatteryOptimizationsState) {
                                 BatteryOptimizationBanner(
@@ -117,7 +161,14 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
                             }
-                            DashboardRoute(viewModel = viewModel(factory = dashboardViewModelFactory))
+                            when (selectedDestination) {
+                                Destination.DASHBOARD -> DashboardRoute(
+                                    viewModel = viewModel(factory = dashboardViewModelFactory),
+                                )
+                                Destination.SETTINGS -> SettingsRoute(
+                                    viewModel = viewModel(factory = settingsViewModelFactory),
+                                )
+                            }
                         }
                     } else {
                         OnboardingScreen(

@@ -5,12 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.service.RecorderService
-import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
-import cc.machado.audioblackbox.settings.RetentionWindowPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -18,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -60,24 +56,16 @@ class DashboardViewModel(
     private val bufferedDurationMillisProvider: () -> Long? = { RecorderService.engine.bufferedDurationMillis() },
     // Issue #40 item 3 (`@rev` finding on issue #6), extended by issue #45: reads
     // RecorderService's real, *reactive* configured capacity instead of a bare constant or a
-    // one-time snapshot, so both the buffer denominator and the retention selector's "selected"
-    // option stay correct across a rebuild without needing this ViewModel recreated.
+    // one-time snapshot, so the buffer denominator stays correct across a retention-window rebuild
+    // without needing this ViewModel recreated. (The retention selector itself moved to
+    // cc.machado.audioblackbox.ui.settings.SettingsViewModel as of issue #73, which reads this
+    // same RecorderService.bufferDurationMinutesFlow independently.)
     private val capacityMinutesFlow: StateFlow<Int> = RecorderService.bufferDurationMinutesFlow,
     private val exportState: StateFlow<ExportState> = RecorderService.exportState,
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
     private val onSaveIntent: (minutes: Int) -> Unit = {},
-    // Issue #45: persists the user's retention-window choice. Defaults to an in-memory fake (this
-    // constructor deliberately takes no Context -- see the class doc above); MainActivity injects
-    // the real DataStore-backed instance.
-    private val retentionWindowPreferences: RetentionWindowPreferences = InMemoryRetentionWindowPreferences(),
-    // Issue #45: rebuilds RecorderService's process-lifetime engine at the new capacity. Returns
-    // `false` (and this ViewModel does nothing further) if the engine was not Idle when called --
-    // see RecorderService.rebuildEngineIfIdle's doc. Callers of this ViewModel's own
-    // confirmRetentionWindowChange() already stop the engine and wait for Idle first, so that
-    // `false` path is only ever reachable by a genuine race, not the normal flow.
-    private val onRebuildEngine: (minutes: Int) -> Boolean = RecorderService::rebuildEngineIfIdle,
 ) : ViewModel() {
 
     // The most recent terminal ExportState (Success/Error) the user has explicitly dismissed --
@@ -135,12 +123,6 @@ class DashboardViewModel(
     // *subsequent* dispatch's own in-flight window, clearing that later call's guard before its
     // own confirmation or its own backstop has actually arrived.
     private var dispatchTimeoutJob: Job? = null
-
-    // Non-null while a retention-window change is waiting on the user's explicit discard
-    // confirmation (issue #45) -- set by selectRetentionWindow() when the engine is not Idle,
-    // cleared by confirmRetentionWindowChange()/cancelRetentionWindowChange(). See those methods'
-    // docs for the full flow; this is only the piece of state [uiState] renders.
-    private val _pendingRetentionConfirmationMinutes = MutableStateFlow<Int?>(null)
 
     // True from the moment toggleEngine() dispatches a start/stop request until captureState is
     // observed to actually change (issue #46) -- the *only* local state this class keeps for the
@@ -200,30 +182,29 @@ class DashboardViewModel(
         }
     }
 
-    // Bundles capacityMinutesFlow + the pending-confirmation flag + the engine-switch pending flag
-    // (issue #46) into one Flow<Triple<..>> because kotlinx.coroutines.flow.combine only has a
-    // direct overload up to 5 flows, and this ViewModel already needs 4 others below (captureState,
-    // bufferedMillisFlow, exportState, _dismissedExportState) -- nesting here keeps the outer
-    // combine within that limit rather than reaching for the vararg overload, which requires every
-    // flow to share one element type.
-    private val retentionInputsFlow: Flow<Triple<Int, Int?, Boolean>> =
-        combine(capacityMinutesFlow, _pendingRetentionConfirmationMinutes, _engineTogglePending) {
-            capacity, pendingRetention, enginePending -> Triple(capacity, pendingRetention, enginePending)
-        }
+    // Bundles capacityMinutesFlow + the engine-switch pending flag (issue #46) into one
+    // Flow<Pair<..>> because kotlinx.coroutines.flow.combine only has a direct overload up to 5
+    // flows, and this ViewModel already needs 4 others below (captureState, bufferedMillisFlow,
+    // exportState, _dismissedExportState) -- nesting here keeps the outer combine within that
+    // limit rather than reaching for the vararg overload, which requires every flow to share one
+    // element type. (Issue #73 removed a third member of this bundle -- the retention discard
+    // confirmation flag -- when the retention control moved to SettingsViewModel; kept as a Pair
+    // rather than un-nested back to a plain 6-arg combine for the same reason it existed before.)
+    private val capacityAndEngineTogglePendingFlow: Flow<Pair<Int, Boolean>> =
+        combine(capacityMinutesFlow, _engineTogglePending) { capacity, enginePending -> capacity to enginePending }
 
     val uiState: StateFlow<DashboardUiState> = combine(
         captureState,
         bufferedMillisFlow,
         exportState,
         _dismissedExportState,
-        retentionInputsFlow,
-    ) { capture, bufferedMillis, export, dismissed, (capacityMinutes, pendingRetentionMinutes, enginePending) ->
+        capacityAndEngineTogglePendingFlow,
+    ) { capture, bufferedMillis, export, dismissed, (capacityMinutes, enginePending) ->
         mapUiState(
             capture,
             bufferedMillis,
             capacityMinutes,
             mapSaveUiState(export, dismissed),
-            pendingRetentionMinutes,
             enginePending,
         )
     }.stateIn(
@@ -234,7 +215,6 @@ class DashboardViewModel(
             bufferedDurationMillisProvider() ?: 0L,
             capacityMinutesFlow.value,
             mapSaveUiState(exportState.value, _dismissedExportState.value),
-            _pendingRetentionConfirmationMinutes.value,
             _engineTogglePending.value,
         ),
     )
@@ -358,72 +338,6 @@ class DashboardViewModel(
         }
     }
 
-    /**
-     * User tapped a retention-window option (issue #45). A no-op if [minutes] already matches the
-     * current capacity, or if a confirmation is already pending -- a second tap while the dialog
-     * is showing must not silently swap which change is pending.
-     *
-     * If capture is currently [CaptureState.Idle], the change applies immediately: an Idle engine
-     * holds no buffered audio (see [RecorderService.rebuildEngineIfIdle]'s doc -- `stop()` already
-     * clears the ring buffer before reaching Idle), so there is nothing to lose and no reason to
-     * make the user confirm a no-op-risk action.
-     *
-     * Otherwise (Recording/Paused/Error with audio still buffered) this only records the request
-     * in [uiState] as [RetentionSectionUiState.pendingConfirmationMinutes] -- [DashboardScreen]
-     * renders that as the discard-warning dialog, and nothing is persisted or rebuilt until
-     * [confirmRetentionWindowChange] is called. This is the enforcement point the whole feature
-     * exists for: never discard the user's buffered audio because they opened a settings screen.
-     */
-    fun selectRetentionWindow(minutes: Int) {
-        if (minutes == capacityMinutesFlow.value) return
-        if (_pendingRetentionConfirmationMinutes.value != null) return
-        if (captureState.value is CaptureState.Idle) {
-            applyRetentionWindow(minutes)
-        } else {
-            _pendingRetentionConfirmationMinutes.value = minutes
-        }
-    }
-
-    /** Confirms the pending retention-window change from [selectRetentionWindow], accepting the
-     * loss of whatever is currently buffered. No-op if nothing is pending (a stale double-tap on a
-     * dialog that already closed).
-     *
-     * Stops the engine first ([onStopEngine]) and suspends until [captureState] actually reaches
-     * [CaptureState.Idle] before applying the new window -- this is the same discard [onStopEngine]
-     * would already cause on its own (see [RecorderService.rebuildEngineIfIdle]'s doc: `stop()`
-     * clears the ring buffer before Idle), so confirming this dialog costs the user nothing beyond
-     * what tapping "Parar motor" already would have. */
-    fun confirmRetentionWindowChange() {
-        val minutes = _pendingRetentionConfirmationMinutes.value ?: return
-        _pendingRetentionConfirmationMinutes.value = null
-        onStopEngine()
-        viewModelScope.launch {
-            captureState.first { it is CaptureState.Idle }
-            applyRetentionWindow(minutes)
-        }
-    }
-
-    /** Lets the user back out of the discard-warning dialog without changing anything -- the
-     * engine keeps running exactly as it was. */
-    fun cancelRetentionWindowChange() {
-        _pendingRetentionConfirmationMinutes.value = null
-    }
-
-    /** Persists [minutes] then rebuilds RecorderService's engine at that capacity. Only ever
-     * called while the engine is actually Idle (see the two call sites above), so
-     * [onRebuildEngine] succeeding is the expected case; a `false` return (the engine somehow
-     * transitioned back to Recording/Paused in the narrow window between the Idle check and this
-     * call -- e.g. an OS-redelivered start Intent) is logged nowhere further here because there is
-     * nothing actionable to surface: the persisted preference and the running engine's actual
-     * capacity would disagree until the user tries again, which is a narrow, self-correcting race,
-     * not a silent data-loss path. */
-    private fun applyRetentionWindow(minutes: Int) {
-        viewModelScope.launch {
-            retentionWindowPreferences.setBufferDurationMinutes(minutes)
-            onRebuildEngine(minutes)
-        }
-    }
-
     companion object {
         private const val DEFAULT_TICK_MILLIS = 500L
         private const val STOP_TIMEOUT_MILLIS = 5_000L
@@ -528,40 +442,15 @@ class DashboardViewModel(
             }
         }
 
-        /**
-         * Builds the retention-window selector (issue #45) from the currently configured
-         * capacity: [RetentionWindowOption.selected] marks the one entry matching
-         * [currentCapacityMinutes] -- [RecorderService.bufferDurationMinutes]/`Flow`, never a
-         * second, independently-tracked "which one is chosen" value, so this can never disagree
-         * with what the engine is actually running at. [RetentionWindowOption.approxRamMb] is the
-         * exact arithmetic [cc.machado.audioblackbox.audio.AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES]'s
-         * doc comment justifies the bounds against -- computed via `AudioConfig.totalBufferBytes`
-         * rather than a second hardcoded table, so it can never drift from the real sizing formula.
-         */
-        fun computeRetentionSection(
-            currentCapacityMinutes: Int,
-            pendingConfirmationMinutes: Int?,
-            optionsMinutes: List<Int> = AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES,
-        ): RetentionSectionUiState {
-            val options = optionsMinutes.map { minutes ->
-                RetentionWindowOption(
-                    minutes = minutes,
-                    approxRamMb = (AudioConfig(bufferDurationMinutes = minutes).totalBufferBytes / BYTES_PER_MB).toInt(),
-                    selected = minutes == currentCapacityMinutes,
-                )
-            }
-            return RetentionSectionUiState(options = options, pendingConfirmationMinutes = pendingConfirmationMinutes)
-        }
-
         /** The single state-mapping oracle issue #6 requires be unit-tested: engine state +
-         * buffered duration (+ the in-flight save outcome, + issue #45's retention selector) ->
-         * the exact [DashboardUiState] the screen renders. */
+         * buffered duration + the in-flight save outcome -> the exact [DashboardUiState] the
+         * screen renders. Issue #73 moved the retention selector (formerly folded in here per
+         * issue #45) to [cc.machado.audioblackbox.ui.settings.SettingsViewModel]'s own oracle. */
         fun mapUiState(
             captureState: CaptureState,
             bufferedMillis: Long,
             capacityMinutes: Int,
             saveState: SaveUiState,
-            pendingRetentionConfirmationMinutes: Int? = null,
             enginePending: Boolean = false,
         ): DashboardUiState {
             val capacityMillis = capacityMinutes.toLong() * MILLIS_PER_MINUTE
@@ -575,12 +464,10 @@ class DashboardViewModel(
                 isBufferFull = clampedBufferedMillis >= capacityMillis,
                 windowOptions = computeWindowOptions(clampedBufferedMillis),
                 saveState = saveState,
-                retentionSection = computeRetentionSection(capacityMinutes, pendingRetentionConfirmationMinutes),
             )
         }
 
         private const val MILLIS_PER_MINUTE = 60_000L
-        private const val BYTES_PER_MB = 1_000_000L
 
         /** Standard [ViewModelProvider.Factory] wiring, used from [cc.machado.audioblackbox.ui.MainActivity]'s
          * `viewModel(factory = ...)` call. Not the no-arg-constructor default factory: this

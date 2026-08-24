@@ -15,10 +15,13 @@ import org.junit.Test
  * step to isolate. This benchmark times the whole call for that reason, not as an approximation.
  *
  * ## Configs measured
- * All at 16 kHz/mono (the real default sample format) across every window
- * [AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES] offers (5/15/30/60 min), plus one hypothetical
+ * All at 16 kHz/mono (the real default sample format) across the bounds
+ * [AudioConfig.RETENTION_WINDOW_MIN_MINUTES]/[AudioConfig.RETENTION_WINDOW_MAX_MINUTES] allow
+ * (5/15/30/60 min -- the four values this benchmark predates issue #73's 5-minute-step stepper
+ * and has not been re-run against every newly-reachable intermediate value), plus one hypothetical
  * config:
- * - 16 kHz / mono / 5, 15, 30, 60 min: every retention window the UI actually lets a user select.
+ * - 16 kHz / mono / 5, 15, 30, 60 min: four representative retention windows within the range the
+ *   UI lets a user select.
  *   30 min is today's practical ceiling -- the largest window that both fits the app's Dalvik heap
  *   and is UI-selectable (60 min hits `OutOfMemoryError` on the real Samsung S25 device -- see
  *   issue #72 -- so it is *offered* but does not currently *work*). Measuring all four windows,
@@ -62,9 +65,10 @@ class RingBufferSnapshotLockBenchmarkTest {
 
     @Test
     fun `benchmark snapshot lock hold time at every UI-selectable window plus a hypothetical config`() {
-        // AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES = [5, 15, 30, 60] -- every window the UI
-        // actually lets a user pick, at the real default 16kHz/mono format, plus 60min at a
-        // hypothetical 44.1kHz/stereo format (see class doc for why that one is hypothetical).
+        // 5/15/30/60 -- four representative windows within
+        // [AudioConfig.RETENTION_WINDOW_MIN_MINUTES, AudioConfig.RETENTION_WINDOW_MAX_MINUTES],
+        // at the real default 16kHz/mono format, plus 60min at a hypothetical 44.1kHz/stereo
+        // format (see class doc for why that one is hypothetical).
         val uiRetentionWindowsMinutes = listOf(5, 15, 30, 60)
         val configs = uiRetentionWindowsMinutes.map { minutes ->
             BenchConfig(
