@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.service.RecorderService
+import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,15 +84,23 @@ class SettingsViewModel(
         capacityMinutesFlow,
         _pendingMinutes,
         _pendingConfirmationMinutes,
-    ) { committed, pending, pendingConfirmation ->
-        mapUiState(committed, pending, pendingConfirmation)
+        retentionWindowPreferences.clampNoticeFlow,
+    ) { committed, pending, pendingConfirmation, clampNotice ->
+        mapUiState(committed, pending, pendingConfirmation, clampNotice)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        // clampNotice starts at null here, not whatever retentionWindowPreferences.clampNoticeFlow
+        // would eventually emit -- issue #84's notice is never urgent enough to justify a
+        // synchronous DataStore read at construction (see AudioBlackboxApplication's doc for the
+        // one place a blocking DataStore read is allowed, and it is not this one); the real value
+        // arrives a moment later once clampNoticeFlow's first DataStore emission lands, same as
+        // every other DataStore-backed value this screen already shows asynchronously.
         initialValue = mapUiState(
             capacityMinutesFlow.value,
             _pendingMinutes.value,
             _pendingConfirmationMinutes.value,
+            clampNotice = null,
         ),
     )
 
@@ -177,6 +186,16 @@ class SettingsViewModel(
         }
     }
 
+    /** [SettingsScreen]'s clamp-down notice dialog calls this on dismiss (issue #84) -- the only
+     * way [SettingsUiState.clampNotice] is ever cleared for good. Persisted through
+     * [RetentionWindowPreferences.acknowledgeClampNotice], not just local state, so the notice
+     * stays gone across process restarts, not just for the rest of this screen visit. */
+    fun acknowledgeClampNotice() {
+        viewModelScope.launch {
+            retentionWindowPreferences.acknowledgeClampNotice()
+        }
+    }
+
     companion object {
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
@@ -187,6 +206,7 @@ class SettingsViewModel(
             committedMinutes: Int,
             pendingMinutes: Int,
             pendingConfirmationMinutes: Int?,
+            clampNotice: ClampNotice? = null,
         ): SettingsUiState {
             val stepper = RetentionStepperUiState(
                 pendingMinutes = pendingMinutes,
@@ -199,7 +219,7 @@ class SettingsViewModel(
                 isDirty = pendingMinutes != committedMinutes,
                 pendingConfirmationMinutes = pendingConfirmationMinutes,
             )
-            return SettingsUiState(retentionStepper = stepper)
+            return SettingsUiState(retentionStepper = stepper, clampNotice = clampNotice)
         }
 
         /** Standard [ViewModelProvider.Factory] wiring, used from [cc.machado.audioblackbox.ui.MainActivity]'s

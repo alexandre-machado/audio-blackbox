@@ -1,5 +1,7 @@
 package cc.machado.audioblackbox.ui.settings
 
+import cc.machado.audioblackbox.settings.ClampNotice
+
 /**
  * One frame of the retention stepper (issue #73, superseding the dashboard's fixed-chip selector
  * from #45/#57). [pendingMinutes] is what the stepper currently displays and what the -/+ controls
@@ -41,4 +43,9 @@ data class RetentionStepperUiState(
  * settings addition does not need every call site's signature to change. */
 data class SettingsUiState(
     val retentionStepper: RetentionStepperUiState,
+    /** Issue #84: non-null exactly while there is an unacknowledged notice that this device's
+     * stored retention window was clamped down (e.g. from 60 to 45) by issue #72's interim safety
+     * clamp. [SettingsScreen] renders this as a one-time dialog; dismissing it calls
+     * [SettingsViewModel.acknowledgeClampNotice], after which this stays `null` for good. */
+    val clampNotice: ClampNotice? = null,
 )
