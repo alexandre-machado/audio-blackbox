@@ -239,13 +239,18 @@ class RingBufferReadSinceConcurrencyTest {
                 if (!firstChunkWritten.await(30, TimeUnit.SECONDS)) {
                     throw AssertionError("writer never produced the first chunk")
                 }
-                val first = buffer.readSince(cursor = 0)
+                val first = buffer.readSince(cursor = 0, maxBytes = capacityBytes)
                 firstRead.set(first)
                 drainReadOnce.countDown()
                 if (!writerLapped.await(30, TimeUnit.SECONDS)) {
                     throw AssertionError("writer never lapped the buffer")
                 }
-                secondRead.set(buffer.readSince((first as ReadSinceResult.Data).nextCursor))
+                secondRead.set(
+                    buffer.readSince(
+                        (first as ReadSinceResult.Data).nextCursor,
+                        maxBytes = capacityBytes,
+                    )
+                )
             } catch (t: Throwable) {
                 drainFailure.set(t)
             }
@@ -283,7 +288,7 @@ class RingBufferReadSinceConcurrencyTest {
 
         // And the documented recovery path actually works: resuming where Lapped points yields
         // exactly the audio that survived, so a consumer can report the gap and carry on.
-        val resumed = buffer.readSince(second.oldestAvailableCursor)
+        val resumed = buffer.readSince(second.oldestAvailableCursor, maxBytes = capacityBytes)
         assertTrue("resume from oldestAvailableCursor must succeed, got $resumed", resumed is ReadSinceResult.Data)
         assertEquals(capacityBytes, (resumed as ReadSinceResult.Data).bytes.size)
     }

@@ -19,6 +19,14 @@ import org.junit.Test
  */
 class RingBufferReadSinceTest {
 
+    /**
+     * "Larger than anything this test's buffer can hold", used where a case is about *what* comes
+     * back rather than about chunking. `maxBytes` has no default (PR #86 review): the signature
+     * makes every caller state a bound, so these tests state theirs too, and the ones that are
+     * genuinely about the bound ([maxBytes caps a single read...]) pass a small explicit value.
+     */
+    private val ample = 1 shl 20
+
     @Test
     fun `successive reads threading the returned cursor reconstruct the stream gap-free and in order`() {
         // Oracle: fails if readSince ever skips, repeats or reorders bytes across calls -- i.e. if
@@ -32,7 +40,7 @@ class RingBufferReadSinceTest {
         val drained = ArrayList<Byte>()
         for (value in 1..12) {
             buffer.write(byteArrayOf(value.toByte()))
-            val result = buffer.readSince(cursor)
+            val result = buffer.readSince(cursor, maxBytes = ample)
             assertTrue("expected Data, got $result", result is ReadSinceResult.Data)
             result as ReadSinceResult.Data
             assertEquals(cursor, result.startCursor)
@@ -55,7 +63,7 @@ class RingBufferReadSinceTest {
         buffer.write(byteArrayOf(1, 2, 3, 4, 5, 6))
         buffer.write(byteArrayOf(7, 8))
 
-        val result = buffer.readSince(cursor = 2) as ReadSinceResult.Data
+        val result = buffer.readSince(cursor = 2, maxBytes = ample) as ReadSinceResult.Data
 
         assertArrayEquals(byteArrayOf(3, 4, 5, 6, 7, 8), result.bytes)
         assertEquals(8L, result.nextCursor)
@@ -73,7 +81,7 @@ class RingBufferReadSinceTest {
         val cursor = buffer.writeCursor()
         buffer.write(ByteArray(10) { 9 })
 
-        val result = buffer.readSince(cursor) as ReadSinceResult.Data
+        val result = buffer.readSince(cursor, maxBytes = ample) as ReadSinceResult.Data
 
         assertEquals(10, result.bytes.size)
         assertArrayEquals(ByteArray(10) { 9 }, result.bytes)
@@ -115,7 +123,7 @@ class RingBufferReadSinceTest {
         val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
         buffer.write(byteArrayOf(1, 2, 3))
 
-        val result = buffer.readSince(cursor = 3) as ReadSinceResult.Data
+        val result = buffer.readSince(cursor = 3, maxBytes = ample) as ReadSinceResult.Data
 
         assertEquals(0, result.bytes.size)
         assertEquals(3L, result.startCursor)
@@ -133,7 +141,7 @@ class RingBufferReadSinceTest {
         val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
         for (value in 1..25) buffer.write(byteArrayOf(value.toByte()))
 
-        val result = buffer.readSince(cursor = 4)
+        val result = buffer.readSince(cursor = 4, maxBytes = ample)
 
         assertTrue("expected Lapped, got $result", result is ReadSinceResult.Lapped)
         result as ReadSinceResult.Lapped
@@ -150,8 +158,8 @@ class RingBufferReadSinceTest {
         val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
         for (value in 1..25) buffer.write(byteArrayOf(value.toByte()))
 
-        val lapped = buffer.readSince(cursor = 0) as ReadSinceResult.Lapped
-        val resumed = buffer.readSince(lapped.oldestAvailableCursor) as ReadSinceResult.Data
+        val lapped = buffer.readSince(cursor = 0, maxBytes = ample) as ReadSinceResult.Lapped
+        val resumed = buffer.readSince(lapped.oldestAvailableCursor, maxBytes = ample) as ReadSinceResult.Data
 
         // Bytes 16..25 are the ten values still in the ring after 25 single-byte writes.
         assertArrayEquals((16..25).map { it.toByte() }.toByteArray(), resumed.bytes)
@@ -167,10 +175,35 @@ class RingBufferReadSinceTest {
         val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
         for (value in 1..25) buffer.write(byteArrayOf(value.toByte()))
 
-        val result = buffer.readSince(cursor = 15)
+        val result = buffer.readSince(cursor = 15, maxBytes = ample)
 
         assertTrue("expected Data at the exact boundary, got $result", result is ReadSinceResult.Data)
         assertEquals(10, (result as ReadSinceResult.Data).bytes.size)
+    }
+
+    @Test
+    fun `one byte older than the oldest buffered byte is lapped, losing exactly that one byte`() {
+        // Oracle: the other side of the boundary, and the case PR #86's review found missing --
+        // every other Lapped test sits far from the edge (smallest loss asserted elsewhere is 11
+        // bytes), so a comparison loosened by one (`cursor < oldestAvailable - 1`) passed the
+        // whole suite. That mutation is not benign: at exactly this cursor it returns a Data whose
+        // copy starts one slot *behind* the oldest live byte, so the caller receives already-
+        // overwritten audio as its first byte and silently loses the newest one -- corruption and
+        // loss dressed up as a good read, which is the failure issue #51 exists to make
+        // impossible. This test fails on any relaxation of that comparison, in either direction,
+        // and it pins the smallest possible loss report: exactly one byte.
+        val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
+        for (value in 1..25) buffer.write(byteArrayOf(value.toByte()))
+        val oldest = buffer.oldestCursor()
+        assertEquals(15L, oldest)
+
+        val result = buffer.readSince(oldest - 1, maxBytes = ample)
+
+        assertTrue("one byte past the edge must be Lapped, got $result", result is ReadSinceResult.Lapped)
+        result as ReadSinceResult.Lapped
+        assertEquals(14L, result.requestedCursor)
+        assertEquals(oldest, result.oldestAvailableCursor)
+        assertEquals(1L, result.lostBytes)
     }
 
     @Test
@@ -181,14 +214,14 @@ class RingBufferReadSinceTest {
         // caller. Fails the moment lapping is expressed as a shorter Data.
         val plentyOfRoom = RingBuffer(capacityBytes = 100, bytesPerSecond = 1000)
         plentyOfRoom.write(ByteArray(5) { 1 })
-        val shortRead = plentyOfRoom.readSince(cursor = 0)
+        val shortRead = plentyOfRoom.readSince(cursor = 0, maxBytes = ample)
 
         val lappedBuffer = RingBuffer(capacityBytes = 5, bytesPerSecond = 1000)
         // 12 separate writes, not one 60-byte write: a single write larger than the whole buffer
         // is truncated to its tail by write()'s own documented rule, which would leave
         // totalWritten at 5 and nothing lapped at all.
         repeat(12) { lappedBuffer.write(ByteArray(5) { 1 }) }
-        val lapped = lappedBuffer.readSince(cursor = 0)
+        val lapped = lappedBuffer.readSince(cursor = 0, maxBytes = ample)
 
         assertTrue("a genuinely short read must stay Data", shortRead is ReadSinceResult.Data)
         assertEquals(5, (shortRead as ReadSinceResult.Data).bytes.size)
@@ -210,12 +243,41 @@ class RingBufferReadSinceTest {
         buffer.clear()
         buffer.write(ByteArray(3) { 2 })
 
-        val result = buffer.readSince(staleCursor)
+        val result = buffer.readSince(staleCursor, maxBytes = ample)
 
         assertTrue("expected StreamReset, got $result", result is ReadSinceResult.StreamReset)
         result as ReadSinceResult.StreamReset
         assertEquals(8L, result.requestedCursor)
         assertEquals(3L, result.currentCursor)
+    }
+
+    @Test
+    fun `once a restarted stream grows past the stale cursor the reset is no longer detectable`() {
+        // Oracle: this pins the documented *limit* of StreamReset rather than a desirable
+        // behaviour, so it is the rare test that would fail on an improvement -- and that is the
+        // point. Detection is positional (cursor > totalWritten), so it expires once the new
+        // stream is longer than the stale cursor: the same drain that got StreamReset above now
+        // gets ordinary Data carrying new-stream bytes at old-stream offsets, spliced across the
+        // stop/start boundary with no signal. PR #86 review (`@rev` finding 2) asked for this
+        // written down so issue #54 inherits a contract instead of an assumption; the durable fix
+        // is a generation counter in the cursor, which belongs to #54, not to this primitive.
+        // If someone implements that counter, this test SHOULD fail -- update it deliberately,
+        // and take the failure as confirmation the gap closed, not as a regression.
+        val buffer = RingBuffer(capacityBytes = 100, bytesPerSecond = 1000)
+        buffer.write(ByteArray(8) { 1 })
+        val staleCursor = buffer.writeCursor()
+        buffer.clear()
+        buffer.write(ByteArray(20) { 2 })
+
+        val result = buffer.readSince(staleCursor, maxBytes = ample)
+
+        assertTrue("today this is undetectable and comes back as Data, got $result", result is ReadSinceResult.Data)
+        result as ReadSinceResult.Data
+        // 12 bytes of the *new* stream, handed back at offsets 8..19 of a stream that no longer
+        // exists. Every byte is a 2 (new stream), never a 1 (old stream): the old audio is gone
+        // and the caller is not told.
+        assertEquals(12, result.bytes.size)
+        assertArrayEquals(ByteArray(12) { 2 }, result.bytes)
     }
 
     @Test
@@ -235,8 +297,8 @@ class RingBufferReadSinceTest {
         assertEquals(13L, buffer.writeCursor())
         assertEquals(3L, buffer.oldestCursor()) // 13 written, 10 retained
 
-        assertTrue(buffer.readSince(buffer.oldestCursor()) is ReadSinceResult.Data)
-        assertEquals(0, (buffer.readSince(buffer.writeCursor()) as ReadSinceResult.Data).bytes.size)
+        assertTrue(buffer.readSince(buffer.oldestCursor(), maxBytes = ample) is ReadSinceResult.Data)
+        assertEquals(0, (buffer.readSince(buffer.writeCursor(), maxBytes = ample) as ReadSinceResult.Data).bytes.size)
     }
 
     @Test
@@ -248,7 +310,7 @@ class RingBufferReadSinceTest {
         val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
         buffer.write(ByteArray(4) { 1 })
 
-        assertThrows(IllegalArgumentException::class.java) { buffer.readSince(cursor = -1) }
+        assertThrows(IllegalArgumentException::class.java) { buffer.readSince(cursor = -1, maxBytes = ample) }
         assertThrows(IllegalArgumentException::class.java) { buffer.readSince(cursor = 0, maxBytes = 0) }
         assertThrows(IllegalArgumentException::class.java) { buffer.readSince(cursor = 0, maxBytes = -5) }
     }
@@ -263,7 +325,7 @@ class RingBufferReadSinceTest {
         val buffer = RingBuffer(capacityBytes = 10, bytesPerSecond = 1000)
         buffer.write(byteArrayOf(1, 2, 3, 4, 5))
 
-        repeat(3) { buffer.readSince(cursor = 0) }
+        repeat(3) { buffer.readSince(cursor = 0, maxBytes = ample) }
 
         assertEquals(5L, buffer.bufferedBytes())
         assertArrayEquals(byteArrayOf(1, 2, 3, 4, 5), buffer.snapshot(durationMillis = 1000).data)

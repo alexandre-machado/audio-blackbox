@@ -69,6 +69,33 @@ sealed interface ReadSinceResult {
      * drain thread that outlives a `clear()` fails visibly without dying, and reported separately
      * from [Lapped] because it is a different event: nothing was overwritten out from under the
      * caller, the stream it was reading simply no longer exists. Resume from [currentCursor].
+     *
+     * ## Contract, and the precise limit of this detection (PR #86 review, `@rev` finding 2)
+     * Detection is **positional**, not generational: the only evidence that a restart happened is
+     * `cursor > totalWritten`. That evidence expires. Once the restarted stream has been written
+     * past the stale cursor's offset -- `clear()` followed by more than `cursor` bytes of new
+     * writes -- a drain still holding the old cursor falls through to the ordinary [Data] path and
+     * receives **new-stream bytes at old-stream offsets**: gap-free to the caller, spliced across
+     * a stop/start boundary in reality, with the tail of the old stream gone and no signal. So,
+     * stated as a contract for whoever wires up a consumer:
+     *
+     * - A stale cursor is reported as [StreamReset] **only while the restarted stream is shorter
+     *   than that cursor**. Past that point a cleared-and-rewritten buffer is indistinguishable
+     *   from a continuing one.
+     * - Therefore a caller **must not** treat "not [StreamReset]" as proof that no restart
+     *   happened. Knowing whether the buffer was cleared is the consumer's responsibility (it is
+     *   the side that triggers `clear()`), not something this primitive can be asked after the
+     *   fact.
+     *
+     * This is not reachable through today's engine: `AudioCaptureEngine` allocates a fresh
+     * `RingBuffer` per session and clears the old instance only in the capture thread's `finally`,
+     * after which nothing writes to it again -- a stale drain there sees [StreamReset] forever.
+     * The flow that would reach it is issue #47's C2 ("save the past, then restart the buffer"),
+     * i.e. clearing a buffer that keeps being written. The durable fix is a generation counter
+     * bumped by [RingBuffer.clear] and carried in the cursor; that is a real API change and
+     * belongs to the issue that introduces the flow (#54), deliberately not done here so this
+     * stays a primitive-only change. `RingBufferReadSinceTest` pins both directions of the
+     * behaviour above so the limit is a tested, written contract rather than an assumption.
      */
     data class StreamReset(
         val requestedCursor: Long,
@@ -319,9 +346,18 @@ class RingBuffer(
      * Two consequences that are the whole point of the primitive: it never allocates a
      * second full-size copy of the window (issue #72), and **the lock hold is proportional to the
      * bytes actually copied, not to capacity** -- a caller that keeps up bounds the writer's worst
-     * case at bytes-per-poll, independently of whether retention is 5 minutes or 45. A caller
-     * seeding from [oldestCursor] should pass an explicit [maxBytes] so even that first
-     * catch-up read stays chunked rather than becoming one capacity-sized copy under the lock.
+     * case at bytes-per-poll, independently of whether retention is 5 minutes or 45.
+     *
+     * [maxBytes] is deliberately **not** defaulted (PR #86 review, `@sec` / `@rev`). An earlier
+     * revision defaulted it to [capacityBytes] and asked callers in this doc to override it when
+     * seeding from [oldestCursor] -- which meant the one call shape the API anticipates,
+     * `readSince(oldestCursor())`, took the capacity-sized allocate-and-copy-under-the-lock path
+     * by omission: exactly the [snapshot]-shaped cost this primitive exists to avoid, and the
+     * shape behind issue #72's OOM. A comment is not a substitute for a signature that cannot be
+     * misused by accident -- the same principle [ReadSinceResult] follows -- so every caller now
+     * states its own bound. A drain on a 100-250 ms cadence wants about one poll interval of
+     * audio, a few KB; a caller catching up from [oldestCursor] loops with the same small bound
+     * rather than asking for the window in one call.
      *
      * Falling behind is reported, never smoothed over: if the ring wrapped past [cursor] the
      * result is [ReadSinceResult.Lapped] with the exact byte count that was lost, and if the
@@ -332,7 +368,7 @@ class RingBuffer(
      * A negative [cursor] or a non-positive [maxBytes] is a programming error, not a runtime
      * condition -- no legal sequence of calls produces one -- so those throw.
      */
-    fun readSince(cursor: Long, maxBytes: Int = capacityBytes): ReadSinceResult {
+    fun readSince(cursor: Long, maxBytes: Int): ReadSinceResult {
         require(cursor >= 0) { "cursor must not be negative, was $cursor" }
         require(maxBytes > 0) { "maxBytes must be positive, was $maxBytes" }
         synchronized(lock) {
