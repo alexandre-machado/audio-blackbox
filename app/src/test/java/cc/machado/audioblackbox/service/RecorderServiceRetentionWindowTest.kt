@@ -24,12 +24,12 @@ class RecorderServiceRetentionWindowTest {
     fun `rebuildEngineIfIdle at a non-default capacity is reflected by every public mirror, not just one`() {
         val engineBefore = RecorderService.engine
 
-        val applied = RecorderService.rebuildEngineIfIdle(60)
+        val applied = RecorderService.rebuildEngineIfIdle(45)
 
         assertTrue("engine was Idle, rebuild must succeed", applied)
-        assertEquals(60, RecorderService.bufferDurationMinutes)
-        assertEquals(60, RecorderService.captureConfig.bufferDurationMinutes)
-        assertEquals(60, RecorderService.bufferDurationMinutesFlow.value)
+        assertEquals(45, RecorderService.bufferDurationMinutes)
+        assertEquals(45, RecorderService.captureConfig.bufferDurationMinutes)
+        assertEquals(45, RecorderService.bufferDurationMinutesFlow.value)
         // A genuinely new engine instance, not the same one mutated in place -- the ring buffer
         // cannot be resized after construction (see AudioConfig's class doc), so "honouring" a new
         // capacity means a new AudioCaptureEngine, never the same reference.

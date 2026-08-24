@@ -30,23 +30,29 @@ import kotlinx.coroutines.flow.map
  * `[AudioConfig.RETENTION_WINDOW_MIN_MINUTES, AudioConfig.RETENTION_WINDOW_MAX_MINUTES]` **and** a
  * multiple of [AudioConfig.RETENTION_WINDOW_STEP_MINUTES] -- is ever handed out, on both ends:
  * [setBufferDurationMinutes] rejects a write that fails that predicate, and
- * [bufferDurationMinutesFlow]/[currentBufferDurationMinutes] fall back to
- * [AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES] on a *read* that finds a present-but-invalid value
- * -- not just an absent key. That second guard (`@techlead` adjudication on PR #57, item 1) matters
- * because an invalid persisted value is reachable through normal use, not only a corrupt/hand-edited
- * file: a future release narrowing the bounds/step combined with a downgrade, or the option set
- * otherwise shrinking, can leave a value on disk that was valid when written and is not any more.
- * Without the read-side guard that value would still reach
+ * [bufferDurationMinutesFlow]/[currentBufferDurationMinutes] resolve a present-but-invalid stored
+ * value through [resolveStoredRetentionMinutes] instead of propagating it -- not just an absent
+ * key. That second guard (`@techlead` adjudication on PR #57, item 1) matters because an invalid
+ * persisted value is reachable through normal use, not only a corrupt/hand-edited file: a future
+ * release narrowing the bounds/step combined with a downgrade, or the option set otherwise
+ * shrinking, can leave a value on disk that was valid when written and is not any more. Without
+ * the read-side guard that value would still reach
  * [cc.machado.audioblackbox.service.RecorderService]'s companion `AudioConfig`/`RingBuffer`'s eager
  * `ByteArray(capacityBytes)` allocation on every single launch.
  *
- * Issue #73 changed the domain from a fixed list (`[5, 15, 30, 60]`) to a range with a step, but
- * this guard's *reason for existing* is unchanged, and now also covers a value that is in range but
- * off-step (e.g. `37`) -- that shape did not exist under the old fixed-list validation (every valid
- * value implicitly satisfied "one of the list" and "a multiple of a step" simultaneously) but is a
- * distinct way to be invalid under a range+step domain, and must degrade to the default exactly like
- * an out-of-range value does. `15` -- a value valid under the old list -- remains valid here (in
- * range, a multiple of 5), so this migration needs no data fixup.
+ * Issue #73 changed the domain from a fixed list (`[5, 15, 30, 60]`) to a range with a step, and
+ * now also covers a value that is in range but off-step (e.g. `37`) -- that shape did not exist
+ * under the old fixed-list validation but is a distinct way to be invalid under a range+step
+ * domain, and degrades to the default exactly like an out-of-range value does. `15` -- a value
+ * valid under the old list -- remains valid here (in range, a multiple of 5), so that migration
+ * needed no data fixup.
+ *
+ * Issue #72's interim clamp (lowering [AudioConfig.RETENTION_WINDOW_MAX_MINUTES] from 60 to 45)
+ * is exactly the scenario the read-side guard's doc above predicted: 50/55/60 were valid when a
+ * previous build of this app wrote them and are not any more. [resolveStoredRetentionMinutes]
+ * migrates that specific case by clamping down to the new MAX rather than resetting to the
+ * default, so an already-configured user keeps as much of their chosen retention window as the
+ * new limit allows instead of silently reverting to 30.
  */
 interface RetentionWindowPreferences {
     /** Reactive, defaults to [AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES] until the user has
@@ -76,6 +82,45 @@ fun isValidRetentionMinutes(minutes: Int): Boolean =
     minutes in AudioConfig.RETENTION_WINDOW_MIN_MINUTES..AudioConfig.RETENTION_WINDOW_MAX_MINUTES &&
         minutes % AudioConfig.RETENTION_WINDOW_STEP_MINUTES == 0
 
+/** The highest [AudioConfig.RETENTION_WINDOW_MAX_MINUTES] this app has ever shipped with, before
+ * the interim #72 safety clamp lowered it from 60 to 45. Used only by
+ * [resolveStoredRetentionMinutes] to distinguish "a value a previous release of this exact app
+ * could legitimately have persisted, that the current clamp now rejects" (e.g. 50/55/60, on-step
+ * and within that older, wider range) from "a value nothing this app ever wrote could produce"
+ * (e.g. 1000, or an off-step 37) -- the former is migrated by clamping down to the new MAX so the
+ * user's intent survives as closely as the new limit allows; the latter still falls back to
+ * [AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES], exactly as before this change. This constant is
+ * itself part of the interim-clamp story (see [AudioConfig.RETENTION_WINDOW_MAX_MINUTES]'s KDoc)
+ * and should be revisited/removed together with that clamp once #72 is fixed and old, wider
+ * persisted values have had time to age out. */
+private const val PRE_INTERIM_CLAMP_RETENTION_WINDOW_MAX_MINUTES = 60
+
+/**
+ * The single oracle for "what value should a caller actually see for [stored]" (issue #72's
+ * interim clamp): valid values pass through unchanged; a value that was valid under this exact
+ * app's *previous*, wider MAX (i.e. on-step, at least MIN, and no higher than
+ * [PRE_INTERIM_CLAMP_RETENTION_WINDOW_MAX_MINUTES]) is clamped down to the new
+ * [AudioConfig.RETENTION_WINDOW_MAX_MINUTES] instead of being discarded -- this is what stops a
+ * value like 50/55/60, persisted by a build before this clamp landed, from either crashing a
+ * `require` on the write/rebuild path or silently resetting an already-configured user back to
+ * [AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES]. Anything else invalid (off-step, below MIN, or
+ * above even the pre-clamp MAX -- i.e. never legitimately produced by any released build of this
+ * app) still falls back to the default, exactly as it did before this change.
+ */
+internal fun resolveStoredRetentionMinutes(stored: Int?): Int {
+    if (stored == null) return AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+    if (isValidRetentionMinutes(stored)) return stored
+    val isOnStep = stored % AudioConfig.RETENTION_WINDOW_STEP_MINUTES == 0
+    val wasValidUnderThePreviousWiderMax =
+        isOnStep &&
+            stored in (AudioConfig.RETENTION_WINDOW_MAX_MINUTES + 1)..PRE_INTERIM_CLAMP_RETENTION_WINDOW_MAX_MINUTES
+    return if (wasValidUnderThePreviousWiderMax) {
+        AudioConfig.RETENTION_WINDOW_MAX_MINUTES
+    } else {
+        AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+    }
+}
+
 /**
  * Production [RetentionWindowPreferences], backed by a dedicated [DataStore] file.
  *
@@ -90,24 +135,21 @@ class DataStoreRetentionWindowPreferences(private val dataStore: DataStore<Prefe
 
     // `@techlead` adjudication on PR #57, item 1 (`@sec` finding): validated on read, not just on
     // write. A value that is *present but invalid* is reachable through entirely normal use --
-    // not just a hand-edited/corrupt file -- if a future release ever narrows
-    // AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES and the app is downgraded,
-    // or the valid domain otherwise shrinks, after a value that was valid under the old bounds was
-    // persisted. Issue #73 widened what "invalid" can mean -- in range but off-step (e.g. 37) is
-    // now a distinct failure mode alongside out-of-range -- so this checks the same
-    // isValidRetentionMinutes predicate the write side enforces, not just range membership.
-    // Falling through to the same DEFAULT_BUFFER_DURATION_MINUTES the absent-key case already uses
-    // -- rather than propagating the stored value -- is what stops an invalid Int from ever
-    // reaching RecorderService's companion `AudioConfig`/`RingBuffer`'s eager
-    // `ByteArray(capacityBytes)` allocation, which would otherwise OOM on every single launch with
-    // nothing pointing at the cause.
+    // not just a hand-edited/corrupt file -- if a release ever narrows
+    // AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES (as issue #72's interim
+    // clamp does, 60 -> 45) and the app is downgraded, or the valid domain otherwise shrinks, after
+    // a value that was valid under the old bounds was persisted. Issue #73 widened what "invalid"
+    // can mean -- in range but off-step (e.g. 37) is a distinct failure mode alongside
+    // out-of-range -- so resolveStoredRetentionMinutes checks the same isValidRetentionMinutes
+    // predicate the write side enforces, not just range membership, before deciding how to degrade
+    // an invalid value: clamp to the new MAX if it was legitimately persisted under this app's
+    // previous, wider MAX (see resolveStoredRetentionMinutes's doc), otherwise fall back to
+    // DEFAULT_BUFFER_DURATION_MINUTES exactly as the absent-key case already does. Either way, an
+    // invalid Int never reaches RecorderService's companion `AudioConfig`/`RingBuffer`'s eager
+    // `ByteArray(capacityBytes)` allocation, which would otherwise OOM (out-of-range) or crash a
+    // `require` (if propagated further) on every single launch with nothing pointing at the cause.
     override val bufferDurationMinutesFlow: Flow<Int> = dataStore.data.map { prefs ->
-        val stored = prefs[KEY_BUFFER_DURATION_MINUTES]
-        if (stored != null && isValidRetentionMinutes(stored)) {
-            stored
-        } else {
-            AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
-        }
+        resolveStoredRetentionMinutes(prefs[KEY_BUFFER_DURATION_MINUTES])
     }
 
     override suspend fun currentBufferDurationMinutes(): Int = bufferDurationMinutesFlow.first()

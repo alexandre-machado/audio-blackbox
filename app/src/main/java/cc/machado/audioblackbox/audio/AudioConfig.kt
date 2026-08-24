@@ -64,28 +64,34 @@ data class AudioConfig(
         //   5 min  ~= 9.6 MB   -- floor: below this the buffer covers less than the time it takes
         //                         to notice something worth keeping and react.
         //   30 min ~= 57.6 MB  -- the original hardcoded default, kept as DEFAULT_BUFFER_DURATION_MINUTES.
-        //   60 min ~= 115.2 MB -- ceiling. Kept at parity with what #45/#57 already offered.
+        //   45 min ~= 86.4 MB  -- ceiling, as an INTERIM CLAMP (see hazard table below), not a
+        //                         considered permanent design choice.
         //
-        // ## Known hazard this MAX widens -- issue #72 (open, deferred by owner decision)
-        // Before this change only 5/15/30/60 were reachable, so only the exact value 60 could
-        // ever hit issue #72's OOM: `RingBuffer.snapshot()` allocates a second full-size copy on
-        // save, so peak memory is 2x the retention window, not 1x. A 5-minute-step stepper makes
-        // every intermediate value in range reachable for the first time, including 35/40/45/50/55,
-        // which previously could not be selected at all. Measured on a real Samsung S25
-        // (dalvik.vm.heapgrowthlimit=256m):
+        // ## Known hazard this bounds -- issue #72 (open) -- MAX is an interim clamp, not a fix
+        // `RingBuffer.snapshot()` allocates a second full-size copy on save, so peak memory at
+        // save time is roughly 2x the retention window, not 1x. Measured on a real Samsung S25
+        // (dalvik.vm.heapgrowthlimit=256m, no largeHeap declared):
         //   30 min -> ~115 MB total (backing + snapshot copy) -- fits
-        //   45 min -> ~173 MB -- likely fits
+        //   45 min -> ~173 MB -- fits with real margin
         //   50 min -> ~192 MB -- tight
         //   55 min -> ~211 MB -- tight, may fail
-        //   60 min -> ~230 MB -- fails, OOM observed on-device
-        // This is *not* fixed here: #72 is deferred pending a product-design rework of the export
-        // path (streaming instead of a whole-buffer snapshot copy). MAX is kept at 60 rather than
-        // narrowed to hide the newly-reachable failures, on explicit owner instruction -- the
-        // owner is aware of this trade-off and can move MAX once #72 lands or if the trade-off
-        // changes. Whoever revisits this bound should re-run #72's arithmetic against whatever the
-        // then-current audio config (sample rate/channel count) is, not just copy this table.
+        //   60 min -> ~230 MB -- fails, OOM observed on-device, against a 256 MB heapGrowthLimit
+        //                         with no headroom left for the framework, Compose, or GC
+        // MAX was previously kept at 60 on explicit owner instruction (the owner was aware of the
+        // above trade-off and accepted it while #72 waited on a design decision). That decision was
+        // revisited: MAX is temporarily clamped to 45 here -- again on explicit owner approval --
+        // until #72 is actually fixed (streaming the export instead of a whole-buffer snapshot
+        // copy), because the widened stepper (#73) made every one of 35/40/45/50/55 reachable for
+        // the first time, not just the single value 60, which meaningfully raised how often this
+        // hazard could be hit in practice. This is an INTERIM SAFETY CLAMP, not a considered
+        // permanent bound: whoever revisits it after #72 lands should re-run #72's arithmetic
+        // against whatever the then-current audio config (sample rate/channel count) is, not just
+        // copy this table, and should also check
+        // [cc.machado.audioblackbox.settings.RetentionWindowPreferences] for the read-side migration
+        // logic this clamp required (persisted values above the new MAX, e.g. 50/55/60 from before
+        // this change, are clamped down on load rather than crashing or resetting to the default).
         const val RETENTION_WINDOW_MIN_MINUTES = 5
-        const val RETENTION_WINDOW_MAX_MINUTES = 60
+        const val RETENTION_WINDOW_MAX_MINUTES = 45
         const val RETENTION_WINDOW_STEP_MINUTES = 5
 
         private const val BITS_PER_BYTE = 8

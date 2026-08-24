@@ -126,11 +126,11 @@
     <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. Use os botões abaixo para escolher um valor e depois toque em Aplicar.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES limitam o
-         controle a múltiplos de 5 no intervalo [5, 60], então o valor nunca é 1, e a forma plural
-         "minutos" é sempre correta aqui. Isso já valia no domínio antigo de lista fixa (revisado na
-         issue #44) e continua valendo no domínio de intervalo com passo: todo valor alcançável,
-         inclusive os novos como 35/40/45/50/55, ainda é múltiplo de 5. Revisado novamente para a
-         issue #73. -->
+         controle a múltiplos de 5 no intervalo [5, 45] (clamp temporário da issue #72, antes era
+         [5, 60]), então o valor nunca é 1, e a forma plural "minutos" é sempre correta aqui. Isso já
+         valia no domínio antigo de lista fixa (revisado na issue #44) e continua valendo no domínio
+         de intervalo com passo: todo valor alcançável, inclusive os novos como 35/40, ainda é
+         múltiplo de 5. Revisado novamente para a issue #73, e de novo para o clamp da issue #72. -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutos, aproximadamente %2$d megabytes, ativo no momento</string>
     <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutos, aproximadamente %2$d megabytes, ainda não aplicado</string>
     <string name="settings_retention_decrement_cd">Diminuir a retenção em 5 minutos</string>

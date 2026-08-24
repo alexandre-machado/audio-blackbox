@@ -126,11 +126,11 @@
     <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Use the buttons below to choose a value, then tap Apply.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES bound the
-         stepper to multiples of 5 in [5, 60], so the value is never 1, and the "minutes" (plural)
-         form is always correct here. This was true under the old fixed-list domain too (re-examined
-         for issue #44), and the stepper's range+step domain does not change that: every reachable
-         value, including newly-reachable ones like 35/40/45/50/55, is still a multiple of 5.
-         Re-examined again for issue #73. -->
+         stepper to multiples of 5 in [5, 45] (issue #72's interim clamp, was [5, 60]), so the value
+         is never 1, and the "minutes" (plural) form is always correct here. This was true under the
+         old fixed-list domain too (re-examined for issue #44), and the stepper's range+step domain
+         does not change that: every reachable value, including newly-reachable ones like 35/40, is
+         still a multiple of 5. Re-examined again for issue #73, and again for issue #72's clamp. -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutes, approximately %2$d megabytes, currently active</string>
     <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutes, approximately %2$d megabytes, not yet applied</string>
     <string name="settings_retention_decrement_cd">Decrease retention by 5 minutes</string>
