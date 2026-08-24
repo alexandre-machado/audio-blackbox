@@ -67,6 +67,11 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    // The floating bottom bar's two tab icons (issue #73 PR #74 review) -- stock Material icons,
+    // not Expressive, not a redistributable third-party icon pack. Small (metadata + the two
+    // vector icons actually referenced), version-managed by the Compose BOM above like every
+    // other androidx.compose artifact here.
+    implementation(libs.androidx.material.icons.core)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     // Retention-window setting persistence (issue #45) -- DataStore, not SharedPreferences, for

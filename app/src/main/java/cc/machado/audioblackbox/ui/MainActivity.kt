@@ -10,9 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,10 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -93,7 +88,30 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AudioBlackboxTheme {
-                Scaffold { innerPadding ->
+                // Issue #73, PR #74 round 2: hoisted here (not inside MainScreenWithBottomBar,
+                // which no longer exists) so both Scaffold's `bottomBar` slot and its `content`
+                // slot below can read/drive the same selected tab -- Scaffold requires the bar and
+                // the content it insets to be siblings passed to it directly, not nested inside a
+                // Box the way the previous, buggy layout had it.
+                var selectedDestination by rememberSaveable { mutableStateOf(Destination.DASHBOARD) }
+
+                Scaffold(
+                    bottomBar = {
+                        // Only shown once past onboarding -- same gate the content slot below uses.
+                        // Scaffold measures this composable structurally on every layout pass and
+                        // derives the content slot's `innerPadding` from that real measurement (see
+                        // FloatingBottomBar's class doc for why this replaced a manual `Box` +
+                        // `onSizeChanged` overlay that PR #74 review found left the bar drawn over
+                        // Dashboard content on a real device).
+                        if (stepState == OnboardingStep.DONE) {
+                            FloatingBottomBar(
+                                selected = selectedDestination,
+                                onSelect = { selectedDestination = it },
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                    },
+                ) { innerPadding ->
                     if (stepState == OnboardingStep.DONE) {
                         val stopEngine: () -> Unit = {
                             ContextCompat.startForegroundService(
@@ -130,6 +148,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        // A single `.padding(innerPadding)` here -- covering the system-bar insets
+                        // *and* the floating bar's real measured height in one value Scaffold
+                        // computed itself -- is the entire fix for "content must not be obscured by
+                        // the bar": neither screen below needs its own contentPadding plumbing for
+                        // this bar, since this Column already reserves the space above it.
                         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                             if (!isIgnoringBatteryOptimizationsState) {
                                 BatteryOptimizationBanner(
@@ -138,10 +161,14 @@ class MainActivity : ComponentActivity() {
                                     },
                                 )
                             }
-                            MainScreenWithBottomBar(
-                                dashboardViewModel = viewModel(factory = dashboardViewModelFactory),
-                                settingsViewModel = viewModel(factory = settingsViewModelFactory),
-                            )
+                            when (selectedDestination) {
+                                Destination.DASHBOARD -> DashboardRoute(
+                                    viewModel = viewModel(factory = dashboardViewModelFactory),
+                                )
+                                Destination.SETTINGS -> SettingsRoute(
+                                    viewModel = viewModel(factory = settingsViewModelFactory),
+                                )
+                            }
                         }
                     } else {
                         OnboardingScreen(
@@ -237,48 +264,6 @@ class MainActivity : ComponentActivity() {
         } else {
             refreshStep()
         }
-    }
-}
-
-/**
- * Hosts [Destination.DASHBOARD]/[Destination.SETTINGS] behind a [FloatingBottomBar] (issue #73).
- * Hoisted `enum` + `remember`ed selected-tab state, not `navigation-compose` (see issue #73's
- * explicit instruction and [FloatingBottomBar]'s own doc) -- two destinations do not justify that
- * dependency.
- *
- * The bar's real, measured height (not a guessed constant) is fed back into each screen's
- * [DashboardRoute]/[SettingsRoute] `contentPadding` so their own scrollable `Column`s add enough
- * bottom padding to scroll their last item clear of the floating bar instead of it being clipped or
- * hidden underneath -- issue #73's "the bar must not cover content" requirement. This container
- * itself does not add its own system-bar inset handling: it lives inside [MainActivity]'s outer
- * [Scaffold], whose `innerPadding` this whole subtree is already placed within, so the floating bar
- * only needs a fixed visual margin from that already-safe edge, not a second insets consumption.
- */
-@Composable
-fun MainScreenWithBottomBar(
-    dashboardViewModel: DashboardViewModel,
-    settingsViewModel: SettingsViewModel,
-    modifier: Modifier = Modifier,
-) {
-    var selectedDestination by rememberSaveable { mutableStateOf(Destination.DASHBOARD) }
-    var barHeight by remember { mutableStateOf(0.dp) }
-    val density = LocalDensity.current
-    val barMargin = 16.dp
-    val contentPadding = PaddingValues(bottom = barHeight + barMargin)
-
-    Box(modifier = modifier.fillMaxSize()) {
-        when (selectedDestination) {
-            Destination.DASHBOARD -> DashboardRoute(viewModel = dashboardViewModel, contentPadding = contentPadding)
-            Destination.SETTINGS -> SettingsRoute(viewModel = settingsViewModel, contentPadding = contentPadding)
-        }
-        FloatingBottomBar(
-            selected = selectedDestination,
-            onSelect = { selectedDestination = it },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(barMargin)
-                .onSizeChanged { size -> barHeight = with(density) { size.height.toDp() } },
-        )
     }
 }
 

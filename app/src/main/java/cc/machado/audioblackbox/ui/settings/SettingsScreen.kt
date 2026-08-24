@@ -2,7 +2,6 @@ package cc.machado.audioblackbox.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,14 +39,16 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
  *
  * Does not host its own [androidx.compose.material3.Scaffold] (issue #73): like
  * [cc.machado.audioblackbox.ui.dashboard.DashboardRoute], this is one of two destinations switched
- * by the floating bottom bar in [cc.machado.audioblackbox.ui.MainActivity], which owns the
- * surrounding insets/Scaffold and passes [contentPadding] down so this screen's scrollable content
- * clears the floating bar.
+ * by the floating bottom bar in [cc.machado.audioblackbox.ui.MainActivity]. That single outer
+ * `Scaffold`'s `innerPadding` (system-bar insets plus the floating bar's own real, measured height
+ * via its `bottomBar` slot) is applied once, above this screen -- see
+ * [cc.machado.audioblackbox.ui.dashboard.DashboardRoute]'s doc and
+ * [cc.machado.audioblackbox.ui.FloatingBottomBar]'s class doc for why this screen does not take its
+ * own `contentPadding` parameter for that.
  */
 @Composable
 fun SettingsRoute(
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -59,7 +60,6 @@ fun SettingsRoute(
         onConfirmRetentionWindowChange = viewModel::confirmRetentionWindowChange,
         onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
         modifier = modifier,
-        contentPadding = contentPadding,
     )
 }
 
@@ -72,14 +72,12 @@ fun SettingsScreen(
     onConfirmRetentionWindowChange: () -> Unit,
     onCancelRetentionWindowChange: () -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
-            .padding(contentPadding),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {

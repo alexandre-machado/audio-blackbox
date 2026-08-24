@@ -1,6 +1,10 @@
 package cc.machado.audioblackbox.ui
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,7 +31,20 @@ enum class Destination {
  * a [Surface] with a shape/elevation wrapping a stock [NavigationBar] -- rather than any
  * Material 3 Expressive component, which is explicitly out of scope for this project (see issue
  * #9). "Floating" here means visually: a shaped, elevated surface inset from the screen edges by
- * the caller's [modifier], not a distinct stock component.
+ * the caller's [modifier] (a fixed margin, e.g. `Modifier.padding(16.dp)`), not a distinct stock
+ * component.
+ *
+ * [cc.machado.audioblackbox.ui.MainActivity] hosts this in [androidx.compose.material3.Scaffold]'s
+ * own `bottomBar` slot, not a manually `align`ed/measured overlay -- PR #74 review found that a
+ * hand-rolled `Box` + `onSizeChanged` approach left the bar drawn over Dashboard content on a real
+ * device (a self-measurement race, not something the JVM-only preview/test tiers could catch).
+ * `Scaffold`'s `bottomBar` slot measures this composable structurally, on every layout pass, and
+ * derives its content `innerPadding` from that real measurement -- including this margin, since it
+ * is part of what gets measured -- which is the framework-supported way to guarantee scrollable
+ * content can never end up under a bottom bar, rather than a constant tuned to look right once.
+ * [NavigationBar] itself also already applies [androidx.compose.material3.NavigationBarDefaults.windowInsets]
+ * (bottom system-bar insets) internally, so the gesture/3-button navigation bar is handled the same
+ * structural way, not via a second, hand-added insets consumption here.
  *
  * Selected-state accessibility ("selected state announced, not merely visually indicated", per
  * issue #73) comes for free from stock [NavigationBarItem]: its `selected` parameter drives the
@@ -55,14 +72,18 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.DASHBOARD,
                 onClick = { onSelect(Destination.DASHBOARD) },
-                icon = { Text(text = "●") },
+                // `contentDescription = null`: the visible label text below already supplies the
+                // accessible name for this item (NavigationBarItem merges icon + label semantics),
+                // so a redundant description here would be exactly the "*_cd that only repeats its
+                // label" issue #66 was filed over.
+                icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = null) },
                 label = { Text(text = stringResource(R.string.nav_dashboard_label)) },
                 colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
             )
             NavigationBarItem(
                 selected = selected == Destination.SETTINGS,
                 onClick = { onSelect(Destination.SETTINGS) },
-                icon = { Text(text = "⚙") },
+                icon = { Icon(imageVector = Icons.Filled.Settings, contentDescription = null) },
                 label = { Text(text = stringResource(R.string.nav_settings_label)) },
                 colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
             )

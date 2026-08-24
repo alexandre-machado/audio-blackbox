@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,14 +58,18 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
  *
  * Does not host its own [androidx.compose.material3.Scaffold] (issue #73): this screen is one of
  * two destinations switched by the floating bottom bar in
- * [cc.machado.audioblackbox.ui.MainActivity], which already owns the surrounding
- * insets/Scaffold and passes [contentPadding] down so this screen's scrollable content clears the
- * floating bar instead of being clipped by or hidden under it.
+ * [cc.machado.audioblackbox.ui.MainActivity]. That single outer `Scaffold`'s `innerPadding` -- which
+ * accounts for both system-bar insets and the floating bar's own real, measured height via its
+ * `bottomBar` slot -- is applied once, above this screen, to the `Column` that hosts whichever
+ * screen is selected. This screen does not need its own `contentPadding` parameter for that: PR #74
+ * review found that plumbing a second, independently-computed bottom padding down to each screen
+ * (via a hand-rolled `Box` + `onSizeChanged` measurement) was itself the bug -- it left the bar
+ * drawn over this screen's content on a real device. See [cc.machado.audioblackbox.ui.FloatingBottomBar]'s
+ * class doc for the structural fix.
  */
 @Composable
 fun DashboardRoute(
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -76,7 +79,6 @@ fun DashboardRoute(
         onSelectWindow = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
         modifier = modifier,
-        contentPadding = contentPadding,
     )
 }
 
@@ -87,14 +89,12 @@ fun DashboardScreen(
     onSelectWindow: (Int) -> Unit,
     onDismissSaveNotice: () -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
-            .padding(contentPadding),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
