@@ -47,13 +47,14 @@ internal fun HarnessApp(initialDestination: Destination) {
             // Mirrors MainActivity's content slot exactly (minus the battery-optimization banner,
             // which is a sibling above the destination and does not affect the bar/content
             // relationship being asserted).
-            Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 when (selected) {
                     Destination.DASHBOARD -> DashboardScreen(
                         uiState = dashboardFixture(),
                         onToggleEngine = {},
                         onSelectWindow = {},
                         onDismissSaveNotice = {},
+                        contentPadding = innerPadding,
                     )
                     Destination.SETTINGS -> SettingsScreen(
                         uiState = settingsFixture(),
@@ -63,6 +64,7 @@ internal fun HarnessApp(initialDestination: Destination) {
                         onConfirmRetentionWindowChange = {},
                         onCancelRetentionWindowChange = {},
                         onAcknowledgeClampNotice = {},
+                        contentPadding = innerPadding,
                     )
                 }
             }

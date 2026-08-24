@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
                         // computed itself -- is the entire fix for "content must not be obscured by
                         // the bar": neither screen below needs its own contentPadding plumbing for
                         // this bar, since this Column already reserves the space above it.
-                        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                        Column(modifier = Modifier.fillMaxSize()) {
                             if (!isIgnoringBatteryOptimizationsState) {
                                 BatteryOptimizationBanner(
                                     onRequestBatteryExemption = {
@@ -156,9 +156,11 @@ class MainActivity : ComponentActivity() {
                             when (selectedDestination) {
                                 Destination.DASHBOARD -> DashboardRoute(
                                     viewModel = viewModel(factory = dashboardViewModelFactory),
+                                    contentPadding = innerPadding,
                                 )
                                 Destination.SETTINGS -> SettingsRoute(
                                     viewModel = viewModel(factory = settingsViewModelFactory),
+                                    contentPadding = innerPadding,
                                 )
                             }
                         }

@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +51,7 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 @Composable
 fun SettingsRoute(
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -62,6 +64,7 @@ fun SettingsRoute(
         onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
         onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
         modifier = modifier,
+        contentPadding = contentPadding,
     )
 }
 
@@ -75,12 +78,14 @@ fun SettingsScreen(
     onCancelRetentionWindowChange: () -> Unit,
     onAcknowledgeClampNotice: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(24.dp)
+            .padding(contentPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -70,6 +71,7 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 @Composable
 fun DashboardRoute(
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,6 +81,7 @@ fun DashboardRoute(
         onSelectWindow = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
         modifier = modifier,
+        contentPadding = contentPadding,
     )
 }
 
@@ -89,12 +92,14 @@ fun DashboardScreen(
     onSelectWindow: (Int) -> Unit,
     onDismissSaveNotice: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(24.dp)
+            .padding(contentPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
