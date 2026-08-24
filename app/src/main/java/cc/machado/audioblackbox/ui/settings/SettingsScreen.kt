@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 
 /**
@@ -59,6 +60,7 @@ fun SettingsRoute(
         onApply = viewModel::commitPendingRetentionWindow,
         onConfirmRetentionWindowChange = viewModel::confirmRetentionWindowChange,
         onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
+        onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
         modifier = modifier,
     )
 }
@@ -71,6 +73,7 @@ fun SettingsScreen(
     onApply: () -> Unit,
     onConfirmRetentionWindowChange: () -> Unit,
     onCancelRetentionWindowChange: () -> Unit,
+    onAcknowledgeClampNotice: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -94,6 +97,9 @@ fun SettingsScreen(
             onConfirm = onConfirmRetentionWindowChange,
             onCancel = onCancelRetentionWindowChange,
         )
+    }
+    uiState.clampNotice?.let { notice ->
+        ClampNoticeDialog(notice = notice, onAcknowledge = onAcknowledgeClampNotice)
     }
 }
 
@@ -210,19 +216,48 @@ private fun RetentionDiscardDialog(pendingMinutes: Int, onConfirm: () -> Unit, o
     )
 }
 
+/** Issue #84: shown at most once ever, when [SettingsUiState.clampNotice] is non-null -- a user
+ * whose stored retention window (e.g. 60 min) was silently clamped down by issue #72's interim
+ * safety clamp (to [ClampNotice.newMinutes], e.g. 45) gets exactly this one explanation of the old
+ * value, the new value, and why. Dismissing it (the only action offered -- there is nothing to
+ * confirm or cancel, just acknowledge) calls [onAcknowledge], which persists that it has been seen
+ * so it never shows again. */
+@Composable
+private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onAcknowledge,
+        title = { Text(text = stringResource(R.string.settings_retention_clamp_notice_title)) },
+        text = {
+            Text(
+                text = stringResource(
+                    R.string.settings_retention_clamp_notice_body,
+                    notice.previousMinutes,
+                    notice.newMinutes,
+                ),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onAcknowledge) {
+                Text(text = stringResource(R.string.settings_retention_clamp_notice_dismiss))
+            }
+        },
+    )
+}
+
 // ---- Previews ----
 
 private fun previewState(
     pendingMinutes: Int = 30,
     committedMinutes: Int = 30,
     pendingConfirmationMinutes: Int? = null,
-): SettingsUiState = SettingsViewModel.mapUiState(committedMinutes, pendingMinutes, pendingConfirmationMinutes)
+    clampNotice: ClampNotice? = null,
+): SettingsUiState = SettingsViewModel.mapUiState(committedMinutes, pendingMinutes, pendingConfirmationMinutes, clampNotice)
 
 @Preview(showBackground = true, name = "Default (30 min, not dirty)")
 @Composable
 private fun SettingsScreenDefaultPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(), {}, {}, {}, {}, {})
+        SettingsScreen(previewState(), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -230,7 +265,7 @@ private fun SettingsScreenDefaultPreview() {
 @Composable
 private fun SettingsScreenPendingPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(pendingMinutes = 45, committedMinutes = 30), {}, {}, {}, {}, {})
+        SettingsScreen(previewState(pendingMinutes = 45, committedMinutes = 30), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -238,7 +273,7 @@ private fun SettingsScreenPendingPreview() {
 @Composable
 private fun SettingsScreenMinBoundPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(pendingMinutes = 5, committedMinutes = 5), {}, {}, {}, {}, {})
+        SettingsScreen(previewState(pendingMinutes = 5, committedMinutes = 5), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -246,7 +281,7 @@ private fun SettingsScreenMinBoundPreview() {
 @Composable
 private fun SettingsScreenMaxBoundPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(pendingMinutes = 60, committedMinutes = 60), {}, {}, {}, {}, {})
+        SettingsScreen(previewState(pendingMinutes = 60, committedMinutes = 60), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -256,7 +291,18 @@ private fun SettingsScreenConfirmPreview() {
     AudioBlackboxTheme {
         SettingsScreen(
             previewState(pendingMinutes = 60, committedMinutes = 30, pendingConfirmationMinutes = 60),
-            {}, {}, {}, {}, {},
+            {}, {}, {}, {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Clamp-down notice (issue #84)")
+@Composable
+private fun SettingsScreenClampNoticePreview() {
+    AudioBlackboxTheme {
+        SettingsScreen(
+            previewState(clampNotice = ClampNotice(previousMinutes = 60, newMinutes = 45)),
+            {}, {}, {}, {}, {}, {},
         )
     }
 }

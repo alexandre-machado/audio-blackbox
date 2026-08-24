@@ -141,4 +141,11 @@
     <string name="settings_retention_confirm_body">Trocar para %1$d min exige parar o motor, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
     <string name="settings_retention_confirm_accept">Parar e trocar</string>
     <string name="settings_retention_confirm_cancel">Cancelar</string>
+
+    <!-- Aviso de redução por clamp (issue #84): mostrado no máximo uma vez, só para quem tinha um
+         valor de retenção salvo (50/55/60, persistido antes do clamp temporário da issue #72) que
+         foi reduzido ao carregar. Nunca mostrado a quem já estava no limite atual ou abaixo dele. -->
+    <string name="settings_retention_clamp_notice_title">Janela de retenção reduzida</string>
+    <string name="settings_retention_clamp_notice_body">Sua janela de retenção foi reduzida de %1$d para %2$d minutos como medida temporária de segurança de memória, enquanto uma correção definitiva está em andamento.</string>
+    <string name="settings_retention_clamp_notice_dismiss">Entendi</string>
 </resources>

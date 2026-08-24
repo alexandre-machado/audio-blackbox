@@ -227,6 +227,85 @@ class RetentionWindowPreferencesTest {
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
     }
 
+    // ---- Issue #84: the one-time clamp-down notice ----
+
+    @Test
+    fun `clampNoticeFlow fires with the old and new values for a stored value that was clamped down`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val notice = preferences.clampNoticeFlow.first()
+
+        assertEquals(60, notice?.previousMinutes)
+        assertEquals(45, notice?.newMinutes)
+    }
+
+    @Test
+    fun `clampNoticeFlow never fires for a value at the current max`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 45 }
+
+        val atMax = DataStoreRetentionWindowPreferences(rawDataStore)
+        assertEquals(null, atMax.clampNoticeFlow.first())
+    }
+
+    @Test
+    fun `clampNoticeFlow never fires for a value below the current max`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 15 }
+
+        val belowMax = DataStoreRetentionWindowPreferences(rawDataStore)
+        assertEquals(null, belowMax.clampNoticeFlow.first())
+    }
+
+    @Test
+    fun `clampNoticeFlow never fires for a fresh install with nothing persisted yet`() = runTest {
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        assertEquals(null, preferences.clampNoticeFlow.first())
+    }
+
+    @Test
+    fun `clampNoticeFlow never fires for an off-step or never-legitimate value (falls back to default, not a clamp)`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 1000 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(null, preferences.clampNoticeFlow.first())
+    }
+
+    @Test
+    fun `acknowledging the clamp notice suppresses it for good, including for a fresh instance reading the same file`() = runTest {
+        val firstJob = SupervisorJob()
+        val firstScope = CoroutineScope(firstJob)
+        val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
+        firstDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
+        val firstPreferences = DataStoreRetentionWindowPreferences(firstDataStore)
+        assertEquals(45, firstPreferences.clampNoticeFlow.first()?.newMinutes)
+
+        firstPreferences.acknowledgeClampNotice()
+        assertEquals(
+            "acknowledging must clear the notice immediately, not just on the next process",
+            null,
+            firstPreferences.clampNoticeFlow.first(),
+        )
+
+        // Same "process death" handshake the round-trip test above uses -- proves the
+        // acknowledged flag itself survived to disk, not just this live instance's state.
+        firstJob.cancelAndJoin()
+        val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
+
+        assertEquals(
+            "a notice already acknowledged before a restart must not resurface on the next launch",
+            null,
+            reloaded.clampNoticeFlow.first(),
+        )
+        // The clamp itself is unaffected by acknowledgement -- the resolved value still reflects
+        // the safety clamp, only the *notice about it* is suppressed.
+        assertEquals(45, reloaded.currentBufferDurationMinutes())
+    }
+
     @Test
     fun `a persisted value that was valid under the old fixed-list domain remains valid (15 needs no migration)`() = runTest {
         // 15 was a member of the pre-issue-#73 fixed list [5, 15, 30, 60] and remains valid under

@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -72,7 +73,25 @@ interface RetentionWindowPreferences {
      * offer bounded, on-step values, so this rejects anything else as a programming error rather
      * than silently clamping it. */
     suspend fun setBufferDurationMinutes(minutes: Int)
+
+    /** Reactive (issue #84): non-null exactly while there is a clamp-down notice the user has not
+     * yet acknowledged -- i.e. the raw stored value is one [resolveStoredRetentionMinutes] clamps
+     * down (not one it resets to the default) **and** [acknowledgeClampNotice] has not yet been
+     * called for it. Emits `null` for a user who was never clamped, and permanently emits `null`
+     * again (until a *new* clamp-down were to occur, which does not exist in this codebase today)
+     * once acknowledged -- see [acknowledgeClampNotice]. */
+    val clampNoticeFlow: Flow<ClampNotice?>
+
+    /** Marks the currently-pending [clampNoticeFlow] value (if any) as shown, so it never surfaces
+     * again. A no-op call with nothing pending is harmless. */
+    suspend fun acknowledgeClampNotice()
 }
+
+/** Issue #84: what [RetentionWindowPreferences.clampNoticeFlow] hands the UI to render "your
+ * retention window was reduced from X to Y minutes" exactly once -- [previousMinutes] is the raw
+ * value a previous build of this app persisted (e.g. 60), [newMinutes] is what it was clamped down
+ * to ([AudioConfig.RETENTION_WINDOW_MAX_MINUTES], e.g. 45). */
+data class ClampNotice(val previousMinutes: Int, val newMinutes: Int)
 
 /** The single oracle for "is [minutes] a value this app will ever persist or hand out" (issue
  * #73): in range **and** on-step. Shared by both the read-side fallback and the write-side
@@ -110,14 +129,29 @@ private const val PRE_INTERIM_CLAMP_RETENTION_WINDOW_MAX_MINUTES = 60
 internal fun resolveStoredRetentionMinutes(stored: Int?): Int {
     if (stored == null) return AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
     if (isValidRetentionMinutes(stored)) return stored
+    return clampNoticeFor(stored)?.newMinutes ?: AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+}
+
+/**
+ * The single oracle (issue #84) for "does [stored] represent a value [resolveStoredRetentionMinutes]
+ * clamps down, as opposed to one it resets to the default" -- shared by [resolveStoredRetentionMinutes]
+ * itself and [DataStoreRetentionWindowPreferences.clampNoticeFlow] so the two can never quietly
+ * disagree about which raw stored values count as "clamped". Returns `null` for anything valid, for
+ * an absent value, or for a value nothing this app ever legitimately persisted (off-step, or above
+ * even the pre-clamp MAX) -- only a genuinely clamped-down value (on-step, in
+ * `(RETENTION_WINDOW_MAX_MINUTES, PRE_INTERIM_CLAMP_RETENTION_WINDOW_MAX_MINUTES]`, e.g. 50/55/60)
+ * produces a [ClampNotice].
+ */
+internal fun clampNoticeFor(stored: Int?): ClampNotice? {
+    if (stored == null || isValidRetentionMinutes(stored)) return null
     val isOnStep = stored % AudioConfig.RETENTION_WINDOW_STEP_MINUTES == 0
     val wasValidUnderThePreviousWiderMax =
         isOnStep &&
             stored in (AudioConfig.RETENTION_WINDOW_MAX_MINUTES + 1)..PRE_INTERIM_CLAMP_RETENTION_WINDOW_MAX_MINUTES
     return if (wasValidUnderThePreviousWiderMax) {
-        AudioConfig.RETENTION_WINDOW_MAX_MINUTES
+        ClampNotice(previousMinutes = stored, newMinutes = AudioConfig.RETENTION_WINDOW_MAX_MINUTES)
     } else {
-        AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+        null
     }
 }
 
@@ -163,8 +197,26 @@ class DataStoreRetentionWindowPreferences(private val dataStore: DataStore<Prefe
         dataStore.edit { prefs -> prefs[KEY_BUFFER_DURATION_MINUTES] = minutes }
     }
 
+    // Issue #84: derived from the same raw stored Int bufferDurationMinutesFlow already reads,
+    // via the shared clampNoticeFor oracle, so this can never disagree with what
+    // bufferDurationMinutesFlow actually resolved the user onto. Suppressed once
+    // KEY_CLAMP_NOTICE_ACKNOWLEDGED is set -- a stored value a previous build clamped stays
+    // clamped forever (nothing rewrites the raw key except a fresh setBufferDurationMinutes call),
+    // so without this flag the notice would resurface on every single launch instead of exactly
+    // once.
+    override val clampNoticeFlow: Flow<ClampNotice?> = dataStore.data.map { prefs ->
+        val notice = clampNoticeFor(prefs[KEY_BUFFER_DURATION_MINUTES])
+        val acknowledged = prefs[KEY_CLAMP_NOTICE_ACKNOWLEDGED] ?: false
+        if (notice != null && !acknowledged) notice else null
+    }
+
+    override suspend fun acknowledgeClampNotice() {
+        dataStore.edit { prefs -> prefs[KEY_CLAMP_NOTICE_ACKNOWLEDGED] = true }
+    }
+
     companion object {
         private val KEY_BUFFER_DURATION_MINUTES = intPreferencesKey("buffer_duration_minutes")
+        private val KEY_CLAMP_NOTICE_ACKNOWLEDGED = booleanPreferencesKey("clamp_notice_acknowledged")
 
         /** Production factory: builds the real, disk-backed [DataStoreRetentionWindowPreferences]
          * from a [Context] -- the constructor above stays [Context]-free for testability (see its
@@ -188,9 +240,14 @@ private val Context.retentionWindowDataStore: DataStore<Preferences> by preferen
  * instead. */
 class InMemoryRetentionWindowPreferences(
     initialMinutes: Int = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+    // Issue #84: lets a test construct a fake that already has a pending clamp notice, without
+    // going through a real DataStore -- production code never passes this (a fresh in-memory
+    // instance always starts at a valid, un-clamped initialMinutes).
+    initialClampNotice: ClampNotice? = null,
 ) : RetentionWindowPreferences {
 
     private val state = kotlinx.coroutines.flow.MutableStateFlow(initialMinutes)
+    private val clampNoticeState = kotlinx.coroutines.flow.MutableStateFlow(initialClampNotice)
 
     override val bufferDurationMinutesFlow: Flow<Int> = state
 
@@ -203,5 +260,11 @@ class InMemoryRetentionWindowPreferences(
                 "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $minutes"
         }
         state.value = minutes
+    }
+
+    override val clampNoticeFlow: Flow<ClampNotice?> = clampNoticeState
+
+    override suspend fun acknowledgeClampNotice() {
+        clampNoticeState.value = null
     }
 }
