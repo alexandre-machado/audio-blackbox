@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -95,22 +94,15 @@ class MainActivity : ComponentActivity() {
                 // Box the way the previous, buggy layout had it.
                 var selectedDestination by rememberSaveable { mutableStateOf(Destination.DASHBOARD) }
 
-                Scaffold(
-                    bottomBar = {
-                        // Only shown once past onboarding -- same gate the content slot below uses.
-                        // Scaffold measures this composable structurally on every layout pass and
-                        // derives the content slot's `innerPadding` from that real measurement (see
-                        // FloatingBottomBar's class doc for why this replaced a manual `Box` +
-                        // `onSizeChanged` overlay that PR #74 review found left the bar drawn over
-                        // Dashboard content on a real device).
-                        if (stepState == OnboardingStep.DONE) {
-                            FloatingBottomBar(
-                                selected = selectedDestination,
-                                onSelect = { selectedDestination = it },
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                    },
+                // The Scaffold + bottomBar shell lives in AppScaffold (issue #78) so an
+                // instrumented Compose UI test can assert its layout contract -- "content is never
+                // drawn under the bar", the thing PR #74 got wrong -- without standing up
+                // permissions, onboarding state, DataStore and the service. Behaviour here is
+                // unchanged: same Scaffold, same bottomBar slot, same onboarding gate.
+                AppScaffold(
+                    selectedDestination = selectedDestination,
+                    onSelectDestination = { selectedDestination = it },
+                    showBottomBar = stepState == OnboardingStep.DONE,
                 ) { innerPadding ->
                     if (stepState == OnboardingStep.DONE) {
                         val stopEngine: () -> Unit = {

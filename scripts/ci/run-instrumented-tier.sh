@@ -27,6 +27,12 @@ APP_ID="cc.machado.audioblackbox"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
+# Where ScreenshotCaptureTest (issue #78) writes its PNGs, relative to the app's data dir, and
+# where they land in the workspace for .github/workflows/ci.yml to upload as an artifact. The
+# device path is the app's *internal* files dir on purpose: `run-as` reads it on any API level
+# without a storage permission, unlike /sdcard/Android/data.
+SCREENSHOT_DEVICE_DIR="files/screenshots"
+SCREENSHOT_OUT_DIR="build/screen-captures"
 MARKER_TAG="SpliceTest"
 MARKER_READY="READY_FOR_CALLS"
 FAKE_CALLER_NUMBER="5551234567"
@@ -61,6 +67,10 @@ log "Installing app + test APKs..."
 "${ADB[@]}" install -r -t "$APP_APK" >/dev/null
 "${ADB[@]}" install -r -t "$TEST_APK" >/dev/null
 
+# `install -r` keeps the app's data dir, so captures from an earlier run on the same emulator
+# would otherwise be pulled and uploaded as if this run had produced them.
+"${ADB[@]}" shell run-as "$APP_ID" rm -rf "$SCREENSHOT_DEVICE_DIR" >/dev/null 2>&1 || true
+
 # --- Phase 1: everything except InterruptionSpliceTest --------------------
 # Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
 # leftovers from some earlier install/boot activity that happened to log the same tag.
@@ -71,6 +81,33 @@ set +e
   2>&1 | tee /tmp/instrumented-phase1.log
 PHASE1_STATUS=$?
 set -e
+
+# --- Screen captures (issue #78) ------------------------------------------
+# Pulled *before* phase 1's pass/fail gate below, deliberately: when a layout assertion fails, the
+# picture of the screen it failed on is the single most useful thing a reviewer can look at, and it
+# only exists on an emulator that is about to be thrown away.
+log "Pulling screen captures written by ScreenshotCaptureTest (issue #78)..."
+rm -rf "$SCREENSHOT_OUT_DIR"
+mkdir -p "$SCREENSHOT_OUT_DIR"
+CAPTURES="$("${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null | tr -d '\r' || true)"
+if [[ -z "$CAPTURES" ]]; then
+  # If the tests themselves failed, missing captures are a symptom, not the disease -- report and
+  # let the phase-1 gate below produce the real error. If they passed, ScreenshotCaptureTest
+  # asserted it wrote non-empty PNGs, so an empty pull means this transfer broke, and treating that
+  # as success would quietly ship a green run with no screenshots (same reasoning as the
+  # HeadroomBenchmark capture above).
+  if [[ $PHASE1_STATUS -eq 0 ]]; then
+    fail "No screen captures found under the app's $SCREENSHOT_DEVICE_DIR even though the tests passed -- the capture/pull path is broken."
+  fi
+  log "WARNING: no screen captures to pull (the instrumented run failed before writing them)."
+else
+  for capture in $CAPTURES; do
+    "${ADB[@]}" exec-out run-as "$APP_ID" cat "$SCREENSHOT_DEVICE_DIR/$capture" > "$SCREENSHOT_OUT_DIR/$capture"
+    [[ -s "$SCREENSHOT_OUT_DIR/$capture" ]] || fail "Pulled an empty file for screen capture '$capture'."
+    log "  $SCREENSHOT_OUT_DIR/$capture ($(wc -c < "$SCREENSHOT_OUT_DIR/$capture") bytes)"
+  done
+fi
+
 if [[ $PHASE1_STATUS -ne 0 ]] || ! grep -q "OK (" /tmp/instrumented-phase1.log; then
   fail "Non-interruption instrumented tests did not report OK -- see the log above."
 fi

@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cc.machado.audioblackbox.R
@@ -25,6 +26,16 @@ enum class Destination {
     DASHBOARD,
     SETTINGS,
 }
+
+/**
+ * Identifies the bar's own [Surface] -- i.e. its visible rectangle, excluding the caller's margin
+ * -- to the instrumented layout harness (issue #78, `ScreenLayoutTest`), which asserts that screen
+ * content stays clear of exactly that rectangle. Deliberately a tag on the bar rather than on every
+ * element the tests check: the bar is the one thing whose measured bounds every one of those
+ * assertions needs, and deriving them from the nav items' bounds instead would silently exclude the
+ * bar's own padding -- the strip PR #74's defect actually covered content with.
+ */
+const val FLOATING_BOTTOM_BAR_TEST_TAG = "floating_bottom_bar"
 
 /**
  * A floating bottom navigation bar (issue #73) built entirely from stock Material 3 primitives --
@@ -59,7 +70,7 @@ fun FloatingBottomBar(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.testTag(FLOATING_BOTTOM_BAR_TEST_TAG),
         shape = RoundedCornerShape(28.dp),
         tonalElevation = 3.dp,
         shadowElevation = 6.dp,
