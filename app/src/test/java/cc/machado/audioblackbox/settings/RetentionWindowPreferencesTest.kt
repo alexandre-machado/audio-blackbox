@@ -102,12 +102,12 @@ class RetentionWindowPreferencesTest {
     }
 
     @Test
-    fun `setBufferDurationMinutes rejects a value outside the bounded options instead of silently persisting it`() = runTest {
+    fun `setBufferDurationMinutes rejects a value outside the bounded range instead of silently persisting it`() = runTest {
         val preferences = DataStoreRetentionWindowPreferences(newDataStore())
 
         var thrown: IllegalArgumentException? = null
         try {
-            preferences.setBufferDurationMinutes(45)
+            preferences.setBufferDurationMinutes(65)
         } catch (e: IllegalArgumentException) {
             thrown = e
         }
@@ -117,30 +117,80 @@ class RetentionWindowPreferencesTest {
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.currentBufferDurationMinutes())
     }
 
+    @Test
+    fun `setBufferDurationMinutes rejects an in-range but off-step value instead of silently persisting it`() = runTest {
+        // Issue #73: the stepper's domain is a range with a step, not a fixed list -- 37 is inside
+        // [MIN, MAX] but not a multiple of STEP, a distinct way to be invalid from "out of range"
+        // that could not exist under the old fixed-list domain.
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+
+        var thrown: IllegalArgumentException? = null
+        try {
+            preferences.setBufferDurationMinutes(37)
+        } catch (e: IllegalArgumentException) {
+            thrown = e
+        }
+
+        assertEquals(true, thrown != null)
+        assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.currentBufferDurationMinutes())
+    }
+
     // `@techlead` adjudication on PR #57, item 1 (`@sec` finding): a value that is *present but
-    // out of bounds* is reachable through entirely normal use -- not only a hand-edited/corrupt
-    // file -- e.g. a future release changing AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES combined
-    // with a downgrade, or the option set otherwise shrinking, after a value from the old set was
-    // persisted. This writes directly through a raw DataStore<Preferences> (bypassing
-    // setBufferDurationMinutes's own write-side `require`, which is exactly the point: this
-    // simulates a value that reached disk some other way, not one this class itself would ever
-    // write today) using the identical key name DataStoreRetentionWindowPreferences uses --
-    // Preferences DataStore keys compare by name+type, not instance identity, so this is a real
-    // stand-in for "whatever is on disk", the same as `PreferencesProto` would produce.
+    // invalid* is reachable through entirely normal use -- not only a hand-edited/corrupt file --
+    // e.g. a future release narrowing AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/
+    // STEP_MINUTES combined with a downgrade, or the valid domain otherwise shrinking, after a
+    // value that was valid under the old bounds was persisted. This writes directly through a raw
+    // DataStore<Preferences> (bypassing setBufferDurationMinutes's own write-side `require`, which
+    // is exactly the point: this simulates a value that reached disk some other way, not one this
+    // class itself would ever write today) using the identical key name
+    // DataStoreRetentionWindowPreferences uses -- Preferences DataStore keys compare by name+type,
+    // not instance identity, so this is a real stand-in for "whatever is on disk", the same as
+    // `PreferencesProto` would produce.
     private val rawKeyBufferDurationMinutes = intPreferencesKey("buffer_duration_minutes")
 
     @Test
-    fun `a persisted out-of-bounds value degrades to the fallback instead of reaching the caller`() = runTest {
+    fun `a persisted out-of-range value degrades to the fallback instead of reaching the caller`() = runTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 1000 }
 
         val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
 
         assertEquals(
-            "an out-of-bounds stored value must never reach a caller that will use it to size a buffer",
+            "an out-of-range stored value must never reach a caller that will use it to size a buffer",
             AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
             preferences.currentBufferDurationMinutes(),
         )
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
+    }
+
+    @Test
+    fun `a persisted in-range but off-step value degrades to the fallback instead of reaching the caller`() = runTest {
+        // 37 is in [MIN, MAX] but not a multiple of STEP -- this shape of invalid value did not
+        // exist under the old fixed-list domain (issue #45/#57) and must be caught the same way an
+        // out-of-range value is, not treated as "close enough".
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 37 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(
+            "an off-step stored value must never reach a caller that will use it to size a buffer",
+            AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+            preferences.currentBufferDurationMinutes(),
+        )
+        assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
+    }
+
+    @Test
+    fun `a persisted value that was valid under the old fixed-list domain remains valid (15 needs no migration)`() = runTest {
+        // 15 was a member of the pre-issue-#73 fixed list [5, 15, 30, 60] and remains valid under
+        // the range+step domain (in [5, 60], a multiple of 5) -- this is the migration guarantee
+        // issue #73's write-up calls out explicitly.
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 15 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(15, preferences.currentBufferDurationMinutes())
     }
 }

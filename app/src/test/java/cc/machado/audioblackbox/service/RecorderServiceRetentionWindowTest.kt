@@ -48,18 +48,37 @@ class RecorderServiceRetentionWindowTest {
     }
 
     @Test
-    fun `rebuildEngineIfIdle rejects a capacity outside the bounded options and changes nothing`() {
+    fun `rebuildEngineIfIdle rejects a capacity outside the bounded range and changes nothing`() {
         RecorderService.rebuildEngineIfIdle(30)
         val before = RecorderService.bufferDurationMinutes
 
         var thrown = false
         try {
-            RecorderService.rebuildEngineIfIdle(45)
+            RecorderService.rebuildEngineIfIdle(65)
         } catch (e: IllegalArgumentException) {
             thrown = true
         }
 
-        assertTrue("45 is not one of AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES", thrown)
+        assertTrue("65 is above AudioConfig.RETENTION_WINDOW_MAX_MINUTES", thrown)
+        assertEquals(before, RecorderService.bufferDurationMinutes)
+    }
+
+    @Test
+    fun `rebuildEngineIfIdle rejects an in-range but off-step capacity and changes nothing`() {
+        // Issue #73: the stepper's domain is a range with a step, not the old fixed list -- 37 is
+        // inside [MIN, MAX] but not a multiple of STEP, a distinct way to be invalid that could not
+        // exist under the pre-#73 fixed-list domain.
+        RecorderService.rebuildEngineIfIdle(30)
+        val before = RecorderService.bufferDurationMinutes
+
+        var thrown = false
+        try {
+            RecorderService.rebuildEngineIfIdle(37)
+        } catch (e: IllegalArgumentException) {
+            thrown = true
+        }
+
+        assertTrue("37 is not a multiple of AudioConfig.RETENTION_WINDOW_STEP_MINUTES", thrown)
         assertEquals(before, RecorderService.bufferDurationMinutes)
     }
 }

@@ -115,17 +115,30 @@
     <string name="gallery_delete_error_title">Não foi possível excluir</string>
     <string name="gallery_delete_error_body">Esta gravação não pôde ser excluída. Isso pode acontecer com gravações antigas após reinstalar o aplicativo.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
-    <!-- Retention window selector (issue #45) -->
-    <string name="dashboard_retention_title">Retenção em memória</string>
-    <string name="dashboard_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória.</string>
-    <string name="dashboard_retention_option">%1$d min (~%2$d MB)</string>
-    <!-- Not a plural: AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES is 5/15/30/60, never 1, so the
-         "minutos" (plural) form is always correct here, see that constant's bounds comment.
-         Real pluralization is issue #44's job for all locale-sensitive copy in this app, not a
-         one-off plurals resource for this string alone. -->
-    <string name="dashboard_retention_option_cd" tools:ignore="PluralsCandidate">Manter %1$d minutos em memória, aproximadamente %2$d megabytes</string>
-    <string name="dashboard_retention_confirm_title">Trocar a retenção agora?</string>
-    <string name="dashboard_retention_confirm_body">Trocar para %1$d min exige parar o motor, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
-    <string name="dashboard_retention_confirm_accept">Parar e trocar</string>
-    <string name="dashboard_retention_confirm_cancel">Cancelar</string>
+    <!-- Barra flutuante inferior (issue #73) -->
+    <string name="nav_dashboard_label">Painel</string>
+    <string name="nav_settings_label">Ajustes</string>
+
+    <!-- Tela de ajustes / controle deslizante de retenção (issue #73, substituindo os chips
+         fixos das issues #45/#57) -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_retention_title">Retenção em memória</string>
+    <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. Use os botões abaixo para escolher um valor e depois toque em Aplicar.</string>
+    <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
+    <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES limitam o
+         controle a múltiplos de 5 no intervalo [5, 60], então o valor nunca é 1, e a forma plural
+         "minutos" é sempre correta aqui. Isso já valia no domínio antigo de lista fixa (revisado na
+         issue #44) e continua valendo no domínio de intervalo com passo: todo valor alcançável,
+         inclusive os novos como 35/40/45/50/55, ainda é múltiplo de 5. Revisado novamente para a
+         issue #73. -->
+    <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutos, aproximadamente %2$d megabytes, ativo no momento</string>
+    <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutos, aproximadamente %2$d megabytes, ainda não aplicado</string>
+    <string name="settings_retention_decrement_cd">Diminuir a retenção em 5 minutos</string>
+    <string name="settings_retention_increment_cd">Aumentar a retenção em 5 minutos</string>
+    <string name="settings_retention_pending_notice">%1$d min continua ativo até você aplicar essa mudança</string>
+    <string name="settings_retention_apply_button">Aplicar</string>
+    <string name="settings_retention_confirm_title">Trocar a retenção agora?</string>
+    <string name="settings_retention_confirm_body">Trocar para %1$d min exige parar o motor, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
+    <string name="settings_retention_confirm_accept">Parar e trocar</string>
+    <string name="settings_retention_confirm_cancel">Cancelar</string>
 </resources>
