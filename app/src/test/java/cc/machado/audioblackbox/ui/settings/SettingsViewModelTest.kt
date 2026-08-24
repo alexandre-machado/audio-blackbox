@@ -2,10 +2,12 @@ package cc.machado.audioblackbox.ui.settings
 
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -354,6 +356,77 @@ class SettingsViewModelTest {
         assertTrue("committing the current value must not rebuild or persist anything", rebuildCalls.isEmpty())
         assertEquals(30, preferences.currentBufferDurationMinutes())
         assertNull(observed.last().retentionStepper.pendingConfirmationMinutes)
+
+        job.cancel()
+    }
+
+    // ---- Clamp-down notice (issue #84) ----
+
+    @Test
+    fun `uiState surfaces a pending clamp notice from the preferences layer`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(
+            initialMinutes = 45,
+            initialClampNotice = ClampNotice(previousMinutes = 60, newMinutes = 45),
+        )
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(45),
+            retentionWindowPreferences = preferences,
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        assertEquals(60, observed.last().clampNotice?.previousMinutes)
+        assertEquals(45, observed.last().clampNotice?.newMinutes)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `acknowledgeClampNotice clears it from uiState and persists the acknowledgement`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(
+            initialMinutes = 45,
+            initialClampNotice = ClampNotice(previousMinutes = 60, newMinutes = 45),
+        )
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(45),
+            retentionWindowPreferences = preferences,
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+        assertTrue(observed.last().clampNotice != null)
+
+        vm.acknowledgeClampNotice()
+        runCurrent()
+
+        assertNull(
+            "acknowledging must clear the notice for this and every subsequent frame",
+            observed.last().clampNotice,
+        )
+        assertNull(
+            "acknowledgement must reach the preferences layer, not just local UI state",
+            preferences.clampNoticeFlow.first(),
+        )
+
+        job.cancel()
+    }
+
+    @Test
+    fun `a user who was never clamped never sees a notice`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            retentionWindowPreferences = preferences,
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        assertNull(observed.last().clampNotice)
 
         job.cancel()
     }

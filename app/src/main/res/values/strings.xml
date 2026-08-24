@@ -141,4 +141,14 @@
     <string name="settings_retention_confirm_body">Switching to %1$d min requires stopping the recording, which discards all audio currently in memory. That recording can\'t be recovered afterward.</string>
     <string name="settings_retention_confirm_accept">Stop and switch</string>
     <string name="settings_retention_confirm_cancel">Cancel</string>
+
+    <!-- Clamp-down notice (issue #84): shown at most once, only to a user whose stored retention
+         window (50/55/60, persisted before issue #72's interim clamp) was reduced on load. Never
+         shown to a user already at or below the current max. -->
+    <string name="settings_retention_clamp_notice_title">Retention window reduced</string>
+    <!-- Not a plural, same reasoning as settings_retention_value_active_cd above: %1$d is always a
+         pre-clamp value (50/55/60) and %2$d is always AudioConfig.RETENTION_WINDOW_MAX_MINUTES
+         (45), so neither is ever 1. -->
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your retention window was reduced from %1$d to %2$d minutes as an interim memory-safety measure while a permanent fix is in progress.</string>
+    <string name="settings_retention_clamp_notice_dismiss">Got it</string>
 </resources>
