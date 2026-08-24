@@ -142,9 +142,11 @@ Rendered at 48dp under a circle mask, the result reads clearly as the four-part 
 | Base plate | 43.05dp | 31.86dp |
 | Upright box | 41.35dp | 30.60dp |
 | Connector nub | 41.84dp | 30.96dp |
-| Horizontal cylinder | 22.67dp (already safe) | 16.77dp |
+| Horizontal cylinder | 29.97dp | 22.18dp |
 
 Three of the four shapes exceeded even the 36dp absolute limit, not just the 33dp guaranteed-safe radius — they would visibly clip under a circular or squircle themed-icon mask on Android 13+. The fix is a uniform 0.74 scale of all four shapes about the (54,54) center, which keeps the isometric proportions intact (same relative sizes and positions, so the mark is still recognisable as the same object, not shrunk to a dot) while bringing the farthest reach to 31.86dp — inside the 33dp safe radius, filling roughly 96% of the safe circle's diameter. See `app/src/main/res/drawable/ic_launcher_monochrome.xml`'s header comment for the exact coordinates.
+
+**Correction (2026-08-24, `@rev`/`@design` cross-check): the cylinder row above was wrong in the first cut of this table** — it measured the path's arc *endpoints*, but the cylinder's two end caps are each a true 180° semicircle (two `A` commands sharing one center), and a semicircle's farthest point from an external centre generally lies partway around the arc, not at either endpoint. Re-deriving from the path data: the left cap's centre sits at (40.68, 49.56) after the 0.74 scale (r = 8.14dp) and (36.0, 48.0) before it (r = 11.0dp); the ray from the canvas centre (54,54) through that cap centre falls inside the cap's actual 90°→270° sweep, so farthest reach = distance(canvas centre, cap centre) + r, giving 29.97dp before and 22.18dp after (both computed independently by `@rev` and `@design` and confirmed to match). This does not change the safety conclusion — 22.18dp is still comfortably inside the 33dp guaranteed-safe radius — but it was the wrong number for a table whose whole purpose is precise geometry. The other three rows (base plate, upright box, connector nub) were re-checked with the same arc-aware method and are unaffected: each is an ordinary 90°-corner rounded rectangle whose farthest corner's away-ray also falls inside that corner's own 90° sweep, so "distance to corner-arc centre plus corner radius" was already the right formula and the published figures hold.
 
 ### Preview renders (not shipped)
 
