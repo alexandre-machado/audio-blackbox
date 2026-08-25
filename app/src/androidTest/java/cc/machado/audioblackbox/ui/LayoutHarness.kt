@@ -54,6 +54,16 @@ internal fun HarnessApp(initialDestination: Destination) {
                     onSelectWindow = {},
                     onDismissSaveNotice = {},
                 )
+                Destination.GALLERY -> cc.machado.audioblackbox.ui.gallery.GalleryScreen(
+                    uiState = galleryFixture(),
+                    onPlayPauseClicked = {},
+                    onSeek = {},
+                    onShareClicked = {},
+                    onDeleteRequested = {},
+                    onDeleteConfirmed = {},
+                    onDeleteCancelled = {},
+                    onDeleteErrorDismissed = {},
+                )
                 Destination.SETTINGS -> SettingsScreen(
                     uiState = settingsFixture(),
                     onDecrement = {},
@@ -116,4 +126,9 @@ internal fun settingsFixture() = SettingsViewModel.mapUiState(
     committedMinutes = 30,
     pendingMinutes = 45,
     pendingConfirmationMinutes = null,
+)
+
+internal fun galleryFixture() = cc.machado.audioblackbox.ui.gallery.GalleryUiState(
+    isLoading = false,
+    items = emptyList(),
 )
