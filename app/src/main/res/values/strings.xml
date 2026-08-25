@@ -151,4 +151,18 @@
          (45), so neither is ever 1. -->
     <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your retention window was reduced from %1$d to %2$d minutes as an interim memory-safety measure while a permanent fix is in progress.</string>
     <string name="settings_retention_clamp_notice_dismiss">Got it</string>
+    <!-- Quick Settings tile (issue #79) -->
+    <string name="tile_label">Audio Blackbox</string>
+    <string name="tile_state_recording">Recording</string>
+    <string name="tile_state_paused">Paused</string>
+    <string name="tile_state_idle">Off</string>
+    <string name="tile_state_error">Error</string>
+
+    <!-- Resume recording after reboot notification (issue #79) -->
+    <string name="notification_resume_channel_name">Resume recording prompt</string>
+    <string name="notification_resume_channel_description">Prompts to resume continuous recording after device restart.</string>
+    <string name="notification_resume_title">Resume continuous recording</string>
+    <string name="notification_resume_content">Recording was active before the device restarted.</string>
+    <string name="notification_resume_action_resume">Resume recording</string>
+    <string name="notification_resume_action_dismiss">Dismiss</string>
 </resources>
