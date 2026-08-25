@@ -1,0 +1,6 @@
+First release of Audio Blackbox for internal testing:
+- Continuous ambient audio rolling buffer in RAM (5, 15, 30, or 60 minutes)
+- On-demand audio export in WAV or AAC (M4A)
+- Automatic pause and resume during phone calls
+- Built-in recordings gallery for playback and sharing
+- 100% private: audio never leaves your device
