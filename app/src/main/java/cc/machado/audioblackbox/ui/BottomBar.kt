@@ -19,11 +19,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cc.machado.audioblackbox.R
 
-/** The app's two screens (issue #73), switched by [FloatingBottomBar]. Deliberately a hoisted
- * `enum` + `selected`/`onSelect` state, not `navigation-compose` -- two destinations do not justify
- * that dependency and its API surface (see issue #73's explicit instruction not to add it). */
+import androidx.compose.material.icons.filled.PlayArrow
+
+/** The app's screens, switched by [FloatingBottomBar]. Deliberately a hoisted
+ * `enum` + `selected`/`onSelect` state, not `navigation-compose` -- three destinations do not justify
+ * that dependency and its API surface. */
 enum class Destination {
     DASHBOARD,
+    GALLERY,
     SETTINGS,
 }
 
@@ -38,7 +41,7 @@ enum class Destination {
 const val FLOATING_BOTTOM_BAR_TEST_TAG = "floating_bottom_bar"
 
 /**
- * A floating bottom navigation bar (issue #73) built entirely from stock Material 3 primitives --
+ * A floating bottom navigation bar built entirely from stock Material 3 primitives --
  * a [Surface] with a shape/elevation wrapping a stock [NavigationBar] -- rather than any
  * Material 3 Expressive component, which is explicitly out of scope for this project (see issue
  * #9). "Floating" here means visually: a shaped, elevated surface inset from the screen edges by
@@ -83,12 +86,15 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.DASHBOARD,
                 onClick = { onSelect(Destination.DASHBOARD) },
-                // `contentDescription = null`: the visible label text below already supplies the
-                // accessible name for this item (NavigationBarItem merges icon + label semantics),
-                // so a redundant description here would be exactly the "*_cd that only repeats its
-                // label" issue #66 was filed over.
                 icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = null) },
                 label = { Text(text = stringResource(R.string.nav_dashboard_label)) },
+                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
+            )
+            NavigationBarItem(
+                selected = selected == Destination.GALLERY,
+                onClick = { onSelect(Destination.GALLERY) },
+                icon = { Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null) },
+                label = { Text(text = stringResource(R.string.nav_gallery_label)) },
                 colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
             )
             NavigationBarItem(

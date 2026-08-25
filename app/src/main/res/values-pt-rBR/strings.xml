@@ -115,8 +115,9 @@
     <string name="gallery_delete_error_title">Não foi possível excluir</string>
     <string name="gallery_delete_error_body">Esta gravação não pôde ser excluída. Isso pode acontecer com gravações antigas após reinstalar o aplicativo.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
-    <!-- Barra flutuante inferior (issue #73) -->
+    <!-- Barra flutuante inferior -->
     <string name="nav_dashboard_label">Painel</string>
+    <string name="nav_gallery_label">Galeria</string>
     <string name="nav_settings_label">Ajustes</string>
 
     <!-- Tela de ajustes / controle deslizante de retenção (issue #73, substituindo os chips

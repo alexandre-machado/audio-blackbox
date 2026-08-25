@@ -115,8 +115,9 @@
     <string name="gallery_delete_error_title">Couldn\'t delete</string>
     <string name="gallery_delete_error_body">This recording couldn\'t be deleted. This can happen with older recordings after reinstalling the app.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
-    <!-- Floating bottom bar (issue #73) -->
+    <!-- Floating bottom bar -->
     <string name="nav_dashboard_label">Dashboard</string>
+    <string name="nav_gallery_label">Gallery</string>
     <string name="nav_settings_label">Settings</string>
 
     <!-- Settings screen / retention stepper (issue #73, superseding the dashboard's chip

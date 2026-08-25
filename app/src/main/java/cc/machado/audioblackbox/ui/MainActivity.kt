@@ -41,6 +41,7 @@ import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.ui.dashboard.DashboardRoute
 import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
+import cc.machado.audioblackbox.ui.gallery.GalleryRoute
 import cc.machado.audioblackbox.ui.onboarding.OnboardingScreen
 import cc.machado.audioblackbox.ui.settings.SettingsRoute
 import cc.machado.audioblackbox.ui.settings.SettingsViewModel
@@ -158,6 +159,7 @@ class MainActivity : ComponentActivity() {
                             Destination.DASHBOARD -> DashboardRoute(
                                 viewModel = viewModel(factory = dashboardViewModelFactory),
                             )
+                            Destination.GALLERY -> GalleryRoute()
                             Destination.SETTINGS -> SettingsRoute(
                                 viewModel = viewModel(factory = settingsViewModelFactory),
                             )
