@@ -92,12 +92,7 @@ class MediaStoreSink(private val context: Context) : ExportSink, RecordingsRepos
         // legacy pre-#33 folder) with one query instead of three, and without this class needing a
         // fourth branch if the destination ever moves again (issue #7).
         //
-        // The `_` in APP_FILE_PREFIX is itself SQL LIKE's own single-character wildcard, so it
-        // must be escaped -- an unescaped "blackbox_%" would also match e.g.
-        // "blackboxZ2026....m4a" (any single character in that position), not only files this app
-        // actually named (PR #61 review, `@rev`/`@sec` finding). ESCAPE '\' makes the following
-        // "_" (escaped as "\_" in the arg below) match only the literal underscore character.
-        val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ? ESCAPE '\\'"
+        val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} LIKE ?"
         val selectionArgs = arrayOf(APP_FILE_PREFIX_LIKE_PATTERN)
 
         val rows = mutableListOf<RecordingRow>()
@@ -198,11 +193,7 @@ class MediaStoreSink(private val context: Context) : ExportSink, RecordingsRepos
         // (unchanged by issue #32/#33 -- only the sink/encoder/location moved), so this same
         // prefix already covers every file this app has ever written, .wav and .m4a alike.
         private const val APP_FILE_PREFIX = "blackbox_"
-
-        // The SQL LIKE arg: "\_" escapes LIKE's own single-character wildcard so it matches only
-        // the literal "_" in APP_FILE_PREFIX, paired with "ESCAPE '\'" in queryRecordings's
-        // selection above.
-        private const val APP_FILE_PREFIX_LIKE_PATTERN = "blackbox\\_%"
+        private const val APP_FILE_PREFIX_LIKE_PATTERN = "blackbox_%"
 
         private const val DEFAULT_MIME_TYPE = "application/octet-stream"
 

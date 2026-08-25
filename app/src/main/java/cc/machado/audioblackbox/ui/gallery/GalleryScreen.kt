@@ -54,6 +54,9 @@ import androidx.compose.material3.Button
 fun GalleryRoute(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val viewModel: GalleryViewModel = viewModel(factory = GalleryViewModel.factory(context))
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     GalleryScreen(
         uiState = uiState,

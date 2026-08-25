@@ -1,8 +1,10 @@
 package cc.machado.audioblackbox.ui
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,8 +20,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cc.machado.audioblackbox.R
-
-import androidx.compose.material.icons.filled.PlayArrow
 
 /** The app's screens, switched by [FloatingBottomBar]. Deliberately a hoisted
  * `enum` + `selected`/`onSelect` state, not `navigation-compose` -- three destinations do not justify
@@ -82,6 +82,7 @@ fun FloatingBottomBar(
         NavigationBar(
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
+            windowInsets = WindowInsets(0, 0, 0, 0),
         ) {
             NavigationBarItem(
                 selected = selected == Destination.DASHBOARD,

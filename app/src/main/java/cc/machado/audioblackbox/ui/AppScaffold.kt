@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.ui
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -55,9 +56,11 @@ fun AppScaffold(
                 FloatingBottomBar(
                     selected = selectedDestination,
                     onSelect = onSelectDestination,
-                    // A fixed visual margin from the already-safe edge. It is part of what
-                    // Scaffold measures, so it is reserved in `innerPadding` too.
-                    modifier = Modifier.padding(BOTTOM_BAR_MARGIN),
+                    // A fixed visual margin above the system navigation bar (3-button or gesture).
+                    // Scaffold measures the bar including this inset and reserves it in innerPadding.
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(BOTTOM_BAR_MARGIN),
                 )
             }
         },
