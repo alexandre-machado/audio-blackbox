@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -94,9 +95,9 @@ fun DashboardScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(DASHBOARD_PADDING),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        verticalArrangement = Arrangement.spacedBy(DASHBOARD_PADDING),
     ) {
         StatusSection(uiState.captureStatus)
         BufferSection(uiState)
@@ -281,10 +282,10 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(text = label, style = MaterialTheme.typography.titleMedium)
             Text(text = stateText, style = MaterialTheme.typography.bodyMedium, color = stateColor)
         }
@@ -292,6 +293,7 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
             checked = engineSwitch.checked,
             onCheckedChange = { onToggleEngine() },
             enabled = engineSwitch.enabled,
+            modifier = Modifier.testTag(ENGINE_SWITCH_TEST_TAG),
         )
     }
 }
@@ -555,3 +557,9 @@ private fun DashboardScreenSaveErrorPreview() {
         )
     }
 }
+
+/** Outer padding applied to the dashboard content column. */
+val DASHBOARD_PADDING = 24.dp
+
+/** Test tag for the continuous recording engine switch control. */
+const val ENGINE_SWITCH_TEST_TAG = "dashboard_engine_switch"
