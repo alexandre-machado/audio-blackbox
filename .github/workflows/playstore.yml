@@ -86,7 +86,7 @@ jobs:
         if: ${{ !inputs.sync_only }}
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY || secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: cc.machado.audioblackbox
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           track: ${{ github.event.inputs.track || 'internal' }}
@@ -95,7 +95,7 @@ jobs:
 
       - name: Sync Store Listing Metadata
         env:
-          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY || secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
           PACKAGE_NAME: cc.machado.audioblackbox
         run: |
           pip install --quiet google-api-python-client google-auth

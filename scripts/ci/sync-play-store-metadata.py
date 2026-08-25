@@ -11,10 +11,10 @@ import glob
 
 def main():
     package_name = os.getenv("PACKAGE_NAME", "cc.machado.audioblackbox")
-    service_account_json = os.getenv("PLAY_STORE_JSON_KEY") or os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+    service_account_json = os.getenv("PLAY_STORE_JSON_KEY")
     
     if not service_account_json:
-        print("ERROR: PLAY_STORE_JSON_KEY or FIREBASE_SERVICE_ACCOUNT_KEY environment variable is required.")
+        print("ERROR: PLAY_STORE_JSON_KEY environment variable is required.")
         sys.exit(1)
 
     try:
