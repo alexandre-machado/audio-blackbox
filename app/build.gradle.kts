@@ -94,6 +94,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".staging"
+        }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
