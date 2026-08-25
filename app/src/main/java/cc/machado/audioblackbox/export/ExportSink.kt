@@ -1,5 +1,8 @@
 package cc.machado.audioblackbox.export
 
+import android.net.Uri
+import java.io.Closeable
+import java.io.FileDescriptor
 import java.io.IOException
 import java.io.OutputStream
 
@@ -36,4 +39,54 @@ interface ExportTarget {
     /** Deletes the (possibly partially written) destination. Call on any failure or
      * cancellation so a half-written file is never left orphaned. */
     fun abort()
+}
+
+/**
+ * Seam over live streaming export destinations for long-running forward recordings (issue #53).
+ */
+interface StreamingExportSink {
+
+    /**
+     * Opens a new live streaming destination named [displayName], declared as [mimeType],
+     * with early commit (`IS_PENDING = 0`) so that in-progress recordings are immediately
+     * visible in MediaStore and Gallery while still being written.
+     *
+     * @throws IOException if the destination cannot be created (insert rejected, disk full, permission denied).
+     */
+    fun openStreaming(displayName: String, mimeType: String): StreamingExportTarget
+}
+
+/**
+ * An active destination for long-running streaming recordings (issue #53).
+ *
+ * Unlike [ExportTarget] (which stays `IS_PENDING = 1` until committed at the very end of a bounded
+ * snapshot export), a [StreamingExportTarget] commits the row early to MediaStore upon creation so
+ * the file is immediately visible in MediaStore and the Gallery while audio continues to be appended.
+ *
+ * ## Lifecycle & Failure Discipline (issue #53)
+ * - On normal completion, [finish] finalizes the container, flushes underlying file descriptors/streams,
+ *   and releases all resources while preserving the committed row.
+ * - On cancellation, error, or unexpected termination (e.g. process death, mid-stream exception,
+ *   storage exhaustion), [close] safely releases open file handles without deleting the row:
+ *   partial recorded audio is preserved on disk for the black box recording.
+ */
+interface StreamingExportTarget : Closeable, AutoCloseable {
+    /** The content URI of the MediaStore row. */
+    val uri: Uri
+
+    /** The seekable file descriptor backing the early-committed destination. */
+    val fileDescriptor: FileDescriptor
+
+    /** An output stream to write directly to the target destination if needed. */
+    val outputStream: OutputStream
+
+    /**
+     * Finalizes the streaming export target.
+     */
+    fun finish()
+
+    /**
+     * Closes underlying descriptors and streams safely without deleting the committed destination.
+     */
+    override fun close()
 }
