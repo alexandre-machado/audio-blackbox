@@ -27,10 +27,24 @@ fun getGitBranch(): String {
     }
 }
 
+fun getGitCommitCount(): Int {
+    return try {
+        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD").start()
+        val countStr = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        countStr.toIntOrNull() ?: 1
+    } catch (_: Exception) {
+        1
+    }
+}
+
 fun computeDynamicVersionName(baseVersion: String): String {
+    val refType = System.getenv("GITHUB_REF_TYPE")
     val branch = getGitBranch()
     val sha = getGitCommitShortSha()
-    return if (branch == "main" || branch.startsWith("v") || branch == "HEAD") {
+    // A tag push (production release) uses the clean base version (e.g. v0.2.0).
+    // Any other build (main/staging, feature branches, local dev) includes the short commit SHA.
+    return if (refType == "tag" || (branch.startsWith("v") && branch != "v" && !branch.contains("-"))) {
         baseVersion
     } else {
         "$baseVersion-$sha"
@@ -56,7 +70,7 @@ android {
         applicationId = "cc.machado.audioblackbox"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
+        versionCode = getGitCommitCount()
         versionName = computeDynamicVersionName("v0.2.0")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
