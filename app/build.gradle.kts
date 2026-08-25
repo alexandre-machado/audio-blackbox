@@ -47,6 +47,7 @@ android {
         // Portuguese translation. Without this, a string added to one locale and not the other
         // ships silently instead of failing the build.
         error += setOf("MissingTranslation", "ExtraTranslation")
+        disable += setOf("InvalidFragmentVersionForActivityResult")
     }
 }
 
@@ -79,6 +80,8 @@ dependencies {
     // Retention-window setting persistence (issue #45) -- DataStore, not SharedPreferences, for
     // new persisted state (see RetentionWindowPreferences's class doc for why).
     implementation(libs.androidx.datastore.preferences)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

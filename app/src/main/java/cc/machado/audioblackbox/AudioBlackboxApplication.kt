@@ -1,8 +1,12 @@
 package cc.machado.audioblackbox
 
 import android.app.Application
+import cc.machado.audioblackbox.analytics.AnalyticsProvider
+import cc.machado.audioblackbox.analytics.FirebaseAnalyticsTracker
+import cc.machado.audioblackbox.analytics.NoOpAnalyticsTracker
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
+import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -27,6 +31,12 @@ class AudioBlackboxApplication : Application() {
         super.onCreate()
         val preferences: RetentionWindowPreferences = DataStoreRetentionWindowPreferences(this)
         PreloadedRetentionWindow.minutes = runBlocking { preferences.currentBufferDurationMinutes() }
+        try {
+            val firebaseAnalytics = FirebaseAnalytics.getInstance(this)
+            AnalyticsProvider.initialize(FirebaseAnalyticsTracker(firebaseAnalytics))
+        } catch (_: Throwable) {
+            AnalyticsProvider.initialize(NoOpAnalyticsTracker)
+        }
     }
 }
 

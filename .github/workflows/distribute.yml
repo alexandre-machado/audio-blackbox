@@ -43,7 +43,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@71fee004f78546b528c11ec1895a6ad6e5d59074 # v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
