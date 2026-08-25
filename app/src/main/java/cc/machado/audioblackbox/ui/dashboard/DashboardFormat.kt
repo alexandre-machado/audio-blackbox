@@ -1,5 +1,8 @@
 package cc.machado.audioblackbox.ui.dashboard
 
+import androidx.annotation.StringRes
+import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.audio.CaptureErrorReason
 import java.util.Locale
 
 /** Formats a millisecond duration as `MM:SS` for the buffer indicator (e.g. `754_000L` ->
@@ -11,4 +14,22 @@ fun formatMillisAsClock(millis: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format(Locale.US, "%02d:%02d", minutes, seconds)
+}
+
+/**
+ * Maps each [CaptureErrorReason] to an actionable, user-facing string resource explaining
+ * what failed and what to do (issue #39).
+ *
+ * Exhaustive `when` with NO `else` branch, ensuring that adding any new [CaptureErrorReason] enum
+ * constant will cause a compile-time failure until an explicit user message resource is mapped.
+ */
+@StringRes
+fun CaptureErrorReason.toUserMessageRes(): Int = when (this) {
+    CaptureErrorReason.BUFFER_ALLOCATION_FAILED -> R.string.capture_error_buffer_allocation_failed
+    CaptureErrorReason.UNSUPPORTED_CONFIG -> R.string.capture_error_unsupported_config
+    CaptureErrorReason.AUDIO_RECORD_INIT_FAILED -> R.string.capture_error_audio_record_init_failed
+    CaptureErrorReason.READ_INVALID_OPERATION -> R.string.capture_error_read_invalid_operation
+    CaptureErrorReason.READ_BAD_VALUE -> R.string.capture_error_read_bad_value
+    CaptureErrorReason.READ_DEAD_OBJECT -> R.string.capture_error_read_dead_object
+    CaptureErrorReason.READ_UNKNOWN_ERROR -> R.string.capture_error_read_unknown_error
 }

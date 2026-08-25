@@ -1,11 +1,17 @@
 package cc.machado.audioblackbox.ui.dashboard
 
+import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.audio.CaptureErrorReason
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Pins exact `MM:SS` output for [formatMillisAsClock] -- the issue's own example
  * ("12:34 de 30:00 em memória") is the primary oracle: a rounding or off-by-one regression in
- * the seconds/minutes split would fail this immediately. */
+ * the seconds/minutes split would fail this immediately.
+ *
+ * Also tests [CaptureErrorReason.toUserMessageRes] (issue #39), ensuring every capture error
+ * reason maps exhaustively to an actionable user-facing string resource. */
 class DashboardFormatTest {
 
     @Test
@@ -32,5 +38,58 @@ class DashboardFormatTest {
     @Test
     fun `negative input is clamped to zero instead of throwing or underflowing`() {
         assertEquals("00:00", formatMillisAsClock(-1_000L))
+    }
+
+    // ---- CaptureErrorReason.toUserMessageRes (issue #39) ----
+
+    @Test
+    fun `every CaptureErrorReason enum entry maps to a valid non-zero string resource`() {
+        for (reason in CaptureErrorReason.entries) {
+            val resId = reason.toUserMessageRes()
+            assertTrue("Expected non-zero string resource for $reason", resId != 0)
+        }
+    }
+
+    @Test
+    fun `each CaptureErrorReason maps to its distinct expected string resource`() {
+        assertEquals(
+            R.string.capture_error_buffer_allocation_failed,
+            CaptureErrorReason.BUFFER_ALLOCATION_FAILED.toUserMessageRes(),
+        )
+        assertEquals(
+            R.string.capture_error_unsupported_config,
+            CaptureErrorReason.UNSUPPORTED_CONFIG.toUserMessageRes(),
+        )
+        assertEquals(
+            R.string.capture_error_audio_record_init_failed,
+            CaptureErrorReason.AUDIO_RECORD_INIT_FAILED.toUserMessageRes(),
+        )
+        assertEquals(
+            R.string.capture_error_read_invalid_operation,
+            CaptureErrorReason.READ_INVALID_OPERATION.toUserMessageRes(),
+        )
+        assertEquals(
+            R.string.capture_error_read_bad_value,
+            CaptureErrorReason.READ_BAD_VALUE.toUserMessageRes(),
+        )
+        assertEquals(
+            R.string.capture_error_read_dead_object,
+            CaptureErrorReason.READ_DEAD_OBJECT.toUserMessageRes(),
+        )
+        assertEquals(
+            R.string.capture_error_read_unknown_error,
+            CaptureErrorReason.READ_UNKNOWN_ERROR.toUserMessageRes(),
+        )
+    }
+
+    @Test
+    fun `every CaptureErrorReason maps to a unique user-facing string resource`() {
+        val resourceIds = CaptureErrorReason.entries.map { it.toUserMessageRes() }
+        val distinctResourceIds = resourceIds.toSet()
+        assertEquals(
+            "Every CaptureErrorReason must map to a unique string resource",
+            CaptureErrorReason.entries.size,
+            distinctResourceIds.size,
+        )
     }
 }
