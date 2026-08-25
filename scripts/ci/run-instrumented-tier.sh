@@ -39,7 +39,7 @@ list_device_captures() {
     grep -E '^[A-Za-z0-9._-]+\.png$' || true
 }
 
-APP_ID="cc.machado.audioblackbox"
+APP_ID="cc.machado.audioblackbox.staging"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
