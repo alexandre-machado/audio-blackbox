@@ -48,4 +48,4 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
       - name: Upload APK to Firebase App Distribution
-        run: ./gradlew appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotes="${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}"
+        run: ./gradlew assembleDebug appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotes="${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}"
