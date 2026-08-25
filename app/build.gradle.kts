@@ -1,5 +1,42 @@
 import java.util.Properties
 
+fun getGitCommitShortSha(): String {
+    return try {
+        val process = ProcessBuilder("git", "rev-parse", "--short=7", "HEAD").start()
+        val sha = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        sha.ifBlank { "unknown" }
+    } catch (_: Exception) {
+        "unknown"
+    }
+}
+
+fun getGitBranch(): String {
+    val envBranch = System.getenv("GITHUB_HEAD_REF")?.takeIf { it.isNotBlank() }
+        ?: System.getenv("GITHUB_REF_NAME")?.takeIf { it.isNotBlank() }
+    if (!envBranch.isNullOrBlank()) {
+        return envBranch
+    }
+    return try {
+        val process = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD").start()
+        val branch = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        branch.ifBlank { "main" }
+    } catch (_: Exception) {
+        "main"
+    }
+}
+
+fun computeDynamicVersionName(baseVersion: String): String {
+    val branch = getGitBranch()
+    val sha = getGitCommitShortSha()
+    return if (branch == "main" || branch.startsWith("v") || branch == "HEAD") {
+        baseVersion
+    } else {
+        "$baseVersion-$sha"
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -20,7 +57,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 2
-        versionName = "0.2"
+        versionName = computeDynamicVersionName("v0.2.0")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
