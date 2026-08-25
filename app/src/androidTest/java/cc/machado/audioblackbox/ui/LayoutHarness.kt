@@ -53,6 +53,9 @@ internal fun HarnessApp(initialDestination: Destination) {
                     onToggleEngine = {},
                     onSelectWindow = {},
                     onDismissSaveNotice = {},
+                    onStartForwardRecording = {},
+                    onStopForwardRecording = {},
+                    onDismissForwardNotice = {},
                 )
                 Destination.GALLERY -> cc.machado.audioblackbox.ui.gallery.GalleryScreen(
                     uiState = galleryFixture(),

@@ -40,25 +40,32 @@ class ScreenshotCaptureTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun capturesBothDestinationsAtTheDeviceWindowSize() {
+    fun capturesAllDestinationsAtTheDeviceWindowSize() {
         // Mirrors MainActivity, which draws edge to edge -- without this the window would be
         // pre-inset by the system bars and the picture would not show what the user sees.
         composeRule.runOnUiThread { composeRule.activity.enableEdgeToEdge() }
         composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
 
         capture("01-dashboard")
+        galleryTab().performClick()
+        capture("02-gallery")
         settingsTab().performClick()
-        capture("02-settings")
+        capture("03-settings")
     }
 
     @Test
-    fun capturesBothDestinationsInTheCompactAssertionWindow() {
+    fun capturesAllDestinationsInTheCompactAssertionWindow() {
         composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
 
-        capture("03-dashboard-compact")
+        capture("04-dashboard-compact")
+        galleryTab().performClick()
+        capture("05-gallery-compact")
         settingsTab().performClick()
-        capture("04-settings-compact")
+        capture("06-settings-compact")
     }
+
+    private fun galleryTab() =
+        composeRule.onNode(hasText(composeRule.activity.getString(R.string.nav_gallery_label)) and hasClickAction())
 
     private fun settingsTab() =
         composeRule.onNode(hasText(composeRule.activity.getString(R.string.nav_settings_label)) and hasClickAction())

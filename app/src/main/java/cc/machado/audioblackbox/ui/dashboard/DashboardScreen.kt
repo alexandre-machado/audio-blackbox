@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
@@ -56,17 +56,6 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
  * between this and [DashboardScreen] exists so every visual state is a plain, previewable
  * function of a [DashboardUiState] value -- see the `@Preview`s below -- without needing a real
  * [cc.machado.audioblackbox.service.RecorderService] running.
- *
- * Does not host its own [androidx.compose.material3.Scaffold] (issue #73): this screen is one of
- * two destinations switched by the floating bottom bar in
- * [cc.machado.audioblackbox.ui.MainActivity]. That single outer `Scaffold`'s `innerPadding` -- which
- * accounts for both system-bar insets and the floating bar's own real, measured height via its
- * `bottomBar` slot -- is applied once, above this screen, to the `Column` that hosts whichever
- * screen is selected. This screen does not need its own `contentPadding` parameter for that: PR #74
- * review found that plumbing a second, independently-computed bottom padding down to each screen
- * (via a hand-rolled `Box` + `onSizeChanged` measurement) was itself the bug -- it left the bar
- * drawn over this screen's content on a real device. See [cc.machado.audioblackbox.ui.FloatingBottomBar]'s
- * class doc for the structural fix.
  */
 @Composable
 fun DashboardRoute(
@@ -79,6 +68,9 @@ fun DashboardRoute(
         onToggleEngine = viewModel::toggleEngine,
         onSelectWindow = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
+        onStartForwardRecording = { viewModel.startForwardRecording(false) },
+        onStopForwardRecording = viewModel::stopForwardRecording,
+        onDismissForwardNotice = viewModel::dismissForwardRecordingNotice,
         modifier = modifier,
     )
 }
@@ -89,6 +81,9 @@ fun DashboardScreen(
     onToggleEngine: () -> Unit,
     onSelectWindow: (Int) -> Unit,
     onDismissSaveNotice: () -> Unit,
+    onStartForwardRecording: () -> Unit,
+    onStopForwardRecording: () -> Unit,
+    onDismissForwardNotice: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -103,8 +98,18 @@ fun DashboardScreen(
         BufferSection(uiState)
         EngineToggle(uiState.engineSwitch, onToggleEngine)
         SaveSection(uiState, onSelectWindow)
+        ForwardRecordingSection(
+            forwardState = uiState.forwardRecordingState,
+            onStart = onStartForwardRecording,
+            onStop = onStopForwardRecording,
+        )
         if (uiState.saveState != SaveUiState.Idle) {
             SaveOutcomeNotice(uiState.saveState, onDismissSaveNotice)
+        }
+        if (uiState.forwardRecordingState is ForwardRecordingUiState.Success ||
+            uiState.forwardRecordingState is ForwardRecordingUiState.Error
+        ) {
+            ForwardOutcomeNotice(uiState.forwardRecordingState, onDismissForwardNotice)
         }
     }
 }
@@ -129,8 +134,6 @@ private fun StatusSection(status: CaptureStatus) {
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
-                // Announces every capture-state transition to a screen reader, per issue #6's
-                // "recording state is announced to screen readers" criterion.
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
@@ -165,9 +168,6 @@ private fun StatusSection(status: CaptureStatus) {
     }
 }
 
-/** Live pulsing dot -- the "buffer is rolling" tell required by issue #6 -- decorative only; the
- * accessible name for the Recording state is already carried by [StatusSection]'s content
- * description, so this element does not need its own. */
 @Composable
 private fun RecordingPulse() {
     val transition = rememberInfiniteTransition(label = "recording-pulse")
@@ -220,9 +220,6 @@ private fun BufferSection(uiState: DashboardUiState) {
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(top = 8.dp),
         )
-        // Once full, the buffer keeps recording by overwriting its own oldest audio (see
-        // AudioCaptureEngine/RingBuffer docs) -- this line is what makes that rolling-window
-        // behavior legible instead of the indicator just looking permanently "stuck at max".
         if (uiState.isBufferFull) {
             Text(
                 text = stringResource(R.string.dashboard_buffer_full_notice),
@@ -233,22 +230,6 @@ private fun BufferSection(uiState: DashboardUiState) {
     }
 }
 
-/**
- * The primary engine control (issue #46): a stock Material 3 [Switch], not a button -- flipping it
- * on/off communicates "this is a persistent mode you are in", not "perform an action". See
- * [EngineSwitchUiState]'s doc for how each [cc.machado.audioblackbox.audio.CaptureState] maps onto
- * this control, in particular Paused (stays checked, distinct color/text) and the pending case
- * (switch disabled, position unchanged -- never optimistically flipped).
- *
- * The merged [Row] carries both the visible label/supporting-text pair *and* the switch's
- * accessible name/state: [announcement] names what is actually happening ("recording
- * continuously" / "a call is using the microphone", not just "on"/"off") and is re-announced to a
- * screen reader on every transition via [LiveRegionMode.Polite] -- the same pattern
- * [StatusSection] and [SaveOutcomeNotice] already use elsewhere on this screen. This is
- * deliberately not a bare restatement of the visible label (issue #66): the label is the static
- * "Continuous recording" title, while [announcement] carries the live state that label alone
- * doesn't.
- */
 @Composable
 private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -> Unit) {
     val stateTextRes = when {
@@ -262,13 +243,7 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
     val label = stringResource(R.string.dashboard_engine_switch_label)
     val stateText = stringResource(stateTextRes)
     val announcement = stringResource(R.string.dashboard_engine_switch_announcement, stateText)
-    // Paused/Error get their own color so the "neither on nor off" and "actionable failure" cases
-    // are visually distinct from plain On/Off, not just distinguishable by reading the text.
     val stateColor = when {
-        // Checked first: a retry-from-error dispatch leaves engineSwitch.error non-null (the
-        // status is still CaptureStatus.Error) for the whole window until the real outcome
-        // arrives, so without this ordering "Starting…" would render in error-red while a start
-        // is genuinely in flight -- `@rev`'s finding on PR #67.
         engineSwitch.pending -> MaterialTheme.colorScheme.onSurfaceVariant
         engineSwitch.error != null -> MaterialTheme.colorScheme.error
         engineSwitch.paused -> Color(0xFFF9A825)
@@ -310,9 +285,6 @@ private fun SaveSection(uiState: DashboardUiState, onSelectWindow: (Int) -> Unit
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 uiState.windowOptions.forEach { option -> WindowChip(option, onSelectWindow) }
             }
-            // The largest enabled option, i.e. the most audio a single tap of this primary button
-            // can save right now -- picking a specific shorter window is what the chips above are
-            // for (each one saves immediately on tap once enabled).
             val enabledOption = uiState.windowOptions.lastOrNull { it.enabled }
             val saveButtonCd = enabledOption?.let {
                 stringResource(R.string.dashboard_save_button_cd, it.minutes)
@@ -346,10 +318,6 @@ private fun WindowChip(option: WindowOption, onSelectWindow: (Int) -> Unit) {
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         FilterChip(
-            // Not a persistent single-choice toggle -- every enabled chip saves immediately on
-            // tap (issue #40 item 1: more than one window can be enabled at once once the buffer
-            // holds enough audio), so `selected` never reflects "the chosen option", only whether
-            // this chip is usable right now.
             selected = false,
             enabled = option.enabled,
             onClick = { onSelectWindow(option.minutes) },
@@ -366,14 +334,89 @@ private fun WindowChip(option: WindowOption, onSelectWindow: (Int) -> Unit) {
     }
 }
 
-/** Renders the real save outcome (issue #40 item 2) -- Exporting/Success/Error, sourced from
- * [cc.machado.audioblackbox.export.ExportEngine]'s own [cc.machado.audioblackbox.export.ExportState]
- * via [DashboardViewModel], not a bare "intent sent" placeholder. Never called with
- * [SaveUiState.Idle] -- see [DashboardScreen]'s guard above this call site. Success/Error are
- * announced to screen readers the same way [StatusSection] announces capture-state transitions,
- * so a failed save is never silent even without looking at the screen. Success only names the
- * saved file -- opening it in the gallery/sharing it needs the gallery (issue #7) and is
- * deliberately not offered here yet. */
+@Composable
+private fun ForwardRecordingSection(
+    forwardState: ForwardRecordingUiState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when (forwardState) {
+                is ForwardRecordingUiState.Recording -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        RecordingPulse()
+                        Text(
+                            text = stringResource(R.string.dashboard_forward_recording_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                    val elapsedFormatted = formatMillisAsClock(forwardState.elapsedMillis)
+                    val elapsedText = stringResource(R.string.dashboard_forward_elapsed_label, elapsedFormatted)
+                    val elapsedCd = stringResource(R.string.dashboard_forward_elapsed_cd, elapsedFormatted)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                liveRegion = LiveRegionMode.Polite
+                                contentDescription = elapsedCd
+                            },
+                    ) {
+                        Text(
+                            text = elapsedText,
+                            style = MaterialTheme.typography.headlineMedium,
+                            modifier = Modifier.testTag(FORWARD_ELAPSED_TEST_TAG),
+                        )
+                        Text(
+                            text = forwardState.displayName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+
+                    Button(
+                        onClick = onStop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(FORWARD_STOP_BUTTON_TEST_TAG),
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_forward_stop_button))
+                    }
+                }
+                else -> {
+                    Text(
+                        text = stringResource(R.string.dashboard_forward_title),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = stringResource(R.string.dashboard_forward_explanation),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(
+                        onClick = onStart,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(FORWARD_START_BUTTON_TEST_TAG),
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_forward_start_button))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
     val titleRes: Int
@@ -420,15 +463,55 @@ private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
     }
 }
 
+@Composable
+private fun ForwardOutcomeNotice(
+    forwardState: ForwardRecordingUiState,
+    onDismiss: () -> Unit,
+) {
+    val titleRes: Int
+    val body: String
+    when (forwardState) {
+        is ForwardRecordingUiState.Success -> {
+            titleRes = R.string.dashboard_forward_success_title
+            body = stringResource(R.string.dashboard_forward_success_body, forwardState.displayName)
+        }
+        is ForwardRecordingUiState.Error -> {
+            titleRes = R.string.dashboard_forward_error_title
+            body = forwardState.message
+        }
+        else -> return
+    }
+    val title = stringResource(titleRes)
+    val announcement = stringResource(R.string.dashboard_forward_outcome_announcement, title, body)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = announcement
+            },
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = body, style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+            }
+        }
+    }
+}
+
 private fun CaptureErrorReason.readable(): String = name.lowercase().replace('_', ' ')
 
-// ---- Previews: one per mandatory state (issue #6) ----
+// ---- Previews ----
 
 private fun previewState(
     status: CaptureStatus,
     bufferedMillis: Long = 0L,
     capacityMinutes: Int = 30,
     saveState: SaveUiState = SaveUiState.Idle,
+    forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
     enginePending: Boolean = false,
 ): DashboardUiState = DashboardViewModel.mapUiState(
     captureState = when (status) {
@@ -440,6 +523,7 @@ private fun previewState(
     bufferedMillis = bufferedMillis,
     capacityMinutes = capacityMinutes,
     saveState = saveState,
+    forwardRecordingState = forwardRecordingState,
     enginePending = enginePending,
 )
 
@@ -447,7 +531,7 @@ private fun previewState(
 @Composable
 private fun DashboardScreenIdlePreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Idle), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Idle), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -455,7 +539,7 @@ private fun DashboardScreenIdlePreview() {
 @Composable
 private fun DashboardScreenRecordingPreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Recording, bufferedMillis = 12 * 60_000L + 34_000L), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Recording, bufferedMillis = 12 * 60_000L + 34_000L), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -463,7 +547,7 @@ private fun DashboardScreenRecordingPreview() {
 @Composable
 private fun DashboardScreenPausedPreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Paused, bufferedMillis = 8 * 60_000L), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Paused, bufferedMillis = 8 * 60_000L), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -475,7 +559,7 @@ private fun DashboardScreenErrorPreview() {
             previewState(
                 CaptureStatus.Error(CaptureErrorReason.AUDIO_RECORD_INIT_FAILED, "AudioRecord.state = 0"),
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -484,7 +568,7 @@ private fun DashboardScreenErrorPreview() {
 @Composable
 private fun DashboardScreenEngineStartingPreview() {
     AudioBlackboxTheme {
-        DashboardScreen(previewState(CaptureStatus.Idle, enginePending = true), {}, {}, {})
+        DashboardScreen(previewState(CaptureStatus.Idle, enginePending = true), {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -494,7 +578,7 @@ private fun DashboardScreenEngineStoppingPreview() {
     AudioBlackboxTheme {
         DashboardScreen(
             previewState(CaptureStatus.Recording, bufferedMillis = 5 * 60_000L, enginePending = true),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -505,7 +589,25 @@ private fun DashboardScreenBufferFullPreview() {
     AudioBlackboxTheme {
         DashboardScreen(
             previewState(CaptureStatus.Recording, bufferedMillis = 30 * 60_000L),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Forward recording active")
+@Composable
+private fun DashboardScreenForwardRecordingPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(
+            previewState(
+                CaptureStatus.Recording,
+                bufferedMillis = 15 * 60_000L,
+                forwardRecordingState = ForwardRecordingUiState.Recording(
+                    displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
+                    elapsedMillis = 74_000L,
+                ),
+            ),
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -520,7 +622,7 @@ private fun DashboardScreenSaveExportingPreview() {
                 bufferedMillis = 30 * 60_000L,
                 saveState = SaveUiState.Exporting,
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -535,7 +637,7 @@ private fun DashboardScreenSaveSuccessPreview() {
                 bufferedMillis = 30 * 60_000L,
                 saveState = SaveUiState.Success("blackbox_2026-08-21_10-15-00_30min.m4a"),
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -553,7 +655,7 @@ private fun DashboardScreenSaveErrorPreview() {
                     "MediaStore insert rejected",
                 ),
             ),
-            {}, {}, {},
+            {}, {}, {}, {}, {}, {},
         )
     }
 }
@@ -563,3 +665,12 @@ val DASHBOARD_PADDING = 24.dp
 
 /** Test tag for the continuous recording engine switch control. */
 const val ENGINE_SWITCH_TEST_TAG = "dashboard_engine_switch"
+
+/** Test tag for the start continuous recording button. */
+const val FORWARD_START_BUTTON_TEST_TAG = "dashboard_forward_start_button"
+
+/** Test tag for the stop continuous recording button. */
+const val FORWARD_STOP_BUTTON_TEST_TAG = "dashboard_forward_stop_button"
+
+/** Test tag for the forward recording elapsed clock display. */
+const val FORWARD_ELAPSED_TEST_TAG = "dashboard_forward_elapsed"

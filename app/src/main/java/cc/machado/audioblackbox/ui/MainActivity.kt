@@ -127,6 +127,22 @@ class MainActivity : ComponentActivity() {
                                                 RecorderService.saveIntent(this@MainActivity, minutes),
                                             )
                                         },
+                                        onStartForwardRecording = { startFromOldest ->
+                                            if (permissionSystem.recordAudioGranted()) {
+                                                ContextCompat.startForegroundService(
+                                                    this@MainActivity,
+                                                    RecorderService.startForwardIntent(this@MainActivity, startFromOldest),
+                                                )
+                                            } else {
+                                                refreshStep()
+                                            }
+                                        },
+                                        onStopForwardRecording = {
+                                            ContextCompat.startForegroundService(
+                                                this@MainActivity,
+                                                RecorderService.stopForwardIntent(this@MainActivity),
+                                            )
+                                        },
                                     )
                                 }
                             }
