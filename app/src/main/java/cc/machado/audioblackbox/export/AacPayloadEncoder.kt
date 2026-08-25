@@ -70,10 +70,16 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
     override val mimeType: String = MIME_TYPE_M4A
     override val fileExtension: String = "m4a"
 
-    override fun encode(config: AudioConfig, payload: ByteArray, out: OutputStream, isCancelled: () -> Boolean) {
+    override fun encode(
+        config: AudioConfig,
+        totalPayloadBytes: Long,
+        chunks: PayloadChunkSource,
+        out: OutputStream,
+        isCancelled: () -> Boolean,
+    ) {
         val tempFile = File.createTempFile(TEMP_FILE_PREFIX, ".m4a", tempDir)
         try {
-            encodeToFile(config, payload, tempFile, isCancelled)
+            encodeToFile(config, chunks, tempFile, isCancelled)
             if (!isCancelled()) {
                 FileInputStream(tempFile).use { input -> input.copyTo(out) }
             }
@@ -82,7 +88,7 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
         }
     }
 
-    private fun encodeToFile(config: AudioConfig, payload: ByteArray, tempFile: File, isCancelled: () -> Boolean) {
+    private fun encodeToFile(config: AudioConfig, chunks: PayloadChunkSource, tempFile: File, isCancelled: () -> Boolean) {
         val bytesPerSecond = config.bytesPerSecond
         val bitRateBps = BIT_RATE_PER_CHANNEL_BPS * config.channelCount
 
@@ -114,11 +120,16 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
             codecStarted = true
 
             var muxerTrackIndex = -1
-            var inputOffset = 0
             var totalBytesFed = 0L
             var inputDone = false
             var outputDone = false
             val bufferInfo = MediaCodec.BufferInfo()
+            // Bounded look-ahead over `chunks` (issue #72): at most one chunk from the source is
+            // ever held live here, whatever size that chunk happens to be -- never the whole
+            // payload. `pendingChunk`/`pendingOffset` track how much of the current chunk has
+            // already been fed into the codec's input buffers.
+            var pendingChunk: ByteArray? = null
+            var pendingOffset = 0
             // Generous but finite: a stuck codec must eventually surface as a failure (which
             // ExportEngine already converts into an aborted, deleted pending row) rather than hang
             // the export thread forever -- see class doc on failure propagation.
@@ -130,17 +141,22 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
                     throw IOException("AAC encode exceeded ${ENCODE_DEADLINE_MILLIS}ms deadline")
                 }
                 if (!inputDone) {
+                    if (pendingChunk == null || pendingOffset >= (pendingChunk?.size ?: 0)) {
+                        pendingChunk = chunks.nextChunk()
+                        pendingOffset = 0
+                    }
+                    val currentChunk = pendingChunk
                     val inputIndex = codec.dequeueInputBuffer(TIMEOUT_US)
                     if (inputIndex >= 0) {
                         val inputBuffer = requireNotNull(codec.getInputBuffer(inputIndex))
                         inputBuffer.clear()
-                        val remainingPayload = payload.size - inputOffset
-                        val chunkSize = minOf(inputBuffer.remaining(), remainingPayload)
+                        val remainingInChunk = (currentChunk?.size ?: 0) - pendingOffset
+                        val chunkSize = minOf(inputBuffer.remaining(), remainingInChunk)
                         val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / bytesPerSecond
-                        if (chunkSize > 0) {
-                            inputBuffer.put(payload, inputOffset, chunkSize)
+                        if (chunkSize > 0 && currentChunk != null) {
+                            inputBuffer.put(currentChunk, pendingOffset, chunkSize)
                             codec.queueInputBuffer(inputIndex, 0, chunkSize, presentationTimeUs, 0)
-                            inputOffset += chunkSize
+                            pendingOffset += chunkSize
                             totalBytesFed += chunkSize
                         } else {
                             codec.queueInputBuffer(

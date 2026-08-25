@@ -18,7 +18,7 @@ import org.junit.Test
  *
  * ## What this class actually proves
  * [ExportEngine]/[RingBuffer] correctly collaborate on a requested window in minutes: a real
- * [RingBuffer] (not a stubbed `snapshotProvider`, the way most of [ExportEngineTest] does it)
+ * [RingBuffer] (not stubbed cursor/read providers, the way most of [ExportEngineTest] does it)
  * backs [ExportEngine], and requesting `durationMillis = requestedMinutes * 60_000L` for 5, 15,
  * and 30 minutes -- plus the case where the request exceeds what is buffered -- produces exactly
  * the expected number of bytes, computed independently from [config]'s own
@@ -70,7 +70,10 @@ class WindowedSaveExportTest {
 
     private fun exportEngineFor(ring: RingBuffer, target: FakeTarget) = ExportEngine(
         config = config,
-        snapshotProvider = ring::snapshot,
+        readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+        writeCursorProvider = { ring.writeCursor() },
+        oldestCursorProvider = { ring.oldestCursor() },
+        estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
         gapsProvider = { emptyList() },
         sink = FakeSink(target),
         payloadEncoder = WavPayloadEncoder,

@@ -1,8 +1,8 @@
 package cc.machado.audioblackbox.export
 
 import cc.machado.audioblackbox.audio.AudioConfig
-import cc.machado.audioblackbox.audio.AudioSnapshot
 import cc.machado.audioblackbox.audio.PauseGap
+import cc.machado.audioblackbox.audio.RingBuffer
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
@@ -11,9 +11,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Orchestration tests for [ExportEngine] (issue #5): snapshot-null/empty surfaces a real error
+ * Orchestration tests for [ExportEngine] (issue #5): no-buffered-audio surfaces a real error
  * (never a silent no-op), a sink-open failure surfaces as an error and never calls commit, and a
  * cancelled export aborts the sink instead of committing a partial file.
+ *
+ * Backed by a real [RingBuffer] plus [ExportEngine]'s cursor-based
+ * `readSinceProvider`/`writeCursorProvider`/`oldestCursorProvider`/`estimateTimestampProvider`
+ * seams (issue #72's bounded cursor drain, replacing the old whole-window `snapshotProvider`) --
+ * this is deliberately the same collaboration production wiring uses (see
+ * [cc.machado.audioblackbox.service.RecorderService]'s `exportEngine`), just with an in-memory
+ * [ExportSink] instead of `MediaStore`.
  *
  * Uses [WavPayloadEncoder] throughout (not the production default [AacPayloadEncoder], which is
  * `MediaCodec`/`MediaMuxer`-backed and covered by the instrumented tier instead -- see
@@ -52,17 +59,42 @@ class ExportEngineTest {
         }
     }
 
+    /** Builds a [RingBuffer]-backed [ExportEngine], the same cursor-based collaboration production
+     * wiring uses. [gapsProvider] is the one seam most tests below hook a side effect onto (e.g.
+     * `cancel()`, a reentrant `export()` call, a thrown exception) -- it is the first provider
+     * [ExportEngine.runExport] calls after fixing the cursor window, mirroring where the old
+     * `snapshotProvider`-based tests hooked the same side effects (that provider used to be called
+     * first; now the cursor reads are cheap and side-effect-free, so the same "first thing this
+     * export actually does real work with" role now belongs to [gapsProvider]). */
+    private fun engineFor(
+        ring: RingBuffer,
+        sink: ExportSink,
+        payloadEncoder: PayloadEncoder = WavPayloadEncoder,
+        writeCursorProvider: () -> Long? = { ring.writeCursor() },
+        gapsProvider: () -> List<PauseGap> = { emptyList() },
+    ): ExportEngine = ExportEngine(
+        config = config,
+        readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+        writeCursorProvider = writeCursorProvider,
+        oldestCursorProvider = { ring.oldestCursor() },
+        estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
+        gapsProvider = gapsProvider,
+        sink = sink,
+        payloadEncoder = payloadEncoder,
+    )
+
+    private fun ringWithBytes(byteCount: Int, fillValue: Byte = 7, capacityBytes: Int = maxOf(byteCount, 1)): RingBuffer {
+        val ring = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = config.bytesPerSecond)
+        if (byteCount > 0) ring.write(ByteArray(byteCount) { fillValue })
+        return ring
+    }
+
     @Test
-    fun `null snapshot surfaces NO_AUDIO_BUFFERED, never a silent no-op`() {
+    fun `capture not running surfaces NO_AUDIO_BUFFERED, never a silent no-op`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { null },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
-        )
+        val ring = ringWithBytes(1000)
+        val engine = engineFor(ring, sink, writeCursorProvider = { null })
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
 
@@ -72,16 +104,11 @@ class ExportEngineTest {
     }
 
     @Test
-    fun `empty snapshot data surfaces NO_AUDIO_BUFFERED`() {
+    fun `nothing buffered yet surfaces NO_AUDIO_BUFFERED`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { AudioSnapshot(ByteArray(0), 0L) },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
-        )
+        val ring = ringWithBytes(0, capacityBytes = 1000)
+        val engine = engineFor(ring, sink)
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
 
@@ -93,13 +120,8 @@ class ExportEngineTest {
     fun `sink open failure surfaces SINK_OPEN_FAILED and never commits`() {
         val target = FakeTarget()
         val sink = FakeSink(target, failOpen = true)
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
-        )
+        val ring = ringWithBytes(1000)
+        val engine = engineFor(ring, sink)
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
 
@@ -112,14 +134,8 @@ class ExportEngineTest {
     fun `successful export writes header plus payload and commits, never aborts`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val rawData = ByteArray(1000) { 7 }
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { AudioSnapshot(rawData, 0L) },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
-        )
+        val ring = ringWithBytes(1000)
+        val engine = engineFor(ring, sink)
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
 
@@ -140,18 +156,17 @@ class ExportEngineTest {
     fun `cancel arriving mid-export aborts the sink instead of committing`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val rawData = ByteArray(1_000_000) { 3 } // large enough to span multiple write chunks
+        // Large enough to span multiple drain chunks (default chunk size is 4096 bytes).
+        val ring = ringWithBytes(1_000_000, fillValue = 3)
         lateinit var engine: ExportEngine
-        engine = ExportEngine(
-            config,
-            // Simulates a concurrent caller invoking cancel() while the snapshot/gap-fill work is
-            // already under way, the same way a real cancel button would race the background
-            // export thread -- export()'s own reset-on-entry happens before this runs, so this
-            // cancel() call is the one that actually takes effect.
-            snapshotProvider = { engine.cancel(); AudioSnapshot(rawData, 0L) },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
+        engine = engineFor(
+            ring,
+            sink,
+            // Simulates a concurrent caller invoking cancel() while the plan/gap work is already
+            // under way, the same way a real cancel button would race the background export
+            // thread -- export()'s own reset-on-entry happens before this runs, so this cancel()
+            // call is the one that actually takes effect.
+            gapsProvider = { engine.cancel(); emptyList() },
         )
 
         val result = engine.export(durationMillis = 1_000_000, minutesLabel = 1)
@@ -166,23 +181,22 @@ class ExportEngineTest {
     fun `a concurrent export call while one is in flight is rejected without touching the sink`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
+        val ring = ringWithBytes(1000)
         lateinit var engine: ExportEngine
         var reentrantResult: ExportState? = null
-        engine = ExportEngine(
-            config,
+        engine = engineFor(
+            ring,
+            sink,
             // Simulates a second ACTION_SAVE dispatch racing in while this export is still
             // mid-flight (double-tap on the notification's Save action, or an OS-redelivered
             // Intent -- the scenario `@sec` flagged for RecorderService.handleSave()). export()
-            // sets _state to Exporting before calling snapshotProvider, so by the time this runs
-            // the outer call has already claimed the "in progress" slot; this recursive call must
+            // sets _state to Exporting before calling gapsProvider, so by the time this runs the
+            // outer call has already claimed the "in progress" slot; this recursive call must
             // observe that and bail out instead of racing cancelRequested/_state with it.
-            snapshotProvider = {
+            gapsProvider = {
                 reentrantResult = engine.export(durationMillis = 1000, minutesLabel = 1)
-                AudioSnapshot(ByteArray(1000), 0L)
+                emptyList()
             },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -202,18 +216,17 @@ class ExportEngineTest {
     fun `an unexpected non-IOException during export surfaces as an error and does not strand the engine`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
+        val ring = ringWithBytes(1000)
         var shouldThrow = true
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
+        val engine = engineFor(
+            ring,
+            sink,
             // Simulates a genuinely unexpected failure (a future regression, an OOM, ...) from
-            // somewhere inside runExport() -- gapsProvider() is called first, before any state
-            // that would need special zeroing exists yet.
+            // somewhere inside runExport() -- gapsProvider() is called right after the cursor
+            // window is fixed, before any PCM has been touched.
             gapsProvider = {
                 if (shouldThrow) throw IllegalStateException("boom") else emptyList()
             },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
         )
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -238,13 +251,8 @@ class ExportEngineTest {
     fun `acknowledgeTerminalState resets a terminal outcome to Idle so it cannot linger forever`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { AudioSnapshot(ByteArray(1000), 0L) },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
-        )
+        val ring = ringWithBytes(1000)
+        val engine = engineFor(ring, sink)
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
         assertTrue(result is ExportState.Success)
@@ -266,44 +274,60 @@ class ExportEngineTest {
     fun `acknowledgeTerminalState is a no-op while an export is in flight`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
+        val ring = ringWithBytes(1000)
         lateinit var engine: ExportEngine
-        engine = ExportEngine(
-            config,
-            snapshotProvider = {
+        engine = engineFor(
+            ring,
+            sink,
+            gapsProvider = {
                 // Mid-export, state is Exporting -- an acknowledge racing in here (e.g. a delayed
                 // acknowledge from a previous export still pending) must not clear it.
                 engine.acknowledgeTerminalState()
                 assertEquals(ExportState.Exporting, engine.state.value)
-                AudioSnapshot(ByteArray(1000), 0L)
+                emptyList()
             },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = WavPayloadEncoder,
         )
 
         engine.export(durationMillis = 1000, minutesLabel = 1)
     }
 
     @Test
-    fun `padding requests extra raw audio equal to the sum of gap durations`() {
-        var requestedDurationMillis = -1L
+    fun `gaps within the exported window are backfilled with silence without shortening the file`() {
+        // 1000 Hz mono 16-bit PCM: bytesPerFrame = 2, bytesPerSecond = 2000.
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val gaps = listOf(PauseGap(100L, 200L), PauseGap(300L, 450L)) // 100ms + 150ms = 250ms total
+        // 2500ms of raw (gap-free) audio-time buffered, starting at wall-clock 0 (fixed via
+        // estimateTimestampProvider below, so the gap timestamps chosen here are exact byte
+        // offsets rather than depending on RingBuffer's real-clock markers).
+        val ring = ringWithBytes(byteCount = 5000, capacityBytes = 5000)
+        // Two gaps landing inside the last requested second [1500ms, 2500ms): 100ms + 150ms of
+        // real elapsed time that produced zero raw bytes. Without padding, a 1000ms export
+        // covering that stretch would come back short by exactly that much; the bounded plan
+        // compensates by drawing on buffered audio further back instead of trimming to less than
+        // the requested duration (issue #72's "request extra raw audio up front" intent, now
+        // expressed as "use the whole buffered window" -- see ExportEngine.runExport's doc).
+        val gaps = listOf(PauseGap(1600L, 1700L), PauseGap(1800L, 1950L))
         val engine = ExportEngine(
-            config,
-            snapshotProvider = { requested ->
-                requestedDurationMillis = requested
-                AudioSnapshot(ByteArray(1000), 0L)
-            },
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            estimateTimestampProvider = { 0L },
             gapsProvider = { gaps },
             sink = sink,
             payloadEncoder = WavPayloadEncoder,
         )
 
-        engine.export(durationMillis = 1000, minutesLabel = 1)
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
 
-        assertEquals(1250L, requestedDurationMillis)
+        assertTrue(result is ExportState.Success)
+        val payloadBytes = target.buffer.toByteArray().size - WavWriter.HEADER_SIZE_BYTES
+        assertEquals(
+            "the requested 1000ms (2000 bytes) must come back whole, not short by the 250ms of " +
+                "silence the two gaps needed",
+            1000 * config.bytesPerSecond / 1000,
+            payloadBytes,
+        )
     }
 
     /** A minimal non-WAV [PayloadEncoder] fake, so [filenameExtensionMatchesEncoder] proves the
@@ -314,9 +338,18 @@ class ExportEngineTest {
         override val mimeType: String = "audio/x-fake"
         override val fileExtension: String = "fake"
         var encodeCalls = 0
-        override fun encode(config: AudioConfig, payload: ByteArray, out: OutputStream, isCancelled: () -> Boolean) {
+        override fun encode(
+            config: AudioConfig,
+            totalPayloadBytes: Long,
+            chunks: PayloadChunkSource,
+            out: OutputStream,
+            isCancelled: () -> Boolean,
+        ) {
             encodeCalls++
-            out.write(payload)
+            while (true) {
+                val chunk = chunks.nextChunk() ?: break
+                out.write(chunk)
+            }
         }
     }
 
@@ -324,14 +357,9 @@ class ExportEngineTest {
     fun `filename extension and sink MIME type follow the injected PayloadEncoder, not a hardcoded format`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
+        val ring = ringWithBytes(100)
         val encoder = FakeEncoder()
-        val engine = ExportEngine(
-            config,
-            snapshotProvider = { AudioSnapshot(ByteArray(100), 0L) },
-            gapsProvider = { emptyList() },
-            sink = sink,
-            payloadEncoder = encoder,
-        )
+        val engine = engineFor(ring, sink, payloadEncoder = encoder)
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 5)
 
