@@ -191,6 +191,7 @@ class ScreenLayoutTest {
         composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
 
         val engineSwitch = composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG, useUnmergedTree = true)
+        engineSwitch.performScrollTo()
         engineSwitch.assertIsDisplayed()
 
         val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
@@ -235,6 +236,7 @@ class ScreenLayoutTest {
         }
 
         val engineSwitch = composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG, useUnmergedTree = true)
+        engineSwitch.performScrollTo()
         engineSwitch.assertIsDisplayed()
 
         val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
