@@ -20,6 +20,9 @@ import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingEngine
+import cc.machado.audioblackbox.export.ForwardRecordingState
+import cc.machado.audioblackbox.export.StreamingAacWriter
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.PreloadedRetentionWindow
 import cc.machado.audioblackbox.settings.DataStoreRecordingPreferences
@@ -101,6 +104,18 @@ class RecorderService : Service() {
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
+        )
+    }
+
+    private val forwardRecordingEngine by lazy {
+        ForwardRecordingEngine(
+            config = captureConfig,
+            readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
+            writeCursorProvider = { engine.writeCursor() },
+            oldestCursorProvider = { engine.oldestCursor() },
+            gapsProvider = { engine.gaps.value },
+            sink = MediaStoreSink(applicationContext),
+            writerFactory = { target, cfg -> StreamingAacWriter(target, cfg) },
         )
     }
 
@@ -199,6 +214,16 @@ class RecorderService : Service() {
                 }
             }
         }
+        serviceScope.launch {
+            forwardRecordingEngine.state.collect { state ->
+                _forwardRecordingState.value = state
+                refreshNotification()
+                if (state is ForwardRecordingState.Success || state is ForwardRecordingState.Error) {
+                    delay(EXPORT_OUTCOME_VISIBLE_MILLIS)
+                    forwardRecordingEngine.acknowledgeTerminalState()
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -235,6 +260,11 @@ class RecorderService : Service() {
                 intent?.getIntExtra(EXTRA_WINDOW_MINUTES, captureConfig.bufferDurationMinutes)
                     ?: captureConfig.bufferDurationMinutes,
             )
+            ACTION_START_FORWARD -> {
+                val startFromOldest = intent?.getBooleanExtra(EXTRA_START_FROM_OLDEST, false) ?: false
+                handleStartForward(startFromOldest)
+            }
+            ACTION_STOP_FORWARD -> handleStopForward()
             null -> stopServiceCompletely() // OS-initiated restart: see START_NOT_STICKY note below.
             else -> Unit // unrecognized action: notification above already covers it, nothing to do.
         }
@@ -273,7 +303,10 @@ class RecorderService : Service() {
         // main thread. A raw Thread (not serviceScope, which is cancelled right below, and would
         // cancel this along with it) so it survives both that cancellation and this Service
         // instance being destroyed -- engine's own capture thread is likewise independent of both.
-        Thread({ engine.stop() }, "RecorderService-onDestroy-stop").apply {
+        Thread({
+            forwardRecordingEngine.stop()
+            engine.stop()
+        }, "RecorderService-onDestroy-stop").apply {
             isDaemon = true
             start()
         }
@@ -318,6 +351,7 @@ class RecorderService : Service() {
      */
     private fun stopServiceCompletely() {
         serviceScope.launch(Dispatchers.Default) {
+            forwardRecordingEngine.stop()
             engine.stop()
             withContext(Dispatchers.Main.immediate) {
                 focusTracker.abandon()
@@ -333,6 +367,27 @@ class RecorderService : Service() {
      * [ExportEngine.export] with no clamping here: [ExportEngine]/[cc.machado.audioblackbox.audio.RingBuffer.snapshot]
      * already clamp to whatever is actually buffered if [requestedMinutes] exceeds it (issue #40
      * item 1 -- no engine change needed), so this method never has to duplicate that logic. */
+    private fun handleStartForward(startFromOldest: Boolean) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "handleStartForward(): RECORD_AUDIO not granted, refusing to start")
+            return
+        }
+        if (engine.state.value is CaptureState.Idle) {
+            handleStart()
+        }
+        serviceScope.launch(Dispatchers.Default) {
+            forwardRecordingEngine.start(startFromOldest = startFromOldest)
+        }
+    }
+
+    private fun handleStopForward() {
+        serviceScope.launch(Dispatchers.Default) {
+            forwardRecordingEngine.stop()
+        }
+    }
+
     private fun handleSave(requestedMinutes: Int) {
         AnalyticsProvider.get().trackSaveTriggered(requestedMinutes)
         // Dispatched off this Service's main thread for the same ANR reason as
@@ -392,6 +447,7 @@ class RecorderService : Service() {
         engine.state.value,
         engine.bufferedDurationMillis(),
         exportEngine.state.value,
+        forwardRecordingState = forwardRecordingEngine.state.value,
     )
 
     private fun refreshNotification() {
@@ -410,6 +466,9 @@ class RecorderService : Service() {
         const val ACTION_START = "cc.machado.audioblackbox.service.action.START"
         const val ACTION_STOP = "cc.machado.audioblackbox.service.action.STOP"
         const val ACTION_SAVE = "cc.machado.audioblackbox.service.action.SAVE"
+        const val ACTION_START_FORWARD = "cc.machado.audioblackbox.service.action.START_FORWARD"
+        const val ACTION_STOP_FORWARD = "cc.machado.audioblackbox.service.action.STOP_FORWARD"
+        const val EXTRA_START_FROM_OLDEST = "cc.machado.audioblackbox.service.extra.START_FROM_OLDEST"
 
         // Requested window length, in minutes, for an ACTION_SAVE Intent (issue #40 item 1). Only
         // MainActivity's dashboard wiring sets this; RecorderNotification's own Save action
@@ -524,11 +583,22 @@ class RecorderService : Service() {
         private val _exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val exportState: StateFlow<ExportState> = _exportState.asStateFlow()
 
+        private val _forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        val forwardRecordingState: StateFlow<ForwardRecordingState> = _forwardRecordingState.asStateFlow()
+
         fun startIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_START)
 
         fun stopIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_STOP)
+
+        fun startForwardIntent(context: Context, startFromOldest: Boolean = false): Intent =
+            Intent(context, RecorderService::class.java)
+                .setAction(ACTION_START_FORWARD)
+                .putExtra(EXTRA_START_FROM_OLDEST, startFromOldest)
+
+        fun stopForwardIntent(context: Context): Intent =
+            Intent(context, RecorderService::class.java).setAction(ACTION_STOP_FORWARD)
 
         /** [windowMinutes] is the requested "salvar o passado" window (5/15/30 from the
          * dashboard's selector) -- defaults to the full configured capacity so any existing caller

@@ -135,6 +135,20 @@ class AudioCaptureEngine(
      * PCM is unreachable through this method). */
     fun snapshot(durationMillis: Long): AudioSnapshot? = ringBuffer?.snapshot(durationMillis)
 
+    /** Stream offset of the write head, or `null` before the first [start] or after [stop]. */
+    fun writeCursor(): Long? = ringBuffer?.writeCursor()
+
+    /** Stream offset of the oldest byte still buffered, or `null` before the first [start] or after [stop]. */
+    fun oldestCursor(): Long? = ringBuffer?.oldestCursor()
+
+    /**
+     * Incremental drain read from the live buffer, or `null` before the first [start] or after [stop].
+     */
+    fun readSince(cursor: Long, maxBytes: Int): ReadSinceResult? = ringBuffer?.readSince(cursor, maxBytes)
+
+    /** Whether capture is currently running and the buffer is accessible. */
+    fun isRunning(): Boolean = ringBuffer != null && (_state.value is CaptureState.Recording || _state.value is CaptureState.Paused)
+
     /** How much audio the ring buffer currently holds, in milliseconds, or `null` before the
      * first [start] / after [stop]. Used by the foreground service's notification to show
      * elapsed buffered duration (issue #3) -- not persisted anywhere, purely derived from the

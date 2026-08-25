@@ -12,6 +12,22 @@ import java.io.FileDescriptor
 import java.io.IOException
 
 /**
+ * Common streaming audio writer interface for incremental PCM chunks and live gap injection (issue #54).
+ */
+interface StreamingAudioWriter : Closeable, AutoCloseable {
+    val totalBytesWritten: Long
+    val isSessionFinished: Boolean
+    val isSessionClosed: Boolean
+
+    fun write(pcmData: ByteArray, offset: Int = 0, length: Int = pcmData.size)
+    fun writePcmChunk(pcmData: ByteArray, offset: Int = 0, length: Int = pcmData.size) { write(pcmData, offset, length) }
+    fun writeGap(gapDurationMillis: Long)
+    fun writeGap(gap: PauseGap) { writeGap(gap.durationMillis) }
+    fun writeSilence(durationMillis: Long) { writeGap(durationMillis) }
+    fun finish()
+}
+
+/**
  * Long-lived streaming AAC encoder producing AAC-LC in an MP4 (`.m4a`) container via `MediaCodec`
  * and `MediaMuxer` (issue #52).
  *
@@ -40,7 +56,7 @@ class StreamingAacWriter private constructor(
     val fileDescriptor: FileDescriptor?,
     val config: AudioConfig,
     val bitRateBps: Int,
-) : Closeable, AutoCloseable {
+) : StreamingAudioWriter, Closeable, AutoCloseable {
 
     constructor(
         outputFile: File,
@@ -76,15 +92,15 @@ class StreamingAacWriter private constructor(
     private var isClosed = false
 
     /** Total PCM bytes (audio + injected silence) fed into the encoder so far. */
-    val totalBytesWritten: Long
+    override val totalBytesWritten: Long
         get() = synchronized(lock) { totalBytesFed }
 
     /** Whether [finish] has completed successfully. */
-    val isSessionFinished: Boolean
+    override val isSessionFinished: Boolean
         get() = synchronized(lock) { isFinished }
 
     /** Whether this writer has been closed / released. */
-    val isSessionClosed: Boolean
+    override val isSessionClosed: Boolean
         get() = synchronized(lock) { isClosed }
 
     init {
@@ -137,7 +153,7 @@ class StreamingAacWriter private constructor(
      * @param offset Starting offset in [pcmData].
      * @param length Number of bytes to write.
      */
-    fun write(pcmData: ByteArray, offset: Int = 0, length: Int = pcmData.size) {
+    override fun write(pcmData: ByteArray, offset: Int, length: Int) {
         require(offset >= 0) { "offset must not be negative, was $offset" }
         require(length >= 0) { "length must not be negative, was $length" }
         require(offset + length <= pcmData.size) {
@@ -179,7 +195,7 @@ class StreamingAacWriter private constructor(
     /**
      * Convenience alias for [write] to accept incremental PCM chunks.
      */
-    fun writePcmChunk(pcmData: ByteArray, offset: Int = 0, length: Int = pcmData.size) {
+    override fun writePcmChunk(pcmData: ByteArray, offset: Int, length: Int) {
         write(pcmData, offset, length)
     }
 
@@ -187,7 +203,7 @@ class StreamingAacWriter private constructor(
      * Injects wall-clock silence frames for the specified [gapDurationMillis] to preserve timeline
      * alignment when an interruption occurs.
      */
-    fun writeGap(gapDurationMillis: Long) {
+    override fun writeGap(gapDurationMillis: Long) {
         require(gapDurationMillis >= 0) { "gapDurationMillis must not be negative, was $gapDurationMillis" }
         if (gapDurationMillis == 0L) return
 
@@ -208,14 +224,14 @@ class StreamingAacWriter private constructor(
     /**
      * Injects wall-clock silence frames for a [PauseGap].
      */
-    fun writeGap(gap: PauseGap) {
+    override fun writeGap(gap: PauseGap) {
         writeGap(gap.durationMillis)
     }
 
     /**
      * Injects wall-clock silence frames for [durationMillis].
      */
-    fun writeSilence(durationMillis: Long) {
+    override fun writeSilence(durationMillis: Long) {
         writeGap(durationMillis)
     }
 
@@ -273,7 +289,7 @@ class StreamingAacWriter private constructor(
      *
      * Once finalized, [outputFile] is a valid, decodable, standard `.m4a` file.
      */
-    fun finish() {
+    override fun finish() {
         synchronized(lock) {
             if (isFinished) return
             check(!isClosed) { "StreamingAacWriter is already closed" }
