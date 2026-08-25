@@ -18,6 +18,8 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+certificates/
+.kotlin/
 
 # WSL/NTFS metadata artifact left behind when a file is copied from Windows
 *:Zone.Identifier

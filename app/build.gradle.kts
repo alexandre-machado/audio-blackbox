@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -23,9 +25,41 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val envKeystore = System.getenv("PLAY_KEYSTORE_PATH")
+            val envStorePassword = System.getenv("PLAY_KEYSTORE_PASSWORD")
+            val envKeyAlias = System.getenv("PLAY_KEY_ALIAS")
+            val envKeyPassword = System.getenv("PLAY_KEY_PASSWORD")
+
+            val keystorePropFile = rootProject.file("keystore.properties")
+            val localProps = Properties().apply {
+                if (keystorePropFile.exists()) {
+                    keystorePropFile.inputStream().use { load(it) }
+                }
+            }
+
+            val storeFilePath = envKeystore
+                ?: localProps.getProperty("storeFile")
+                ?: rootProject.file("upload-keystore.jks").takeIf { it.exists() }?.absolutePath
+
+            val storePass = envStorePassword ?: localProps.getProperty("storePassword")
+            val alias = envKeyAlias ?: localProps.getProperty("keyAlias")
+            val keyPass = envKeyPassword ?: localProps.getProperty("keyPassword")
+
+            if (!storeFilePath.isNullOrBlank() && !storePass.isNullOrBlank() && !alias.isNullOrBlank() && !keyPass.isNullOrBlank()) {
+                storeFile = file(storeFilePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
