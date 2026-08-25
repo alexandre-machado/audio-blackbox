@@ -60,7 +60,15 @@
     <string name="dashboard_idle_explanation">A gravação está parada. Nada está sendo gravado agora. Ative o interruptor abaixo para começar a gravação contínua em segundo plano.</string>
     <string name="dashboard_recording_explanation">O motor está gravando continuamente. Quando o buffer enche, o áudio mais antigo é substituído automaticamente pelo mais recente.</string>
     <string name="dashboard_paused_explanation">Gravação pausada porque o microfone está sendo usado por uma chamada. A gravação será retomada automaticamente assim que a chamada terminar.</string>
-    <string name="dashboard_error_explanation">Não foi possível continuar gravando: %1$s</string>
+
+    <!-- Motivos de erro de captura (issue #39) -->
+    <string name="capture_error_buffer_allocation_failed">Memória insuficiente para alocar o buffer de áudio. Tente reduzir a janela de retenção em Ajustes.</string>
+    <string name="capture_error_unsupported_config">O formato de gravação de áudio necessário não é suportado pelo seu aparelho.</string>
+    <string name="capture_error_audio_record_init_failed">Não foi possível inicializar o microfone. Verifique se outro aplicativo está usando o microfone e tente novamente.</string>
+    <string name="capture_error_read_invalid_operation">O gravador de áudio encontrou uma operação inválida. Desligue e ligue a gravação novamente para tentar de novo.</string>
+    <string name="capture_error_read_bad_value">O gravador de áudio recebeu parâmetros inválidos. Desligue e ligue a gravação novamente para tentar de novo.</string>
+    <string name="capture_error_read_dead_object">O serviço de áudio do sistema parou de responder. Desligue e ligue a gravação novamente ou reinicie o aparelho.</string>
+    <string name="capture_error_read_unknown_error">Ocorreu um erro inesperado na gravação de áudio. Desligue e ligue a gravação novamente para tentar de novo.</string>
 
     <string name="dashboard_status_announcement">Estado da gravação: %1$s</string>
 

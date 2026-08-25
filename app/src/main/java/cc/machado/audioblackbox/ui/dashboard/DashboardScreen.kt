@@ -121,13 +121,10 @@ private fun StatusSection(status: CaptureStatus) {
         is CaptureStatus.Idle -> R.string.dashboard_status_idle to R.string.dashboard_idle_explanation
         is CaptureStatus.Recording -> R.string.dashboard_status_recording to R.string.dashboard_recording_explanation
         is CaptureStatus.Paused -> R.string.dashboard_status_paused to R.string.dashboard_paused_explanation
-        is CaptureStatus.Error -> R.string.dashboard_status_error to null
+        is CaptureStatus.Error -> R.string.dashboard_status_error to status.reason.toUserMessageRes()
     }
     val label = stringResource(labelRes)
-    val explanation = when (status) {
-        is CaptureStatus.Error -> stringResource(R.string.dashboard_error_explanation, status.reason.readable())
-        else -> explanationRes?.let { stringResource(it) }.orEmpty()
-    }
+    val explanation = stringResource(explanationRes)
     val announcement = stringResource(R.string.dashboard_status_announcement, label)
 
     Column(
@@ -158,7 +155,7 @@ private fun StatusSection(status: CaptureStatus) {
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        if (status is CaptureStatus.Error) {
+        if (status is CaptureStatus.Error && status.message.isNotBlank()) {
             Text(
                 text = status.message,
                 style = MaterialTheme.typography.bodySmall,
@@ -527,8 +524,6 @@ private fun ForwardOutcomeNotice(
     }
 }
 
-private fun CaptureErrorReason.readable(): String = name.lowercase().replace('_', ' ')
-
 // ---- Previews ----
 
 private fun previewState(
@@ -576,13 +571,29 @@ private fun DashboardScreenPausedPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Error")
+@Preview(showBackground = true, name = "Error - AudioRecord init failed")
 @Composable
 private fun DashboardScreenErrorPreview() {
     AudioBlackboxTheme {
         DashboardScreen(
             previewState(
                 CaptureStatus.Error(CaptureErrorReason.AUDIO_RECORD_INIT_FAILED, "AudioRecord.state = 0"),
+            ),
+            {}, {}, {}, {}, {}, {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Error - Buffer allocation failed")
+@Composable
+private fun DashboardScreenErrorBufferAllocationPreview() {
+    AudioBlackboxTheme {
+        DashboardScreen(
+            previewState(
+                CaptureStatus.Error(
+                    CaptureErrorReason.BUFFER_ALLOCATION_FAILED,
+                    "Failed to allocate 57600000-byte ring buffer: OutOfMemoryError",
+                ),
             ),
             {}, {}, {}, {}, {}, {},
         )

@@ -60,7 +60,15 @@
     <string name="dashboard_idle_explanation">Recording is stopped. Nothing is being recorded right now. Turn on the switch below to begin continuous background recording.</string>
     <string name="dashboard_recording_explanation">Recording continues in the background. When the buffer fills up, the oldest audio is automatically replaced with the newest.</string>
     <string name="dashboard_paused_explanation">Recording is paused because the microphone is being used by a call. Recording will resume automatically once the call ends.</string>
-    <string name="dashboard_error_explanation">Recording couldn\'t continue: %1$s</string>
+
+    <!-- Capture error reasons (issue #39) -->
+    <string name="capture_error_buffer_allocation_failed">Not enough device memory to allocate the audio buffer. Try reducing the retention window in Settings.</string>
+    <string name="capture_error_unsupported_config">The required audio recording format is not supported by your device.</string>
+    <string name="capture_error_audio_record_init_failed">Couldn\'t initialize the microphone. Make sure no other app is using it and try again.</string>
+    <string name="capture_error_read_invalid_operation">The audio recorder encountered an invalid operation. Turn recording off and on again to retry.</string>
+    <string name="capture_error_read_bad_value">The audio recorder received invalid parameters. Turn recording off and on again to retry.</string>
+    <string name="capture_error_read_dead_object">The system audio service stopped responding. Turn recording off and on again, or restart your device.</string>
+    <string name="capture_error_read_unknown_error">An unexpected audio recording error occurred. Turn recording off and on again to retry.</string>
 
     <string name="dashboard_status_announcement">Recording state: %1$s</string>
 
