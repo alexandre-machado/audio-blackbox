@@ -28,6 +28,15 @@ fun getGitBranch(): String {
     }
 }
 
+fun computeDynamicVersionCode(): Int {
+    val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+    if (runNumber != null) {
+        // GITHUB_RUN_NUMBER is strictly monotonic per workflow without requiring full git clone history
+        return 100 + runNumber
+    }
+    return getGitCommitCount()
+}
+
 fun getGitCommitCount(): Int {
     return try {
         val process = ProcessBuilder("git", "rev-list", "--count", "HEAD").start()
@@ -71,7 +80,7 @@ android {
         applicationId = "cc.machado.audioblackbox"
         minSdk = 29
         targetSdk = 36
-        versionCode = getGitCommitCount()
+        versionCode = computeDynamicVersionCode()
         versionName = computeDynamicVersionName("v0.2.0")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
