@@ -1,0 +1,6 @@
+Primeiro lançamento do Audio Blackbox para testes internos:
+- Gravação contínua em buffer circular de memória RAM (5, 15, 30 ou 60 minutos)
+- Exportação de áudio sob demanda em WAV ou AAC (M4A)
+- Pausa e retomada automática durante chamadas telefônicas
+- Galeria de gravações integrada para reprodução e compartilhamento
+- 100% privado: seus áudios nunca saem do seu dispositivo
