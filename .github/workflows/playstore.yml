@@ -92,6 +92,7 @@ jobs:
           track: ${{ github.event.inputs.track || 'internal' }}
           status: ${{ github.event.inputs.status || 'completed' }}
           whatsNewDirectory: distribution/whatsnew
+          changesNotSentForReview: true
 
       - name: Sync Store Listing Metadata
         env:
