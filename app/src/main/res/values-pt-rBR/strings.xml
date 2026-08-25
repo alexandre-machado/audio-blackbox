@@ -45,6 +45,10 @@
     <string name="recorder_notification_export_exporting">Salvando gravação…</string>
     <string name="recorder_notification_export_success">Gravação salva: %1$s</string>
     <string name="recorder_notification_export_error">Falha ao salvar a gravação</string>
+    <string name="recorder_notification_forward_recording">Gravação ao vivo: %1$s</string>
+    <string name="recorder_notification_forward_success">Gravação ao vivo salva: %1$s</string>
+    <string name="recorder_notification_forward_error">Falha na gravação ao vivo</string>
+    <string name="recorder_notification_action_stop_forward">Parar gravação ao vivo</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_status_idle">Parado</string>

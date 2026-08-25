@@ -175,6 +175,82 @@ class RingBufferSnapshotLockBenchmarkTest {
         return true
     }
 
+    @Test
+    fun `benchmark three-way contention - continuous writes plus continuous readSince drain plus snapshot`() {
+        val sampleRateHz = 16_000
+        val bytesPerSecond = sampleRateHz * 2
+        val capacityBytes = bytesPerSecond * 60 * 5 // 5 minutes retention window (9.6 MB)
+        val buffer = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = bytesPerSecond)
+
+        val writeChunkSize = 320 // 20ms of audio
+        val drainChunkSize = 4096 // 128ms of audio
+        val totalWrites = 500
+        val startLatch = java.util.concurrent.CountDownLatch(1)
+        val writerDone = java.util.concurrent.atomic.AtomicBoolean(false)
+        val writesCompleted = java.util.concurrent.atomic.AtomicInteger(0)
+        val drainsCompleted = java.util.concurrent.atomic.AtomicInteger(0)
+        val snapshotsCompleted = java.util.concurrent.atomic.AtomicInteger(0)
+        val totalDrainedBytes = java.util.concurrent.atomic.AtomicLong(0)
+
+        val writerThread = Thread({
+            val chunk = ByteArray(writeChunkSize)
+            startLatch.await()
+            repeat(totalWrites) {
+                buffer.write(chunk)
+                writesCompleted.incrementAndGet()
+            }
+            writerDone.set(true)
+        }, "bench-writer")
+
+        val drainThread = Thread({
+            startLatch.await()
+            var cursor = 0L
+            while (!writerDone.get() || cursor < buffer.writeCursor()) {
+                when (val result = buffer.readSince(cursor, drainChunkSize)) {
+                    is ReadSinceResult.Data -> {
+                        if (result.bytes.isNotEmpty()) {
+                            cursor = result.nextCursor
+                            totalDrainedBytes.addAndGet(result.bytes.size.toLong())
+                            drainsCompleted.incrementAndGet()
+                        }
+                    }
+                    else -> break
+                }
+            }
+        }, "bench-drainer")
+
+        val snapshotThread = Thread({
+            startLatch.await()
+            while (!writerDone.get()) {
+                val snap = buffer.snapshot(60_000L)
+                if (snap.data.isNotEmpty()) {
+                    snapshotsCompleted.incrementAndGet()
+                }
+            }
+        }, "bench-snapshotter")
+
+        writerThread.start()
+        drainThread.start()
+        snapshotThread.start()
+
+        val startTime = System.nanoTime()
+        startLatch.countDown()
+
+        writerThread.join(30_000)
+        drainThread.join(30_000)
+        snapshotThread.join(30_000)
+        val elapsedMs = (System.nanoTime() - startTime) / NANOS_PER_MILLI
+
+        println(
+            "[SnapshotBenchmark] THREE-WAY CONTENTION RESULT: writes=${writesCompleted.get()}/$totalWrites, " +
+                "drains=${drainsCompleted.get()}, snapshots=${snapshotsCompleted.get()}, " +
+                "drainedBytes=${totalDrainedBytes.get()}, totalTime=${elapsedMs}ms",
+        )
+
+        org.junit.Assert.assertEquals(totalWrites, writesCompleted.get())
+        org.junit.Assert.assertEquals(totalWrites.toLong() * writeChunkSize, totalDrainedBytes.get())
+    }
+
     private companion object {
         const val BYTES_PER_SAMPLE_PCM16 = 2
         const val SECONDS_PER_MINUTE = 60L

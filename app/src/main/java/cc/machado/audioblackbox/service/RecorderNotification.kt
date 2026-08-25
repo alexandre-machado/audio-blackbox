@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.ui.MainActivity
 import java.util.Locale
 
@@ -26,6 +27,7 @@ object RecorderNotification {
     private const val REQUEST_CODE_CONTENT = 100
     private const val REQUEST_CODE_SAVE = 101
     private const val REQUEST_CODE_STOP = 102
+    private const val REQUEST_CODE_STOP_FORWARD = 103
 
     /** Idempotent: `NotificationManager.createNotificationChannel` is itself a no-op when the
      * channel already exists with the same id. No API-level guard needed here: `minSdk` is 29
@@ -47,31 +49,22 @@ object RecorderNotification {
         manager.createNotificationChannel(channel)
     }
 
-    /** Builds the current notification content for [state]/[bufferedDurationMillis]/[exportState].
+    /** Builds the current notification content for [state]/[bufferedDurationMillis]/[exportState]/[forwardRecordingState].
      * Called on every [RecorderService.onStartCommand] so the shown state and buffered duration
      * stay fresh, and via `NotificationManager.notify` whenever [RecorderService] observes a
-     * [CaptureState] or [ExportState] change while already running (issue #5's "failure surfaces
-     * a user-visible error, never a silent no-op" criterion -- this is that surface). */
+     * [CaptureState], [ExportState], or [ForwardRecordingState] change while already running. */
     fun build(
         context: Context,
         state: CaptureState,
         bufferedDurationMillis: Long?,
         exportState: ExportState = ExportState.Idle,
-        // Issue #45: the notification's own Save action always means "save everything currently
-        // buffered" (see RecorderService.onStartCommand's EXTRA_WINDOW_MINUTES handling), so its
-        // label must say the *actual* configured capacity, not a hardcoded "30 min" that would be
-        // silently wrong the moment a user picks a different retention window.
         capacityMinutes: Int = RecorderService.bufferDurationMinutes,
+        forwardRecordingState: ForwardRecordingState = ForwardRecordingState.Idle,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
             REQUEST_CODE_CONTENT,
             Intent(context, MainActivity::class.java).apply {
-                // NEW_TASK is required because this PendingIntent is built from a Service
-                // context, not an Activity one. Combined with MainActivity's
-                // android:launchMode="singleTop" in the manifest, SINGLE_TOP here means tapping
-                // the notification body brings the existing MainActivity instance to the front
-                // instead of creating a duplicate one.
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -79,6 +72,7 @@ object RecorderNotification {
 
         val saveIntent = actionPendingIntent(context, RecorderService.ACTION_SAVE, REQUEST_CODE_SAVE)
         val stopIntent = actionPendingIntent(context, RecorderService.ACTION_STOP, REQUEST_CODE_STOP)
+        val stopForwardIntent = actionPendingIntent(context, RecorderService.ACTION_STOP_FORWARD, REQUEST_CODE_STOP_FORWARD)
 
         val stateText = context.getString(
             when (state) {
@@ -92,11 +86,7 @@ object RecorderNotification {
             R.string.recorder_notification_buffered,
             formatDuration(bufferedDurationMillis ?: 0L),
         )
-        // exportState reflects ExportEngine's own StateFlow (see RecorderService's serviceScope
-        // collector) -- Idle never adds anything, so a session that never taps Save looks exactly
-        // like it did before this field existed. Exporting/Success/Error each get a short,
-        // user-visible line ahead of the buffered-duration text, which is how a failed or
-        // in-flight export becomes visible instead of only ever reaching Logcat.
+
         val exportText = when (exportState) {
             is ExportState.Idle -> null
             is ExportState.Exporting -> context.getString(R.string.recorder_notification_export_exporting)
@@ -104,16 +94,31 @@ object RecorderNotification {
                 context.getString(R.string.recorder_notification_export_success, exportState.displayName)
             is ExportState.Error -> context.getString(R.string.recorder_notification_export_error)
         }
-        val contentText = if (exportText != null) "$exportText · $bufferedText" else bufferedText
 
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        val forwardText = when (forwardRecordingState) {
+            is ForwardRecordingState.Idle -> null
+            is ForwardRecordingState.Recording ->
+                context.getString(R.string.recorder_notification_forward_recording, forwardRecordingState.displayName)
+            is ForwardRecordingState.Success ->
+                context.getString(R.string.recorder_notification_forward_success, forwardRecordingState.displayName)
+            is ForwardRecordingState.Error ->
+                context.getString(R.string.recorder_notification_forward_error)
+        }
+
+        val extraStatus = when {
+            forwardText != null && exportText != null -> "$forwardText · $exportText"
+            forwardText != null -> forwardText
+            exportText != null -> exportText
+            else -> null
+        }
+
+        val contentText = if (extraStatus != null) "$extraStatus · $bufferedText" else bufferedText
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_mic)
             .setContentTitle(stateText)
             .setContentText(contentText)
             .setOngoing(true)
-            // Suppresses a fresh heads-up/sound on every content refresh (e.g. the buffered
-            // duration ticking up) -- only the very first post of this notification should ever
-            // be noticeable, and the channel itself is already IMPORTANCE_LOW/no-sound.
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
             .addAction(
@@ -121,8 +126,17 @@ object RecorderNotification {
                 context.getString(R.string.recorder_notification_action_save, capacityMinutes),
                 saveIntent,
             )
-            .addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
-            .build()
+
+        if (forwardRecordingState is ForwardRecordingState.Recording) {
+            builder.addAction(
+                0,
+                context.getString(R.string.recorder_notification_action_stop_forward),
+                stopForwardIntent,
+            )
+        }
+
+        builder.addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
+        return builder.build()
     }
 
     private fun actionPendingIntent(context: Context, action: String, requestCode: Int): PendingIntent {

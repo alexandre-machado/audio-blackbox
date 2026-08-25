@@ -45,6 +45,10 @@
     <string name="recorder_notification_export_exporting">Saving recording…</string>
     <string name="recorder_notification_export_success">Recording saved: %1$s</string>
     <string name="recorder_notification_export_error">Failed to save recording</string>
+    <string name="recorder_notification_forward_recording">Live recording: %1$s</string>
+    <string name="recorder_notification_forward_success">Live recording saved: %1$s</string>
+    <string name="recorder_notification_forward_error">Live recording failed</string>
+    <string name="recorder_notification_action_stop_forward">Stop live</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_status_idle">Stopped</string>

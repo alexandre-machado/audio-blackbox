@@ -292,4 +292,110 @@ class RingBufferReadSinceConcurrencyTest {
         assertTrue("resume from oldestAvailableCursor must succeed, got $resumed", resumed is ReadSinceResult.Data)
         assertEquals(capacityBytes, (resumed as ReadSinceResult.Data).bytes.size)
     }
+
+    @Test
+    fun `concurrent readSince drain plus snapshot while writer is actively writing causes zero frame drops`() {
+        val capacityBytes = bytesPerSecond * 5 // 80,000 bytes
+        val writesToPerform = 200 // 64,000 bytes (< 80,000 bytes, so no lapping)
+        val racedBytes = writesToPerform.toLong() * chunkSize
+
+        val buffer = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = bytesPerSecond)
+        val startLatch = CountDownLatch(1)
+        val firstDrainLatch = CountDownLatch(1)
+        val firstSnapshotLatch = CountDownLatch(1)
+        val writerDone = AtomicBoolean(false)
+        val writerFailure = AtomicReference<Throwable?>(null)
+        val drainFailure = AtomicReference<Throwable?>(null)
+        val snapshotFailure = AtomicReference<Throwable?>(null)
+        val snapshotsTaken = AtomicInteger(0)
+
+        val writer = Thread({
+            try {
+                val scratch = ByteArray(128 * 1024)
+                startLatch.await()
+                repeat(writesToPerform) { index ->
+                    buffer.write(chunkFor(index))
+                    if (index == 0) {
+                        if (!firstDrainLatch.await(30, TimeUnit.SECONDS)) {
+                            throw AssertionError("drain thread never ran first read")
+                        }
+                        if (!firstSnapshotLatch.await(30, TimeUnit.SECONDS)) {
+                            throw AssertionError("snapshot thread never ran first snapshot")
+                        }
+                    }
+                    java.util.Arrays.fill(scratch, index.toByte())
+                }
+            } catch (t: Throwable) {
+                writerFailure.set(t)
+            } finally {
+                writerDone.set(true)
+            }
+        }, "test-writer-threeway")
+
+        val drained = ByteArrayOutputStream()
+        val drainer = Thread({
+            try {
+                startLatch.await()
+                var cursor = 0L
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+                while (drained.size() < racedBytes) {
+                    if (System.nanoTime() > deadline) {
+                        throw AssertionError("drain timed out waiting for $racedBytes bytes")
+                    }
+                    when (val result = buffer.readSince(cursor, maxBytes = 4096)) {
+                        is ReadSinceResult.Data -> {
+                            if (result.bytes.isNotEmpty()) {
+                                drained.write(result.bytes)
+                                cursor = result.nextCursor
+                                firstDrainLatch.countDown()
+                            }
+                        }
+                        is ReadSinceResult.Lapped -> throw AssertionError("unexpected lapping: $result")
+                        is ReadSinceResult.StreamReset -> throw AssertionError("unexpected stream reset: $result")
+                    }
+                }
+            } catch (t: Throwable) {
+                drainFailure.set(t)
+            }
+        }, "test-drainer-threeway")
+
+        val snapshotter = Thread({
+            try {
+                startLatch.await()
+                while (!writerDone.get()) {
+                    val snap = buffer.snapshot(2_000L)
+                    if (snap.data.isNotEmpty()) {
+                        snapshotsTaken.incrementAndGet()
+                        firstSnapshotLatch.countDown()
+                    }
+                }
+            } catch (t: Throwable) {
+                snapshotFailure.set(t)
+            }
+        }, "test-snapshotter-threeway")
+
+        writer.start()
+        drainer.start()
+        snapshotter.start()
+
+        startLatch.countDown()
+
+        writer.join(30_000)
+        drainer.join(30_000)
+        snapshotter.join(30_000)
+
+        assertNull("writer failed: ${writerFailure.get()}", writerFailure.get())
+        assertNull("drainer failed: ${drainFailure.get()}", drainFailure.get())
+        assertNull("snapshotter failed: ${snapshotFailure.get()}", snapshotFailure.get())
+
+        assertEquals(racedBytes, drained.size().toLong())
+        val reconstructed = drained.toByteArray()
+        repeat(writesToPerform) { i ->
+            val expected = chunkFor(i)
+            val actual = reconstructed.copyOfRange(i * chunkSize, (i + 1) * chunkSize)
+            assertTrue("chunk $i mismatch in three-way test", expected.contentEquals(actual))
+        }
+        assertTrue("at least one snapshot should have run concurrently", snapshotsTaken.get() > 0)
+    }
+
 }
