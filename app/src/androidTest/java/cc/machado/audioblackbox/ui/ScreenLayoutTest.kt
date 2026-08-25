@@ -16,8 +16,12 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -55,7 +59,72 @@ class ScreenLayoutTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
-    private fun string(id: Int): String = composeRule.activity.getString(id)
+    private fun string(id: Int, vararg formatArgs: Any): String =
+        composeRule.activity.getString(id, *formatArgs)
+
+    private fun localizedString(locale: Locale, id: Int, vararg formatArgs: Any): String {
+        val config = Configuration(composeRule.activity.resources.configuration).apply {
+            setLocale(locale)
+        }
+        val localizedContext = composeRule.activity.createConfigurationContext(config)
+        return localizedContext.getString(id, *formatArgs)
+    }
+
+    private fun assertSaveWindowChipsValid(locale: Locale) {
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val windowMinutes = listOf(5, 15, 30)
+
+        // 1. Verify that all chip labels render on a single line (no mid-word or multi-line wrap).
+        for (minutes in windowMinutes) {
+            val labelText = localizedString(locale, R.string.dashboard_save_window_option, minutes)
+            val labelNode = composeRule.onNodeWithText(labelText, useUnmergedTree = true)
+            labelNode.performScrollTo()
+            labelNode.assertIsDisplayed()
+
+            val textLayoutResults = mutableListOf<TextLayoutResult>()
+            labelNode.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action ->
+                action(textLayoutResults)
+            }
+            assertTrue(
+                "expected text layout result for chip label '$labelText'",
+                textLayoutResults.isNotEmpty(),
+            )
+            val layoutResult = textLayoutResults.first()
+            assertTrue(
+                "chip label '$labelText' wrapped into ${layoutResult.lineCount} lines " +
+                    "(text: '${layoutResult.layoutInput.text}'), expected exactly 1 line without wrapping.",
+                layoutResult.lineCount == 1,
+            )
+
+            val chipNode = composeRule.onNode(hasText(labelText) and hasClickAction())
+            val chipBounds = chipNode.getUnclippedBoundsInRoot()
+            assertTrue(
+                "the $minutes min chip is clipped off the right edge: its right edge is at ${chipBounds.right}, " +
+                    "but root window right edge is at ${rootBounds.right}.",
+                chipBounds.right <= rootBounds.right,
+            )
+            assertTrue(
+                "the $minutes min chip is positioned before the left edge: its left edge is at ${chipBounds.left}, " +
+                    "but root window left edge is at ${rootBounds.left}.",
+                chipBounds.left >= rootBounds.left,
+            )
+        }
+
+        // 2. Verify that all 3 window chips share the row width equally.
+        val helperText = localizedString(locale, R.string.dashboard_save_window_insufficient_buffer, 0)
+        val helperNodes = composeRule.onAllNodesWithText(helperText)
+        val count = helperNodes.fetchSemanticsNodes().size
+        assertTrue("expected 3 helper text nodes for the 3 chips, found $count", count == 3)
+        val widths = (0 until count).map { i ->
+            val bounds = helperNodes[i].getUnclippedBoundsInRoot()
+            bounds.right - bounds.left
+        }
+        assertTrue(
+            "the 3 window chips do not share width equally: widths are ${widths.map { it.value }}, expected equal width within tolerance.",
+            (widths[0] - widths[1]).value.absoluteValue <= GAP_TOLERANCE_DP &&
+                (widths[1] - widths[2]).value.absoluteValue <= GAP_TOLERANCE_DP,
+        )
+    }
 
     /**
      * Oracle: fails if the dashboard's primary action can come to rest inside the floating bar's
@@ -253,6 +322,55 @@ class ScreenLayoutTest {
                 "$expectedMaxRight (accounting for $DASHBOARD_PADDING dashboard padding).",
             (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
         )
+    }
+
+    /**
+     * Oracle: fails if the save-window chip labels ("5 min", "15 min", "30 min") wrap mid-word or
+     * across multiple lines, or if the chips do not share available width equally across the row
+     * when helper text ("only 0 min available") is shown under compact width (Issue #77).
+     *
+     * Under the pre-fix layout, the save-window chips had no weight constraints or single-line
+     * guarantees, causing unequal width allocation where the 30-min chip wrapped mid-word
+     * ("30 mi\nn") and its helper text was squeezed across three lines. Under the fix, the chip
+     * row uses fillMaxWidth with equal weight(1f) modifiers and FilterChip labels enforce
+     * single-line rendering without wrapping.
+     */
+    @Test
+    fun saveWindowChipsDoNotWrapAndShareWidthEquallyInCompactWidth() {
+        composeRule.setContent {
+            CompactHarnessApp(
+                Destination.DASHBOARD,
+                dashboardUiState = emptyBufferDashboardFixture(),
+            )
+        }
+
+        assertSaveWindowChipsValid(Locale.ENGLISH)
+    }
+
+    /**
+     * Oracle: same defect as above, verified under the Portuguese (pt-BR) locale where the helper
+     * text ("só 0 min disponíveis") is longer than English.
+     */
+    @Test
+    fun saveWindowChipsDoNotWrapAndShareWidthEquallyInCompactWidthWithPortugueseLocale() {
+        val ptLocale = Locale.forLanguageTag("pt-BR")
+        composeRule.setContent {
+            val ptConfig = Configuration(LocalConfiguration.current).apply {
+                setLocale(ptLocale)
+            }
+            val ptContext = LocalContext.current.createConfigurationContext(ptConfig)
+            CompositionLocalProvider(
+                LocalConfiguration provides ptConfig,
+                LocalContext provides ptContext,
+            ) {
+                CompactHarnessApp(
+                    Destination.DASHBOARD,
+                    dashboardUiState = emptyBufferDashboardFixture(),
+                )
+            }
+        }
+
+        assertSaveWindowChipsValid(ptLocale)
     }
 
     // ---- helpers ----

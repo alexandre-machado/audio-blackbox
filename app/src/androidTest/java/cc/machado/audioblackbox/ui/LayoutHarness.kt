@@ -39,7 +39,10 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
  * not participate in the bar/content relation, and the onboarding branch.
  */
 @Composable
-internal fun HarnessApp(initialDestination: Destination) {
+internal fun HarnessApp(
+    initialDestination: Destination,
+    dashboardUiState: cc.machado.audioblackbox.ui.dashboard.DashboardUiState = dashboardFixture(),
+) {
     var selected by rememberSaveable { mutableStateOf(initialDestination) }
     AudioBlackboxTheme {
         AppScaffold(
@@ -49,7 +52,7 @@ internal fun HarnessApp(initialDestination: Destination) {
         ) {
             when (selected) {
                 Destination.DASHBOARD -> DashboardScreen(
-                    uiState = dashboardFixture(),
+                    uiState = dashboardUiState,
                     onToggleEngine = {},
                     onSelectWindow = {},
                     onDismissSaveNotice = {},
@@ -97,9 +100,12 @@ internal fun HarnessApp(initialDestination: Destination) {
  * window, or in landscape at a large font scale.
  */
 @Composable
-internal fun CompactHarnessApp(initialDestination: Destination) {
+internal fun CompactHarnessApp(
+    initialDestination: Destination,
+    dashboardUiState: cc.machado.audioblackbox.ui.dashboard.DashboardUiState = dashboardFixture(),
+) {
     Box(modifier = Modifier.requiredSize(COMPACT_WINDOW_WIDTH, COMPACT_WINDOW_HEIGHT)) {
-        HarnessApp(initialDestination)
+        HarnessApp(initialDestination, dashboardUiState)
     }
 }
 
@@ -120,6 +126,16 @@ internal fun dashboardFixture() = DashboardViewModel.mapUiState(
     bufferedMillis = 30L * 60_000L,
     capacityMinutes = 30,
     saveState = SaveUiState.Success("blackbox_2026-08-24_10-15-00_30min.m4a"),
+)
+
+/**
+ * Paused with 0ms in buffer so save window chips are disabled with insufficient-buffer helper text.
+ */
+internal fun emptyBufferDashboardFixture() = DashboardViewModel.mapUiState(
+    captureState = CaptureState.Paused,
+    bufferedMillis = 0L,
+    capacityMinutes = 30,
+    saveState = SaveUiState.Idle,
 )
 
 /** A pending (not yet applied) retention change: shows the dirty notice and an enabled Apply
