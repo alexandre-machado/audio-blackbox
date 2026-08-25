@@ -1,3 +1,4 @@
+import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
 import java.util.Properties
 
 fun getGitCommitShortSha(): String {
@@ -110,6 +111,9 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".staging"
+            firebaseAppDistribution {
+                groups = "testers"
+            }
         }
         release {
             isMinifyEnabled = false

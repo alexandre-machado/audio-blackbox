@@ -10,6 +10,11 @@ on:
         required: false
         default: "Manual distribution build"
         type: string
+      groups:
+        description: "Tester groups (comma-separated)"
+        required: false
+        default: "testers"
+        type: string
 
 permissions:
   contents: read
@@ -48,4 +53,4 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
       - name: Upload APK to Firebase App Distribution
-        run: ./gradlew assembleDebug appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotes="${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}"
+        run: ./gradlew assembleDebug appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotes="${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}" -PfirebaseAppDistributionGroups="${{ github.event.inputs.groups || 'testers' }}"
