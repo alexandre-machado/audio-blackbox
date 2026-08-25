@@ -26,6 +26,11 @@ on:
           - draft
           - inProgress
           - halted
+      sync_only:
+        description: "Sync metadata only (skip AAB build/upload)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -38,29 +43,36 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up JDK 17
+        if: ${{ !inputs.sync_only }}
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
+        if: ${{ !inputs.sync_only }}
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
       - name: Install SDK platform and build-tools
+        if: ${{ !inputs.sync_only }}
         run: sdkmanager "platforms;android-37.1" "build-tools;37.0.0"
 
       - name: Set up Gradle
+        if: ${{ !inputs.sync_only }}
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Grant execute permission for gradlew
+        if: ${{ !inputs.sync_only }}
         run: chmod +x gradlew
 
       - name: Decode Keystore
+        if: ${{ !inputs.sync_only }}
         run: |
           mkdir -p /tmp/keystore
           echo "${{ secrets.PLAY_KEYSTORE_BASE64 }}" | base64 -d > /tmp/keystore/upload-keystore.jks
 
       - name: Build Release Bundle
+        if: ${{ !inputs.sync_only }}
         env:
           PLAY_KEYSTORE_PATH: /tmp/keystore/upload-keystore.jks
           PLAY_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
@@ -69,6 +81,7 @@ jobs:
         run: ./gradlew bundleRelease --no-daemon
 
       - name: Upload to Google Play
+        if: ${{ !inputs.sync_only }}
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY || secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
@@ -77,6 +90,14 @@ jobs:
           track: ${{ github.event.inputs.track || 'internal' }}
           status: ${{ github.event.inputs.status || 'completed' }}
           whatsNewDirectory: distribution/whatsnew
+
+      - name: Sync Store Listing Metadata
+        env:
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY || secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          PACKAGE_NAME: cc.machado.audioblackbox
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 scripts/ci/sync-play-store-metadata.py
 
       - name: Clean up Keystore
         if: always()
