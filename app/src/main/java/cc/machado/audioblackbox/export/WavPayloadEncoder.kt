@@ -14,16 +14,21 @@ object WavPayloadEncoder : PayloadEncoder {
     override val mimeType: String = "audio/wav"
     override val fileExtension: String = "wav"
 
-    override fun encode(config: AudioConfig, payload: ByteArray, out: OutputStream, isCancelled: () -> Boolean) {
-        WavWriter.writeHeader(out, config, payload.size)
-        var offset = 0
-        while (offset < payload.size) {
+    override fun encode(
+        config: AudioConfig,
+        totalPayloadBytes: Long,
+        chunks: PayloadChunkSource,
+        out: OutputStream,
+        isCancelled: () -> Boolean,
+    ) {
+        require(totalPayloadBytes in 0..Int.MAX_VALUE.toLong()) {
+            "totalPayloadBytes must fit a WAV data subchunk (Int), was $totalPayloadBytes"
+        }
+        WavWriter.writeHeader(out, config, totalPayloadBytes.toInt())
+        while (true) {
             if (isCancelled()) return
-            val length = minOf(CHUNK_BYTES, payload.size - offset)
-            out.write(payload, offset, length)
-            offset += length
+            val chunk = chunks.nextChunk() ?: break
+            out.write(chunk)
         }
     }
-
-    private const val CHUNK_BYTES = 64 * 1024
 }

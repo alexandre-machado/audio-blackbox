@@ -85,14 +85,15 @@ class RecorderService : Service() {
     // (MediaStoreSink -> ContentResolver; AacPayloadEncoder -> cacheDir for its temp file, see its
     // class doc), which is only available once this Service instance is attached.
     //
-    // snapshotProvider/gapsProvider are lambdas that read the companion's `engine` property fresh
-    // on every call, deliberately not bound method references (`engine::snapshot`) captured once
-    // at this lazy block's first evaluation (issue #45): a retention-window change can replace
-    // `engine` wholesale for the lifetime of this same Service instance (see
-    // `rebuildEngineIfIdle`), and a bound reference would keep exporting from the old, abandoned
-    // engine forever after that. `config` does not need the same treatment -- sampleRateHz/
-    // encoding/channelCount never change across a rebuild, only bufferDurationMinutes, which
-    // ExportEngine never reads (see its own field, private and unused for that purpose).
+    // readSinceProvider/writeCursorProvider/oldestCursorProvider/estimateTimestampProvider/
+    // gapsProvider are lambdas that read the companion's `engine` property fresh on every call,
+    // deliberately not bound method references (`engine::readSince`) captured once at this lazy
+    // block's first evaluation (issue #45): a retention-window change can replace `engine`
+    // wholesale for the lifetime of this same Service instance (see `rebuildEngineIfIdle`), and a
+    // bound reference would keep exporting from the old, abandoned engine forever after that.
+    // `config` does not need the same treatment -- sampleRateHz/encoding/channelCount never
+    // change across a rebuild, only bufferDurationMinutes, which ExportEngine never reads (see its
+    // own field, private and unused for that purpose).
     //
     // AacPayloadEncoder (`.m4a`, issue #32) is the production default, not WavPayloadEncoder --
     // see issue #32's device evidence for why (176 audio files on the target device, zero WAV).
@@ -100,7 +101,10 @@ class RecorderService : Service() {
     private val exportEngine by lazy {
         ExportEngine(
             config = captureConfig,
-            snapshotProvider = { durationMillis -> engine.snapshot(durationMillis) },
+            readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
+            writeCursorProvider = { engine.writeCursor() },
+            oldestCursorProvider = { engine.oldestCursor() },
+            estimateTimestampProvider = { offset -> engine.estimateTimestamp(offset) },
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),

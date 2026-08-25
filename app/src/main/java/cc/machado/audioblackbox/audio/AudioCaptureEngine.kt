@@ -146,6 +146,11 @@ class AudioCaptureEngine(
      */
     fun readSince(cursor: Long, maxBytes: Int): ReadSinceResult? = ringBuffer?.readSince(cursor, maxBytes)
 
+    /** Wall-clock estimate for [streamOffset], or `null` before the first [start] or after [stop].
+     * See [RingBuffer.estimateTimestamp] -- backs the bounded "save the past" export path (issue
+     * #72), which needs a window's wall-clock start without a full [snapshot]. */
+    fun estimateTimestamp(streamOffset: Long): Long? = ringBuffer?.estimateTimestamp(streamOffset)
+
     /** Whether capture is currently running and the buffer is accessible. */
     fun isRunning(): Boolean = ringBuffer != null && (_state.value is CaptureState.Recording || _state.value is CaptureState.Paused)
 

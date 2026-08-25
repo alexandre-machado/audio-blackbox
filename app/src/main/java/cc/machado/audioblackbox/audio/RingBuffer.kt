@@ -407,6 +407,18 @@ class RingBuffer(
         }
     }
 
+    /**
+     * Public wall-clock estimate for an arbitrary [streamOffset] (issue #72's bounded export
+     * path needs this to compute a gap-fill window's wall-clock start without paying for a full
+     * [snapshot] just to read [AudioSnapshot.startTimestampMillis]). Same marker interpolation
+     * [snapshot] already uses internally, just reachable for a cursor a caller obtained from
+     * [writeCursor]/[oldestCursor] instead of only for whatever [snapshot] itself just copied.
+     */
+    fun estimateTimestamp(streamOffset: Long): Long {
+        require(streamOffset >= 0) { "streamOffset must not be negative, was $streamOffset" }
+        return synchronized(lock) { estimateTimestampLocked(streamOffset) }
+    }
+
     /** Must be called with [lock] held. Interpolates/extrapolates from the closest marker. */
     private fun estimateTimestampLocked(streamOffset: Long): Long {
         if (markerCount == 0) return clock()

@@ -11,8 +11,10 @@ import org.junit.Test
 
 /**
  * Proves capture writes are not dropped or corrupted while a snapshot is being taken (issue #5
- * mandatory test). Exercises [RingBuffer] directly -- the real production dependency
- * [ExportEngine.export] calls through `snapshotProvider` -- rather than
+ * mandatory test). Exercises [RingBuffer] directly -- `snapshot()` is no longer on
+ * [ExportEngine.export]'s production path as of issue #72 (which reads via `readSince` instead),
+ * but the property under test here is `snapshot()`'s own locking, which this class still pins
+ * since the method remains a public, tested part of [RingBuffer]'s contract -- rather than
  * [cc.machado.audioblackbox.audio.AudioCaptureEngine], both because that class is owned by a
  * concurrent PR (issue #26) and because the property under test ("does snapshot() ever cause
  * write() to lose or corrupt a frame") lives entirely inside [RingBuffer]'s own locking, which
