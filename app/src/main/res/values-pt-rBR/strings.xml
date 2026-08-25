@@ -48,6 +48,7 @@
     <string name="recorder_notification_forward_recording">Gravação ao vivo: %1$s</string>
     <string name="recorder_notification_forward_success">Gravação ao vivo salva: %1$s</string>
     <string name="recorder_notification_forward_error">Falha na gravação ao vivo</string>
+    <string name="recorder_notification_action_start_forward">Gravar para frente</string>
     <string name="recorder_notification_action_stop_forward">Parar gravação ao vivo</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
@@ -94,6 +95,19 @@
     <string name="dashboard_save_error_title">Falha ao salvar</string>
     <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
     <string name="dashboard_save_notice_dismiss">OK</string>
+
+    <!-- Gravação para frente (Ação 2, issue #55) -->
+    <string name="dashboard_forward_title">Gravar para frente</string>
+    <string name="dashboard_forward_explanation">Grave continuamente a partir de agora em um novo arquivo, mantendo o buffer circular ativo.</string>
+    <string name="dashboard_forward_start_button">Iniciar gravação contínua</string>
+    <string name="dashboard_forward_recording_title">Gravando para frente</string>
+    <string name="dashboard_forward_elapsed_label">Tempo decorrido: %1$s</string>
+    <string name="dashboard_forward_elapsed_cd">Tempo decorrido da gravação contínua: %1$s</string>
+    <string name="dashboard_forward_stop_button">Parar gravação contínua</string>
+    <string name="dashboard_forward_success_title">Gravação contínua salva</string>
+    <string name="dashboard_forward_success_body">Arquivo: %1$s</string>
+    <string name="dashboard_forward_error_title">Falha na gravação contínua</string>
+    <string name="dashboard_forward_outcome_announcement">%1$s. %2$s</string>
 
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Gravações salvas</string>

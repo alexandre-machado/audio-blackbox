@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.export.ExportFailureReason
+import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
 
 /** UI-facing mirror of [cc.machado.audioblackbox.audio.CaptureState], mapped 1:1 by
  * [DashboardViewModel] -- see its `mapCaptureStatus` -- so the screen never needs to import the
@@ -105,6 +106,14 @@ sealed interface SaveUiState {
  * carries it; [capacityMillis] still reflects whatever the settings screen has committed, since
  * that comes from [cc.machado.audioblackbox.service.RecorderService]'s own reactive capacity, not
  * a value this screen owns. */
+/** Observable lifecycle of forward continuous recording on the dashboard. */
+sealed interface ForwardRecordingUiState {
+    data object Idle : ForwardRecordingUiState
+    data class Recording(val displayName: String, val elapsedMillis: Long) : ForwardRecordingUiState
+    data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingUiState
+    data class Error(val reason: ForwardRecordingFailureReason, val message: String) : ForwardRecordingUiState
+}
+
 data class DashboardUiState(
     val captureStatus: CaptureStatus,
     val engineSwitch: EngineSwitchUiState,
@@ -113,6 +122,7 @@ data class DashboardUiState(
     val isBufferFull: Boolean,
     val windowOptions: List<WindowOption>,
     val saveState: SaveUiState,
+    val forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
 ) {
     companion object {
         val WINDOW_OPTION_MINUTES = listOf(5, 15, 30)

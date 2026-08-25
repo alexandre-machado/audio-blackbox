@@ -28,6 +28,7 @@ object RecorderNotification {
     private const val REQUEST_CODE_SAVE = 101
     private const val REQUEST_CODE_STOP = 102
     private const val REQUEST_CODE_STOP_FORWARD = 103
+    private const val REQUEST_CODE_START_FORWARD = 104
 
     /** Idempotent: `NotificationManager.createNotificationChannel` is itself a no-op when the
      * channel already exists with the same id. No API-level guard needed here: `minSdk` is 29
@@ -60,6 +61,7 @@ object RecorderNotification {
         exportState: ExportState = ExportState.Idle,
         capacityMinutes: Int = RecorderService.bufferDurationMinutes,
         forwardRecordingState: ForwardRecordingState = ForwardRecordingState.Idle,
+        bytesPerSecond: Int = cc.machado.audioblackbox.audio.AudioConfig.DEFAULT_SAMPLE_RATE_HZ * 2,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
@@ -72,6 +74,7 @@ object RecorderNotification {
 
         val saveIntent = actionPendingIntent(context, RecorderService.ACTION_SAVE, REQUEST_CODE_SAVE)
         val stopIntent = actionPendingIntent(context, RecorderService.ACTION_STOP, REQUEST_CODE_STOP)
+        val startForwardIntent = actionPendingIntent(context, RecorderService.ACTION_START_FORWARD, REQUEST_CODE_START_FORWARD)
         val stopForwardIntent = actionPendingIntent(context, RecorderService.ACTION_STOP_FORWARD, REQUEST_CODE_STOP_FORWARD)
 
         val stateText = context.getString(
@@ -95,10 +98,16 @@ object RecorderNotification {
             is ExportState.Error -> context.getString(R.string.recorder_notification_export_error)
         }
 
+        val forwardElapsedMillis = if (bytesPerSecond > 0 && forwardRecordingState is ForwardRecordingState.Recording) {
+            (forwardRecordingState.bytesWritten * 1000L) / bytesPerSecond
+        } else {
+            0L
+        }
+
         val forwardText = when (forwardRecordingState) {
             is ForwardRecordingState.Idle -> null
             is ForwardRecordingState.Recording ->
-                context.getString(R.string.recorder_notification_forward_recording, forwardRecordingState.displayName)
+                context.getString(R.string.recorder_notification_forward_recording, formatDuration(forwardElapsedMillis))
             is ForwardRecordingState.Success ->
                 context.getString(R.string.recorder_notification_forward_success, forwardRecordingState.displayName)
             is ForwardRecordingState.Error ->
@@ -132,6 +141,12 @@ object RecorderNotification {
                 0,
                 context.getString(R.string.recorder_notification_action_stop_forward),
                 stopForwardIntent,
+            )
+        } else {
+            builder.addAction(
+                0,
+                context.getString(R.string.recorder_notification_action_start_forward),
+                startForwardIntent,
             )
         }
 

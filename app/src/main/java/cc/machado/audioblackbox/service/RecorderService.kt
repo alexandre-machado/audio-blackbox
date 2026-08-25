@@ -447,7 +447,9 @@ class RecorderService : Service() {
         engine.state.value,
         engine.bufferedDurationMillis(),
         exportEngine.state.value,
+        capacityMinutes = captureConfig.bufferDurationMinutes,
         forwardRecordingState = forwardRecordingEngine.state.value,
+        bytesPerSecond = captureConfig.bytesPerSecond,
     )
 
     private fun refreshNotification() {

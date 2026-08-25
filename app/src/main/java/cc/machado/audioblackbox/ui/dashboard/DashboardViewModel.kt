@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.service.RecorderService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -46,26 +48,18 @@ import kotlinx.coroutines.launch
  * needs the gallery (issue #7) and is not attempted here -- see [SaveUiState.Success]'s doc.
  */
 class DashboardViewModel(
-    // Issue #45: reads the companion's *forwarded* captureState/bufferDurationMinutesFlow, not
-    // `RecorderService.engine.state`/a one-time snapshot `Int` -- a retention-window change
-    // replaces the underlying `engine` instance wholesale, and a reference captured once here
-    // (the way both of these used to be) would freeze at whatever it saw at ViewModel
-    // construction and never observe another transition/capacity change afterwards. See
-    // RecorderService.captureState's doc for why the forwarding exists.
     private val captureState: StateFlow<CaptureState> = RecorderService.captureState,
     private val bufferedDurationMillisProvider: () -> Long? = { RecorderService.engine.bufferedDurationMillis() },
-    // Issue #40 item 3 (`@rev` finding on issue #6), extended by issue #45: reads
-    // RecorderService's real, *reactive* configured capacity instead of a bare constant or a
-    // one-time snapshot, so the buffer denominator stays correct across a retention-window rebuild
-    // without needing this ViewModel recreated. (The retention selector itself moved to
-    // cc.machado.audioblackbox.ui.settings.SettingsViewModel as of issue #73, which reads this
-    // same RecorderService.bufferDurationMinutesFlow independently.)
     private val capacityMinutesFlow: StateFlow<Int> = RecorderService.bufferDurationMinutesFlow,
     private val exportState: StateFlow<ExportState> = RecorderService.exportState,
+    private val forwardRecordingState: StateFlow<ForwardRecordingState> = RecorderService.forwardRecordingState,
+    private val audioConfigProvider: () -> AudioConfig = { RecorderService.captureConfig },
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
     private val onSaveIntent: (minutes: Int) -> Unit = {},
+    private val onStartForwardRecording: (startFromOldest: Boolean) -> Unit = {},
+    private val onStopForwardRecording: () -> Unit = {},
 ) : ViewModel() {
 
     // The most recent terminal ExportState (Success/Error) the user has explicitly dismissed --
@@ -74,6 +68,7 @@ class DashboardViewModel(
     // terminal value from before this ViewModel existed (e.g. after rotation, right after a save
     // just finished) -- that outcome is still worth showing once, not swallowed silently.
     private val _dismissedExportState = MutableStateFlow<ExportState?>(null)
+    private val _dismissedForwardRecordingState = MutableStateFlow<ForwardRecordingState?>(null)
 
     // Polled rather than a StateFlow because AudioCaptureEngine.bufferedDurationMillis() is a
     // plain getter, not itself observable (see that method's doc) -- it changes continuously
@@ -190,32 +185,48 @@ class DashboardViewModel(
     // element type. (Issue #73 removed a third member of this bundle -- the retention discard
     // confirmation flag -- when the retention control moved to SettingsViewModel; kept as a Pair
     // rather than un-nested back to a plain 6-arg combine for the same reason it existed before.)
+    private val exportAndDismissedFlow: Flow<Pair<ExportState, ExportState?>> =
+        combine(exportState, _dismissedExportState) { exp, dism -> exp to dism }
+
+    private val forwardAndDismissedFlow: Flow<Pair<ForwardRecordingState, ForwardRecordingState?>> =
+        combine(forwardRecordingState, _dismissedForwardRecordingState) { fwd, dism -> fwd to dism }
+
     private val capacityAndEngineTogglePendingFlow: Flow<Pair<Int, Boolean>> =
         combine(capacityMinutesFlow, _engineTogglePending) { capacity, enginePending -> capacity to enginePending }
 
     val uiState: StateFlow<DashboardUiState> = combine(
         captureState,
         bufferedMillisFlow,
-        exportState,
-        _dismissedExportState,
+        exportAndDismissedFlow,
+        forwardAndDismissedFlow,
         capacityAndEngineTogglePendingFlow,
-    ) { capture, bufferedMillis, export, dismissed, (capacityMinutes, enginePending) ->
+    ) { capture, bufferedMillis, (export, dismissedExport), (forward, dismissedForward), (capacityMinutes, enginePending) ->
         mapUiState(
-            capture,
-            bufferedMillis,
-            capacityMinutes,
-            mapSaveUiState(export, dismissed),
-            enginePending,
+            captureState = capture,
+            bufferedMillis = bufferedMillis,
+            capacityMinutes = capacityMinutes,
+            saveState = mapSaveUiState(export, dismissedExport),
+            forwardRecordingState = mapForwardRecordingUiState(
+                forwardState = forward,
+                dismissed = dismissedForward,
+                bytesPerSecond = audioConfigProvider().bytesPerSecond,
+            ),
+            enginePending = enginePending,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
         initialValue = mapUiState(
-            captureState.value,
-            bufferedDurationMillisProvider() ?: 0L,
-            capacityMinutesFlow.value,
-            mapSaveUiState(exportState.value, _dismissedExportState.value),
-            _engineTogglePending.value,
+            captureState = captureState.value,
+            bufferedMillis = bufferedDurationMillisProvider() ?: 0L,
+            capacityMinutes = capacityMinutesFlow.value,
+            saveState = mapSaveUiState(exportState.value, _dismissedExportState.value),
+            forwardRecordingState = mapForwardRecordingUiState(
+                forwardState = forwardRecordingState.value,
+                dismissed = _dismissedForwardRecordingState.value,
+                bytesPerSecond = audioConfigProvider().bytesPerSecond,
+            ),
+            enginePending = _engineTogglePending.value,
         ),
     )
 
@@ -337,6 +348,24 @@ class DashboardViewModel(
             _dismissedExportState.value = current
         }
     }
+    fun startForwardRecording(startFromOldest: Boolean = false) {
+        if (forwardRecordingState.value is ForwardRecordingState.Recording) return
+        _dismissedForwardRecordingState.value = null
+        onStartForwardRecording(startFromOldest)
+    }
+
+    fun stopForwardRecording() {
+        if (forwardRecordingState.value !is ForwardRecordingState.Recording) return
+        onStopForwardRecording()
+    }
+
+    fun dismissForwardRecordingNotice() {
+        val current = forwardRecordingState.value
+        if (current is ForwardRecordingState.Success || current is ForwardRecordingState.Error) {
+            _dismissedForwardRecordingState.value = current
+        }
+    }
+
 
     companion object {
         private const val DEFAULT_TICK_MILLIS = 500L
@@ -404,6 +433,31 @@ class DashboardViewModel(
                 if (exportState == dismissed) SaveUiState.Idle else SaveUiState.Error(exportState.reason, exportState.message)
         }
 
+        fun mapForwardRecordingUiState(
+            forwardState: ForwardRecordingState,
+            dismissed: ForwardRecordingState?,
+            bytesPerSecond: Int,
+        ): ForwardRecordingUiState = when (forwardState) {
+            is ForwardRecordingState.Idle -> ForwardRecordingUiState.Idle
+            is ForwardRecordingState.Recording -> {
+                val elapsedMillis = if (bytesPerSecond > 0) {
+                    (forwardState.bytesWritten * 1000L) / bytesPerSecond
+                } else {
+                    0L
+                }
+                ForwardRecordingUiState.Recording(
+                    displayName = forwardState.displayName,
+                    elapsedMillis = elapsedMillis,
+                )
+            }
+            is ForwardRecordingState.Success ->
+                if (forwardState == dismissed) ForwardRecordingUiState.Idle
+                else ForwardRecordingUiState.Success(forwardState.displayName, forwardState.bytesWritten)
+            is ForwardRecordingState.Error ->
+                if (forwardState == dismissed) ForwardRecordingUiState.Idle
+                else ForwardRecordingUiState.Error(forwardState.reason, forwardState.message)
+        }
+
         /**
          * Builds the "salvar o passado" window selector from what's actually buffered (issue #40
          * item 1). [RecorderService.saveIntent] can now request any window up to what is buffered
@@ -451,6 +505,7 @@ class DashboardViewModel(
             bufferedMillis: Long,
             capacityMinutes: Int,
             saveState: SaveUiState,
+            forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
             enginePending: Boolean = false,
         ): DashboardUiState {
             val capacityMillis = capacityMinutes.toLong() * MILLIS_PER_MINUTE
@@ -464,6 +519,7 @@ class DashboardViewModel(
                 isBufferFull = clampedBufferedMillis >= capacityMillis,
                 windowOptions = computeWindowOptions(clampedBufferedMillis),
                 saveState = saveState,
+                forwardRecordingState = forwardRecordingState,
             )
         }
 

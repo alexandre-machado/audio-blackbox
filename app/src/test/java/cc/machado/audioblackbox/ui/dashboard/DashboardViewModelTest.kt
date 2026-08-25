@@ -4,6 +4,8 @@ import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -224,4 +226,83 @@ class DashboardViewModelTest {
         assertEquals(40 * 60_000L, fullAtNonDefaultCapacity.bufferedMillis)
         assertFalse(fullAtNonDefaultCapacity.isBufferFull)
     }
+
+    // ---- mapForwardRecordingUiState: the forward continuous recording oracle (issue #55) ----
+
+    @Test
+    fun `mapForwardRecordingUiState maps Idle through unchanged`() {
+        assertEquals(
+            ForwardRecordingUiState.Idle,
+            DashboardViewModel.mapForwardRecordingUiState(ForwardRecordingState.Idle, dismissed = null, bytesPerSecond = 32_000),
+        )
+    }
+
+    @Test
+    fun `mapForwardRecordingUiState calculates elapsed time from bytesWritten`() {
+        val forwardState = ForwardRecordingState.Recording(
+            displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
+            bytesWritten = 64_000L, // 2 seconds at 32000 bytes/sec
+        )
+        val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = null, bytesPerSecond = 32_000)
+        assertEquals(
+            ForwardRecordingUiState.Recording(
+                displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
+                elapsedMillis = 2_000L,
+            ),
+            mapped,
+        )
+    }
+
+    @Test
+    fun `mapForwardRecordingUiState surfaces Success with file name and bytes written`() {
+        val forwardState = ForwardRecordingState.Success(
+            displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
+            bytesWritten = 128_000L,
+        )
+        val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = null, bytesPerSecond = 32_000)
+        assertEquals(
+            ForwardRecordingUiState.Success(
+                displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
+                bytesWritten = 128_000L,
+            ),
+            mapped,
+        )
+    }
+
+    @Test
+    fun `mapForwardRecordingUiState surfaces Error with reason and message`() {
+        val forwardState = ForwardRecordingState.Error(
+            reason = ForwardRecordingFailureReason.CURSOR_LAPPED,
+            message = "Cursor was lapped",
+        )
+        val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = null, bytesPerSecond = 32_000)
+        assertEquals(
+            ForwardRecordingUiState.Error(
+                reason = ForwardRecordingFailureReason.CURSOR_LAPPED,
+                message = "Cursor was lapped",
+            ),
+            mapped,
+        )
+    }
+
+    @Test
+    fun `mapForwardRecordingUiState hides Success when dismissed`() {
+        val forwardState = ForwardRecordingState.Success(
+            displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
+            bytesWritten = 128_000L,
+        )
+        val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = forwardState, bytesPerSecond = 32_000)
+        assertEquals(ForwardRecordingUiState.Idle, mapped)
+    }
+
+    @Test
+    fun `mapForwardRecordingUiState hides Error when dismissed`() {
+        val forwardState = ForwardRecordingState.Error(
+            reason = ForwardRecordingFailureReason.WRITE_FAILED,
+            message = "Disk full",
+        )
+        val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = forwardState, bytesPerSecond = 32_000)
+        assertEquals(ForwardRecordingUiState.Idle, mapped)
+    }
+
 }

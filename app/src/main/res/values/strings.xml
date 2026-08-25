@@ -48,6 +48,7 @@
     <string name="recorder_notification_forward_recording">Live recording: %1$s</string>
     <string name="recorder_notification_forward_success">Live recording saved: %1$s</string>
     <string name="recorder_notification_forward_error">Live recording failed</string>
+    <string name="recorder_notification_action_start_forward">Record forward</string>
     <string name="recorder_notification_action_stop_forward">Stop live</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
@@ -94,6 +95,19 @@
     <string name="dashboard_save_error_title">Save failed</string>
     <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
     <string name="dashboard_save_notice_dismiss">OK</string>
+
+    <!-- Forward recording (Action 2, issue #55) -->
+    <string name="dashboard_forward_title">Record forward</string>
+    <string name="dashboard_forward_explanation">Record continuously to a new file from now on while keeping the circular buffer rolling.</string>
+    <string name="dashboard_forward_start_button">Start continuous recording</string>
+    <string name="dashboard_forward_recording_title">Recording forward</string>
+    <string name="dashboard_forward_elapsed_label">Elapsed time: %1$s</string>
+    <string name="dashboard_forward_elapsed_cd">Continuous recording elapsed time: %1$s</string>
+    <string name="dashboard_forward_stop_button">Stop continuous recording</string>
+    <string name="dashboard_forward_success_title">Continuous recording saved</string>
+    <string name="dashboard_forward_success_body">File: %1$s</string>
+    <string name="dashboard_forward_error_title">Continuous recording failed</string>
+    <string name="dashboard_forward_outcome_announcement">%1$s. %2$s</string>
 
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Saved recordings</string>
