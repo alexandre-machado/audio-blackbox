@@ -90,7 +90,7 @@
     <string name="dashboard_save_window_label">Time window to save</string>
     <string name="dashboard_save_window_option">%1$d min</string>
     <string name="dashboard_save_window_option_cd_enabled">Save the last %1$d min</string>
-    <string name="dashboard_save_window_option_cd_insufficient_buffer">Save %1$d min, unavailable: only %2$d min in memory so far</string>
+    <string name="dashboard_save_window_option_cd_insufficient_buffer">Save the last %1$d min, unavailable: only %2$d min in memory so far</string>
     <string name="dashboard_save_window_insufficient_buffer">only %1$d min available</string>
     <string name="dashboard_save_button">Save recent audio</string>
     <string name="dashboard_save_button_cd">Save the last %1$d min recorded</string>

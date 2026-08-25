@@ -41,7 +41,7 @@
     <string name="recorder_notification_state_error">Erro na gravação</string>
     <string name="recorder_notification_buffered">Buffer: %1$s</string>
     <string name="recorder_notification_action_save">Salvar últimos %1$d min</string>
-    <string name="recorder_notification_action_stop">Parar motor</string>
+    <string name="recorder_notification_action_stop">Parar gravação</string>
     <string name="recorder_notification_export_exporting">Salvando gravação…</string>
     <string name="recorder_notification_export_success">Gravação salva: %1$s</string>
     <string name="recorder_notification_export_error">Falha ao salvar a gravação</string>
@@ -58,7 +58,7 @@
     <string name="dashboard_status_error">Erro</string>
 
     <string name="dashboard_idle_explanation">A gravação está parada. Nada está sendo gravado agora. Ative o interruptor abaixo para começar a gravação contínua em segundo plano.</string>
-    <string name="dashboard_recording_explanation">O motor está gravando continuamente. Quando o buffer enche, o áudio mais antigo é substituído automaticamente pelo mais recente.</string>
+    <string name="dashboard_recording_explanation">A gravação continua em segundo plano. Quando o buffer enche, o áudio mais antigo é substituído automaticamente pelo mais recente.</string>
     <string name="dashboard_paused_explanation">Gravação pausada porque o microfone está sendo usado por uma chamada. A gravação será retomada automaticamente assim que a chamada terminar.</string>
 
     <!-- Motivos de erro de captura (issue #39) -->
@@ -90,7 +90,7 @@
     <string name="dashboard_save_window_label">Janela para salvar</string>
     <string name="dashboard_save_window_option">%1$d min</string>
     <string name="dashboard_save_window_option_cd_enabled">Salvar os últimos %1$d min</string>
-    <string name="dashboard_save_window_option_cd_insufficient_buffer">Salvar %1$d min, indisponível: só %2$d min em memória até agora</string>
+    <string name="dashboard_save_window_option_cd_insufficient_buffer">Salvar os últimos %1$d min, indisponível: só %2$d min em memória até agora</string>
     <string name="dashboard_save_window_insufficient_buffer">só %1$d min disponíveis</string>
     <string name="dashboard_save_button">Salvar o passado</string>
     <string name="dashboard_save_button_cd">Salvar os últimos %1$d min gravados</string>
@@ -165,7 +165,7 @@
     <string name="settings_retention_pending_notice">%1$d min continua ativo até você aplicar essa mudança</string>
     <string name="settings_retention_apply_button">Aplicar</string>
     <string name="settings_retention_confirm_title">Trocar a retenção agora?</string>
-    <string name="settings_retention_confirm_body">Trocar para %1$d min exige parar o motor, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
+    <string name="settings_retention_confirm_body">Trocar para %1$d min exige parar a gravação, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
     <string name="settings_retention_confirm_accept">Parar e trocar</string>
     <string name="settings_retention_confirm_cancel">Cancelar</string>
 
