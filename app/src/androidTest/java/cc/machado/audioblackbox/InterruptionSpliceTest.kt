@@ -83,6 +83,7 @@ class InterruptionSpliceTest {
             "capture never reached Recording",
             pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Recording },
         )
+        val recordingStartMillis = System.currentTimeMillis()
 
         // Sync point for scripts/ci/run-interruption-scenario.sh: it waits for this exact line
         // before starting its adb-emu gsm-call schedule. Everything from here on is driven
@@ -109,13 +110,28 @@ class InterruptionSpliceTest {
         assertTrue("gap 1 duration must be positive (found $gaps)", gaps[0].durationMillis > 0)
         assertTrue("gap 2 duration must be positive (found $gaps)", gaps[1].durationMillis > 0)
 
+        val requestSaveMillis = System.currentTimeMillis()
         context.startService(RecorderService.saveIntent(context))
 
         val row = pollForExportedRow(sinceMillis = testStartMillis, timeoutMillis = 30_000)
         assertNotNull("export never landed a committed MediaStore row", row)
         checkNotNull(row)
         assertEquals("IS_PENDING must be cleared once export commits", 0, row.isPending)
-        assertTrue("declared duration must be positive (found ${row.durationMillis}ms)", row.durationMillis > 0)
+
+        // The recording window spans from when we entered Recording until we issued saveIntent.
+        // If interruptions were mis-spliced and dropped instead of filled with silence (issue #36),
+        // the file will be significantly shorter than this elapsed window (missing ~8-10s of simulated calls).
+        // We allow 6 seconds of tolerance to accommodate for AudioRecord initialization latency, emulator
+        // buffer scheduling, start/stop jitter, and polling latency (which was observed to create a ~4.4s discrepancy).
+        // This tolerance remains strictly tighter than the ~8-10s total gap durations being verified, ensuring
+        // that an un-spliced/shortened file still causes a failure.
+        val expectedDuration = requestSaveMillis - recordingStartMillis
+        val tolerance = 6000L
+        assertTrue(
+            "declared duration ${row.durationMillis}ms must match the elapsed recording window " +
+                "of ${expectedDuration}ms within a ${tolerance}ms tolerance",
+            kotlin.math.abs(row.durationMillis - expectedDuration) <= tolerance
+        )
         // This tier runs at API 30 (see scripts/ci/avd.env) -- below the API 31 floor
         // MediaStoreSink requires for the top-level `Recordings/` root (issue #33) -- so this is
         // exactly the OS range that exercises the documented `Music/Blackbox/` fallback, not the

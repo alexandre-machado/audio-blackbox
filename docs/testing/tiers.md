@@ -111,7 +111,7 @@ force-stop a device that may be mid-session).
 **What `InterruptionSpliceTest` proves and does not prove, stated precisely (`@rev` finding,
 PR #35):** it proves a real interruption is detected, that exactly two `PauseGap`s are recorded
 in the correct order with no overlap, and that the subsequent export commits a non-pending
-MediaStore row with a positive declared duration. It does **not** prove the exported audio is
+MediaStore row with a declared duration matching the expected recording window. It does **not** prove the exported audio is
 correctly spliced — a mis-ordering or mis-placement of segments that still adds up to the same
 total length would satisfy every assertion here unnoticed. That byte-level placement claim is
 `GapFillerTest`'s job (a JVM unit test with a synthetic multi-gap fixture it can assert exact
