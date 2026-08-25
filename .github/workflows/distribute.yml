@@ -52,5 +52,14 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
+      - name: Prepare Release Notes
+        run: |
+          mkdir -p build/distribution
+          if [ -n "${{ github.event.inputs.release_notes }}" ]; then
+            echo "${{ github.event.inputs.release_notes }}" > build/distribution/release_notes.txt
+          else
+            git log -1 --pretty=format:"%B" > build/distribution/release_notes.txt
+          fi
+
       - name: Upload APK to Firebase App Distribution
-        run: ./gradlew assembleDebug appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotes="${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}" -PfirebaseAppDistributionGroups="${{ github.event.inputs.groups || 'testers' }}"
+        run: ./gradlew assembleDebug appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotesFile="build/distribution/release_notes.txt" -PfirebaseAppDistributionGroups="${{ github.event.inputs.groups || 'testers' }}"
