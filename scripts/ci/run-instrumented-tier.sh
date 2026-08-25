@@ -73,8 +73,13 @@ log "Installing app + test APKs..."
 # scripts/run-instrumented-tests.sh drives a persistent local AVD where it matters, so the removal
 # is verified rather than assumed: `|| true` cannot tell "removed" from "run-as refused".
 "${ADB[@]}" shell run-as "$APP_ID" rm -rf "$SCREENSHOT_DEVICE_DIR" >/dev/null 2>&1 || true
-if "${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" >/dev/null 2>&1; then
-  fail "Could not clear stale screen captures at the app's $SCREENSHOT_DEVICE_DIR -- refusing to run, since a later pull would upload a previous run's PNGs as this run's."
+# Checked by what the listing *prints*, not by its exit status: `adb exec-out run-as ... ls` on a
+# missing directory was observed exiting 0 on the API 30 AVD (it reports the error on stderr), so an
+# exit-code check here failed the whole tier on a perfectly clean emulator. An empty stdout means
+# "nothing left to pull", which is the property this guard is actually about.
+STALE_CAPTURES="$("${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null | tr -d '\r' || true)"
+if [[ -n "$STALE_CAPTURES" ]]; then
+  fail "Stale screen captures survive at the app's $SCREENSHOT_DEVICE_DIR ($(echo "$STALE_CAPTURES" | tr '\n' ' ')) -- refusing to run, since the pull would upload a previous run's PNGs as this run's."
 fi
 
 # --- Phase 1: everything except InterruptionSpliceTest --------------------
