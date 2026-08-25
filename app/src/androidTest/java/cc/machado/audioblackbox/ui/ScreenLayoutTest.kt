@@ -1,7 +1,14 @@
 package cc.machado.audioblackbox.ui
 
+import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import cc.machado.audioblackbox.ui.dashboard.DASHBOARD_PADDING
+import cc.machado.audioblackbox.ui.dashboard.ENGINE_SWITCH_TEST_TAG
+import java.util.Locale
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -11,6 +18,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Dp
@@ -166,6 +174,82 @@ class ScreenLayoutTest {
                 "once (an inset/padding double-count), anything smaller that part of it was not " +
                 "reserved at all.",
             (gap - BOTTOM_BAR_MARGIN).value.absoluteValue <= GAP_TOLERANCE_DP,
+        )
+    }
+
+    /**
+     * Oracle: fails if long state text in the engine switch row (e.g. the paused-state explanation,
+     * which runs up to ~100+ characters in English and Portuguese) pushes the [androidx.compose.material3.Switch]
+     * off the right edge of the screen. Under the pre-fix layout the label column had no weight
+     * modifier in the [androidx.compose.foundation.layout.Row], allowing its unbounded measured
+     * text width to push the switch beyond the window's right edge; under the fix the text column
+     * has `Modifier.weight(1f)` with 16dp spacing so the text wraps naturally and the switch
+     * remains fully within root bounds and clear of the screen edge.
+     */
+    @Test
+    fun engineSwitchRemainsWithinRootBoundsAcrossLongStateStringsInCompactWidth() {
+        composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
+
+        val engineSwitch = composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG, useUnmergedTree = true)
+        engineSwitch.assertIsDisplayed()
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val switchBounds = engineSwitch.getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "the continuous recording switch is clipped off the right edge of the screen: " +
+                "its right edge is at ${switchBounds.right}, but the root window right edge is at ${rootBounds.right}.",
+            switchBounds.right <= rootBounds.right,
+        )
+        assertTrue(
+            "the continuous recording switch is positioned before the left edge of the screen: " +
+                "its left edge is at ${switchBounds.left}, but the root window left edge is at ${rootBounds.left}.",
+            switchBounds.left >= rootBounds.left,
+        )
+        val expectedMaxRight = rootBounds.right - DASHBOARD_PADDING
+        assertTrue(
+            "the continuous recording switch right edge is at ${switchBounds.right}, expected to be at or within " +
+                "$expectedMaxRight (accounting for $DASHBOARD_PADDING dashboard padding).",
+            (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
+        )
+    }
+
+    /**
+     * Oracle: same defect as above, verified under the Portuguese (pt-BR) locale where the paused
+     * state string ("Pausado — uma ligação está usando o microfone; a gravação será retomada
+     * automaticamente quando ela terminar") is even longer than English.
+     */
+    @Test
+    fun engineSwitchRemainsWithinRootBoundsInCompactWidthWithPortugueseLocale() {
+        composeRule.setContent {
+            val ptConfig = Configuration(LocalConfiguration.current).apply {
+                setLocale(Locale.forLanguageTag("pt-BR"))
+            }
+            val ptContext = LocalContext.current.createConfigurationContext(ptConfig)
+            CompositionLocalProvider(
+                LocalConfiguration provides ptConfig,
+                LocalContext provides ptContext,
+            ) {
+                CompactHarnessApp(Destination.DASHBOARD)
+            }
+        }
+
+        val engineSwitch = composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG, useUnmergedTree = true)
+        engineSwitch.assertIsDisplayed()
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val switchBounds = engineSwitch.getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "the continuous recording switch is clipped off the right edge with pt-BR paused text: " +
+                "its right edge is at ${switchBounds.right}, but the root window right edge is at ${rootBounds.right}.",
+            switchBounds.right <= rootBounds.right,
+        )
+        val expectedMaxRight = rootBounds.right - DASHBOARD_PADDING
+        assertTrue(
+            "the continuous recording switch right edge is at ${switchBounds.right}, expected to be at or within " +
+                "$expectedMaxRight (accounting for $DASHBOARD_PADDING dashboard padding).",
+            (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
         )
     }
 
