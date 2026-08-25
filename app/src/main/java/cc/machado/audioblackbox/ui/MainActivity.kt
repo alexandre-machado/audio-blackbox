@@ -11,12 +11,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -95,23 +93,20 @@ class MainActivity : ComponentActivity() {
                 // Box the way the previous, buggy layout had it.
                 var selectedDestination by rememberSaveable { mutableStateOf(Destination.DASHBOARD) }
 
-                Scaffold(
-                    bottomBar = {
-                        // Only shown once past onboarding -- same gate the content slot below uses.
-                        // Scaffold measures this composable structurally on every layout pass and
-                        // derives the content slot's `innerPadding` from that real measurement (see
-                        // FloatingBottomBar's class doc for why this replaced a manual `Box` +
-                        // `onSizeChanged` overlay that PR #74 review found left the bar drawn over
-                        // Dashboard content on a real device).
-                        if (stepState == OnboardingStep.DONE) {
-                            FloatingBottomBar(
-                                selected = selectedDestination,
-                                onSelect = { selectedDestination = it },
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                    },
-                ) { innerPadding ->
+                // The Scaffold + bottomBar shell lives in AppScaffold (issue #78) so an
+                // instrumented Compose UI test can assert its layout contract -- "content is never
+                // drawn under the bar", the thing PR #74 got wrong -- without standing up
+                // permissions, onboarding state, DataStore and the service. Behaviour here is
+                // unchanged: same Scaffold, same bottomBar slot, same onboarding gate. Everything
+                // below is the content of AppScaffold's own Column, which is where the Scaffold's
+                // innerPadding is applied -- deliberately not repeated here, so there is exactly
+                // one place in the codebase that can get "content clears the bar" wrong, and the
+                // harness tests that place (PR #87 review).
+                AppScaffold(
+                    selectedDestination = selectedDestination,
+                    onSelectDestination = { selectedDestination = it },
+                    showBottomBar = stepState == OnboardingStep.DONE,
+                ) {
                     if (stepState == OnboardingStep.DONE) {
                         val stopEngine: () -> Unit = {
                             ContextCompat.startForegroundService(
@@ -148,32 +143,28 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        // A single `.padding(innerPadding)` here -- covering the system-bar insets
-                        // *and* the floating bar's real measured height in one value Scaffold
-                        // computed itself -- is the entire fix for "content must not be obscured by
-                        // the bar": neither screen below needs its own contentPadding plumbing for
-                        // this bar, since this Column already reserves the space above it.
-                        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-                            if (!isIgnoringBatteryOptimizationsState) {
-                                BatteryOptimizationBanner(
-                                    onRequestBatteryExemption = {
-                                        batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
-                                    },
-                                )
-                            }
-                            when (selectedDestination) {
-                                Destination.DASHBOARD -> DashboardRoute(
-                                    viewModel = viewModel(factory = dashboardViewModelFactory),
-                                )
-                                Destination.SETTINGS -> SettingsRoute(
-                                    viewModel = viewModel(factory = settingsViewModelFactory),
-                                )
-                            }
+                        // Neither screen below needs its own contentPadding plumbing for the bar:
+                        // AppScaffold's Column already reserves the space above it, in one value
+                        // Scaffold computed from the bar's real measured height plus the system-bar
+                        // insets.
+                        if (!isIgnoringBatteryOptimizationsState) {
+                            BatteryOptimizationBanner(
+                                onRequestBatteryExemption = {
+                                    batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
+                                },
+                            )
+                        }
+                        when (selectedDestination) {
+                            Destination.DASHBOARD -> DashboardRoute(
+                                viewModel = viewModel(factory = dashboardViewModelFactory),
+                            )
+                            Destination.SETTINGS -> SettingsRoute(
+                                viewModel = viewModel(factory = settingsViewModelFactory),
+                            )
                         }
                     } else {
                         OnboardingScreen(
                             step = stepState,
-                            modifier = Modifier.padding(innerPadding),
                             onContinueLegalNotice = {
                                 preferences.hasSeenLegalNotice = true
                                 refreshStep()
@@ -190,7 +181,9 @@ class MainActivity : ComponentActivity() {
                                 settingsLauncher.launch(appSettingsIntent())
                             },
                             onRequestBatteryExemption = {
-                                batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this))
+                                // Explicitly the Activity: `this` inside AppScaffold's content slot
+                                // is its ColumnScope receiver.
+                                batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
                             },
                             onSkipBatteryOptimization = {
                                 preferences.hasSkippedBatteryOptimization = true

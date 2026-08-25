@@ -23,10 +23,32 @@ cd "$REPO_ROOT"
 log()  { printf '[instrumented-tier] %s\n' "$*"; }
 fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# The screen captures (issue #78) currently on the device, one filename per line, empty if there
+# are none. Two things about this AVD's toybox `ls` are load-bearing here, both learned the hard
+# way on this branch rather than assumed:
+#   - for a missing directory it prints "ls: <dir>: No such file or directory" on *stdout* and
+#     still exits 0, so neither the exit status nor the raw output distinguishes "empty" from
+#     "gone"; only the shape of the names does.
+#   - it lays names out in padded columns rather than one per line, so nothing may be matched
+#     line-anchored without normalizing the whitespace first.
+# Hence: split on any whitespace, then keep only what looks like one of the PNGs
+# ScreenshotCaptureTest writes. Every token of the error message fails that pattern.
+list_device_captures() {
+  "${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null |
+    tr -s ' \t\r' '\n' |
+    grep -E '^[A-Za-z0-9._-]+\.png$' || true
+}
+
 APP_ID="cc.machado.audioblackbox"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
+# Where ScreenshotCaptureTest (issue #78) writes its PNGs, relative to the app's data dir, and
+# where they land in the workspace for .github/workflows/ci.yml to upload as an artifact. The
+# device path is the app's *internal* files dir on purpose: `run-as` reads it on any API level
+# without a storage permission, unlike /sdcard/Android/data.
+SCREENSHOT_DEVICE_DIR="files/screenshots"
+SCREENSHOT_OUT_DIR="build/screen-captures"
 MARKER_TAG="SpliceTest"
 MARKER_READY="READY_FOR_CALLS"
 FAKE_CALLER_NUMBER="5551234567"
@@ -61,6 +83,17 @@ log "Installing app + test APKs..."
 "${ADB[@]}" install -r -t "$APP_APK" >/dev/null
 "${ADB[@]}" install -r -t "$TEST_APK" >/dev/null
 
+# `install -r` keeps the app's data dir, so captures from an earlier run on the same emulator
+# would otherwise be pulled and uploaded as if this run had produced them -- and would make the
+# "no captures were written" check below pass on the previous run's images. Ephemeral on CI, but
+# scripts/run-instrumented-tests.sh drives a persistent local AVD where it matters, so the removal
+# is verified rather than assumed: `|| true` cannot tell "removed" from "run-as refused".
+"${ADB[@]}" shell run-as "$APP_ID" rm -rf "$SCREENSHOT_DEVICE_DIR" >/dev/null 2>&1 || true
+STALE_CAPTURES="$(list_device_captures)"
+if [[ -n "$STALE_CAPTURES" ]]; then
+  fail "Stale screen captures survive at the app's $SCREENSHOT_DEVICE_DIR ($(echo "$STALE_CAPTURES" | tr '\n' ' ')) -- refusing to run, since the pull would upload a previous run's PNGs as this run's."
+fi
+
 # --- Phase 1: everything except InterruptionSpliceTest --------------------
 # Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
 # leftovers from some earlier install/boot activity that happened to log the same tag.
@@ -71,6 +104,42 @@ set +e
   2>&1 | tee /tmp/instrumented-phase1.log
 PHASE1_STATUS=$?
 set -e
+
+# --- Screen captures (issue #78) ------------------------------------------
+# Pulled *before* phase 1's pass/fail gate below, deliberately: when a layout assertion fails, the
+# picture of the screen it failed on is the single most useful thing a reviewer can look at, and it
+# only exists on an emulator that is about to be thrown away.
+log "Pulling screen captures written by ScreenshotCaptureTest (issue #78)..."
+rm -rf "$SCREENSHOT_OUT_DIR"
+mkdir -p "$SCREENSHOT_OUT_DIR"
+CAPTURES="$(list_device_captures)"
+if [[ -z "$CAPTURES" ]]; then
+  # Which case this is has to be decided the same way the phase-1 gate below decides it: `am
+  # instrument -w` exits 0 even when tests fail, which is why nothing in this script trusts
+  # PHASE1_STATUS alone. Branching on the exit code here used to report "even though the tests
+  # passed" for an ordinary test failure -- and `fail` before the gate, so the actual failure was
+  # never printed.
+  if grep -q "OK (" /tmp/instrumented-phase1.log; then
+    # The tests passed, and ScreenshotCaptureTest asserts it wrote non-empty PNGs -- so an empty
+    # pull means this transfer broke. Treating that as success would ship a green run with no
+    # screenshots (same reasoning as the HeadroomBenchmark capture above).
+    fail "No screen captures found under the app's $SCREENSHOT_DEVICE_DIR even though the tests passed -- the capture/pull path is broken."
+  fi
+  log "WARNING: no screen captures to pull -- the instrumented run failed before writing them; see the test failure below."
+else
+  # Quoted, line-at-a-time: a filename with a space would otherwise be split into two bogus pulls.
+  while IFS= read -r capture; do
+    [[ -n "$capture" ]] || continue
+    "${ADB[@]}" exec-out run-as "$APP_ID" cat "$SCREENSHOT_DEVICE_DIR/$capture" > "$SCREENSHOT_OUT_DIR/$capture"
+    [[ -s "$SCREENSHOT_OUT_DIR/$capture" ]] || fail "Pulled an empty file for screen capture '$capture'."
+    # Non-empty is not the same as decodable: four corrupt files riding along on a green run is
+    # exactly the failure a size check cannot see, so check the PNG signature (89 50 4e 47).
+    MAGIC="$(od -An -tx1 -N4 < "$SCREENSHOT_OUT_DIR/$capture" | tr -d ' \n')"
+    [[ "$MAGIC" == "89504e47" ]] || fail "Screen capture '$capture' is not a PNG (first four bytes: $MAGIC) -- the pull corrupted it."
+    log "  $SCREENSHOT_OUT_DIR/$capture ($(wc -c < "$SCREENSHOT_OUT_DIR/$capture") bytes)"
+  done <<< "$CAPTURES"
+fi
+
 if [[ $PHASE1_STATUS -ne 0 ]] || ! grep -q "OK (" /tmp/instrumented-phase1.log; then
   fail "Non-interruption instrumented tests did not report OK -- see the log above."
 fi

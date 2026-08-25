@@ -154,3 +154,15 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
           disable-animations: true
           script: ./scripts/ci/run-instrumented-tier.sh
+
+      # Issue #78: PNGs of both destinations, rendered on the emulator by ScreenshotCaptureTest and
+      # pulled off it by the script above. The point is that a reviewer can *see* the screens from
+      # a pull request instead of needing the repo owner's phone -- so this runs on failure too,
+      # where the picture is worth the most. Not goldens: nothing compares them, nothing rots.
+      - name: Upload screen captures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: screen-captures
+          path: build/screen-captures/
+          if-no-files-found: ignore
