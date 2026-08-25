@@ -42,13 +42,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@71fee004f78546b528c11ec1895a6ad6e5d59074 # v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
 
       - name: Upload APK to Firebase App Distribution
-        uses: wzieba/Firebase-Distribution-Github-Action@v1
-        with:
-          appId: 1:161933619226:android:84ed39cb4fa25f2affa1a3
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-          file: app/build/outputs/apk/debug/app-debug.apk
-          releaseNotes: ${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}
+        run: ./gradlew appDistributionUploadDebug --no-daemon -PfirebaseAppDistributionReleaseNotes="${{ github.event.inputs.release_notes || github.event.head_commit.message || 'Continuous distribution build' }}"
