@@ -1,9 +1,6 @@
 package cc.machado.audioblackbox.ui
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,8 +29,14 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
  * the layout contract under test, and all of it is a source of flakiness and of test failures that
  * have nothing to do with layout. What does participate -- [AppScaffold]'s `Scaffold` +
  * `bottomBar`-slot structure and each screen's scrollable `Column` -- is production code, used here
- * exactly as [MainActivity] uses it (same `Column(Modifier.padding(innerPadding).fillMaxSize())`
- * around the destination). If that structure regresses, these tests fail.
+ * exactly as [MainActivity] uses it: the destination is passed straight into [AppScaffold]'s
+ * content slot, and the `innerPadding` handling that keeps content clear of the bar is
+ * [AppScaffold]'s own. Nothing about the bar/content relation is re-implemented here -- an earlier
+ * version of this file copied [MainActivity]'s padded `Column`, which left that half of PR #74's
+ * fix untested (PR #87 review, `@rev`). If the structure regresses, these tests fail.
+ *
+ * What is not modelled: the battery-optimization banner, a sibling above the destination that does
+ * not participate in the bar/content relation, and the onboarding branch.
  */
 @Composable
 internal fun HarnessApp(initialDestination: Destination) {
@@ -43,28 +46,23 @@ internal fun HarnessApp(initialDestination: Destination) {
             selectedDestination = selected,
             onSelectDestination = { selected = it },
             showBottomBar = true,
-        ) { innerPadding ->
-            // Mirrors MainActivity's content slot exactly (minus the battery-optimization banner,
-            // which is a sibling above the destination and does not affect the bar/content
-            // relationship being asserted).
-            Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-                when (selected) {
-                    Destination.DASHBOARD -> DashboardScreen(
-                        uiState = dashboardFixture(),
-                        onToggleEngine = {},
-                        onSelectWindow = {},
-                        onDismissSaveNotice = {},
-                    )
-                    Destination.SETTINGS -> SettingsScreen(
-                        uiState = settingsFixture(),
-                        onDecrement = {},
-                        onIncrement = {},
-                        onApply = {},
-                        onConfirmRetentionWindowChange = {},
-                        onCancelRetentionWindowChange = {},
-                        onAcknowledgeClampNotice = {},
-                    )
-                }
+        ) {
+            when (selected) {
+                Destination.DASHBOARD -> DashboardScreen(
+                    uiState = dashboardFixture(),
+                    onToggleEngine = {},
+                    onSelectWindow = {},
+                    onDismissSaveNotice = {},
+                )
+                Destination.SETTINGS -> SettingsScreen(
+                    uiState = settingsFixture(),
+                    onDecrement = {},
+                    onIncrement = {},
+                    onApply = {},
+                    onConfirmRetentionWindowChange = {},
+                    onCancelRetentionWindowChange = {},
+                    onAcknowledgeClampNotice = {},
+                )
             }
         }
     }

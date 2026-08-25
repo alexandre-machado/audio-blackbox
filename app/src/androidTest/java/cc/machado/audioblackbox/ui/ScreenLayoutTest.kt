@@ -1,12 +1,12 @@
 package cc.machado.audioblackbox.ui
 
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -20,6 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.math.absoluteValue
 
 /**
  * The screen-layout harness (issue #78), established after PR #74 shipped a floating bottom bar
@@ -70,27 +71,35 @@ class ScreenLayoutTest {
     }
 
     /**
-     * Oracle: fails if the last item of either screen's scrollable content cannot be brought fully
-     * clear of the floating bar -- the "you can scroll to it, but the bar sits on top of it when you
-     * get there" failure. `performScrollTo` scrolls the minimum needed to bring the node into the
-     * scroll viewport, so where the node ends up is exactly a statement about where that viewport
-     * ends: at the window's bottom edge (pre-fix, under the bar) or above the bar (now).
+     * Expressed through the last item of each screen, because that is the element a user most often
+     * has to reach, but note what is actually pinned: `performScrollTo` scrolls the *minimum* needed
+     * to bring a node into the scroll viewport, so a node that lands under the bar proves the
+     * viewport itself extends under the bar. It does not prove the node was unreachable -- under PR
+     * #74's pre-fix layout the extra bottom `contentPadding` meant scrolling further would have
+     * brought it clear, which is why this is not named after reachability (PR #87 review, `@rev`).
+     *
+     * Oracle: fails if either screen's scroll viewport ends below the floating bar's top edge, i.e.
+     * if the content area a screen scrolls within runs to the window's bottom edge with the bar
+     * floating on top of it.
      */
     @Test
-    fun lastItemOfEachScreenCanBeScrolledClearOfTheFloatingBottomBar() {
+    fun scrollViewportOfEachScreenEndsAboveTheFloatingBottomBar() {
         composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
 
         val dashboardLastItem = composeRule.onNodeWithText(string(R.string.dashboard_save_notice_dismiss))
         dashboardLastItem.performScrollTo()
         dashboardLastItem.assertIsDisplayed()
-        dashboardLastItem.assertClearOfBottomBar("the dashboard's last item (the save notice's OK button)")
+        dashboardLastItem.assertClearOfBottomBar(
+            "the dashboard's last item (the save notice's OK button)",
+            note = CAME_TO_REST,
+        )
 
         settingsTab().performClick()
 
         val settingsLastItem = composeRule.onNodeWithText(string(R.string.settings_retention_apply_button))
         settingsLastItem.performScrollTo()
         settingsLastItem.assertIsDisplayed()
-        settingsLastItem.assertClearOfBottomBar("the settings screen's last item (Apply)")
+        settingsLastItem.assertClearOfBottomBar("the settings screen's last item (Apply)", note = CAME_TO_REST)
     }
 
     /**
@@ -127,14 +136,52 @@ class ScreenLayoutTest {
         contentArea().assertClearOfBottomBar("the dashboard's content area after switching back")
     }
 
+    /**
+     * The one assertion that runs at the emulator's natural size in an **edge-to-edge** window, the
+     * way [MainActivity] draws (`enableEdgeToEdge()`, `MainActivity.kt`). The three tests above run
+     * in a fixed box inside a normally-inset window, where the decor has already consumed the
+     * system-bar insets, so the inset arithmetic never executes there -- and inset double-counting
+     * is a defect this tier was chosen to catch (PR #87 review, `@rev`; issue #80's mechanism).
+     *
+     * `enableEdgeToEdge` is deliberately *not* added to the compact tests: their box's bottom edge
+     * is nowhere near the window's, so mixing real insets into that geometry would be incoherent.
+     *
+     * Oracle: fails if, with real system-bar insets in play, the content area either runs under the
+     * bar (the space was not reserved) or is separated from it by more than the bar's own margin
+     * (the space was reserved twice -- the double-count). The gap between the two is exactly
+     * [BOTTOM_BAR_MARGIN] when each is counted once: `Scaffold` reserves the whole bar slot,
+     * margin included, and the bar's visible surface sits inside that slot inset by that margin.
+     */
+    @Test
+    fun contentAreaClearsTheBottomBarByExactlyItsMarginInAnEdgeToEdgeWindow() {
+        composeRule.runOnUiThread { composeRule.activity.enableEdgeToEdge() }
+        composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
+
+        contentArea().assertClearOfBottomBar("the dashboard's content area in an edge-to-edge window")
+
+        val gap = bottomBarTop() - contentArea().getUnclippedBoundsInRoot().bottom
+        assertTrue(
+            "the gap between the content area and the floating bar is $gap, expected " +
+                "$BOTTOM_BAR_MARGIN: anything larger means the bar's height was reserved more than " +
+                "once (an inset/padding double-count), anything smaller that part of it was not " +
+                "reserved at all.",
+            (gap - BOTTOM_BAR_MARGIN).value.absoluteValue <= GAP_TOLERANCE_DP,
+        )
+    }
+
     // ---- helpers ----
 
     /** The bar's own [androidx.compose.material3.Surface], i.e. its visible rectangle. */
     private fun bottomBarTop(): Dp =
         composeRule.onNodeWithTag(FLOATING_BOTTOM_BAR_TEST_TAG).getUnclippedBoundsInRoot().top
 
-    /** The visible destination's scrollable container -- each screen has exactly one. */
-    private fun contentArea(): SemanticsNodeInteraction = composeRule.onNode(hasScrollAction())
+    /**
+     * The region [AppScaffold] leaves for screen content. Matched by tag rather than by "the one
+     * node with a scroll action": that shortcut degrades into an "expected exactly one node" matcher
+     * error the day a third destination brings a second scrollable (PR #87 review, `@rev`), and a
+     * matcher error is the least useful thing to read out of a layout suite.
+     */
+    private fun contentArea(): SemanticsNodeInteraction = composeRule.onNodeWithTag(APP_CONTENT_TEST_TAG)
 
     /** `hasClickAction` separates the Settings *tab* from the Settings screen's own title, which is
      * the same word. */
@@ -153,13 +200,25 @@ class ScreenLayoutTest {
     private fun settingsMarker() =
         composeRule.onNodeWithText(string(R.string.settings_retention_title))
 
-    private fun SemanticsNodeInteraction.assertClearOfBottomBar(what: String) {
+    private fun SemanticsNodeInteraction.assertClearOfBottomBar(what: String, note: String = "") {
         val barTop = bottomBarTop()
         val bottom = getUnclippedBoundsInRoot().bottom
         assertTrue(
             "$what is not clear of the floating bottom bar: it extends to $bottom, " +
-                "but the bar's top edge is at $barTop.",
+                "but the bar's top edge is at $barTop.$note",
             bottom <= barTop,
         )
+    }
+
+    private companion object {
+        /** Guards against reading a minimum-scroll landing spot as a reachability failure. */
+        const val CAME_TO_REST =
+            " It came to rest there after the smallest scroll that brings it into the viewport, so" +
+                " this is a statement about where the viewport ends, not about whether the item" +
+                " could be reached by scrolling further."
+
+        /** Dp arithmetic on real measured bounds lands on fractional pixels; 1dp is far below the
+         * bar height a double-count would add, so this loosens nothing that matters. */
+        const val GAP_TOLERANCE_DP = 1f
     }
 }
