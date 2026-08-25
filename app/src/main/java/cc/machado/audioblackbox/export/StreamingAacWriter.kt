@@ -8,6 +8,7 @@ import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.PauseGap
 import java.io.Closeable
 import java.io.File
+import java.io.FileDescriptor
 import java.io.IOException
 
 /**
@@ -34,11 +35,30 @@ import java.io.IOException
  * exception during construction, exception during write, or cancellation) without leaking hardware
  * codec instances.
  */
-class StreamingAacWriter(
-    val outputFile: File,
+class StreamingAacWriter private constructor(
+    val outputFile: File?,
+    val fileDescriptor: FileDescriptor?,
     val config: AudioConfig,
-    val bitRateBps: Int = BIT_RATE_PER_CHANNEL_BPS * config.channelCount,
+    val bitRateBps: Int,
 ) : Closeable, AutoCloseable {
+
+    constructor(
+        outputFile: File,
+        config: AudioConfig,
+        bitRateBps: Int = BIT_RATE_PER_CHANNEL_BPS * config.channelCount,
+    ) : this(outputFile = outputFile, fileDescriptor = null, config = config, bitRateBps = bitRateBps)
+
+    constructor(
+        fileDescriptor: FileDescriptor,
+        config: AudioConfig,
+        bitRateBps: Int = BIT_RATE_PER_CHANNEL_BPS * config.channelCount,
+    ) : this(outputFile = null, fileDescriptor = fileDescriptor, config = config, bitRateBps = bitRateBps)
+
+    constructor(
+        target: StreamingExportTarget,
+        config: AudioConfig,
+        bitRateBps: Int = BIT_RATE_PER_CHANNEL_BPS * config.channelCount,
+    ) : this(outputFile = null, fileDescriptor = target.fileDescriptor, config = config, bitRateBps = bitRateBps)
 
     private val lock = Any()
 
@@ -88,7 +108,11 @@ class StreamingAacWriter(
         var createdMuxer: MediaMuxer? = null
         var startedCodec = false
         try {
-            val muxerInstance = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxerInstance = if (fileDescriptor != null) {
+                MediaMuxer(fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            } else {
+                MediaMuxer(requireNotNull(outputFile).absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            }
             createdMuxer = muxerInstance
 
             createdCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)

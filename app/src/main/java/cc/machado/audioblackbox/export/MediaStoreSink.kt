@@ -7,6 +7,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.os.ParcelFileDescriptor
+import java.io.FileDescriptor
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
 
@@ -73,7 +76,64 @@ interface RecordingsRepository {
  * failure [ExportTarget.abort] deletes the row via `ContentResolver.delete` rather than leaving an
  * orphaned pending entry behind -- this is unchanged by issue #32/#33's other changes.
  */
-class MediaStoreSink(private val context: Context) : ExportSink, RecordingsRepository {
+class MediaStoreSink(private val context: Context) : ExportSink, StreamingExportSink, RecordingsRepository {
+
+    override fun openStreaming(displayName: String, mimeType: String): StreamingExportTarget {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Audio.Media.DISPLAY_NAME, displayName)
+            put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
+            put(MediaStore.Audio.Media.RELATIVE_PATH, relativePath())
+            put(MediaStore.Audio.Media.IS_PENDING, 1)
+        }
+        val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val uri = resolver.insert(collection, values)
+            ?: throw IOException("MediaStore insert rejected for $displayName")
+
+        val pfd = try {
+            resolver.openFileDescriptor(uri, "rwt")
+                ?: resolver.openFileDescriptor(uri, "rw")
+                ?: throw IOException("openFileDescriptor returned null for $uri")
+        } catch (e: IOException) {
+            resolver.delete(uri, null, null)
+            throw e
+        } catch (e: SecurityException) {
+            resolver.delete(uri, null, null)
+            throw IOException("openFileDescriptor denied for $uri", e)
+        }
+
+        // Early commit (issue #53): clear IS_PENDING immediately so the recording in progress is
+        // visible in MediaStore and Gallery while still being written.
+        try {
+            val earlyCommit = ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }
+            resolver.update(uri, earlyCommit, null, null)
+        } catch (e: Exception) {
+            try { pfd.close() } catch (_: Exception) {}
+            resolver.delete(uri, null, null)
+            throw IOException("Failed to early-commit MediaStore row for $uri", e)
+        }
+
+        return object : StreamingExportTarget {
+            private var isClosed = false
+            override val uri: Uri = uri
+            override val fileDescriptor: FileDescriptor = pfd.fileDescriptor
+            override val outputStream: OutputStream by lazy {
+                FileOutputStream(pfd.fileDescriptor)
+            }
+
+            override fun finish() {
+                close()
+            }
+
+            override fun close() {
+                if (isClosed) return
+                isClosed = true
+                try {
+                    pfd.close()
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     override fun queryRecordings(): List<RecordingRow> {
         val resolver = context.contentResolver
