@@ -52,12 +52,13 @@ fun computeDynamicVersionName(baseVersion: String): String {
     val refType = System.getenv("GITHUB_REF_TYPE")
     val branch = getGitBranch()
     val sha = getGitCommitShortSha()
+    val buildNumber = computeDynamicVersionCode()
     // A tag push (production release) uses the clean base version (e.g. v0.2.0).
-    // Any other build (main/staging, feature branches, local dev) includes the short commit SHA.
+    // Any other build (main/staging, feature branches, local dev) includes the build number and short commit SHA.
     return if (refType == "tag" || (branch.startsWith("v") && branch != "v" && !branch.contains("-"))) {
         baseVersion
     } else {
-        "$baseVersion-$sha"
+        "$baseVersion.$buildNumber-$sha"
     }
 }
 
