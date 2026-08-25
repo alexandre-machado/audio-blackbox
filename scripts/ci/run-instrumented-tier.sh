@@ -24,14 +24,18 @@ log()  { printf '[instrumented-tier] %s\n' "$*"; }
 fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
 
 # The screen captures (issue #78) currently on the device, one filename per line, empty if there
-# are none. Neither the exit status nor the raw output of the listing can be trusted: this AVD's
-# toybox `ls` prints "No such file or directory" on *stdout* and still exits 0 for a missing
-# directory, so both a `if ls ...` check and a bare capture of its output read that error as
-# "a file is there". Keeping only what looks like one of the PNGs ScreenshotCaptureTest writes is
-# what actually distinguishes the two cases.
+# are none. Two things about this AVD's toybox `ls` are load-bearing here, both learned the hard
+# way on this branch rather than assumed:
+#   - for a missing directory it prints "ls: <dir>: No such file or directory" on *stdout* and
+#     still exits 0, so neither the exit status nor the raw output distinguishes "empty" from
+#     "gone"; only the shape of the names does.
+#   - it lays names out in padded columns rather than one per line, so nothing may be matched
+#     line-anchored without normalizing the whitespace first.
+# Hence: split on any whitespace, then keep only what looks like one of the PNGs
+# ScreenshotCaptureTest writes. Every token of the error message fails that pattern.
 list_device_captures() {
   "${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null |
-    tr -d '\r' |
+    tr -s ' \t\r' '\n' |
     grep -E '^[A-Za-z0-9._-]+\.png$' || true
 }
 
