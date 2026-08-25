@@ -1,0 +1,12 @@
+Audio Blackbox funciona como uma caixa preta de áudio para o seu dia a dia.
+
+Ele grava continuamente em um buffer circular mantido 100% na memória RAM do seu celular (5, 15 ou 30 minutos). Quando algo importante acontecer, você pode salvar retroativamente o áudio que acabou de ouvir ou iniciar uma gravação contínua para frente.
+
+PRINCIPAIS RECURSOS:
+• Buffer Circular na Memória RAM: Seus áudios só são gravados no armazenamento do aparelho quando você decidir salvar.
+• Salve o Passado: Salve com um toque os últimos 5, 15 ou 30 minutos do áudio capturado.
+• Gravação Contínua para Frente: Continue gravando sem perder o contexto dos momentos que antecederam o início.
+• Pausa Inteligente em Chamadas: Pausa e retoma automaticamente durante ligações telefônicas sem corromper a linha do tempo.
+• Galeria Offline Integrada: Ouça, avance, compartilhe e gerencie todas as suas gravações salvas em um player nativo.
+• Botão de Configurações Rápidas (Quick Settings Tile): Ative e desative a gravação direto da barra de notificações do Android.
+• 100% Privado e Seguro: Zero envio de áudios para nuvem, sem transcrição remota, sem anúncios e com código aberto auditável.

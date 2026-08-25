@@ -1,6 +1,7 @@
-First release of Audio Blackbox for internal testing:
-- Continuous ambient audio rolling buffer in RAM (5, 15, 30, or 60 minutes)
-- On-demand audio export in WAV or AAC (M4A)
-- Automatic pause and resume during phone calls
-- Built-in recordings gallery for playback and sharing
-- 100% private: audio never leaves your device
+What's new in version 0.3.0:
+• Two primary actions: Save the Past (last 5/15/30 min) and Forward Continuous Recording
+• Real-time streaming AAC recorder with live timeline gap preservation
+• Built-in recordings gallery with native player, seek slider, and share intent
+• Quick Settings Tile to start and stop capture with a single tap
+• One-tap prompt notification to resume continuous recording after device reboot
+• Enhanced navigation bar and edge-to-edge layout polish

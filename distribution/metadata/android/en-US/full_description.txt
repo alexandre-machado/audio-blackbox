@@ -1,0 +1,12 @@
+Audio Blackbox acts as a true audio black box for your day-to-day life.
+
+It records continuously in a rolling circular buffer stored 100% in your device's RAM (5, 15, or 30 minutes). When something important happens, you can retroactively save the audio you just heard or start a forward recording without losing context.
+
+KEY FEATURES:
+• RAM-Only Circular Buffer: Audio is written to disk storage only when you explicitly tap to save.
+• Save the Past: Retroactively export the last 5, 15, or 30 minutes of captured audio with a single tap.
+• Continuous Forward Recording: Keep recording seamlessly while preserving the historical moments leading up to it.
+• Smart Interruption Handling: Automatically pauses and resumes during phone calls while preserving timeline alignment.
+• Integrated Offline Gallery: Listen, seek, share, and manage your saved recordings with an embedded native player.
+• Quick Settings Tile: Toggle continuous capture straight from your Android notification shade.
+• 100% Private & Secure: Zero cloud uploads, zero remote transcription, zero ads, and fully auditable open source architecture.
