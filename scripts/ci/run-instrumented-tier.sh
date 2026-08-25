@@ -23,6 +23,18 @@ cd "$REPO_ROOT"
 log()  { printf '[instrumented-tier] %s\n' "$*"; }
 fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# The screen captures (issue #78) currently on the device, one filename per line, empty if there
+# are none. Neither the exit status nor the raw output of the listing can be trusted: this AVD's
+# toybox `ls` prints "No such file or directory" on *stdout* and still exits 0 for a missing
+# directory, so both a `if ls ...` check and a bare capture of its output read that error as
+# "a file is there". Keeping only what looks like one of the PNGs ScreenshotCaptureTest writes is
+# what actually distinguishes the two cases.
+list_device_captures() {
+  "${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null |
+    tr -d '\r' |
+    grep -E '^[A-Za-z0-9._-]+\.png$' || true
+}
+
 APP_ID="cc.machado.audioblackbox"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
@@ -73,11 +85,7 @@ log "Installing app + test APKs..."
 # scripts/run-instrumented-tests.sh drives a persistent local AVD where it matters, so the removal
 # is verified rather than assumed: `|| true` cannot tell "removed" from "run-as refused".
 "${ADB[@]}" shell run-as "$APP_ID" rm -rf "$SCREENSHOT_DEVICE_DIR" >/dev/null 2>&1 || true
-# Checked by what the listing *prints*, not by its exit status: `adb exec-out run-as ... ls` on a
-# missing directory was observed exiting 0 on the API 30 AVD (it reports the error on stderr), so an
-# exit-code check here failed the whole tier on a perfectly clean emulator. An empty stdout means
-# "nothing left to pull", which is the property this guard is actually about.
-STALE_CAPTURES="$("${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null | tr -d '\r' || true)"
+STALE_CAPTURES="$(list_device_captures)"
 if [[ -n "$STALE_CAPTURES" ]]; then
   fail "Stale screen captures survive at the app's $SCREENSHOT_DEVICE_DIR ($(echo "$STALE_CAPTURES" | tr '\n' ' ')) -- refusing to run, since the pull would upload a previous run's PNGs as this run's."
 fi
@@ -100,7 +108,7 @@ set -e
 log "Pulling screen captures written by ScreenshotCaptureTest (issue #78)..."
 rm -rf "$SCREENSHOT_OUT_DIR"
 mkdir -p "$SCREENSHOT_OUT_DIR"
-CAPTURES="$("${ADB[@]}" exec-out run-as "$APP_ID" ls "$SCREENSHOT_DEVICE_DIR" 2>/dev/null | tr -d '\r' || true)"
+CAPTURES="$(list_device_captures)"
 if [[ -z "$CAPTURES" ]]; then
   # Which case this is has to be decided the same way the phase-1 gate below decides it: `am
   # instrument -w` exits 0 even when tests fail, which is why nothing in this script trusts
