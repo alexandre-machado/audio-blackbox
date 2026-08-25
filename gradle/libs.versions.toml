@@ -15,7 +15,6 @@ androidxTestRunner = "1.6.2"
 androidxTestRules = "1.6.1"
 datastorePreferences = "1.2.1"
 googleServices = "4.4.2"
-firebaseAppDistribution = "5.3.0"
 firebaseBom = "33.9.0"
 
 [libraries]
@@ -52,4 +51,3 @@ firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
-firebase-appdistribution = { id = "com.google.firebase.appdistribution", version.ref = "firebaseAppDistribution" }
