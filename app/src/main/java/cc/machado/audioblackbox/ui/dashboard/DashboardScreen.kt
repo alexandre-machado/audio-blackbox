@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -282,8 +283,17 @@ private fun SaveSection(uiState: DashboardUiState, onSelectWindow: (Int) -> Unit
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(R.string.dashboard_save_title), style = MaterialTheme.typography.titleMedium)
             Text(text = stringResource(R.string.dashboard_save_window_label), style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                uiState.windowOptions.forEach { option -> WindowChip(option, onSelectWindow) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                uiState.windowOptions.forEach { option ->
+                    WindowChip(
+                        option = option,
+                        onSelectWindow = onSelectWindow,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
             val enabledOption = uiState.windowOptions.lastOrNull { it.enabled }
             val saveButtonCd = enabledOption?.let {
@@ -309,19 +319,32 @@ private fun SaveSection(uiState: DashboardUiState, onSelectWindow: (Int) -> Unit
 }
 
 @Composable
-private fun WindowChip(option: WindowOption, onSelectWindow: (Int) -> Unit) {
+private fun WindowChip(
+    option: WindowOption,
+    onSelectWindow: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val label = stringResource(R.string.dashboard_save_window_option, option.minutes)
     val cd = when (option.disabledReason) {
         WindowDisabledReason.INSUFFICIENT_BUFFER ->
             stringResource(R.string.dashboard_save_window_option_cd_insufficient_buffer, option.minutes, option.availableMinutes)
         null -> stringResource(R.string.dashboard_save_window_option_cd_enabled, option.minutes)
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+    ) {
         FilterChip(
             selected = false,
             enabled = option.enabled,
             onClick = { onSelectWindow(option.minutes) },
-            label = { Text(text = label) },
+            label = {
+                Text(
+                    text = label,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            },
             colors = FilterChipDefaults.filterChipColors(),
             modifier = Modifier.semantics { contentDescription = cd },
         )
@@ -329,6 +352,8 @@ private fun WindowChip(option: WindowOption, onSelectWindow: (Int) -> Unit) {
             Text(
                 text = stringResource(R.string.dashboard_save_window_insufficient_buffer, option.availableMinutes),
                 style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
