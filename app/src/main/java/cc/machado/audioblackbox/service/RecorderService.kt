@@ -22,6 +22,8 @@ import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.PreloadedRetentionWindow
+import cc.machado.audioblackbox.settings.DataStoreRecordingPreferences
+import cc.machado.audioblackbox.settings.RecordingPreferences
 import cc.machado.audioblackbox.settings.isValidRetentionMinutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +72,10 @@ class RecorderService : Service() {
     // companion's forwarded `captureState` -- not `engine.state` directly -- so this keeps working
     // across a retention-window rebuild (issue #45), which replaces the underlying `engine`
     // instance wholesale (see `attachEngineForwarding`'s doc).
+    private val recordingPreferences: RecordingPreferences by lazy {
+        DataStoreRecordingPreferences(applicationContext)
+    }
+
     private val notificationRefresher = PeriodicNotificationRefresher(captureState)
 
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
@@ -207,8 +213,18 @@ class RecorderService : Service() {
         startForeground(RecorderNotification.NOTIFICATION_ID, currentNotification())
 
         when (intent?.action) {
-            ACTION_START -> handleStart()
-            ACTION_STOP -> stopServiceCompletely()
+            ACTION_START -> {
+                serviceScope.launch(Dispatchers.IO) {
+                    recordingPreferences.setRecordingDesired(true)
+                }
+                handleStart()
+            }
+            ACTION_STOP -> {
+                serviceScope.launch(Dispatchers.IO) {
+                    recordingPreferences.setRecordingDesired(false)
+                }
+                stopServiceCompletely()
+            }
             ACTION_SAVE -> handleSave(
                 // Absent for the notification's own Save action (RecorderNotification builds a
                 // bare ACTION_SAVE Intent with no extra) -- that action has always meant "save
