@@ -62,9 +62,12 @@ fun AppScaffold(
             }
         },
     ) { innerPadding ->
+        // MUTATION (throwaway, do not merge): `.padding(innerPadding)` deleted from the single
+        // production owner of the relation, to show the harness now fails when it goes missing.
+        @Suppress("UNUSED_PARAMETER", "UnusedMaterial3ScaffoldPaddingParameter")
+        val ignored = innerPadding
         Column(
             modifier = Modifier
-                .padding(innerPadding)
                 .fillMaxSize()
                 .testTag(APP_CONTENT_TEST_TAG),
             content = content,
