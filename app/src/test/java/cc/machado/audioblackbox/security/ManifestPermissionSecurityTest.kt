@@ -65,6 +65,28 @@ class ManifestPermissionSecurityTest {
             expectedPermissions.containsAll(permissions))
     }
 
+    @Test
+    fun sourceManifest_explicitlyRemovesAdvertisingIdPermission() {
+        val manifestFile = File("src/main/AndroidManifest.xml")
+        assertTrue("Source manifest must exist at ${manifestFile.absolutePath}", manifestFile.exists())
+
+        val factory = DocumentBuilderFactory.newInstance()
+        val builder = factory.newDocumentBuilder()
+        val doc = builder.parse(manifestFile)
+        val usesPermissions = doc.getElementsByTagName("uses-permission")
+        var adIdRemoved = false
+
+        for (i in 0 until usesPermissions.length) {
+            val node = usesPermissions.item(i)
+            val name = node.attributes.getNamedItem("android:name")?.nodeValue
+            val toolsNode = node.attributes.getNamedItem("tools:node")?.nodeValue
+            if (name == "com.google.android.gms.permission.AD_ID" && toolsNode == "remove") {
+                adIdRemoved = true
+            }
+        }
+        assertTrue("Source manifest must explicitly declare tools:node=\"remove\" for AD_ID permission", adIdRemoved)
+    }
+
     private fun extractPermissions(file: File): Set<String> {
         val factory = DocumentBuilderFactory.newInstance()
         val builder = factory.newDocumentBuilder()
@@ -75,7 +97,8 @@ class ManifestPermissionSecurityTest {
         for (i in 0 until usesPermissions.length) {
             val node = usesPermissions.item(i)
             val name = node.attributes.getNamedItem("android:name")?.nodeValue
-            if (name != null) {
+            val toolsNode = node.attributes.getNamedItem("tools:node")?.nodeValue
+            if (name != null && toolsNode != "remove") {
                 result.add(name)
             }
         }
