@@ -87,17 +87,13 @@
     <string name="dashboard_buffer_full_notice">Buffer cheio: gravando por cima do áudio mais antigo</string>
 
     <string name="dashboard_save_title">Salvar o passado</string>
-    <string name="dashboard_save_window_label">Janela para salvar</string>
-    <string name="dashboard_save_window_option">%1$d min</string>
-    <string name="dashboard_save_window_option_cd_enabled">Salvar os últimos %1$d min</string>
-    <string name="dashboard_save_window_option_cd_insufficient_buffer">Salvar os últimos %1$d min, indisponível: só %2$d min em memória até agora</string>
-    <string name="dashboard_save_window_insufficient_buffer">só %1$d min disponíveis</string>
     <string name="dashboard_save_button">Salvar o passado</string>
-    <string name="dashboard_save_button_cd">Salvar os últimos %1$d min gravados</string>
+    <string name="dashboard_save_button_cd">Salvar os %1$s de áudio atualmente em buffer</string>
     <string name="dashboard_save_disabled_no_audio">Aguarde o buffer encher para poder salvar.</string>
+    <string name="dashboard_save_partial_buffer_notice">Só %1$s gravados até agora — é isso que este salvamento vai incluir.</string>
 
     <string name="dashboard_save_exporting_title">Salvando…</string>
-    <string name="dashboard_save_exporting_body">Gravando a janela selecionada no armazenamento do aparelho.</string>
+    <string name="dashboard_save_exporting_body">Gravando o áudio em buffer no armazenamento do aparelho.</string>
     <string name="dashboard_save_success_title">Gravação salva</string>
     <string name="dashboard_save_success_body">Arquivo: %1$s</string>
     <string name="dashboard_save_error_title">Falha ao salvar</string>

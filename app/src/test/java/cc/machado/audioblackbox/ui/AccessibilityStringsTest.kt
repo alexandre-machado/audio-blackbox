@@ -87,23 +87,34 @@ class AccessibilityStringsTest {
         )
     }
 
+    // Issue #121 retired the 5/15/30-minute selector's chip content descriptions
+    // (`dashboard_save_window_option_cd_enabled`/`..._cd_insufficient_buffer`), which this test
+    // used to pin -- there is no longer a chip to describe. What replaces it below asserts the
+    // single Save button's content description names the *actual* buffered duration (a %1$s
+    // clock-formatted placeholder, matching DashboardScreen's `formatMillisAsClock` call site),
+    // never a bare minute count that could silently be fed the configured capacity instead of
+    // what is really buffered -- the exact honesty contract issue #121 exists to enforce.
     @Test
-    fun windowOptionCdStringsProvideCompleteActionableContext() {
+    fun saveButtonCdStringNamesTheActualBufferedDuration() {
         val enStrings = loadStringMap("src/main/res/values/strings.xml")
         val ptStrings = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
 
-        // Enabled chip CD includes action phrase "Save the last %1$d min"
-        assertEquals("Save the last %1" + "$" + "d min", enStrings["dashboard_save_window_option_cd_enabled"])
-        assertEquals("Salvar os últimos %1" + "$" + "d min", ptStrings["dashboard_save_window_option_cd_enabled"])
-
-        // Insufficient buffer chip CD specifies unavailable reason and buffer status
-        assertEquals(
-            "Save the last %1" + "$" + "d min, unavailable: only %2" + "$" + "d min in memory so far",
-            enStrings["dashboard_save_window_option_cd_insufficient_buffer"],
+        val durationToken = "%1" + "$" + "s"
+        assertTrue(
+            "dashboard_save_button_cd (EN) must reference a %1\$s buffered-duration placeholder",
+            enStrings["dashboard_save_button_cd"]?.contains(durationToken) == true,
         )
-        assertEquals(
-            "Salvar os últimos %1" + "$" + "d min, indisponível: só %2" + "$" + "d min em memória até agora",
-            ptStrings["dashboard_save_window_option_cd_insufficient_buffer"],
+        assertTrue(
+            "dashboard_save_button_cd (PT) must reference a %1\$s buffered-duration placeholder",
+            ptStrings["dashboard_save_button_cd"]?.contains(durationToken) == true,
+        )
+        assertTrue(
+            "dashboard_save_partial_buffer_notice (EN) must reference the buffered-duration placeholder",
+            enStrings["dashboard_save_partial_buffer_notice"]?.contains(durationToken) == true,
+        )
+        assertTrue(
+            "dashboard_save_partial_buffer_notice (PT) must reference the buffered-duration placeholder",
+            ptStrings["dashboard_save_partial_buffer_notice"]?.contains(durationToken) == true,
         )
     }
 

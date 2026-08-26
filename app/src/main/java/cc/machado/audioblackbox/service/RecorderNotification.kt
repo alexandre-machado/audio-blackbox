@@ -132,7 +132,17 @@ object RecorderNotification {
             .setContentIntent(contentIntent)
             .addAction(
                 0,
-                context.getString(R.string.recorder_notification_action_save, capacityMinutes),
+                // Issue #121: this label names what a tap right now would actually save, not the
+                // configured retention window (RecorderService.resolveSavedMinutes is the same
+                // oracle DashboardScreen's Save button description uses, so the two surfaces can
+                // never disagree about which quantity "N min" refers to) -- floors to whole
+                // minutes since a compact notification action has no room for mm:ss precision, and
+                // PeriodicNotificationRefresher keeps this within 10s of the real buffered amount
+                // while recording.
+                context.getString(
+                    R.string.recorder_notification_action_save,
+                    RecorderService.resolveSavedMinutes(bufferedDurationMillis ?: 0L, capacityMinutes),
+                ),
                 saveIntent,
             )
 

@@ -54,7 +54,7 @@ internal fun HarnessApp(
                 Destination.DASHBOARD -> DashboardScreen(
                     uiState = dashboardUiState,
                     onToggleEngine = {},
-                    onSelectWindow = {},
+                    onSave = {},
                     onDismissSaveNotice = {},
                     onStartForwardRecording = {},
                     onStopForwardRecording = {},
@@ -126,16 +126,6 @@ internal fun dashboardFixture() = DashboardViewModel.mapUiState(
     bufferedMillis = 30L * 60_000L,
     capacityMinutes = 30,
     saveState = SaveUiState.Success("blackbox_2026-08-24_10-15-00_30min.m4a"),
-)
-
-/**
- * Paused with 0ms in buffer so save window chips are disabled with insufficient-buffer helper text.
- */
-internal fun emptyBufferDashboardFixture() = DashboardViewModel.mapUiState(
-    captureState = CaptureState.Paused,
-    bufferedMillis = 0L,
-    capacityMinutes = 30,
-    saveState = SaveUiState.Idle,
 )
 
 /** A pending (not yet applied) retention change: shows the dirty notice and an enabled Apply

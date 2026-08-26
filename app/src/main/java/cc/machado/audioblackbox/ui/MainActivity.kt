@@ -121,10 +121,10 @@ class MainActivity : ComponentActivity() {
                                     DashboardViewModel(
                                         onStartEngine = { startRecordingEngine() },
                                         onStopEngine = stopEngine,
-                                        onSaveIntent = { minutes ->
+                                        onSaveIntent = {
                                             ContextCompat.startForegroundService(
                                                 this@MainActivity,
-                                                RecorderService.saveIntent(this@MainActivity, minutes),
+                                                RecorderService.saveIntent(this@MainActivity),
                                             )
                                         },
                                         onStartForwardRecording = { startFromOldest ->

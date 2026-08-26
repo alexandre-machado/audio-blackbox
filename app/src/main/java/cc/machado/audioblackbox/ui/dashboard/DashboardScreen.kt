@@ -21,8 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -67,7 +65,7 @@ fun DashboardRoute(
     DashboardScreen(
         uiState = uiState,
         onToggleEngine = viewModel::toggleEngine,
-        onSelectWindow = viewModel::requestSave,
+        onSave = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
         onStartForwardRecording = { viewModel.startForwardRecording(false) },
         onStopForwardRecording = viewModel::stopForwardRecording,
@@ -80,7 +78,7 @@ fun DashboardRoute(
 fun DashboardScreen(
     uiState: DashboardUiState,
     onToggleEngine: () -> Unit,
-    onSelectWindow: (Int) -> Unit,
+    onSave: () -> Unit,
     onDismissSaveNotice: () -> Unit,
     onStartForwardRecording: () -> Unit,
     onStopForwardRecording: () -> Unit,
@@ -98,7 +96,7 @@ fun DashboardScreen(
         StatusSection(uiState.captureStatus)
         BufferSection(uiState)
         EngineToggle(uiState.engineSwitch, onToggleEngine)
-        SaveSection(uiState, onSelectWindow)
+        SaveSection(uiState, onSave)
         ForwardRecordingSection(
             forwardState = uiState.forwardRecordingState,
             onStart = onStartForwardRecording,
@@ -271,87 +269,50 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
     }
 }
 
+/**
+ * Issue #121: one save action, the whole buffer -- the 5/15/30-minute chip row that used to sit
+ * here is gone. The button is disabled only when [DashboardUiState.bufferedMillis] is genuinely
+ * zero (nothing recorded yet); otherwise it always saves everything currently buffered, and both
+ * the button's content description and the notice below it name the *real* buffered duration --
+ * never the configured capacity -- so a partially-filled buffer is never oversold as more than it
+ * actually holds.
+ */
 @Composable
-private fun SaveSection(uiState: DashboardUiState, onSelectWindow: (Int) -> Unit) {
+private fun SaveSection(uiState: DashboardUiState, onSave: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(R.string.dashboard_save_title), style = MaterialTheme.typography.titleMedium)
-            Text(text = stringResource(R.string.dashboard_save_window_label), style = MaterialTheme.typography.labelLarge)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                uiState.windowOptions.forEach { option ->
-                    WindowChip(
-                        option = option,
-                        onSelectWindow = onSelectWindow,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+            val canSave = uiState.bufferedMillis > 0L
+            val bufferedLabel = formatMillisAsClock(uiState.bufferedMillis)
+            val saveButtonCd = if (canSave) {
+                stringResource(R.string.dashboard_save_button_cd, bufferedLabel)
+            } else {
+                stringResource(R.string.dashboard_save_disabled_no_audio)
             }
-            val enabledOption = uiState.windowOptions.lastOrNull { it.enabled }
-            val saveButtonCd = enabledOption?.let {
-                stringResource(R.string.dashboard_save_button_cd, it.minutes)
-            } ?: stringResource(R.string.dashboard_save_disabled_no_audio)
             Button(
-                onClick = { enabledOption?.let { onSelectWindow(it.minutes) } },
-                enabled = enabledOption != null,
+                onClick = onSave,
+                enabled = canSave,
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics { contentDescription = saveButtonCd },
             ) {
                 Text(text = stringResource(R.string.dashboard_save_button))
             }
-            if (enabledOption == null) {
-                Text(
+            when {
+                !canSave -> Text(
                     text = stringResource(R.string.dashboard_save_disabled_no_audio),
                     style = MaterialTheme.typography.bodySmall,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WindowChip(
-    option: WindowOption,
-    onSelectWindow: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val label = stringResource(R.string.dashboard_save_window_option, option.minutes)
-    val cd = when (option.disabledReason) {
-        WindowDisabledReason.INSUFFICIENT_BUFFER ->
-            stringResource(R.string.dashboard_save_window_option_cd_insufficient_buffer, option.minutes, option.availableMinutes)
-        null -> stringResource(R.string.dashboard_save_window_option_cd_enabled, option.minutes)
-    }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier,
-    ) {
-        FilterChip(
-            selected = false,
-            enabled = option.enabled,
-            onClick = { onSelectWindow(option.minutes) },
-            label = {
-                Text(
-                    text = label,
-                    maxLines = 1,
-                    softWrap = false,
+                !uiState.isBufferFull -> Text(
+                    text = stringResource(R.string.dashboard_save_partial_buffer_notice, bufferedLabel),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-            },
-            colors = FilterChipDefaults.filterChipColors(),
-            modifier = Modifier.semantics { contentDescription = cd },
-        )
-        if (option.disabledReason == WindowDisabledReason.INSUFFICIENT_BUFFER) {
-            Text(
-                text = stringResource(R.string.dashboard_save_window_insufficient_buffer, option.availableMinutes),
-                style = MaterialTheme.typography.labelSmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            }
         }
     }
 }

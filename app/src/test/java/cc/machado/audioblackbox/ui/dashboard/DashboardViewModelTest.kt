@@ -18,11 +18,23 @@ import org.junit.Test
  * arithmetic), so a broken mapping -- e.g. Paused rendered as Recording, or a window option
  * enabled when it shouldn't be -- fails these tests, not just an unrelated smoke check.
  *
- * Extended for issue #40: [computeWindowOptions] no longer takes a `capacityMinutes` parameter
- * (every window up to what is buffered is now enabled -- see that function's doc for why capacity
- * doesn't need to gate it separately any more), [mapSaveUiState] is the new oracle for the
- * real-progress mapping, and one `mapUiState` test now exercises a deliberately non-default
- * capacity to prove the mapping isn't hardcoded to 30 anywhere.
+ * Extended for issue #40: [mapSaveUiState] is the new oracle for the real-progress mapping, and
+ * one `mapUiState` test now exercises a deliberately non-default capacity to prove the mapping
+ * isn't hardcoded to 30 anywhere.
+ *
+ * Issue #121 retired the 5/15/30-minute window selector and, with it, `computeWindowOptions` --
+ * the tests that used to pin its enabled/disabled contract are removed (there is no longer a
+ * window to enable or disable; see the git history of this file for the six tests that pinned
+ * `computeWindowOptions`, all removed as part of PR for issue #121: `all options are disabled
+ * with INSUFFICIENT_BUFFER when nothing has been buffered yet`, `the mandatory case -- a
+ * requested window longer than what is buffered -- is disabled with the available minutes
+ * attached`, `a shorter option within the buffered amount is now enabled, closing issue #40's
+ * gap`, `every option becomes enabled once the buffer holds enough for all of them`, `an option
+ * becomes enabled at the exact minute it is first fully buffered, not one minute early`, and the
+ * `computeWindowOptions` reference inside the class doc itself). What replaces them is the
+ * `mapUiState reports the real buffered duration honestly...` group below: the mandatory
+ * regression test issue #121 requires, pinning that a partially-filled buffer is reported by its
+ * true size, never the configured capacity, at 0%, mid-fill, and 100%.
  */
 class DashboardViewModelTest {
 
@@ -50,67 +62,6 @@ class DashboardViewModelTest {
         val engineError = CaptureState.Error(CaptureErrorReason.READ_DEAD_OBJECT, "AudioRecord.read() returned -6")
         val mapped = DashboardViewModel.mapCaptureStatus(engineError)
         assertEquals(CaptureStatus.Error(CaptureErrorReason.READ_DEAD_OBJECT, "AudioRecord.read() returned -6"), mapped)
-    }
-
-    // ---- computeWindowOptions: the window-selector fix (issue #40 item 1) ----
-
-    @Test
-    fun `all options are disabled with INSUFFICIENT_BUFFER when nothing has been buffered yet`() {
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 0L)
-
-        assertEquals(3, options.size)
-        options.forEach { option ->
-            assertFalse("option $option should be disabled", option.enabled)
-            assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, option.disabledReason)
-            assertEquals(0, option.availableMinutes)
-        }
-    }
-
-    @Test
-    fun `the mandatory case -- a requested window longer than what is buffered -- is disabled with the available minutes attached`() {
-        // 12 minutes buffered: the 15 and 30 min options both request more than is available.
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L)
-
-        val fifteen = options.single { it.minutes == 15 }
-        assertFalse(fifteen.enabled)
-        assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, fifteen.disabledReason)
-        assertEquals(12, fifteen.availableMinutes)
-
-        val thirty = options.single { it.minutes == 30 }
-        assertFalse(thirty.enabled)
-        assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, thirty.disabledReason)
-        assertEquals(12, thirty.availableMinutes)
-    }
-
-    @Test
-    fun `a shorter option within the buffered amount is now enabled, closing issue #40's gap`() {
-        // 12 minutes buffered: the 5 min option has enough audio behind it, and the service can
-        // now honour that exact window (issue #40 item 1) -- this must be enabled, not disabled.
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L)
-
-        val five = options.single { it.minutes == 5 }
-        assertTrue(five.enabled)
-        assertEquals(null, five.disabledReason)
-        assertEquals(12, five.availableMinutes)
-    }
-
-    @Test
-    fun `every option becomes enabled once the buffer holds enough for all of them`() {
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 30 * 60_000L)
-
-        options.forEach { option ->
-            assertTrue("option $option should be enabled", option.enabled)
-            assertEquals(null, option.disabledReason)
-        }
-    }
-
-    @Test
-    fun `an option becomes enabled at the exact minute it is first fully buffered, not one minute early`() {
-        val notYet = DashboardViewModel.computeWindowOptions(bufferedMillis = 15 * 60_000L - 1L)
-        assertFalse(notYet.single { it.minutes == 15 }.enabled)
-
-        val exact = DashboardViewModel.computeWindowOptions(bufferedMillis = 15 * 60_000L)
-        assertTrue(exact.single { it.minutes == 15 }.enabled)
     }
 
     // ---- mapSaveUiState: the real-progress oracle (issue #40 item 2) ----
@@ -214,9 +165,8 @@ class DashboardViewModelTest {
         assertEquals(45 * 60_000L, state.capacityMillis)
         assertFalse("10 min of 45 must not be reported as full", state.isBufferFull)
 
-        // The 30 min window option must be enabled here (10 min buffered is nowhere near it, so
-        // this isn't the assertion -- the point is that a 45 min capacity does not clamp
-        // bufferedMillis at 30 min the way a hardcoded default would).
+        // 40 of 45 min buffered must not be clamped to 30 min the way a hardcoded default
+        // capacity would.
         val fullAtNonDefaultCapacity = DashboardViewModel.mapUiState(
             captureState = CaptureState.Recording,
             bufferedMillis = 40 * 60_000L,
@@ -225,6 +175,65 @@ class DashboardViewModelTest {
         )
         assertEquals(40 * 60_000L, fullAtNonDefaultCapacity.bufferedMillis)
         assertFalse(fullAtNonDefaultCapacity.isBufferFull)
+    }
+
+    // ---- mapUiState: partial-buffer honesty (issue #121's mandatory regression test) ----
+    //
+    // The 5/15/30-minute selector this issue retires used to guarantee honesty implicitly: an
+    // option could only ever be tapped once the buffer held that much audio in full, so a save
+    // could never come back shorter than what was requested. With a single "save everything
+    // buffered" action, [DashboardUiState.bufferedMillis] is now the *only* thing standing
+    // between an honest UI and one that promises more than it delivers -- these three tests pin
+    // that it reports the true buffered amount, unrounded and unclamped to anything but the
+    // configured capacity, at each of the three points issue #121 calls out: empty, mid-fill, and
+    // full. A regression here (e.g. bufferedMillis silently reported as capacityMillis regardless
+    // of how much is actually buffered) is exactly the "N min promised, less delivered" bug class
+    // this issue exists to close, and DashboardScreen's SaveSection composable reads this same
+    // field verbatim for both the Save button's content description and the disabled/partial
+    // notice text -- see that composable's doc.
+
+    @Test
+    fun `mapUiState reports an empty buffer honestly, not a rounded-up minimum`() {
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 0L,
+            capacityMinutes = 30,
+            saveState = SaveUiState.Idle,
+        )
+
+        assertEquals(0L, state.bufferedMillis)
+        assertFalse(state.isBufferFull)
+    }
+
+    @Test
+    fun `mapUiState reports a mid-fill buffer at its true size, never the configured capacity`() {
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 4 * 60_000L + 32_000L, // 4:32 buffered, of a 30 min capacity
+            capacityMinutes = 30,
+            saveState = SaveUiState.Idle,
+        )
+
+        assertEquals(
+            "a partially-filled buffer must be reported by its real size -- reporting the " +
+                "configured capacity instead would promise 30 min and deliver 4:32",
+            4 * 60_000L + 32_000L,
+            state.bufferedMillis,
+        )
+        assertFalse(state.isBufferFull)
+    }
+
+    @Test
+    fun `mapUiState reports a full buffer as exactly the configured capacity`() {
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 30 * 60_000L,
+            capacityMinutes = 30,
+            saveState = SaveUiState.Idle,
+        )
+
+        assertEquals(30 * 60_000L, state.bufferedMillis)
+        assertTrue(state.isBufferFull)
     }
 
     // ---- mapForwardRecordingUiState: the forward continuous recording oracle (issue #55) ----

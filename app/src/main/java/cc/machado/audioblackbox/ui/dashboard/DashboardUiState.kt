@@ -56,20 +56,6 @@ data class EngineSwitchUiState(
     val error: CaptureStatus.Error?,
 )
 
-/** Why a [WindowOption] can't be requested right now. */
-enum class WindowDisabledReason {
-    /** The ring buffer simply does not hold this many minutes of audio yet. */
-    INSUFFICIENT_BUFFER,
-}
-
-/** One entry in the "salvar o passado" window selector. */
-data class WindowOption(
-    val minutes: Int,
-    val availableMinutes: Int,
-    val enabled: Boolean,
-    val disabledReason: WindowDisabledReason?,
-)
-
 /** Observable lifecycle of a save request, as the dashboard screen sees it -- a direct mirror of
  * [cc.machado.audioblackbox.export.ExportState] (issue #40 item 2: [RecorderService][cc.machado.audioblackbox.service.RecorderService]
  * now publishes that StateFlow from its companion, the same way it already does for `engine.state`),
@@ -105,7 +91,11 @@ sealed interface SaveUiState {
  * [cc.machado.audioblackbox.ui.settings.SettingsScreen] as of issue #73 -- this state no longer
  * carries it; [capacityMillis] still reflects whatever the settings screen has committed, since
  * that comes from [cc.machado.audioblackbox.service.RecorderService]'s own reactive capacity, not
- * a value this screen owns. */
+ * a value this screen owns.
+ *
+ * Issue #121 retired the 5/15/30-minute export-window selector that used to live here as
+ * `windowOptions` -- the dashboard's Save card is now a single action that always exports
+ * everything currently in [bufferedMillis], never a user-chosen sub-window. */
 /** Observable lifecycle of forward continuous recording on the dashboard. */
 sealed interface ForwardRecordingUiState {
     data object Idle : ForwardRecordingUiState
@@ -120,11 +110,6 @@ data class DashboardUiState(
     val bufferedMillis: Long,
     val capacityMillis: Long,
     val isBufferFull: Boolean,
-    val windowOptions: List<WindowOption>,
     val saveState: SaveUiState,
     val forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
-) {
-    companion object {
-        val WINDOW_OPTION_MINUTES = listOf(5, 15, 30)
-    }
-}
+)

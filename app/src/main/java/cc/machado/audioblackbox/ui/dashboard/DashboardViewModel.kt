@@ -31,14 +31,14 @@ import kotlinx.coroutines.launch
  * reflects whatever the service's real state already is, rather than starting from a guess.
  * [exportState] and [capacityMinutes] follow the same pattern -- see their own docs below.
  *
- * ## The window selector (issue #40 item 1, closing the gap flagged on issue #6)
- * [RecorderService.saveIntent] now threads a requested window in minutes through `ACTION_SAVE`
- * into `exportEngine.export(...)`, so [computeWindowOptions] can enable every option the buffer
- * actually holds enough audio for, not only the one matching [capacityMinutes]. This ViewModel
- * still does not trim or duplicate any windowing itself: [requestSave] only ever forwards the
- * exact minutes value an already-enabled [WindowOption] carries, and
- * [cc.machado.audioblackbox.export.ExportEngine]/[cc.machado.audioblackbox.audio.RingBuffer.snapshot]
- * are the only things that ever clamp a request down to what is truly buffered.
+ * ## One save action, the whole buffer (issue #121, retiring the 5/15/30 window selector)
+ * [requestSave] no longer takes a requested window: [RecorderService.saveIntent] always asks for
+ * everything currently buffered, and [cc.machado.audioblackbox.export.ExportEngine]/
+ * [cc.machado.audioblackbox.audio.RingBuffer.snapshot] clamp that down to what is truly buffered
+ * if the buffer has not filled yet -- the same clamp this ViewModel relied on before, just no
+ * longer gated behind a chip the user had to pick. [DashboardUiState.bufferedMillis] is what the
+ * screen shows as "what will actually be saved right now"; there is no separate window state to
+ * track any more.
  *
  * ## Real save progress (issue #40 item 2, closing the gap flagged on issue #6)
  * [RecorderService] now publishes `exportEngine.state` from its companion object the same way it
@@ -57,7 +57,7 @@ class DashboardViewModel(
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
-    private val onSaveIntent: (minutes: Int) -> Unit = {},
+    private val onSaveIntent: () -> Unit = {},
     private val onStartForwardRecording: (startFromOldest: Boolean) -> Unit = {},
     private val onStopForwardRecording: () -> Unit = {},
 ) : ViewModel() {
@@ -273,10 +273,12 @@ class DashboardViewModel(
         }
     }
 
-    /** Fires the save request for [minutes] if -- and only if -- [uiState] currently reports that
-     * option as enabled; a disabled option can only be reached by a stale composition, never by
-     * an actual tap on an enabled control, so silently ignoring it here is correct rather than an
-     * error case worth surfacing.
+    /** Fires the single save action (issue #121: there is no window to choose any more -- this
+     * always exports everything currently buffered) unless [uiState] currently reports an empty
+     * buffer; that state can only be reached by a stale composition, never by an actual tap on an
+     * enabled control (the button is disabled whenever [DashboardUiState.bufferedMillis] is zero
+     * -- see [DashboardScreen]'s `SaveSection`), so silently ignoring it here is correct rather
+     * than an error case worth surfacing.
      *
      * Also ignored while a save is already in flight -- either a real [ExportState.Exporting]
      * ([exportState] read directly, not through [uiState], so this is accurate even if nothing is
@@ -312,9 +314,8 @@ class DashboardViewModel(
      * guaranteed to be shown once it lands, even in the (practically impossible, since filenames
      * are timestamped) case that it would otherwise compare equal to whatever was last
      * dismissed. */
-    fun requestSave(minutes: Int) {
-        val option = uiState.value.windowOptions.firstOrNull { it.minutes == minutes } ?: return
-        if (!option.enabled) return
+    fun requestSave() {
+        if (uiState.value.bufferedMillis <= 0L) return
         if (saveDispatchPending || exportState.value !is ExportState.Idle) return
         saveDispatchPending = true
         _dismissedExportState.value = null
@@ -327,7 +328,7 @@ class DashboardViewModel(
 
         var dispatchThrew = true
         try {
-            onSaveIntent(minutes)
+            onSaveIntent()
             dispatchThrew = false
         } finally {
             if (dispatchThrew) {
@@ -458,44 +459,6 @@ class DashboardViewModel(
                 else ForwardRecordingUiState.Error(forwardState.reason, forwardState.message)
         }
 
-        /**
-         * Builds the "salvar o passado" window selector from what's actually buffered (issue #40
-         * item 1). [RecorderService.saveIntent] can now request any window up to what is buffered
-         * -- [ExportEngine][cc.machado.audioblackbox.export.ExportEngine]/
-         * [RingBuffer.snapshot][cc.machado.audioblackbox.audio.RingBuffer.snapshot] clamp down to
-         * what is actually available if a request ever exceeded it -- so the only rule left is:
-         *   - an option is [WindowOption.enabled] once the buffer holds at least that many
-         *     minutes;
-         *   - otherwise it is disabled with [WindowDisabledReason.INSUFFICIENT_BUFFER], carrying
-         *     [WindowOption.availableMinutes] so the UI can say "só X min disponíveis" -- this is
-         *     the guarantee `@rev` verified on issue #6 and that must not regress: an option is
-         *     never enabled unless the buffer can back it in full, so a save can never silently
-         *     come back shorter than what was requested.
-         */
-        fun computeWindowOptions(
-            bufferedMillis: Long,
-            optionsMinutes: List<Int> = DashboardUiState.WINDOW_OPTION_MINUTES,
-        ): List<WindowOption> {
-            val availableMinutes = (bufferedMillis / MILLIS_PER_MINUTE).toInt()
-            return optionsMinutes.map { minutes ->
-                if (minutes > availableMinutes) {
-                    WindowOption(
-                        minutes = minutes,
-                        availableMinutes = availableMinutes,
-                        enabled = false,
-                        disabledReason = WindowDisabledReason.INSUFFICIENT_BUFFER,
-                    )
-                } else {
-                    WindowOption(
-                        minutes = minutes,
-                        availableMinutes = availableMinutes,
-                        enabled = true,
-                        disabledReason = null,
-                    )
-                }
-            }
-        }
-
         /** The single state-mapping oracle issue #6 requires be unit-tested: engine state +
          * buffered duration + the in-flight save outcome -> the exact [DashboardUiState] the
          * screen renders. Issue #73 moved the retention selector (formerly folded in here per
@@ -517,7 +480,6 @@ class DashboardViewModel(
                 bufferedMillis = clampedBufferedMillis,
                 capacityMillis = capacityMillis,
                 isBufferFull = clampedBufferedMillis >= capacityMillis,
-                windowOptions = computeWindowOptions(clampedBufferedMillis),
                 saveState = saveState,
                 forwardRecordingState = forwardRecordingState,
             )

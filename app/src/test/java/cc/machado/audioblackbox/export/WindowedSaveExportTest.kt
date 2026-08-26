@@ -27,16 +27,18 @@ import org.junit.Test
  * is), not read back from any production formula.
  *
  * ## What this class does *not* prove, and where that gap actually lives
- * The intent -> `RecorderService.onStartCommand` -> `handleSave(requestedMinutes)` ->
- * `exportEngine.export(...)` wiring issue #40 item 1 introduced -- i.e. that a real `ACTION_SAVE`
- * Intent carrying `RecorderService.EXTRA_WINDOW_MINUTES` actually reaches this same
- * [ExportEngine]/[RingBuffer] collaboration with the right value -- is untested by this class and,
- * as far as this PR goes, untested anywhere else either. Closing that gap needs either
- * `RecorderService`'s Service-hosted logic to be reachable from a plain unit test (a production
- * seam this PR does not introduce) or an instrumented test dispatching a real `Intent` -- the
- * latter was deliberately not attempted in this PR (per `@techlead`'s adjudication): the smallest
- * window this app supports is 5 minutes of real time, a poor fit for CI, and worth deciding on
- * separately rather than improvising here.
+ * The intent -> `RecorderService.onStartCommand` -> `handleSave()` -> `exportEngine.export(...)`
+ * wiring -- i.e. that a real `ACTION_SAVE` Intent actually reaches this same
+ * [ExportEngine]/[RingBuffer] collaboration -- is untested by this class and, as far as this PR
+ * goes, untested anywhere else either. Closing that gap needs either `RecorderService`'s
+ * Service-hosted logic to be reachable from a plain unit test (a production seam this PR does not
+ * introduce) or an instrumented test dispatching a real `Intent`.
+ *
+ * The 5/15/30-minute values exercised below predate issue #121 (which retired the dashboard's
+ * chip selector that used to request exactly those windows) and are kept as arbitrary durations
+ * to exercise [ExportEngine]'s own clamp-to-buffered behavior -- see
+ * `RecorderService.resolveSavedMinutes` for where issue #121 moved the "label the file honestly"
+ * concern this class's requested-vs-buffered mismatch used to stand in for.
  */
 class WindowedSaveExportTest {
 
