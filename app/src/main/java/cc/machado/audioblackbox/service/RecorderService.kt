@@ -79,6 +79,7 @@ class RecorderService : Service() {
     }
 
     private val notificationRefresher = PeriodicNotificationRefresher(captureState)
+    private var isGracefullyStopping = false
 
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
     // (MediaStoreSink -> ContentResolver; AacPayloadEncoder -> cacheDir for its temp file, see its
@@ -286,7 +287,7 @@ class RecorderService : Service() {
         // case stopServiceCompletely() has already driven engine.stop() to completion before ever
         // calling stopSelf(), so running engine.stop() asynchronously here is not only redundant
         // but would race a subsequent startIntent() by stopping the next session asynchronously.
-        if (engine.isRunning() || forwardRecordingEngine.state.value !is ForwardRecordingState.Idle) {
+        if (!isGracefullyStopping) {
             Thread({
                 forwardRecordingEngine.stop()
                 engine.stop()
@@ -335,6 +336,7 @@ class RecorderService : Service() {
      * notification (and the service itself) never disappear while the mic might still be open.
      */
     private fun stopServiceCompletely() {
+        isGracefullyStopping = true
         serviceScope.launch(Dispatchers.Default) {
             forwardRecordingEngine.stop()
             engine.stop()
