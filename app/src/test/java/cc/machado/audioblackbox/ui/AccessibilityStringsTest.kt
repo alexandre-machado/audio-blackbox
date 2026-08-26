@@ -120,4 +120,17 @@ class AccessibilityStringsTest {
             assertTrue(key + " in PT must include " + token, ptStrings[key]?.contains(token) == true)
         }
     }
+
+    @Test
+    fun aboutAndVersionStringsAreDefinedWithFormatPlaceholders() {
+        val enStrings = loadStringMap("src/main/res/values/strings.xml")
+        val ptStrings = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
+
+        assertEquals("About", enStrings["settings_about_title"])
+        assertEquals("Sobre", ptStrings["settings_about_title"])
+
+        val token = "%1" + "$" + "s"
+        assertEquals("Version " + token, enStrings["settings_version_label"])
+        assertEquals("Versão " + token, ptStrings["settings_version_label"])
+    }
 }
