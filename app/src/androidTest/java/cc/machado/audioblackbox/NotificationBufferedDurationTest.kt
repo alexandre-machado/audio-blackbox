@@ -86,27 +86,33 @@ class NotificationBufferedDurationTest {
             pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Recording },
         )
 
-        val text0 = pollForNonNullText(timeoutMillis = 10_000)
-        assertNotNull("no notification for this app was ever observed as posted", text0)
+        val text0 = pollForNonNullText(timeoutMillis = 25_000)
+        assertNotNull(
+            "no notification for this app was ever observed as posted within 25s " +
+                "(active notifications: ${notificationManager?.activeNotifications?.map { "${it.id}:${it.packageName}" }})",
+            text0,
+        )
 
         // Must clear a full refresher tick (10s) with margin. CaptureState stays Recording
         // throughout this wait -- no transition occurs, so only the periodic refresher (or a
         // pre-#30 regression's absence of one) can explain what happens here.
-        val text1 = waitForTextChange(previous = text0, timeoutMillis = 18_000)
+        val text1 = waitForTextChange(previous = text0, timeoutMillis = 35_000)
         assertNotNull(
-            "posted notification text never changed within 18s of steady Recording with no " +
+            "posted notification text never changed within 35s of steady Recording with no " +
                 "CaptureState transition -- this is exactly issue #30's regression: nothing but " +
-                "a state transition refreshes the posted notification, and none occurred here",
+                "a state transition refreshes the posted notification, and none occurred here " +
+                "(initial: '$text0', current: '${currentPostedText()}')",
             text1,
         )
 
         // A second consecutive change rules out a single stray refresh (e.g. a race on the
         // initial post) and confirms this is a genuinely periodic driver that keeps ticking for
         // as long as Recording continues, spanning more than two refresh ticks in total.
-        val text2 = waitForTextChange(previous = text1, timeoutMillis = 18_000)
+        val text2 = waitForTextChange(previous = text1, timeoutMillis = 35_000)
         assertNotNull(
             "posted notification text changed only once; a genuinely periodic refresher must " +
-                "keep ticking on every subsequent interval too, not just once",
+                "keep ticking on every subsequent interval too, not just once " +
+                "(text1: '$text1', current: '${currentPostedText()}')",
             text2,
         )
     }

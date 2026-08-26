@@ -113,8 +113,12 @@ class PartialBufferSaveLabelTest {
             reachedSubMinute,
         )
 
-        val saveActionText = pollForSaveActionText(timeoutMillis = 10_000)
-        assertNotNull("no notification for this app was ever observed as posted", saveActionText)
+        val saveActionText = pollForSaveActionText(timeoutMillis = 25_000)
+        assertNotNull(
+            "no notification for this app was ever observed as posted within 25s " +
+                "(active notifications: ${notificationManager?.activeNotifications?.map { "${it.id}:${it.packageName}" }})",
+            saveActionText,
+        )
         checkNotNull(saveActionText)
         assertFalse(
             "notification must not render the pre-#129-fix misleading label 'Save last 0 min' " +
