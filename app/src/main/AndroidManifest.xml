@@ -10,6 +10,14 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+      Explicit opt-out of Google Play Advertising ID (AD_ID) for Google Play policy compliance.
+      Ensures no transitive dependency ever injects AD_ID into the merged manifest.
+    -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+
+    <!--
       Privacy invariant: Audio Blackbox is 100% offline, contains zero network egress, zero tracking, and zero advertisements.
     -->
 
