@@ -87,13 +87,11 @@
     <string name="dashboard_buffer_full_notice">Buffer full: recording over the oldest audio</string>
 
     <string name="dashboard_save_title">Save recent audio</string>
-    <string name="dashboard_save_window_label">Time window to save</string>
-    <string name="dashboard_save_window_option">%1$d min</string>
-    <string name="dashboard_save_window_option_cd_enabled">Save the last %1$d min</string>
-    <string name="dashboard_save_window_option_cd_insufficient_buffer">Save the last %1$d min, unavailable: only %2$d min in memory so far</string>
-    <string name="dashboard_save_window_insufficient_buffer">only %1$d min available</string>
     <string name="dashboard_save_button">Save recent audio</string>
-    <string name="dashboard_save_button_cd">Save the last %1$d min recorded</string>
+    <string name="dashboard_save_explanation_full">Save the full buffer (%1$d min) to device storage.</string>
+    <string name="dashboard_save_explanation_partial">Save the audio recorded so far (%1$s) to device storage.</string>
+    <string name="dashboard_save_button_cd_full">Save the full %1$d min buffer</string>
+    <string name="dashboard_save_button_cd_partial">Save the %1$s recorded so far</string>
     <string name="dashboard_save_disabled_no_audio">Wait for the buffer to fill before you can save.</string>
 
     <string name="dashboard_save_exporting_title">Saving…</string>

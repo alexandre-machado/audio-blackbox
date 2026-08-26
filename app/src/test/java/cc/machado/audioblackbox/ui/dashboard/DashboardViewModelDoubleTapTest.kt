@@ -47,7 +47,7 @@ class DashboardViewModelDoubleTapTest {
 
     private fun newViewModel(
         exportState: MutableStateFlow<ExportState>,
-        onSaveIntent: (Int) -> Unit,
+        onSaveIntent: () -> Unit,
     ) = DashboardViewModel(
         captureState = MutableStateFlow(CaptureState.Recording),
         bufferedDurationMillisProvider = { 30 * 60_000L },
@@ -65,8 +65,8 @@ class DashboardViewModelDoubleTapTest {
         // Simulates a double-tap: both calls happen before RecorderService's async dispatch has
         // had any chance to flip exportState away from Idle -- exportState is still Idle for
         // both, exactly the race the window-option-enabled check alone cannot catch.
-        viewModel.requestSave(30)
-        viewModel.requestSave(30)
+        viewModel.requestSave()
+        viewModel.requestSave()
 
         assertEquals(
             "a second requestSave() while the first is still awaiting a real ExportState must " +
@@ -82,7 +82,7 @@ class DashboardViewModelDoubleTapTest {
         var dispatchCount = 0
         val viewModel = newViewModel(exportState) { dispatchCount++ }
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(1, dispatchCount)
 
         // The real ExportState finally catches up (as it would once RecorderService's async
@@ -91,7 +91,7 @@ class DashboardViewModelDoubleTapTest {
         exportState.value = ExportState.Exporting
         runCurrent()
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(
             "a tap while a real export is Exporting must still be ignored",
             1,
@@ -105,7 +105,7 @@ class DashboardViewModelDoubleTapTest {
         var dispatchCount = 0
         val viewModel = newViewModel(exportState) { dispatchCount++ }
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(1, dispatchCount)
 
         // The export genuinely starts and finishes -- the guard must not be permanently stuck
@@ -117,7 +117,7 @@ class DashboardViewModelDoubleTapTest {
         exportState.value = ExportState.Idle // RecorderService's own post-notification reset
         runCurrent()
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(
             "a later, genuinely new save request must not be blocked by a guard that only " +
                 "ever existed to cover the previous save's pre-Exporting gap",
@@ -135,7 +135,7 @@ class DashboardViewModelDoubleTapTest {
         val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         var dispatchCount = 0
         var shouldThrow = true
-        val viewModel = newViewModel(exportState) { minutes ->
+        val viewModel = newViewModel(exportState) {
             dispatchCount++
             if (shouldThrow) error("onSaveIntent boom")
         }
@@ -145,11 +145,11 @@ class DashboardViewModelDoubleTapTest {
         // this same ViewModel instance: nothing will ever move exportState away from Idle for a
         // dispatch that never reached RecorderService, so if the guard survived this it would
         // survive forever.
-        assertThrows(IllegalStateException::class.java) { viewModel.requestSave(30) }
+        assertThrows(IllegalStateException::class.java) { viewModel.requestSave() }
         assertEquals(1, dispatchCount)
 
         shouldThrow = false
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(
             "a throwing dispatch must not permanently lock Save out -- the very next call on " +
                 "the same instance (here, effectively immediately, no virtual time needed) must " +
@@ -165,7 +165,7 @@ class DashboardViewModelDoubleTapTest {
         var dispatchCount = 0
         val viewModel = newViewModel(exportState) { dispatchCount++ }
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(1, dispatchCount)
 
         // No exception, and exportState never moves -- simulates onSaveIntent returning
@@ -177,7 +177,7 @@ class DashboardViewModelDoubleTapTest {
         advanceTimeBy(5_001L)
         runCurrent()
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(
             "a dispatch that never produces a real ExportState transition must still release " +
                 "the guard once the timeout backstop elapses, not lock Save out forever",
@@ -194,7 +194,7 @@ class DashboardViewModelDoubleTapTest {
         val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         var dispatchCount = 0
         var shouldThrow = true
-        val viewModel = newViewModel(exportState) { minutes ->
+        val viewModel = newViewModel(exportState) {
             dispatchCount++
             if (shouldThrow) error("onSaveIntent boom")
         }
@@ -202,7 +202,7 @@ class DashboardViewModelDoubleTapTest {
         // t=0: first dispatch throws. Its `finally` releases the guard immediately, but (pre-fix)
         // also leaves a 5s backstop Job scheduled and uncancelled -- a stale timer armed to fire
         // at t=5000 regardless of what happens afterwards.
-        assertThrows(IllegalStateException::class.java) { viewModel.requestSave(30) }
+        assertThrows(IllegalStateException::class.java) { viewModel.requestSave() }
         assertEquals(1, dispatchCount)
 
         // t=2000: some time later, a second, genuine dispatch is made. It does not throw, so it
@@ -212,7 +212,7 @@ class DashboardViewModelDoubleTapTest {
         shouldThrow = false
         advanceTimeBy(2_000L)
         runCurrent()
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(2, dispatchCount)
 
         // t=5000: the FIRST dispatch's stale timer (armed at t=0, 5s duration) fires here. The
@@ -222,7 +222,7 @@ class DashboardViewModelDoubleTapTest {
         advanceTimeBy(3_000L) // t: 2000 -> 5000
         runCurrent()
 
-        viewModel.requestSave(30)
+        viewModel.requestSave()
         assertEquals(
             "a stale backstop Job from the first (thrown) dispatch fired at t=5000 and released " +
                 "the guard belonging to the second, still-in-flight dispatch -- production " +

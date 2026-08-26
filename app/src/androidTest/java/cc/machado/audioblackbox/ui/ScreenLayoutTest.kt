@@ -70,59 +70,35 @@ class ScreenLayoutTest {
         return localizedContext.getString(id, *formatArgs)
     }
 
-    private fun assertSaveWindowChipsValid(locale: Locale) {
+    private fun assertSaveSectionValid(locale: Locale) {
         val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
-        val windowMinutes = listOf(5, 15, 30)
+        val saveButtonText = localizedString(locale, R.string.dashboard_save_button)
+        val saveButtonNode = composeRule.onNode(hasText(saveButtonText) and hasClickAction())
+        saveButtonNode.performScrollTo()
+        saveButtonNode.assertIsDisplayed()
 
-        // 1. Verify that all chip labels render on a single line (no mid-word or multi-line wrap).
-        for (minutes in windowMinutes) {
-            val labelText = localizedString(locale, R.string.dashboard_save_window_option, minutes)
-            val labelNode = composeRule.onNodeWithText(labelText, useUnmergedTree = true)
-            labelNode.performScrollTo()
-            labelNode.assertIsDisplayed()
-
-            val textLayoutResults = mutableListOf<TextLayoutResult>()
-            labelNode.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action ->
-                action(textLayoutResults)
-            }
-            assertTrue(
-                "expected text layout result for chip label '$labelText'",
-                textLayoutResults.isNotEmpty(),
-            )
-            val layoutResult = textLayoutResults.first()
-            assertTrue(
-                "chip label '$labelText' wrapped into ${layoutResult.lineCount} lines " +
-                    "(text: '${layoutResult.layoutInput.text}'), expected exactly 1 line without wrapping.",
-                layoutResult.lineCount == 1,
-            )
-
-            val chipNode = composeRule.onNode(hasText(labelText) and hasClickAction())
-            val chipBounds = chipNode.getUnclippedBoundsInRoot()
-            assertTrue(
-                "the $minutes min chip is clipped off the right edge: its right edge is at ${chipBounds.right}, " +
-                    "but root window right edge is at ${rootBounds.right}.",
-                chipBounds.right <= rootBounds.right,
-            )
-            assertTrue(
-                "the $minutes min chip is positioned before the left edge: its left edge is at ${chipBounds.left}, " +
-                    "but root window left edge is at ${rootBounds.left}.",
-                chipBounds.left >= rootBounds.left,
-            )
-        }
-
-        // 2. Verify that all 3 window chips share the row width equally.
-        val helperText = localizedString(locale, R.string.dashboard_save_window_insufficient_buffer, 0)
-        val helperNodes = composeRule.onAllNodesWithText(helperText)
-        val count = helperNodes.fetchSemanticsNodes().size
-        assertTrue("expected 3 helper text nodes for the 3 chips, found $count", count == 3)
-        val widths = (0 until count).map { i ->
-            val bounds = helperNodes[i].getUnclippedBoundsInRoot()
-            bounds.right - bounds.left
-        }
+        val saveButtonBounds = saveButtonNode.getUnclippedBoundsInRoot()
         assertTrue(
-            "the 3 window chips do not share width equally: widths are ${widths.map { it.value }}, expected equal width within tolerance.",
-            (widths[0] - widths[1]).value.absoluteValue <= GAP_TOLERANCE_DP &&
-                (widths[1] - widths[2]).value.absoluteValue <= GAP_TOLERANCE_DP,
+            "the save button is clipped off the right edge: its right edge is at ${saveButtonBounds.right}, " +
+                "but root window right edge is at ${rootBounds.right}.",
+            saveButtonBounds.right <= rootBounds.right,
+        )
+        assertTrue(
+            "the save button is positioned before the left edge: its left edge is at ${saveButtonBounds.left}, " +
+                "but root window left edge is at ${rootBounds.left}.",
+            saveButtonBounds.left >= rootBounds.left,
+        )
+
+        val explanationText = localizedString(locale, R.string.dashboard_save_disabled_no_audio)
+        val explanationNode = composeRule.onNodeWithText(explanationText)
+        explanationNode.performScrollTo()
+        explanationNode.assertIsDisplayed()
+
+        val explanationBounds = explanationNode.getUnclippedBoundsInRoot()
+        assertTrue(
+            "the explanation text is clipped off the right edge: its right edge is at ${explanationBounds.right}, " +
+                "but root window right edge is at ${rootBounds.right}.",
+            explanationBounds.right <= rootBounds.right,
         )
     }
 
@@ -325,18 +301,10 @@ class ScreenLayoutTest {
     }
 
     /**
-     * Oracle: fails if the save-window chip labels ("5 min", "15 min", "30 min") wrap mid-word or
-     * across multiple lines, or if the chips do not share available width equally across the row
-     * when helper text ("only 0 min available") is shown under compact width (Issue #77).
-     *
-     * Under the pre-fix layout, the save-window chips had no weight constraints or single-line
-     * guarantees, causing unequal width allocation where the 30-min chip wrapped mid-word
-     * ("30 mi\nn") and its helper text was squeezed across three lines. Under the fix, the chip
-     * row uses fillMaxWidth with equal weight(1f) modifiers and FilterChip labels enforce
-     * single-line rendering without wrapping.
+     * Oracle: fails if the save button or explanation text clip off-screen under compact width.
      */
     @Test
-    fun saveWindowChipsDoNotWrapAndShareWidthEquallyInCompactWidth() {
+    fun saveSectionDoesNotClipInCompactWidth() {
         composeRule.setContent {
             CompactHarnessApp(
                 Destination.DASHBOARD,
@@ -344,15 +312,14 @@ class ScreenLayoutTest {
             )
         }
 
-        assertSaveWindowChipsValid(Locale.ENGLISH)
+        assertSaveSectionValid(Locale.ENGLISH)
     }
 
     /**
-     * Oracle: same defect as above, verified under the Portuguese (pt-BR) locale where the helper
-     * text ("só 0 min disponíveis") is longer than English.
+     * Oracle: same as above, verified under the Portuguese (pt-BR) locale.
      */
     @Test
-    fun saveWindowChipsDoNotWrapAndShareWidthEquallyInCompactWidthWithPortugueseLocale() {
+    fun saveSectionDoesNotClipInCompactWidthWithPortugueseLocale() {
         val ptLocale = Locale.forLanguageTag("pt-BR")
         composeRule.setContent {
             val ptConfig = Configuration(LocalConfiguration.current).apply {
@@ -370,7 +337,7 @@ class ScreenLayoutTest {
             }
         }
 
-        assertSaveWindowChipsValid(ptLocale)
+        assertSaveSectionValid(ptLocale)
     }
 
     // ---- helpers ----
@@ -396,9 +363,9 @@ class ScreenLayoutTest {
 
     private fun settingsTab() = tab(string(R.string.nav_settings_label))
 
-    /** Text that only the dashboard renders. */
+    /** Unique element that only the dashboard renders. */
     private fun dashboardMarker() =
-        composeRule.onNodeWithText(string(R.string.dashboard_save_window_label))
+        composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG)
 
     /** Text that only the settings screen renders. */
     private fun settingsMarker() =

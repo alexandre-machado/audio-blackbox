@@ -88,23 +88,24 @@ class AccessibilityStringsTest {
     }
 
     @Test
-    fun windowOptionCdStringsProvideCompleteActionableContext() {
+    fun saveActionExplanationAndCdStringsProvideHonestDurationContext() {
         val enStrings = loadStringMap("src/main/res/values/strings.xml")
         val ptStrings = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
 
-        // Enabled chip CD includes action phrase "Save the last %1$d min"
-        assertEquals("Save the last %1" + "$" + "d min", enStrings["dashboard_save_window_option_cd_enabled"])
-        assertEquals("Salvar os últimos %1" + "$" + "d min", ptStrings["dashboard_save_window_option_cd_enabled"])
+        val intToken = "%1" + "$" + "d"
+        val strToken = "%1" + "$" + "s"
 
-        // Insufficient buffer chip CD specifies unavailable reason and buffer status
-        assertEquals(
-            "Save the last %1" + "$" + "d min, unavailable: only %2" + "$" + "d min in memory so far",
-            enStrings["dashboard_save_window_option_cd_insufficient_buffer"],
-        )
-        assertEquals(
-            "Salvar os últimos %1" + "$" + "d min, indisponível: só %2" + "$" + "d min em memória até agora",
-            ptStrings["dashboard_save_window_option_cd_insufficient_buffer"],
-        )
+        // Full buffer explanation and CD include %1$d for capacity minutes
+        assertTrue(enStrings["dashboard_save_explanation_full"]?.contains(intToken) == true)
+        assertTrue(ptStrings["dashboard_save_explanation_full"]?.contains(intToken) == true)
+        assertTrue(enStrings["dashboard_save_button_cd_full"]?.contains(intToken) == true)
+        assertTrue(ptStrings["dashboard_save_button_cd_full"]?.contains(intToken) == true)
+
+        // Partial buffer explanation and CD include %1$s for buffered duration clock
+        assertTrue(enStrings["dashboard_save_explanation_partial"]?.contains(strToken) == true)
+        assertTrue(ptStrings["dashboard_save_explanation_partial"]?.contains(strToken) == true)
+        assertTrue(enStrings["dashboard_save_button_cd_partial"]?.contains(strToken) == true)
+        assertTrue(ptStrings["dashboard_save_button_cd_partial"]?.contains(strToken) == true)
     }
 
     @Test

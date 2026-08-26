@@ -52,65 +52,48 @@ class DashboardViewModelTest {
         assertEquals(CaptureStatus.Error(CaptureErrorReason.READ_DEAD_OBJECT, "AudioRecord.read() returned -6"), mapped)
     }
 
-    // ---- computeWindowOptions: the window-selector fix (issue #40 item 1) ----
+    // ---- mapUiState: full vs partial buffer mapping (issue #121) ----
 
     @Test
-    fun `all options are disabled with INSUFFICIENT_BUFFER when nothing has been buffered yet`() {
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 0L)
+    fun `mapUiState correctly identifies empty buffer`() {
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 0L,
+            capacityMinutes = 30,
+            saveState = SaveUiState.Idle,
+        )
 
-        assertEquals(3, options.size)
-        options.forEach { option ->
-            assertFalse("option $option should be disabled", option.enabled)
-            assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, option.disabledReason)
-            assertEquals(0, option.availableMinutes)
-        }
+        assertEquals(0L, state.bufferedMillis)
+        assertEquals(30 * 60_000L, state.capacityMillis)
+        assertFalse(state.isBufferFull)
     }
 
     @Test
-    fun `the mandatory case -- a requested window longer than what is buffered -- is disabled with the available minutes attached`() {
-        // 12 minutes buffered: the 15 and 30 min options both request more than is available.
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L)
+    fun `mapUiState correctly identifies partial buffer`() {
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 12 * 60_000L,
+            capacityMinutes = 30,
+            saveState = SaveUiState.Idle,
+        )
 
-        val fifteen = options.single { it.minutes == 15 }
-        assertFalse(fifteen.enabled)
-        assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, fifteen.disabledReason)
-        assertEquals(12, fifteen.availableMinutes)
-
-        val thirty = options.single { it.minutes == 30 }
-        assertFalse(thirty.enabled)
-        assertEquals(WindowDisabledReason.INSUFFICIENT_BUFFER, thirty.disabledReason)
-        assertEquals(12, thirty.availableMinutes)
+        assertEquals(12 * 60_000L, state.bufferedMillis)
+        assertEquals(30 * 60_000L, state.capacityMillis)
+        assertFalse(state.isBufferFull)
     }
 
     @Test
-    fun `a shorter option within the buffered amount is now enabled, closing issue #40's gap`() {
-        // 12 minutes buffered: the 5 min option has enough audio behind it, and the service can
-        // now honour that exact window (issue #40 item 1) -- this must be enabled, not disabled.
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 12 * 60_000L)
+    fun `mapUiState correctly identifies full buffer`() {
+        val state = DashboardViewModel.mapUiState(
+            captureState = CaptureState.Recording,
+            bufferedMillis = 30 * 60_000L,
+            capacityMinutes = 30,
+            saveState = SaveUiState.Idle,
+        )
 
-        val five = options.single { it.minutes == 5 }
-        assertTrue(five.enabled)
-        assertEquals(null, five.disabledReason)
-        assertEquals(12, five.availableMinutes)
-    }
-
-    @Test
-    fun `every option becomes enabled once the buffer holds enough for all of them`() {
-        val options = DashboardViewModel.computeWindowOptions(bufferedMillis = 30 * 60_000L)
-
-        options.forEach { option ->
-            assertTrue("option $option should be enabled", option.enabled)
-            assertEquals(null, option.disabledReason)
-        }
-    }
-
-    @Test
-    fun `an option becomes enabled at the exact minute it is first fully buffered, not one minute early`() {
-        val notYet = DashboardViewModel.computeWindowOptions(bufferedMillis = 15 * 60_000L - 1L)
-        assertFalse(notYet.single { it.minutes == 15 }.enabled)
-
-        val exact = DashboardViewModel.computeWindowOptions(bufferedMillis = 15 * 60_000L)
-        assertTrue(exact.single { it.minutes == 15 }.enabled)
+        assertEquals(30 * 60_000L, state.bufferedMillis)
+        assertEquals(30 * 60_000L, state.capacityMillis)
+        assertTrue(state.isBufferFull)
     }
 
     // ---- mapSaveUiState: the real-progress oracle (issue #40 item 2) ----
