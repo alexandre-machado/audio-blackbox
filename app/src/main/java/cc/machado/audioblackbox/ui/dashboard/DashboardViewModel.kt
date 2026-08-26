@@ -57,7 +57,7 @@ class DashboardViewModel(
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
-    private val onSaveIntent: (minutes: Int) -> Unit = {},
+    private val onSaveIntent: () -> Unit = {},
     private val onStartForwardRecording: (startFromOldest: Boolean) -> Unit = {},
     private val onStopForwardRecording: () -> Unit = {},
 ) : ViewModel() {
@@ -312,9 +312,13 @@ class DashboardViewModel(
      * guaranteed to be shown once it lands, even in the (practically impossible, since filenames
      * are timestamped) case that it would otherwise compare equal to whatever was last
      * dismissed. */
-    fun requestSave(minutes: Int) {
-        val option = uiState.value.windowOptions.firstOrNull { it.minutes == minutes } ?: return
-        if (!option.enabled) return
+    /** Fires the save request to save the entire buffered audio window if there is audio in memory.
+     * Ignored if the buffer is empty or if a save is already in flight.
+     *
+     * Clears any previously dismissed outcome so this new export's own Success/Error is
+     * guaranteed to be shown once it lands. */
+    fun requestSave() {
+        if (uiState.value.bufferedMillis <= 0L) return
         if (saveDispatchPending || exportState.value !is ExportState.Idle) return
         saveDispatchPending = true
         _dismissedExportState.value = null
@@ -327,7 +331,7 @@ class DashboardViewModel(
 
         var dispatchThrew = true
         try {
-            onSaveIntent(minutes)
+            onSaveIntent()
             dispatchThrew = false
         } finally {
             if (dispatchThrew) {
@@ -458,48 +462,11 @@ class DashboardViewModel(
                 else ForwardRecordingUiState.Error(forwardState.reason, forwardState.message)
         }
 
-        /**
-         * Builds the "salvar o passado" window selector from what's actually buffered (issue #40
-         * item 1). [RecorderService.saveIntent] can now request any window up to what is buffered
-         * -- [ExportEngine][cc.machado.audioblackbox.export.ExportEngine]/
-         * [RingBuffer.snapshot][cc.machado.audioblackbox.audio.RingBuffer.snapshot] clamp down to
-         * what is actually available if a request ever exceeded it -- so the only rule left is:
-         *   - an option is [WindowOption.enabled] once the buffer holds at least that many
-         *     minutes;
-         *   - otherwise it is disabled with [WindowDisabledReason.INSUFFICIENT_BUFFER], carrying
-         *     [WindowOption.availableMinutes] so the UI can say "só X min disponíveis" -- this is
-         *     the guarantee `@rev` verified on issue #6 and that must not regress: an option is
-         *     never enabled unless the buffer can back it in full, so a save can never silently
-         *     come back shorter than what was requested.
-         */
-        fun computeWindowOptions(
-            bufferedMillis: Long,
-            optionsMinutes: List<Int> = DashboardUiState.WINDOW_OPTION_MINUTES,
-        ): List<WindowOption> {
-            val availableMinutes = (bufferedMillis / MILLIS_PER_MINUTE).toInt()
-            return optionsMinutes.map { minutes ->
-                if (minutes > availableMinutes) {
-                    WindowOption(
-                        minutes = minutes,
-                        availableMinutes = availableMinutes,
-                        enabled = false,
-                        disabledReason = WindowDisabledReason.INSUFFICIENT_BUFFER,
-                    )
-                } else {
-                    WindowOption(
-                        minutes = minutes,
-                        availableMinutes = availableMinutes,
-                        enabled = true,
-                        disabledReason = null,
-                    )
-                }
-            }
-        }
-
         /** The single state-mapping oracle issue #6 requires be unit-tested: engine state +
          * buffered duration + the in-flight save outcome -> the exact [DashboardUiState] the
          * screen renders. Issue #73 moved the retention selector (formerly folded in here per
-         * issue #45) to [cc.machado.audioblackbox.ui.settings.SettingsViewModel]'s own oracle. */
+         * issue #45) to [cc.machado.audioblackbox.ui.settings.SettingsViewModel]'s own oracle.
+         * Issue #121 retired the window options selector in favor of a single save action. */
         fun mapUiState(
             captureState: CaptureState,
             bufferedMillis: Long,
@@ -517,7 +484,6 @@ class DashboardViewModel(
                 bufferedMillis = clampedBufferedMillis,
                 capacityMillis = capacityMillis,
                 isBufferFull = clampedBufferedMillis >= capacityMillis,
-                windowOptions = computeWindowOptions(clampedBufferedMillis),
                 saveState = saveState,
                 forwardRecordingState = forwardRecordingState,
             )

@@ -165,25 +165,27 @@ class DashboardViewModelInstanceTest {
 
     // ---- requestSave: dispatches, and the real ExportState becomes visible on uiState ----
 
+    // ---- requestSave: dispatches, and the real ExportState becomes visible on uiState ----
+
     @Test
     fun `requestSave dispatches the save intent, and the real ExportState Exporting becomes visible once RecorderService's round trip lands`() = runTest(testDispatcher) {
-        val dispatched = mutableListOf<Int>()
+        var dispatched = 0
         val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             bufferedDurationMillisProvider = { 30 * 60_000L }, // buffer full at capacity
             capacityMinutesFlow = MutableStateFlow(30),
             exportState = exportState,
-            onSaveIntent = { minutes -> dispatched += minutes },
+            onSaveIntent = { dispatched++ },
         )
         val observed = mutableListOf<DashboardUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
         runCurrent()
 
-        vm.requestSave(30)
+        vm.requestSave()
         runCurrent()
 
-        assertEquals(listOf(30), dispatched)
+        assertEquals(1, dispatched)
         // The dispatch alone does not flip the screen's state -- unlike the old fake `Requested`,
         // there is nothing to show yet until RecorderService's own async round trip actually
         // starts the export (issue #40 item 2: no more "intent sent" placeholder state).
@@ -200,24 +202,24 @@ class DashboardViewModelInstanceTest {
     }
 
     @Test
-    fun `requestSave silently ignores a disabled option -- no dispatch, no state change`() = runTest(testDispatcher) {
-        val dispatched = mutableListOf<Int>()
+    fun `requestSave silently ignores when buffer is empty -- no dispatch, no state change`() = runTest(testDispatcher) {
+        var dispatched = 0
         val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
-            bufferedDurationMillisProvider = { 0L }, // nothing buffered -- every option disabled
+            bufferedDurationMillisProvider = { 0L }, // nothing buffered -- save disabled
             capacityMinutesFlow = MutableStateFlow(30),
             exportState = exportState,
-            onSaveIntent = { minutes -> dispatched += minutes },
+            onSaveIntent = { dispatched++ },
         )
         val observed = mutableListOf<DashboardUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
         runCurrent()
 
-        vm.requestSave(30)
+        vm.requestSave()
         runCurrent()
 
-        assertTrue("expected no dispatch for a disabled option, got $dispatched", dispatched.isEmpty())
+        assertEquals(0, dispatched)
         assertEquals(SaveUiState.Idle, observed.last().saveState)
 
         job.cancel()

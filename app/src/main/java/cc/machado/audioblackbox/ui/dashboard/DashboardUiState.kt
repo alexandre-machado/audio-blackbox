@@ -56,20 +56,6 @@ data class EngineSwitchUiState(
     val error: CaptureStatus.Error?,
 )
 
-/** Why a [WindowOption] can't be requested right now. */
-enum class WindowDisabledReason {
-    /** The ring buffer simply does not hold this many minutes of audio yet. */
-    INSUFFICIENT_BUFFER,
-}
-
-/** One entry in the "salvar o passado" window selector. */
-data class WindowOption(
-    val minutes: Int,
-    val availableMinutes: Int,
-    val enabled: Boolean,
-    val disabledReason: WindowDisabledReason?,
-)
-
 /** Observable lifecycle of a save request, as the dashboard screen sees it -- a direct mirror of
  * [cc.machado.audioblackbox.export.ExportState] (issue #40 item 2: [RecorderService][cc.machado.audioblackbox.service.RecorderService]
  * now publishes that StateFlow from its companion, the same way it already does for `engine.state`),
@@ -120,11 +106,6 @@ data class DashboardUiState(
     val bufferedMillis: Long,
     val capacityMillis: Long,
     val isBufferFull: Boolean,
-    val windowOptions: List<WindowOption>,
     val saveState: SaveUiState,
     val forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
-) {
-    companion object {
-        val WINDOW_OPTION_MINUTES = listOf(5, 15, 30)
-    }
-}
+)
