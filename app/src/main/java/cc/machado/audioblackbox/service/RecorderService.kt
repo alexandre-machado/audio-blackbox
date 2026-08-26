@@ -79,6 +79,7 @@ class RecorderService : Service() {
     }
 
     private val notificationRefresher = PeriodicNotificationRefresher(captureState)
+    private var isGracefullyStopping = false
 
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
     // (MediaStoreSink -> ContentResolver; AacPayloadEncoder -> cacheDir for its temp file, see its
@@ -148,6 +149,7 @@ class RecorderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        _isServiceRunning.value = true
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         focusTracker = AudioFocusTracker(audioManager)
         RecorderNotification.ensureChannel(this)
@@ -284,20 +286,19 @@ class RecorderService : Service() {
         // Defensive cleanup for the case where this service is destroyed some other way than
         // through stopServiceCompletely() (e.g. the OS force-destroys it directly). In the common
         // case stopServiceCompletely() has already driven engine.stop() to completion before ever
-        // calling stopSelf(), so this is an idempotent no-op. It is dispatched on its own daemon
-        // thread rather than blocked on synchronously, for the same ANR reason as
-        // stopServiceCompletely(): the join + RingBuffer.clear() must not run on this callback's
-        // main thread. A raw Thread (not serviceScope, which is cancelled right below, and would
-        // cancel this along with it) so it survives both that cancellation and this Service
-        // instance being destroyed -- engine's own capture thread is likewise independent of both.
-        Thread({
-            forwardRecordingEngine.stop()
-            engine.stop()
-        }, "RecorderService-onDestroy-stop").apply {
-            isDaemon = true
-            start()
+        // calling stopSelf(), so running engine.stop() asynchronously here is not only redundant
+        // but would race a subsequent startIntent() by stopping the next session asynchronously.
+        if (!isGracefullyStopping) {
+            Thread({
+                forwardRecordingEngine.stop()
+                engine.stop()
+            }, "RecorderService-onDestroy-stop").apply {
+                isDaemon = true
+                start()
+            }
         }
         serviceScope.cancel()
+        _isServiceRunning.value = false
         super.onDestroy()
     }
 
@@ -337,6 +338,7 @@ class RecorderService : Service() {
      * notification (and the service itself) never disappear while the mic might still be open.
      */
     private fun stopServiceCompletely() {
+        isGracefullyStopping = true
         serviceScope.launch(Dispatchers.Default) {
             forwardRecordingEngine.stop()
             engine.stop()
@@ -577,6 +579,9 @@ class RecorderService : Service() {
         // `captureState` exists above instead of a plain `engine.state` reference.
         private val _bufferDurationMinutesFlow = MutableStateFlow(_captureConfig.bufferDurationMinutes)
         val bufferDurationMinutesFlow: StateFlow<Int> = _bufferDurationMinutesFlow.asStateFlow()
+
+        private val _isServiceRunning = MutableStateFlow(false)
+        val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
 
         // Public mirror of captureConfig.bufferDurationMinutes (issue #40 item 3 -- `@rev` finding
         // on issue #6): DashboardViewModel used to default its own capacityMinutes to the bare

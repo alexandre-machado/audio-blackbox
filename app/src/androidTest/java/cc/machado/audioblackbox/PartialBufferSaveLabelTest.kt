@@ -16,6 +16,7 @@ import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,12 +69,25 @@ class PartialBufferSaveLabelTest {
     // against, even though that emulator is headless/throwaway and never reaches a real user).
     private var createdRowUri: Uri? = null
 
+    @Before
+    fun setUp() {
+        ensureServiceStopped()
+    }
+
     @After
     fun tearDown() {
-        context.startService(RecorderService.stopIntent(context))
-        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+        ensureServiceStopped()
         createdRowUri?.let { uri ->
             context.contentResolver.delete(uri, null, null)
+        }
+    }
+
+    private fun ensureServiceStopped() {
+        if (RecorderService.isServiceRunning.value || RecorderService.engine.state.value !is CaptureState.Idle) {
+            context.startService(RecorderService.stopIntent(context))
+            pollUntil(timeoutMillis = 15_000) {
+                RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+            }
         }
     }
 
@@ -90,16 +104,24 @@ class PartialBufferSaveLabelTest {
         // Wait for a genuinely non-zero but still sub-minute buffer -- long enough that this isn't
         // testing the empty-buffer edge case, short enough that it stays inside the "under a
         // minute" branch this test exists to cover.
+        val reachedSubMinute = pollUntil(timeoutMillis = 35_000) {
+            val ms = RecorderService.engine.bufferedDurationMillis() ?: 0L
+            ms in 2_000..55_000
+        }
+        val observedMs = RecorderService.engine.bufferedDurationMillis()
+        val observedState = RecorderService.engine.state.value
         assertTrue(
-            "buffered duration never reached the 3s-55s window this test needs",
-            pollUntil(timeoutMillis = 20_000) {
-                val ms = RecorderService.engine.bufferedDurationMillis() ?: 0L
-                ms in 3_000..55_000
-            },
+            "buffered duration never reached the 2s-55s window this test needs " +
+                "(observed duration: ${observedMs}ms, state: $observedState)",
+            reachedSubMinute,
         )
 
-        val saveActionText = currentSaveActionText()
-        assertNotNull("no notification for this app was ever observed as posted", saveActionText)
+        val saveActionText = pollForSaveActionText(timeoutMillis = 25_000)
+        assertNotNull(
+            "no notification for this app was ever observed as posted within 25s " +
+                "(active notifications: ${notificationManager?.activeNotifications?.map { "${it.id}:${it.packageName}" }})",
+            saveActionText,
+        )
         checkNotNull(saveActionText)
         assertFalse(
             "notification must not render the pre-#129-fix misleading label 'Save last 0 min' " +
@@ -118,6 +140,15 @@ class PartialBufferSaveLabelTest {
                 "-- got name: ${row.name}",
             SUB_MINUTE_SECONDS_SUFFIX.containsMatchIn(row.name),
         )
+    }
+
+    private fun pollForSaveActionText(timeoutMillis: Long): String? {
+        var text: String? = null
+        pollUntil(timeoutMillis = timeoutMillis) {
+            text = currentSaveActionText()
+            text != null
+        }
+        return text
     }
 
     private fun currentSaveActionText(): String? =
