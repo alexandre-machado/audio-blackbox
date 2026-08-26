@@ -363,9 +363,9 @@ class ScreenLayoutTest {
 
     private fun settingsTab() = tab(string(R.string.nav_settings_label))
 
-    /** Text that only the dashboard renders. */
+    /** Unique element that only the dashboard renders. */
     private fun dashboardMarker() =
-        composeRule.onNodeWithText(string(R.string.dashboard_save_title))
+        composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG)
 
     /** Text that only the settings screen renders. */
     private fun settingsMarker() =
