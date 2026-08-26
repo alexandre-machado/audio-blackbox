@@ -132,13 +132,12 @@ class PartialBufferSaveLabelTest {
     }
 
     private fun pollForSaveActionText(timeoutMillis: Long): String? {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (System.currentTimeMillis() < deadline) {
-            val text = currentSaveActionText()
-            if (text != null) return text
-            Thread.sleep(250)
+        var text: String? = null
+        pollUntil(timeoutMillis = timeoutMillis) {
+            text = currentSaveActionText()
+            text != null
         }
-        return currentSaveActionText()
+        return text
     }
 
     private fun currentSaveActionText(): String? =
