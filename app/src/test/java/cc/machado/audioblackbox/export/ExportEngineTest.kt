@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -150,6 +151,24 @@ class ExportEngineTest {
         assertTrue(name.startsWith("blackbox_"))
         assertTrue(name.endsWith("_1min.wav"))
         assertTrue(name.matches(Regex("blackbox_\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}_1min\\.wav")))
+    }
+
+    @Test
+    fun `a non-null secondsLabel overrides minutesLabel in the filename -- issue #129 sub-minute follow-up`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val ring = ringWithBytes(1000)
+        val engine = engineFor(ring, sink)
+
+        // minutesLabel = 0 is what RecorderService.handleSave() actually passes for a sub-minute
+        // save (resolveSavedMinutes floors to 0); secondsLabel is what must win in the filename --
+        // a `_0min.wav` name here would be the exact regression this test pins against.
+        val result = engine.export(durationMillis = 1000, minutesLabel = 0, secondsLabel = 45)
+
+        assertTrue(result is ExportState.Success)
+        val name = requireNotNull(sink.openedWith)
+        assertTrue("expected a _45s suffix, not _0min -- got: $name", name.endsWith("_45s.wav"))
+        assertFalse("secondsLabel must fully replace minutesLabel in the name, not just append -- got: $name", name.contains("min"))
     }
 
     @Test

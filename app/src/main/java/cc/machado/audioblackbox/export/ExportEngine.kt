@@ -174,7 +174,8 @@ class ExportEngine(
 
     /**
      * Runs one export of the last [durationMillis] of audio, labeling the filename with
-     * [minutesLabel] (e.g. `30` for `..._30min.wav`). Blocking; always leaves [state] (and its
+     * [minutesLabel] (e.g. `30` for `..._30min.wav`), or with [secondsLabel] instead when it is
+     * non-null (e.g. `45` for `..._45s.wav`) -- see [filenameFor]'s doc. Blocking; always leaves [state] (and its
      * own return value) in [ExportState.Success] or [ExportState.Error] -- never throws:
      * [runExport]/[writeAndFinish] catch any unexpected `Throwable` internally and convert it to
      * [ExportFailureReason.UNEXPECTED_FAILURE]; the `try`/`finally` below is the backstop that
@@ -189,7 +190,7 @@ class ExportEngine(
      * [readSinceProvider]/[sink] -- mirrors [cc.machado.audioblackbox.service.AudioFocusTracker]'s
      * "check before acting" dedup rather than letting two exports interleave.
      */
-    fun export(durationMillis: Long, minutesLabel: Int): ExportState {
+    fun export(durationMillis: Long, minutesLabel: Int, secondsLabel: Int? = null): ExportState {
         synchronized(exportLock) {
             if (_state.value is ExportState.Exporting) {
                 return ExportState.Error(
@@ -205,14 +206,14 @@ class ExportEngine(
             "export did not complete",
         )
         try {
-            result = runExport(durationMillis, minutesLabel)
+            result = runExport(durationMillis, minutesLabel, secondsLabel)
         } finally {
             _state.value = result
         }
         return result
     }
 
-    private fun runExport(durationMillis: Long, minutesLabel: Int): ExportState {
+    private fun runExport(durationMillis: Long, minutesLabel: Int, secondsLabel: Int?): ExportState {
         return try {
             // Fix the window purely from cursors, before touching a single PCM byte (issue #72):
             // [oldestCursor, writeCursor) is everything currently buffered, which is naturally at
@@ -241,7 +242,7 @@ class ExportEngine(
                 config = config,
                 targetDurationMillis = durationMillis,
             )
-            val displayName = filenameFor(windowStart, minutesLabel)
+            val displayName = filenameFor(windowStart, minutesLabel, secondsLabel)
 
             val target = try {
                 sink.open(displayName, payloadEncoder.mimeType)
@@ -323,10 +324,22 @@ class ExportEngine(
         return state
     }
 
-    private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int): String {
+    /**
+     * [secondsLabel], when non-null, overrides [minutesLabel] in the filename with whole-seconds
+     * granularity (`..._45s.m4a` instead of `..._0min.m4a`) -- issue #129 follow-up (`@techlead`
+     * round-2 finding): a floored `0min` name for a genuinely sub-minute save is technically
+     * non-overstating but useless for identifying the file later in an evidentiary product.
+     * `null` (the default every existing caller still passes) preserves the original
+     * `..._Nmin.` naming exactly. Callers are expected to pass [secondsLabel] only when
+     * [minutesLabel] itself resolved to `0` (see
+     * [cc.machado.audioblackbox.service.RecorderService.resolveSavedSeconds]'s doc) -- this method
+     * does not re-derive that condition itself, it only trusts what it is given.
+     */
+    private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int, secondsLabel: Int?): String {
         val formatter = SimpleDateFormat(FILENAME_TIMESTAMP_PATTERN, Locale.US)
         val timestamp = formatter.format(Date(startTimestampMillis))
-        return "blackbox_${timestamp}_${minutesLabel}min.${payloadEncoder.fileExtension}"
+        val durationSuffix = if (secondsLabel != null) "${secondsLabel}s" else "${minutesLabel}min"
+        return "blackbox_${timestamp}_${durationSuffix}.${payloadEncoder.fileExtension}"
     }
 
     private companion object {

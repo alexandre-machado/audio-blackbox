@@ -243,16 +243,10 @@ class RecorderService : Service() {
                 }
                 stopServiceCompletely()
             }
-            ACTION_SAVE -> handleSave(
-                // Absent for the notification's own Save action (RecorderNotification builds a
-                // bare ACTION_SAVE Intent with no extra) -- that action has always meant "save
-                // everything currently buffered", so falling back to the full configured capacity
-                // here preserves that behavior exactly. Present when MainActivity dispatches
-                // RecorderService.saveIntent(context, minutes) from the dashboard's window
-                // selector (issue #40 item 1).
-                intent?.getIntExtra(EXTRA_WINDOW_MINUTES, captureConfig.bufferDurationMinutes)
-                    ?: captureConfig.bufferDurationMinutes,
-            )
+            // Issue #121: one Save action, always "everything currently buffered" -- both the
+            // dashboard's and the notification's own ACTION_SAVE dispatch the exact same bare
+            // Intent now, so there is no extra left to read here.
+            ACTION_SAVE -> handleSave()
             ACTION_START_FORWARD -> {
                 val startFromOldest = intent?.getBooleanExtra(EXTRA_START_FROM_OLDEST, false) ?: false
                 handleStartForward(startFromOldest)
@@ -354,12 +348,6 @@ class RecorderService : Service() {
         }
     }
 
-    /** [requestedMinutes] is the window the caller asked for -- 5/15/30 from the dashboard's
-     * selector, or the full configured capacity for the notification's own Save action (see
-     * [onStartCommand]'s [EXTRA_WINDOW_MINUTES] handling). Passed straight through to
-     * [ExportEngine.export] with no clamping here: [ExportEngine]/[cc.machado.audioblackbox.audio.RingBuffer.snapshot]
-     * already clamp to whatever is actually buffered if [requestedMinutes] exceeds it (issue #40
-     * item 1 -- no engine change needed), so this method never has to duplicate that logic. */
     private fun handleStartForward(startFromOldest: Boolean) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
@@ -381,7 +369,21 @@ class RecorderService : Service() {
         }
     }
 
-    private fun handleSave(requestedMinutes: Int) {
+    /** Issue #121: the single Save action always requests the full configured capacity from
+     * [ExportEngine.export] -- [ExportEngine]/[cc.machado.audioblackbox.audio.RingBuffer.snapshot]
+     * clamp that down to whatever is genuinely buffered if the buffer has not filled yet, so this
+     * never has to duplicate that clamp. What it must not do is *label* the resulting file with
+     * the requested capacity when less was actually buffered -- see [resolveSavedMinutes]'s doc
+     * for why the label is computed from what's actually buffered at dispatch time instead. */
+    private fun handleSave() {
+        val requestedMinutes = captureConfig.bufferDurationMinutes
+        val bufferedMillis = engine.bufferedDurationMillis() ?: 0L
+        val savedMinutes = resolveSavedMinutes(bufferedMillis, requestedMinutes)
+        // Sub-minute save (issue #129 follow-up): a floored `0min` filename never overstates, but
+        // for an evidentiary product it is useless for telling a 45s clip apart from an empty one
+        // later. Only computed/used when savedMinutes is genuinely 0 -- see resolveSavedSeconds's
+        // doc and ExportEngine.filenameFor's secondsLabel parameter.
+        val savedSeconds = if (savedMinutes == 0) resolveSavedSeconds(bufferedMillis) else null
         // Dispatched off this Service's main thread for the same ANR reason as
         // stopServiceCompletely(): ExportEngine.export() is blocking I/O (ring buffer copy-out is
         // already bounded/off-thread by the time it gets here, but the WAV encode + MediaStore
@@ -398,7 +400,8 @@ class RecorderService : Service() {
         serviceScope.launch(Dispatchers.Default) {
             val result = exportEngine.export(
                 durationMillis = requestedMinutes.toLong() * MILLIS_PER_MINUTE,
-                minutesLabel = requestedMinutes,
+                minutesLabel = savedMinutes,
+                secondsLabel = savedSeconds,
             )
             when (result) {
                 is ExportState.Success -> {
@@ -458,11 +461,33 @@ class RecorderService : Service() {
         const val ACTION_STOP_FORWARD = "cc.machado.audioblackbox.service.action.STOP_FORWARD"
         const val EXTRA_START_FROM_OLDEST = "cc.machado.audioblackbox.service.extra.START_FROM_OLDEST"
 
-        // Requested window length, in minutes, for an ACTION_SAVE Intent (issue #40 item 1). Only
-        // MainActivity's dashboard wiring sets this; RecorderNotification's own Save action
-        // deliberately does not (see onStartCommand's handling), so a missing extra there keeps
-        // meaning exactly what it always has: "save everything currently buffered".
-        const val EXTRA_WINDOW_MINUTES = "cc.machado.audioblackbox.service.extra.WINDOW_MINUTES"
+        /**
+         * The minute label a Save should carry -- for the exported file's name ([handleSave]) and
+         * for the notification's own Save action label ([cc.machado.audioblackbox.service.RecorderNotification.build])
+         * -- computed from what is *actually* buffered, never from [capacityMinutes] (issue #121).
+         * Before the buffer fills, [bufferedMillis] is the smaller number; labeling either surface
+         * with the full configured capacity instead would promise more than the save actually
+         * delivers, exactly the dishonesty issue #121 exists to close. Floors to whole minutes
+         * (matching the old chip selector's "only X min available" convention) and is clamped to
+         * [capacityMinutes] as a defensive upper bound -- a reading momentarily above capacity
+         * (e.g. a stale poll racing a capacity shrink) must never be reported as more than what was
+         * actually requested.
+         */
+        fun resolveSavedMinutes(bufferedMillis: Long, capacityMinutes: Int): Int =
+            (bufferedMillis / MILLIS_PER_MINUTE).toInt().coerceIn(0, capacityMinutes)
+
+        /**
+         * The whole-seconds label for a sub-minute save (issue #129 follow-up): both
+         * [handleSave]'s exported filename and [cc.machado.audioblackbox.service.RecorderNotification.saveActionLabel]
+         * call this -- never re-derive it independently -- so the two surfaces can't drift apart
+         * on this narrower case the same way [resolveSavedMinutes] already guarantees for the
+         * whole-minutes case. Only meaningful (and only ever called) when [resolveSavedMinutes]
+         * itself resolved to `0`; floors to whole seconds and clamps to `0..59` so it can never
+         * read `60s` (which would just be the `1min` case misrepresented) nor overstate a
+         * momentarily stale reading.
+         */
+        fun resolveSavedSeconds(bufferedMillis: Long): Int =
+            (bufferedMillis / 1000L).coerceIn(0L, 59L).toInt()
 
         // Built from PreloadedRetentionWindow.minutes (issue #45), not the bare
         // AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES constant: AudioBlackboxApplication.onCreate
@@ -588,15 +613,16 @@ class RecorderService : Service() {
         fun stopForwardIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_STOP_FORWARD)
 
-        /** [windowMinutes] is the requested "salvar o passado" window (5/15/30 from the
-         * dashboard's selector) -- defaults to the full configured capacity so any existing caller
-         * that only wants "save everything buffered" (there is none left after this change, but
-         * keeping the default avoids a silent behavior change for any future one) still gets
-         * exactly that. */
-        fun saveIntent(context: Context, windowMinutes: Int = bufferDurationMinutes): Intent =
-            Intent(context, RecorderService::class.java)
-                .setAction(ACTION_SAVE)
-                .putExtra(EXTRA_WINDOW_MINUTES, windowMinutes)
+        /** Issue #121 retired the dashboard's 5/15/30-minute window selector: `ACTION_SAVE` no
+         * longer carries a requested window at all -- every Save, from the dashboard or the
+         * notification, means exactly the same thing:
+         * "export everything currently buffered". [handleSave] still requests the full configured
+         * capacity from [cc.machado.audioblackbox.export.ExportEngine]; that engine clamps it down
+         * to what is genuinely buffered if the buffer has not filled yet (see
+         * [cc.machado.audioblackbox.audio.RingBuffer.snapshot]), and [resolveSavedMinutes] labels
+         * the resulting file honestly rather than with the requested capacity. */
+        fun saveIntent(context: Context): Intent =
+            Intent(context, RecorderService::class.java).setAction(ACTION_SAVE)
 
         /**
          * Rebuilds the process-lifetime engine at [newBufferDurationMinutes] (issue #45). Returns
