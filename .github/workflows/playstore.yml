@@ -37,6 +37,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: playstore-release
+  cancel-in-progress: true
+
 jobs:
   deploy-playstore:
     runs-on: ubuntu-latest

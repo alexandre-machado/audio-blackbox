@@ -190,10 +190,7 @@ dependencies {
     // new persisted state (see RetentionWindowPreferences's class doc for why).
     implementation(libs.androidx.datastore.preferences)
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics) {
-        exclude(group = "com.google.android.gms", module = "play-services-ads-identifier")
-        exclude(group = "androidx.privacysandbox.ads")
-    }
+    implementation(libs.firebase.analytics)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

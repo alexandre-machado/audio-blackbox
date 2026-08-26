@@ -11,18 +11,8 @@
 
     <!--
       Privacy invariant: Audio Blackbox contains zero advertisements and does not track users.
-      Explicitly remove GMS AD_ID and Android Privacy Sandbox AdServices permissions introduced
-      transitively by Firebase Analytics.
+      Firebase Analytics is used strictly for coarse operational metrics (see AnalyticsTracker.kt).
     -->
-    <uses-permission
-        android:name="com.google.android.gms.permission.AD_ID"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.ACCESS_ADSERVICES_AD_ID"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION"
-        tools:node="remove" />
 
     <!--
       android:allowBackup="false" and android:dataExtractionRules are both
