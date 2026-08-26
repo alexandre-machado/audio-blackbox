@@ -73,7 +73,6 @@ fun computeDynamicVersionName(baseVersion: String = "v0.3.0"): String {
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.google.services)
 }
 
 android {
@@ -189,8 +188,6 @@ dependencies {
     // Retention-window setting persistence (issue #45) -- DataStore, not SharedPreferences, for
     // new persisted state (see RetentionWindowPreferences's class doc for why).
     implementation(libs.androidx.datastore.preferences)
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
