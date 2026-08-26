@@ -135,3 +135,17 @@ Because `targetSdk` is 36, Google Play requires a specific declaration for `FORE
 - **Target Audience**: `18 and over` (or `13 and over`).
 - **Contains Ads**: `No`.
 - **Pricing**: `Free`.
+
+---
+
+## 6. Advertising ID Declaration (ID de Publicidade / AD_ID)
+
+Google Play Console requires all apps targeting Android 13+ (API 33+) to declare their Advertising ID usage under **Policy > App content > Advertising ID** (Política > Conteúdo do app > ID de publicidade).
+
+- **Question**: *Does your app use an advertising ID?* (*O seu app usa o código de publicidade?*)
+- **Answer**: **`No`** (**`Não`**)
+
+### Rationale & Invariants
+1. Audio Blackbox contains zero advertisements, zero monetization SDKs, and zero telemetry trackers.
+2. The `com.google.android.gms.permission.AD_ID` permission is **not requested or merged** anywhere in the app.
+3. The app is 100% offline with zero network permissions (`android.permission.INTERNET` is completely absent, as verified by `ManifestPermissionSecurityTest`).
