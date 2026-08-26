@@ -16,9 +16,10 @@ import org.junit.runner.RunWith
  * Analytics was linked, since the source manifest never mentioned INTERNET in the first place.
  *
  * [PackageManager.getPackageInfo] reads the permissions actually baked into the installed APK,
- * i.e. the real output of manifest merging (the same content emitted to
- * `app/build/intermediates/merged_manifest*/`), not the source `AndroidManifest.xml`. That makes
- * this the durable form of the assertion: if any future dependency merges `INTERNET` or
+ * i.e. the real output of manifest merging (the same content emitted under the
+ * `app/build/intermediates/merged_manifest` directory tree), not the source
+ * `AndroidManifest.xml`. That makes this the durable form of the assertion: if any future
+ * dependency merges `INTERNET` or
  * `ACCESS_NETWORK_STATE` back in, this test fails loudly instead of leaving the privacy claim
  * silently false again.
  */
