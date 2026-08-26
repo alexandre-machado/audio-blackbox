@@ -162,13 +162,7 @@ class RecorderService : Service() {
         // reconciles the notification with whatever engine.state already is at the moment this
         // collector attaches.
         serviceScope.launch {
-            captureState.collect { state ->
-                val stateName = when (state) {
-                    is CaptureState.Idle -> "idle"
-                    is CaptureState.Recording -> "recording"
-                    is CaptureState.Paused -> "paused"
-                    is CaptureState.Error -> "error"
-                }
+            captureState.collect {
                 refreshNotification()
             }
         }
