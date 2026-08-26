@@ -13,7 +13,6 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.content.ContextCompat
-import cc.machado.audioblackbox.analytics.AnalyticsProvider
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
@@ -163,17 +162,7 @@ class RecorderService : Service() {
         // reconciles the notification with whatever engine.state already is at the moment this
         // collector attaches.
         serviceScope.launch {
-            captureState.collect { state ->
-                val stateName = when (state) {
-                    is CaptureState.Idle -> "idle"
-                    is CaptureState.Recording -> "recording"
-                    is CaptureState.Paused -> "paused"
-                    is CaptureState.Error -> "error"
-                }
-                AnalyticsProvider.get().trackEngineStateChanged(stateName)
-                if (state is CaptureState.Error) {
-                    AnalyticsProvider.get().trackError(state.reason.name, state.message)
-                }
+            captureState.collect {
                 refreshNotification()
             }
         }
@@ -393,7 +382,6 @@ class RecorderService : Service() {
     }
 
     private fun handleSave(requestedMinutes: Int) {
-        AnalyticsProvider.get().trackSaveTriggered(requestedMinutes)
         // Dispatched off this Service's main thread for the same ANR reason as
         // stopServiceCompletely(): ExportEngine.export() is blocking I/O (ring buffer copy-out is
         // already bounded/off-thread by the time it gets here, but the WAV encode + MediaStore
@@ -415,15 +403,9 @@ class RecorderService : Service() {
             when (result) {
                 is ExportState.Success -> {
                     Log.i(TAG, "handleSave(): wrote ${result.displayName} (${result.bytesWritten} bytes)")
-                    AnalyticsProvider.get().trackSaveCompleted(
-                        durationMinutes = requestedMinutes,
-                        format = "m4a",
-                        fileSizeBytes = result.bytesWritten.toLong(),
-                    )
                 }
                 is ExportState.Error -> {
                     Log.w(TAG, "handleSave(): export failed (${result.reason}): ${result.message}")
-                    AnalyticsProvider.get().trackError(result.reason.name, result.message)
                 }
                 else -> Unit
             }
@@ -643,7 +625,6 @@ class RecorderService : Service() {
             _engine = AudioCaptureEngine(config = newConfig)
             attachEngineForwarding(_engine)
             _bufferDurationMinutesFlow.value = newBufferDurationMinutes
-            AnalyticsProvider.get().trackRetentionWindowChanged(newBufferDurationMinutes)
             return true
         }
     }

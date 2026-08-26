@@ -10,8 +10,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
-      Privacy invariant: Audio Blackbox contains zero advertisements and does not track users.
-      Firebase Analytics is used strictly for coarse operational metrics (see AnalyticsTracker.kt).
+      Privacy invariant: Audio Blackbox is 100% offline, contains zero network egress, zero tracking, and zero advertisements.
     -->
 
     <!--
