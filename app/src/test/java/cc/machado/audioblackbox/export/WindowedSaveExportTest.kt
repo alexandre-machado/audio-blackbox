@@ -28,9 +28,10 @@ import org.junit.Test
  *
  * ## What this class does *not* prove, and where that gap actually lives
  * The intent -> `RecorderService.onStartCommand` -> `handleSave()` -> `exportEngine.export(...)`
- * wiring is untested by this class. Issue #121 retired the dashboard's 5/15/30-minute selector and
- * its `EXTRA_WINDOW_MINUTES` extra: `handleSave()` now always requests the full configured
- * capacity and labels the result via `RecorderService.resolveSavedMinutes`, pinned separately by
+ * wiring is untested by this class. Issue #121 retired the dashboard's 5/15/30-minute selector, so
+ * `ACTION_SAVE` no longer carries a requested window at all: `handleSave()` now always requests
+ * the full configured capacity and labels the result via `RecorderService.resolveSavedMinutes`
+ * (and, for a sub-minute save, `resolveSavedSeconds` -- issue #129), pinned separately by
  * `RecorderServiceSaveLabelTest` (the oracle) and `InterruptionSpliceTest`/the instrumented suite
  * (the real dispatch). This class keeps proving the lower-level fact those tests build on: a
  * requested window in minutes that exceeds what is buffered clamps to what is actually buffered,

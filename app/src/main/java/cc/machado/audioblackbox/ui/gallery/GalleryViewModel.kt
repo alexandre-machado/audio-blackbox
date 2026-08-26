@@ -168,7 +168,12 @@ class GalleryViewModel(
 
         // Matches ExportEngine.filenameFor's own pattern -- see RecordingItem.capturedAtMillis's
         // doc for why the filename, not MediaStore's DATE_ADDED, is preferred when it parses.
-        private val FILENAME_REGEX = Regex("""^blackbox_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_\d+min\.\w+$""")
+        // `\d+(?:min|s)` (not just `\d+min`) since issue #129's follow-up: a sub-minute save now
+        // names its file `..._45s.m4a` instead of the misleadingly-useless `..._0min.m4a` (see
+        // ExportEngine.filenameFor's secondsLabel doc) -- this regex only anchors on the suffix
+        // shape to find the timestamp group, so both forms must keep matching or every sub-minute
+        // recording would silently fall back to DATE_ADDED sorting instead of its real capture time.
+        private val FILENAME_REGEX = Regex("""^blackbox_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_\d+(?:min|s)\.\w+$""")
 
         /** Pure oracle for "does this filename carry a capture timestamp, and if so, what is it"
          * -- `null` on any row whose name doesn't match [FILENAME_REGEX] or whose captured

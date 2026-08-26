@@ -57,4 +57,25 @@ class RecorderServiceSaveLabelTest {
         // to more minutes than the export itself will ever actually request.
         assertEquals(30, RecorderService.resolveSavedMinutes(bufferedMillis = 45 * 60_000L, capacityMinutes = 30))
     }
+
+    // ---- resolveSavedSeconds (issue #129 follow-up: the sub-minute filename/label oracle) ----
+
+    @Test
+    fun `resolveSavedSeconds floors an empty buffer to 0`() {
+        assertEquals(0, RecorderService.resolveSavedSeconds(bufferedMillis = 0L))
+    }
+
+    @Test
+    fun `resolveSavedSeconds floors a sub-minute buffer to whole seconds, never rounding up`() {
+        // 45.9s buffered must floor to 45, not round to 46.
+        assertEquals(45, RecorderService.resolveSavedSeconds(bufferedMillis = 45_900L))
+    }
+
+    @Test
+    fun `resolveSavedSeconds clamps a full-minute-or-more reading to 59, never to 60`() {
+        // 60s must never render as "60s" (that would just be the 1min case misrepresented as
+        // seconds); this is a defensive clamp -- callers are only expected to invoke this once
+        // resolveSavedMinutes has already resolved to 0.
+        assertEquals(59, RecorderService.resolveSavedSeconds(bufferedMillis = 60_000L))
+    }
 }

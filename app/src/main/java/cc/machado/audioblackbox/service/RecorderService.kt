@@ -377,7 +377,13 @@ class RecorderService : Service() {
      * for why the label is computed from what's actually buffered at dispatch time instead. */
     private fun handleSave() {
         val requestedMinutes = captureConfig.bufferDurationMinutes
-        val savedMinutes = resolveSavedMinutes(engine.bufferedDurationMillis() ?: 0L, requestedMinutes)
+        val bufferedMillis = engine.bufferedDurationMillis() ?: 0L
+        val savedMinutes = resolveSavedMinutes(bufferedMillis, requestedMinutes)
+        // Sub-minute save (issue #129 follow-up): a floored `0min` filename never overstates, but
+        // for an evidentiary product it is useless for telling a 45s clip apart from an empty one
+        // later. Only computed/used when savedMinutes is genuinely 0 -- see resolveSavedSeconds's
+        // doc and ExportEngine.filenameFor's secondsLabel parameter.
+        val savedSeconds = if (savedMinutes == 0) resolveSavedSeconds(bufferedMillis) else null
         // Dispatched off this Service's main thread for the same ANR reason as
         // stopServiceCompletely(): ExportEngine.export() is blocking I/O (ring buffer copy-out is
         // already bounded/off-thread by the time it gets here, but the WAV encode + MediaStore
@@ -395,6 +401,7 @@ class RecorderService : Service() {
             val result = exportEngine.export(
                 durationMillis = requestedMinutes.toLong() * MILLIS_PER_MINUTE,
                 minutesLabel = savedMinutes,
+                secondsLabel = savedSeconds,
             )
             when (result) {
                 is ExportState.Success -> {
@@ -468,6 +475,19 @@ class RecorderService : Service() {
          */
         fun resolveSavedMinutes(bufferedMillis: Long, capacityMinutes: Int): Int =
             (bufferedMillis / MILLIS_PER_MINUTE).toInt().coerceIn(0, capacityMinutes)
+
+        /**
+         * The whole-seconds label for a sub-minute save (issue #129 follow-up): both
+         * [handleSave]'s exported filename and [cc.machado.audioblackbox.service.RecorderNotification.saveActionLabel]
+         * call this -- never re-derive it independently -- so the two surfaces can't drift apart
+         * on this narrower case the same way [resolveSavedMinutes] already guarantees for the
+         * whole-minutes case. Only meaningful (and only ever called) when [resolveSavedMinutes]
+         * itself resolved to `0`; floors to whole seconds and clamps to `0..59` so it can never
+         * read `60s` (which would just be the `1min` case misrepresented) nor overstate a
+         * momentarily stale reading.
+         */
+        fun resolveSavedSeconds(bufferedMillis: Long): Int =
+            (bufferedMillis / 1000L).coerceIn(0L, 59L).toInt()
 
         // Built from PreloadedRetentionWindow.minutes (issue #45), not the bare
         // AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES constant: AudioBlackboxApplication.onCreate
@@ -594,8 +614,8 @@ class RecorderService : Service() {
             Intent(context, RecorderService::class.java).setAction(ACTION_STOP_FORWARD)
 
         /** Issue #121 retired the dashboard's 5/15/30-minute window selector: `ACTION_SAVE` no
-         * longer carries a requested window (the old `EXTRA_WINDOW_MINUTES` extra is gone) --
-         * every Save, from the dashboard or the notification, means exactly the same thing:
+         * longer carries a requested window at all -- every Save, from the dashboard or the
+         * notification, means exactly the same thing:
          * "export everything currently buffered". [handleSave] still requests the full configured
          * capacity from [cc.machado.audioblackbox.export.ExportEngine]; that engine clamps it down
          * to what is genuinely buffered if the buffer has not filled yet (see

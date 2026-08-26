@@ -173,7 +173,11 @@ object RecorderNotification {
         return if (savedMinutes > 0) {
             context.getString(R.string.recorder_notification_action_save, savedMinutes)
         } else {
-            val savedSeconds = (bufferedDurationMillis / 1000L).coerceIn(0L, 59L).toInt()
+            // Same oracle RecorderService.handleSave()'s exported filename now uses for this same
+            // sub-minute case (issue #129 follow-up) -- calling it here too, rather than
+            // re-deriving the seconds arithmetic locally, is what keeps the notification and the
+            // filename from being able to drift apart on this narrower case.
+            val savedSeconds = RecorderService.resolveSavedSeconds(bufferedDurationMillis)
             context.getString(R.string.recorder_notification_action_save_seconds, savedSeconds)
         }
     }

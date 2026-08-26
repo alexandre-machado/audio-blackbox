@@ -35,6 +35,15 @@ class GalleryMappingTest {
         assertNull(GalleryViewModel.parseCapturedAtMillis("blackbox_totally-wrong-shape.m4a"))
     }
 
+    @Test
+    fun `parseCapturedAtMillis reads a sub-minute seconds-suffixed filename the same way -- issue #129 follow-up`() {
+        // ExportEngine.filenameFor names a sub-minute save "..._45s.m4a" instead of "..._0min.m4a"
+        // (see its secondsLabel doc); the gallery must keep parsing the real capture timestamp out
+        // of these names too, not silently fall back to DATE_ADDED for every sub-minute recording.
+        val millis = GalleryViewModel.parseCapturedAtMillis("blackbox_2026-08-25_09-05-30_45s.m4a")
+        assertNotNullAndMatches(millis, year = 2026, month = 8, day = 25, hour = 9, minute = 5, second = 30)
+    }
+
     private fun assertNotNullAndMatches(
         millis: Long?,
         year: Int,
