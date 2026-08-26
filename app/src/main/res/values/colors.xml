@@ -1,12 +1,8 @@
 <resources>
     <!--
-      App icon background (issue #75). The foreground is now a raster PNG
-      traced from docs/design/icon/icon.1.jpg (see
-      app/src/main/res/drawable-*dpi/ic_launcher_foreground.png and
-      docs/design/icon/README.md); its background was keyed out by border
-      flood fill down to the artwork's own white, so this background layer
-      is set to match it exactly, otherwise the foreground's square edge
-      would show as a visible seam against a different background colour.
+      App icon background. The foreground is a cleanly isolated, transparent
+      raster PNG of the Flight Recorder hardware. A dark surface tone (#141418)
+      provides contrast and matches modern Material 3 dark themes.
     -->
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#141418</color>
 </resources>
