@@ -27,16 +27,14 @@ import org.junit.Test
  * is), not read back from any production formula.
  *
  * ## What this class does *not* prove, and where that gap actually lives
- * The intent -> `RecorderService.onStartCommand` -> `handleSave(requestedMinutes)` ->
- * `exportEngine.export(...)` wiring issue #40 item 1 introduced -- i.e. that a real `ACTION_SAVE`
- * Intent carrying `RecorderService.EXTRA_WINDOW_MINUTES` actually reaches this same
- * [ExportEngine]/[RingBuffer] collaboration with the right value -- is untested by this class and,
- * as far as this PR goes, untested anywhere else either. Closing that gap needs either
- * `RecorderService`'s Service-hosted logic to be reachable from a plain unit test (a production
- * seam this PR does not introduce) or an instrumented test dispatching a real `Intent` -- the
- * latter was deliberately not attempted in this PR (per `@techlead`'s adjudication): the smallest
- * window this app supports is 5 minutes of real time, a poor fit for CI, and worth deciding on
- * separately rather than improvising here.
+ * The intent -> `RecorderService.onStartCommand` -> `handleSave()` -> `exportEngine.export(...)`
+ * wiring is untested by this class. Issue #121 retired the dashboard's 5/15/30-minute selector and
+ * its `EXTRA_WINDOW_MINUTES` extra: `handleSave()` now always requests the full configured
+ * capacity and labels the result via `RecorderService.resolveSavedMinutes`, pinned separately by
+ * `RecorderServiceSaveLabelTest` (the oracle) and `InterruptionSpliceTest`/the instrumented suite
+ * (the real dispatch). This class keeps proving the lower-level fact those tests build on: a
+ * requested window in minutes that exceeds what is buffered clamps to what is actually buffered,
+ * never pads or errors.
  */
 class WindowedSaveExportTest {
 

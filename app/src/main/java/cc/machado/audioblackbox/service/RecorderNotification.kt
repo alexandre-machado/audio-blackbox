@@ -132,7 +132,7 @@ object RecorderNotification {
             .setContentIntent(contentIntent)
             .addAction(
                 0,
-                context.getString(R.string.recorder_notification_action_save, capacityMinutes),
+                saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes),
                 saveIntent,
             )
 
@@ -152,6 +152,30 @@ object RecorderNotification {
 
         builder.addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
         return builder.build()
+    }
+
+    /**
+     * Issue #121's mislabel fix: names what a tap right now would actually save, not the
+     * configured retention window -- [RecorderService.resolveSavedMinutes] is the same oracle
+     * [cc.machado.audioblackbox.ui.dashboard.DashboardViewModel]'s Save button description uses,
+     * so the two surfaces can never disagree about which quantity "N min" refers to.
+     * [PeriodicNotificationRefresher] keeps this within its tick cadence of the real buffered
+     * amount while recording.
+     *
+     * Floors to whole minutes for the common case (a compact notification action has no room for
+     * mm:ss precision), but never renders the "0 min" issue #129 flagged as misleading: once
+     * something is buffered but not yet a full minute, this switches to whole seconds instead --
+     * still floored, so it never overstates either. An empty buffer (0 ms, 0 s) is the one case
+     * where "0" is simply true, not a mislabel.
+     */
+    private fun saveActionLabel(context: Context, bufferedDurationMillis: Long, capacityMinutes: Int): String {
+        val savedMinutes = RecorderService.resolveSavedMinutes(bufferedDurationMillis, capacityMinutes)
+        return if (savedMinutes > 0) {
+            context.getString(R.string.recorder_notification_action_save, savedMinutes)
+        } else {
+            val savedSeconds = (bufferedDurationMillis / 1000L).coerceIn(0L, 59L).toInt()
+            context.getString(R.string.recorder_notification_action_save_seconds, savedSeconds)
+        }
     }
 
     private fun actionPendingIntent(context: Context, action: String, requestCode: Int): PendingIntent {
