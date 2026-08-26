@@ -30,6 +30,8 @@ Audio Blackbox was built with a fundamental commitment to privacy: **your audio 
 1. `RECORD_AUDIO`: Required to capture ambient audio into the rolling buffer.
 2. `POST_NOTIFICATIONS`: Required on Android 13+ to display a persistent foreground service notification while recording is actively running, ensuring you always know when audio capture is in progress.
 3. `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MICROPHONE`: Required on modern Android versions to allow the rolling buffer to remain active in RAM while using other apps or with the screen turned off.
+4. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: Lets the app ask the system not to suspend or throttle the background recording service to save battery, so the rolling buffer keeps running reliably while the app is not in the foreground.
+5. `RECEIVE_BOOT_COMPLETED`: Lets the app detect a device restart or app update. Audio Blackbox does **not** automatically resume recording on boot; it only posts a notification prompting you to tap and resume recording if it was active before the restart. Capture never starts without that explicit tap.
 
 ---
 
@@ -59,7 +61,6 @@ If this Privacy Policy is updated, the revised version will be published in this
 Audio Blackbox is open source. You can inspect the code and verify our privacy guarantees at:  
 [https://github.com/alexandre-machado/audio-blackbox](https://github.com/alexandre-machado/audio-blackbox)
 
----
 ---
 
 # Política de Privacidade do Audio Blackbox (pt-BR)
@@ -94,6 +95,8 @@ O Audio Blackbox foi desenvolvido com um compromisso fundamental com a privacida
 1. `RECORD_AUDIO`: Necessária para capturar o áudio ambiente no buffer circular.
 2. `POST_NOTIFICATIONS`: Necessária no Android 13+ para exibir uma notificação persistente de serviço em primeiro plano enquanto a gravação está ativa, garantindo que você sempre saiba quando a captura de áudio está em andamento.
 3. `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MICROPHONE`: Necessária nas versões modernas do Android para permitir que o buffer circular permaneça ativo na RAM enquanto você usa outros aplicativos ou com a tela desligada.
+4. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: Permite que o app solicite ao sistema que não suspenda nem limite o serviço de gravação em segundo plano para economizar bateria, mantendo o buffer circular funcionando de forma confiável enquanto o app não está em primeiro plano.
+5. `RECEIVE_BOOT_COMPLETED`: Permite que o app detecte uma reinicialização do dispositivo ou uma atualização do aplicativo. O Audio Blackbox **não** retoma a gravação automaticamente ao reiniciar; ele apenas exibe uma notificação convidando você a tocar para retomar a gravação, caso ela estivesse ativa antes da reinicialização. A captura nunca é iniciada sem esse toque explícito.
 
 ---
 
