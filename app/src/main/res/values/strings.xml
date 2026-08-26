@@ -192,4 +192,8 @@
     <string name="notification_resume_content">Recording was active before the device restarted.</string>
     <string name="notification_resume_action_resume">Resume recording</string>
     <string name="notification_resume_action_dismiss">Dismiss</string>
+
+    <!-- About / App Version section -->
+    <string name="settings_about_title">About</string>
+    <string name="settings_version_label">Version %1$s</string>
 </resources>
