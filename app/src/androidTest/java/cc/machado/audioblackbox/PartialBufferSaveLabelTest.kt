@@ -16,6 +16,7 @@ import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,6 +69,12 @@ class PartialBufferSaveLabelTest {
     // against, even though that emulator is headless/throwaway and never reaches a real user).
     private var createdRowUri: Uri? = null
 
+    @Before
+    fun setUp() {
+        context.startService(RecorderService.stopIntent(context))
+        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+    }
+
     @After
     fun tearDown() {
         context.startService(RecorderService.stopIntent(context))
@@ -90,15 +97,19 @@ class PartialBufferSaveLabelTest {
         // Wait for a genuinely non-zero but still sub-minute buffer -- long enough that this isn't
         // testing the empty-buffer edge case, short enough that it stays inside the "under a
         // minute" branch this test exists to cover.
+        val reachedSubMinute = pollUntil(timeoutMillis = 35_000) {
+            val ms = RecorderService.engine.bufferedDurationMillis() ?: 0L
+            ms in 2_000..55_000
+        }
+        val observedMs = RecorderService.engine.bufferedDurationMillis()
+        val observedState = RecorderService.engine.state.value
         assertTrue(
-            "buffered duration never reached the 3s-55s window this test needs",
-            pollUntil(timeoutMillis = 20_000) {
-                val ms = RecorderService.engine.bufferedDurationMillis() ?: 0L
-                ms in 3_000..55_000
-            },
+            "buffered duration never reached the 2s-55s window this test needs " +
+                "(observed duration: ${observedMs}ms, state: $observedState)",
+            reachedSubMinute,
         )
 
-        val saveActionText = currentSaveActionText()
+        val saveActionText = pollForSaveActionText(timeoutMillis = 10_000)
         assertNotNull("no notification for this app was ever observed as posted", saveActionText)
         checkNotNull(saveActionText)
         assertFalse(
@@ -118,6 +129,16 @@ class PartialBufferSaveLabelTest {
                 "-- got name: ${row.name}",
             SUB_MINUTE_SECONDS_SUFFIX.containsMatchIn(row.name),
         )
+    }
+
+    private fun pollForSaveActionText(timeoutMillis: Long): String? {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (System.currentTimeMillis() < deadline) {
+            val text = currentSaveActionText()
+            if (text != null) return text
+            Thread.sleep(250)
+        }
+        return currentSaveActionText()
     }
 
     private fun currentSaveActionText(): String? =

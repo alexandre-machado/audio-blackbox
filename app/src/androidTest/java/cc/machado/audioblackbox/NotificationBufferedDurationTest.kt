@@ -13,6 +13,7 @@ import cc.machado.audioblackbox.service.RecorderService
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,6 +61,12 @@ class NotificationBufferedDurationTest {
 
     private val notificationManager
         get() = context.getSystemService(NotificationManager::class.java)
+
+    @Before
+    fun setUp() {
+        context.startService(RecorderService.stopIntent(context))
+        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+    }
 
     @After
     fun tearDown() {
