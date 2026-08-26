@@ -54,7 +54,7 @@ internal fun HarnessApp(
                 Destination.DASHBOARD -> DashboardScreen(
                     uiState = dashboardUiState,
                     onToggleEngine = {},
-                    onSelectWindow = {},
+                    onSaveRecent = {},
                     onDismissSaveNotice = {},
                     onStartForwardRecording = {},
                     onStopForwardRecording = {},
