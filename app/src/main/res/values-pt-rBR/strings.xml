@@ -189,4 +189,8 @@
     <string name="notification_resume_content">O gravador estava ativo antes do dispositivo reiniciar.</string>
     <string name="notification_resume_action_resume">Retomar gravação</string>
     <string name="notification_resume_action_dismiss">Ignorar</string>
+
+    <!-- Seção Sobre / Versão do app -->
+    <string name="settings_about_title">Sobre</string>
+    <string name="settings_version_label">Versão %1$s</string>
 </resources>

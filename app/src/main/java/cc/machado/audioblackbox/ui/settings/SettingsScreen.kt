@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cc.machado.audioblackbox.BuildConfig
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
@@ -75,6 +76,7 @@ fun SettingsScreen(
     onCancelRetentionWindowChange: () -> Unit,
     onAcknowledgeClampNotice: () -> Unit,
     modifier: Modifier = Modifier,
+    versionName: String = BuildConfig.VERSION_NAME,
 ) {
     Column(
         modifier = modifier
@@ -90,6 +92,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement, onApply)
+        AboutSection(versionName = versionName)
     }
     uiState.retentionStepper.pendingConfirmationMinutes?.let { pendingMinutes ->
         RetentionDiscardDialog(
@@ -186,6 +189,35 @@ private fun RetentionStepperSection(
             ) {
                 Text(text = stringResource(R.string.settings_retention_apply_button))
             }
+        }
+    }
+}
+
+/**
+ * About section displaying the app version.
+ */
+@Composable
+private fun AboutSection(
+    modifier: Modifier = Modifier,
+    versionName: String = BuildConfig.VERSION_NAME,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_about_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.settings_version_label, versionName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
