@@ -7,11 +7,21 @@ data that ships (or, for the not-shipped candidates, that is kept as
 documented prior art) and rasterising it with cairosvg + Pillow — the only
 two imaging libraries available in this environment (issue #56, issue #60).
 
+How to run
+----------
+Neither cairosvg nor Pillow is guaranteed to be preinstalled on the system
+Python (it wasn't, in the environment this was written in). Run from the
+repo root with `uv` pinned to the exact versions the committed PNGs were
+rendered with, so re-running this script reproduces them rather than
+drifting to whatever cairosvg/Pillow happen to resolve to later — see
+docs/design/icon/README.md's "How to regenerate these renders" section for
+the exact pinned command.
+
 Why this file exists now and didn't before (issue #60)
 --------------------------------------------------------
 The previous renders (PR #58) were produced by a one-off script that was
 never committed. That script (or its author, manually) built SVG <path>
-elements from VectorDraward pathData without carrying across
+elements from VectorDrawable pathData without carrying across
 `android:fillType="evenOdd"` as `fill-rule="evenodd"` on the SVG side. SVG's
 default fill-rule is `nonzero`, so a path with two subpaths that are meant to
 punch a hole in each other (the accent-band groove, see
@@ -305,7 +315,11 @@ def assert_groove_present(foreground_xml: Path, color_map: dict[str, str], label
     def sample(x_dp: float) -> tuple[int, int, int, int]:
         return layer.getpixel((int(round(x_dp * scale)), y_px))
 
-    # Find the accent band's left edge by scanning outward from center.
+    # Find the first accent-coloured pixel on this scanline by scanning
+    # left-to-right from the canvas edge (x_dp=0), not outward from center;
+    # since the accent band is the only accent-coloured region on this
+    # scanline, the first hit is its left edge (to sub-dp precision, refined
+    # below).
     accent_x = None
     for x_dp_tenth in range(int(CANVAS_DP * 10)):
         x_dp = x_dp_tenth / 10.0

@@ -119,6 +119,16 @@ Fixed in `scripts/design/render_icon_previews.py`, now actually committed instea
 
 `docs/design/store/ic_launcher_store_512.png` (the currently shipped store icon, derived from `icon.1.jpg`'s own raster pixels per issue #75) and the `icon1_variant*.png` previews are untouched by this fix: they never went through VectorDrawable/SVG conversion or `fill-rule` at all, so `evenOdd` handling doesn't apply to them.
 
+#### How to regenerate these renders
+
+`cairosvg` and Pillow are not guaranteed to be preinstalled on the system Python — they weren't in the environment this script was written in, and `pip install` was not an option there (sandboxed). Regenerate from the repo root with:
+
+```
+uv run --with cairosvg==2.9.0 --with pillow==12.3.0 python scripts/design/render_icon_previews.py
+```
+
+**Why pinned, not `--with cairosvg --with pillow`:** the PNGs this script writes are committed evidence, not build output regenerated on every CI run — the whole point of fixing issue #60 was that this pipeline has to be reproducible on demand, not just once. An unpinned `uv run` re-resolves to whatever the latest `cairosvg`/`pillow` are at run time; a later minor-version change to either library's rasterisation or anti-aliasing could silently shift pixels without anyone noticing until the next `@rev`-style manual pixel check. `2.9.0`/`12.3.0` are the exact versions this script was run with to produce the PNGs currently committed in this directory and in `docs/design/store/`; re-running with those exact versions reproduces them byte-for-byte (verified: `git status --porcelain` on both directories is empty after a pinned re-run). Bump these two version pins deliberately, in the same commit as the PNGs they produce, if `cairosvg`/`pillow` ever need to move — never silently.
+
 ## Issue #75: `icon.1` ships after all
 
 The repo owner saw `icon.1.jpg` running on their own S25 (via an experimental branch, `experiment/icon-1-jpg`, built by `@techlead` for that one purpose) and asked for it to be adopted as the shipped launcher icon, reversing the "Two rejected references" decision above. The technical objections recorded above are all still true — none of them stopped being true — the owner simply decided that reading as the actual product photo outweighs them. That is a product-identity call the owner is entitled to make, and it is recorded here rather than silently overwriting the earlier reasoning, so a future reader sees both the original "why not" and the later "why anyway" instead of a document that looks like the rejection never happened.
