@@ -65,13 +65,17 @@ class NotificationBufferedDurationTest {
     @Before
     fun setUp() {
         context.startService(RecorderService.stopIntent(context))
-        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+        pollUntil(timeoutMillis = 15_000) {
+            RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+        }
     }
 
     @After
     fun tearDown() {
         context.startService(RecorderService.stopIntent(context))
-        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+        pollUntil(timeoutMillis = 15_000) {
+            RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+        }
     }
 
     @Test
@@ -117,24 +121,26 @@ class NotificationBufferedDurationTest {
             ?.toString()
 
     private fun pollForNonNullText(timeoutMillis: Long): String? {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (System.currentTimeMillis() < deadline) {
-            val text = currentPostedText()
-            if (text != null) return text
-            Thread.sleep(250)
+        var text: String? = null
+        pollUntil(timeoutMillis = timeoutMillis) {
+            text = currentPostedText()
+            text != null
         }
-        return currentPostedText()
+        return text
     }
 
     private fun waitForTextChange(previous: String?, timeoutMillis: Long): String? {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (System.currentTimeMillis() < deadline) {
+        var changed: String? = null
+        pollUntil(timeoutMillis = timeoutMillis, intervalMillis = 500) {
             val current = currentPostedText()
-            if (current != null && current != previous) return current
-            Thread.sleep(500)
+            if (current != null && current != previous) {
+                changed = current
+                true
+            } else {
+                false
+            }
         }
-        val last = currentPostedText()
-        return if (last != null && last != previous) last else null
+        return changed
     }
 
     private fun pollUntil(timeoutMillis: Long, intervalMillis: Long = 250, condition: () -> Boolean): Boolean {

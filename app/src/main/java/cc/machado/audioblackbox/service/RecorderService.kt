@@ -149,6 +149,7 @@ class RecorderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        _isServiceRunning.value = true
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         focusTracker = AudioFocusTracker(audioManager)
         RecorderNotification.ensureChannel(this)
@@ -297,6 +298,7 @@ class RecorderService : Service() {
             }
         }
         serviceScope.cancel()
+        _isServiceRunning.value = false
         super.onDestroy()
     }
 
@@ -577,6 +579,9 @@ class RecorderService : Service() {
         // `captureState` exists above instead of a plain `engine.state` reference.
         private val _bufferDurationMinutesFlow = MutableStateFlow(_captureConfig.bufferDurationMinutes)
         val bufferDurationMinutesFlow: StateFlow<Int> = _bufferDurationMinutesFlow.asStateFlow()
+
+        private val _isServiceRunning = MutableStateFlow(false)
+        val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
 
         // Public mirror of captureConfig.bufferDurationMinutes (issue #40 item 3 -- `@rev` finding
         // on issue #6): DashboardViewModel used to default its own capacityMinutes to the bare

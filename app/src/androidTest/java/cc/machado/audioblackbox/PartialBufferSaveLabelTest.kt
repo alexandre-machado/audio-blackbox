@@ -72,13 +72,17 @@ class PartialBufferSaveLabelTest {
     @Before
     fun setUp() {
         context.startService(RecorderService.stopIntent(context))
-        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+        pollUntil(timeoutMillis = 15_000) {
+            RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+        }
     }
 
     @After
     fun tearDown() {
         context.startService(RecorderService.stopIntent(context))
-        pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Idle }
+        pollUntil(timeoutMillis = 15_000) {
+            RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+        }
         createdRowUri?.let { uri ->
             context.contentResolver.delete(uri, null, null)
         }
