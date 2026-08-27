@@ -249,10 +249,7 @@ class RecorderService : Service() {
             // dashboard's and the notification's own ACTION_SAVE dispatch the exact same bare
             // Intent now, so there is no extra left to read here.
             ACTION_SAVE -> handleSave()
-            ACTION_START_FORWARD -> {
-                val startFromOldest = intent?.getBooleanExtra(EXTRA_START_FROM_OLDEST, false) ?: false
-                handleStartForward(startFromOldest)
-            }
+            ACTION_START_FORWARD -> handleStartForward()
             ACTION_STOP_FORWARD -> handleStopForward()
             null -> stopServiceCompletely() // OS-initiated restart: see START_NOT_STICKY note below.
             else -> Unit // unrecognized action: notification above already covers it, nothing to do.
@@ -350,7 +347,7 @@ class RecorderService : Service() {
         }
     }
 
-    private fun handleStartForward(startFromOldest: Boolean) {
+    private fun handleStartForward() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -361,7 +358,7 @@ class RecorderService : Service() {
             handleStart()
         }
         serviceScope.launch(Dispatchers.Default) {
-            forwardRecordingEngine.start(startFromOldest = startFromOldest)
+            forwardRecordingEngine.start()
         }
     }
 
@@ -461,7 +458,6 @@ class RecorderService : Service() {
         const val ACTION_SAVE = "cc.machado.audioblackbox.service.action.SAVE"
         const val ACTION_START_FORWARD = "cc.machado.audioblackbox.service.action.START_FORWARD"
         const val ACTION_STOP_FORWARD = "cc.machado.audioblackbox.service.action.STOP_FORWARD"
-        const val EXTRA_START_FROM_OLDEST = "cc.machado.audioblackbox.service.extra.START_FROM_OLDEST"
 
         /**
          * The minute label a Save should carry -- for the exported file's name ([handleSave]) and
@@ -610,10 +606,9 @@ class RecorderService : Service() {
         fun stopIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_STOP)
 
-        fun startForwardIntent(context: Context, startFromOldest: Boolean = false): Intent =
+        fun startForwardIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java)
                 .setAction(ACTION_START_FORWARD)
-                .putExtra(EXTRA_START_FROM_OLDEST, startFromOldest)
 
         fun stopForwardIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_STOP_FORWARD)

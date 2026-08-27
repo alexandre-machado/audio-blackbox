@@ -132,7 +132,7 @@ class ForwardRecordingEngineTest {
             writerFactory = { target, cfg -> FakeStreamingAudioWriter(target, cfg).also { createdWriter = it } },
         )
 
-        val startResult = engine.start(startFromOldest = true)
+        val startResult = engine.start()
         assertTrue("start should transition to Recording", startResult is ForwardRecordingState.Recording)
 
         val pcm2 = ByteArray(1600) { (it % 128).toByte() }
@@ -147,6 +147,49 @@ class ForwardRecordingEngineTest {
         assertTrue("target must be finished", sink.lastTarget?.finished == true)
         assertTrue("target must be closed", sink.lastTarget?.closed == true)
         assertTrue("writer must be finished", createdWriter?.isFinished == true)
+    }
+
+    @Test
+    fun `start always drains the retained past, producing a recording longer than the live-only elapsed audio`() {
+        // Issue #139 regression pin: forward recording has exactly one mode now -- it always
+        // drains whatever the ring buffer already retains before continuing live. A regression
+        // back to forward-only (dropping the oldest-cursor drain silently) would make the
+        // resulting file's byte count converge on exactly the live-only bytes below instead of
+        // exceeding them.
+        val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1)
+        val buffer = RingBuffer(capacityBytes = 80_000, bytesPerSecond = config.bytesPerSecond)
+
+        // Audio already retained in the ring buffer before this forward session ever starts --
+        // the "past" a forward-only session would never have captured.
+        val pastPcm = ByteArray(6400) { (it % 128).toByte() }
+        buffer.write(pastPcm)
+
+        val sink = FakeStreamingSink()
+        val engine = createEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
+            writeCursorProvider = { buffer.writeCursor() },
+            oldestCursorProvider = { buffer.oldestCursor() },
+            sink = sink,
+        )
+
+        val startResult = engine.start()
+        assertTrue("start should transition to Recording", startResult is ForwardRecordingState.Recording)
+
+        // Audio written live, after start() already returned -- what a forward-only session would
+        // have captured on its own.
+        val livePcm = ByteArray(3200) { (it % 128).toByte() }
+        buffer.write(livePcm)
+
+        val stopResult = engine.stop()
+        assertTrue("stop should transition to Success: $stopResult", stopResult is ForwardRecordingState.Success)
+        val bytesWritten = (stopResult as ForwardRecordingState.Success).bytesWritten
+
+        assertTrue(
+            "recording ($bytesWritten bytes) must be longer than the live-only audio " +
+                "(${livePcm.size} bytes) -- forward recording must always include the retained past",
+            bytesWritten > livePcm.size,
+        )
     }
 
     @Test

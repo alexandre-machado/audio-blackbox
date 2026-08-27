@@ -43,7 +43,6 @@ class DashboardViewModelForwardRecordingTest {
     fun `startForwardRecording dispatches when forward recording is idle`() {
         val forwardState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
         var startDispatched = false
-        var startFromOldestArg = false
 
         val viewModel = DashboardViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
@@ -52,16 +51,12 @@ class DashboardViewModelForwardRecordingTest {
             exportState = MutableStateFlow(ExportState.Idle),
             forwardRecordingState = forwardState,
             audioConfigProvider = { AudioConfig() },
-            onStartForwardRecording = { startFromOldest ->
-                startDispatched = true
-                startFromOldestArg = startFromOldest
-            },
+            onStartForwardRecording = { startDispatched = true },
             onStopForwardRecording = {},
         )
 
-        viewModel.startForwardRecording(startFromOldest = false)
+        viewModel.startForwardRecording()
         assertTrue("startForwardRecording should invoke onStartForwardRecording callback", startDispatched)
-        assertFalse("startFromOldest should be false", startFromOldestArg)
     }
 
     @Test
@@ -82,7 +77,7 @@ class DashboardViewModelForwardRecordingTest {
             onStopForwardRecording = {},
         )
 
-        viewModel.startForwardRecording(startFromOldest = false)
+        viewModel.startForwardRecording()
         assertFalse("startForwardRecording should be ignored if already recording", startDispatched)
     }
 

@@ -49,7 +49,7 @@
     <string name="recorder_notification_forward_recording">Gravação ao vivo: %1$s</string>
     <string name="recorder_notification_forward_success">Gravação ao vivo salva: %1$s</string>
     <string name="recorder_notification_forward_error">Falha na gravação ao vivo</string>
-    <string name="recorder_notification_action_start_forward">Gravar para frente</string>
+    <string name="recorder_notification_action_start_forward">Gravar tudo</string>
     <string name="recorder_notification_action_stop_forward">Parar gravação ao vivo</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
@@ -87,7 +87,6 @@
     <string name="dashboard_buffer_status_cd">Buffer de áudio: %1$s de %2$s em memória</string>
     <string name="dashboard_buffer_full_notice">Buffer cheio: gravando por cima do áudio mais antigo</string>
 
-    <string name="dashboard_save_title">Salvar o passado</string>
     <string name="dashboard_save_button">Salvar o passado</string>
     <string name="dashboard_save_explanation_full">Salva todo o áudio em memória (%1$d min) no armazenamento do aparelho.</string>
     <string name="dashboard_save_explanation_partial">Salva o áudio acumulado até agora (%1$s) no armazenamento do aparelho.</string>
@@ -103,10 +102,9 @@
     <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
     <string name="dashboard_save_notice_dismiss">OK</string>
 
-    <!-- Gravação para frente (Ação 2, issue #55) -->
-    <string name="dashboard_forward_title">Gravar para frente</string>
-    <string name="dashboard_forward_explanation">Grave continuamente a partir de agora em um novo arquivo, mantendo o buffer circular ativo.</string>
-    <string name="dashboard_forward_start_button">Iniciar gravação contínua</string>
+    <!-- Gravação para frente (Ação 2, issue #55; agora sempre inclui o passado retido, issue #139) -->
+    <string name="dashboard_forward_explanation">Inicia um novo arquivo com tudo que já está no buffer e continua gravando ao vivo até você parar -- o buffer contínuo continua ativo o tempo todo.</string>
+    <string name="dashboard_forward_start_button">Salvar o passado e seguir gravando</string>
     <string name="dashboard_forward_recording_title">Gravando para frente</string>
     <string name="dashboard_forward_elapsed_label">Tempo decorrido: %1$s</string>
     <string name="dashboard_forward_elapsed_cd">Tempo decorrido da gravação contínua: %1$s</string>

@@ -71,7 +71,6 @@ class AccessibilityStringsTest {
         val ptStrings = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
 
         // English canonical name
-        assertEquals("Save recent audio", enStrings["dashboard_save_title"])
         assertEquals("Save recent audio", enStrings["dashboard_save_button"])
         assertTrue(
             "gallery_empty_body must reference Save recent audio",
@@ -79,7 +78,6 @@ class AccessibilityStringsTest {
         )
 
         // Portuguese canonical name
-        assertEquals("Salvar o passado", ptStrings["dashboard_save_title"])
         assertEquals("Salvar o passado", ptStrings["dashboard_save_button"])
         assertTrue(
             "gallery_empty_body must reference Salvar o passado",
@@ -106,6 +104,38 @@ class AccessibilityStringsTest {
         assertTrue(ptStrings["dashboard_save_explanation_partial"]?.contains(strToken) == true)
         assertTrue(enStrings["dashboard_save_button_cd_partial"]?.contains(strToken) == true)
         assertTrue(ptStrings["dashboard_save_button_cd_partial"]?.contains(strToken) == true)
+    }
+
+    @Test
+    fun forwardRecordingButtonLabelReflectsThatThePastIsIncluded() {
+        val enStrings = loadStringMap("src/main/res/values/strings.xml")
+        val ptStrings = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
+
+        // Issue #139: forward recording always drains the retained past before continuing live,
+        // so the button must say so rather than the old forward-only wording.
+        assertEquals("Save the past and keep recording", enStrings["dashboard_forward_start_button"])
+        assertEquals("Salvar o passado e seguir gravando", ptStrings["dashboard_forward_start_button"])
+    }
+
+    @Test
+    fun saveAndForwardNotificationActionLabelsStayDistinguishableWhenTruncated() {
+        val enStrings = loadStringMap("src/main/res/values/strings.xml")
+        val ptStrings = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
+
+        // Issue #139/#55: the notification action slot is narrow and shows both a Save action and
+        // a Record-everything action side by side -- a wrong tap either loses the moment or starts
+        // an hours-long recording, so the two must read differently even severely truncated.
+        val truncateWidth = 8
+        for (strings in listOf(enStrings, ptStrings)) {
+            val save = strings["recorder_notification_action_save"]?.take(truncateWidth)
+            val forward = strings["recorder_notification_action_start_forward"]?.take(truncateWidth)
+            assertTrue("save label must be present", save != null)
+            assertTrue("forward label must be present", forward != null)
+            assertTrue(
+                "notification Save ('$save') and Record ('$forward') labels must not collide when truncated to $truncateWidth chars",
+                save != forward,
+            )
+        }
     }
 
     @Test
