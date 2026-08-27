@@ -177,3 +177,23 @@ Three variants of the shipped foreground artwork were rendered at a realistic 48
 Both (b) and (c) were produced by masking and colour-patching the source JPEG (sampled-colour fill with a softened mask edge, not a proper paint-out/inpaint), since no image-editing tool beyond PIL was available in this environment — treat them as legibility comparisons, not production-quality retouching.
 
 At 48dp, the lettering is not clearly legible in *any* of the three variants, including (a) as shipped — consistent with the original "Two rejected references" finding above that it's an unreadable smudge at launcher size. The internal shadow band is a small, subtle effect at this size in all three. Given that, (b) and (c) are very likely the better choice long-term (removing an illegible label and a shadow that will visually fight Android's own elevation shadow once the icon actually casts one), but the visual difference at 48dp is genuinely small in these renders, and this is exactly the kind of aesthetic call the brief for this issue says the owner should make, not `@design`. **Recommendation, not a decision**: (b) if the owner wants one incremental cleanup with the least risk of the patch looking obviously edited; otherwise ship (a) as directed and revisit if the lettering ever needs to read at a larger size (e.g. the Play Store listing, where it's still legible).
+
+## Issue #82: Themed-icon monochrome silhouette redrawn with isometric negative space
+
+On physical device testing (Galaxy S25 One UI themed icons), the previous monochrome implementation (#76) was found to render correctly without cropping, but failed to read as the same object as the default coloured icon: flattening the isometric art into four axis-aligned primitives (horizontal base bar, vertical box, horizontal capsule, square nub) destroyed the 3D perspective cues and read as an abstract geometric arrangement.
+
+### Resolution
+
+Per the repo owner's chosen direction (option 2: redraw for the flat medium with native negative space), `ic_launcher_monochrome.xml` was redrawn with clean, bold negative-space seams separating:
+- The chamfered base plate with mounting features.
+- The prominent crash-survivable memory cylinder along the ~30° isometric axis.
+- The upright electronics module with corner bevel seams.
+- The front circular face cap and connector plug.
+
+### Safe Zone Verification
+
+Measuring from the canvas center (54,54):
+- **Maximum radial reach**: **31.38dp**, strictly inside the **33.0dp** guaranteed safe circle radius (66dp diameter).
+- **Mask margin**: ~1.6dp clearance before the safe boundary and ~4.6dp before the 36dp (72dp diameter) absolute mask cutoff.
+- Renders crisp and legibly across both light and dark wallpaper themes at 48dp and 72dp.
+
