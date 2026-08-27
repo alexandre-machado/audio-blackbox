@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.IOException
@@ -138,13 +139,28 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
             // MediaScannerConnection.scanFile against the row's real on-disk path, awaited with a
             // bounded latch rather than a sleep. Never throws -- a failed refresh here must not fail
             // an otherwise-successful recording.
+            //
+            // Every failure path logs at W. Best-effort must not mean invisible: the symptom of this
+            // refresh silently not happening is *exactly* issue #140 -- a saved recording showing the
+            // wrong size in the gallery -- which is indistinguishable from the bug this method exists
+            // to fix. Without these logs a recurrence would be unreportable, since the user sees only
+            // a wrong number and there is nothing on the device to correlate it with. Logcat is the
+            // right channel and the only one: this app deliberately has no network permission and no
+            // analytics (issue #119), so nothing here leaves the device.
             override fun refinalizeMetadata() {
                 try {
                     val dataPath = resolver.query(
                         uri,
                         arrayOf(MediaStore.Audio.Media.DATA),
                         null, null, null,
-                    )?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: return
+                    )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+
+                    if (dataPath == null) {
+                        // The row vanished, or the platform returned no DATA path for it. Either way
+                        // there is nothing to hand the scanner, so SIZE/DURATION stay as they were.
+                        Log.w(TAG, "refinalizeMetadata(): no DATA path for the row, size/duration left stale")
+                        return
+                    }
 
                     val latch = CountDownLatch(1)
                     MediaScannerConnection.scanFile(
@@ -152,10 +168,16 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
                         arrayOf(dataPath),
                         arrayOf(StreamingAacWriter.MIME_TYPE_M4A),
                     ) { _, _ -> latch.countDown() }
-                    latch.await(REFINALIZE_SCAN_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                } catch (_: Exception) {
+                    if (!latch.await(REFINALIZE_SCAN_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                        // The scan may still land after this returns -- the timeout bounds how long
+                        // the drain thread waits, not the scanner. Logged because if it routinely
+                        // times out, the row is routinely stale and the bound is the thing to revisit.
+                        Log.w(TAG, "refinalizeMetadata(): scan did not report back within ${REFINALIZE_SCAN_TIMEOUT_MILLIS}ms")
+                    }
+                } catch (e: Exception) {
                     // Best-effort: leave the row as it was rather than fail the recording over a
                     // metadata refresh (see doc).
+                    Log.w(TAG, "refinalizeMetadata(): refresh failed, size/duration left stale", e)
                 }
             }
 
@@ -290,6 +312,8 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
         private const val APP_FILE_PREFIX_LIKE_PATTERN = "blackbox_%"
 
         private const val DEFAULT_MIME_TYPE = "application/octet-stream"
+
+        private const val TAG = "MediaStoreSink"
 
         /** Bound on how long [refinalizeMetadata] waits for `MediaScannerConnection`'s async
          * callback before giving up -- this runs on the forward-recording drain thread, never the
