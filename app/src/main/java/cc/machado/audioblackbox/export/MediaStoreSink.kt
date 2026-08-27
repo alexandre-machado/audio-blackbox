@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.export
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -12,6 +13,8 @@ import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * One row read back from `MediaStore` for one of this app's own exported recordings (issue #7).
@@ -123,6 +126,37 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
 
             override fun finish() {
                 close()
+            }
+
+            // See StreamingExportTarget.refinalizeMetadata's doc (issue #140). SIZE and DURATION are
+            // platform-computed columns for audio rows -- confirmed empirically (see the PR
+            // description's reproduction) that writing them directly via ContentValues.update() is
+            // silently dropped, matching the documented behavior of the other computed columns
+            // (WIDTH/HEIGHT/etc). The platform's own mechanism to recompute them without disturbing
+            // IS_PENDING (unlike a 1->0 toggle, which would also make an in-progress recording
+            // transiently vanish from other apps' queries, undermining issue #53) is
+            // MediaScannerConnection.scanFile against the row's real on-disk path, awaited with a
+            // bounded latch rather than a sleep. Never throws -- a failed refresh here must not fail
+            // an otherwise-successful recording.
+            override fun refinalizeMetadata() {
+                try {
+                    val dataPath = resolver.query(
+                        uri,
+                        arrayOf(MediaStore.Audio.Media.DATA),
+                        null, null, null,
+                    )?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: return
+
+                    val latch = CountDownLatch(1)
+                    MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(dataPath),
+                        arrayOf(StreamingAacWriter.MIME_TYPE_M4A),
+                    ) { _, _ -> latch.countDown() }
+                    latch.await(REFINALIZE_SCAN_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                } catch (_: Exception) {
+                    // Best-effort: leave the row as it was rather than fail the recording over a
+                    // metadata refresh (see doc).
+                }
             }
 
             override fun close() {
@@ -256,6 +290,11 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
         private const val APP_FILE_PREFIX_LIKE_PATTERN = "blackbox_%"
 
         private const val DEFAULT_MIME_TYPE = "application/octet-stream"
+
+        /** Bound on how long [refinalizeMetadata] waits for `MediaScannerConnection`'s async
+         * callback before giving up -- this runs on the forward-recording drain thread, never the
+         * audio capture thread, so blocking it briefly does not risk dropped audio (issue #140). */
+        private const val REFINALIZE_SCAN_TIMEOUT_MILLIS = 3_000L
 
         /** Pure oracle for "is this display name actually this app's own recording" -- the plain
          * Kotlin equivalent of the escaped `LIKE` selection [queryRecordings] uses, kept as its

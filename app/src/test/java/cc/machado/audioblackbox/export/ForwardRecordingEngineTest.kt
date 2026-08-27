@@ -33,10 +33,15 @@ class ForwardRecordingEngineTest {
         override val outputStream: OutputStream get() = out
         var finished = false
         var closed = false
+        var refinalizeCallCount = 0
 
         override fun finish() {
             finished = true
             close()
+        }
+
+        override fun refinalizeMetadata() {
+            refinalizeCallCount++
         }
 
         override fun close() {
@@ -147,6 +152,13 @@ class ForwardRecordingEngineTest {
         assertTrue("target must be finished", sink.lastTarget?.finished == true)
         assertTrue("target must be closed", sink.lastTarget?.closed == true)
         assertTrue("writer must be finished", createdWriter?.isFinished == true)
+        // Regression coverage for issue #140: stop() must re-finalize the MediaStore row's
+        // metadata, not just finish the container. Before the fix, nothing ever called
+        // target.refinalizeMetadata(), so this would be 0.
+        assertTrue(
+            "stop() must re-finalize MediaStore metadata at least once, was ${sink.lastTarget?.refinalizeCallCount}",
+            (sink.lastTarget?.refinalizeCallCount ?: 0) >= 1,
+        )
     }
 
     @Test

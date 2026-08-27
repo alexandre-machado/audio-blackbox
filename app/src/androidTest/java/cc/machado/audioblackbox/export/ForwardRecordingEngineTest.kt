@@ -228,6 +228,79 @@ class ForwardRecordingEngineTest {
         insertedUris += row!!.uri
     }
 
+    /**
+     * Regression test for issue #140: the row `MediaStoreSink.openStreaming` early-commits (issue
+     * #53) is never re-finalized when the recording stops, so `SIZE`/`DURATION` are left at
+     * whatever the platform derived from the almost-empty file at open time.
+     *
+     * ## Oracle
+     * After [ForwardRecordingEngine.stop] returns [ForwardRecordingState.Success], the MediaStore
+     * row's `SIZE` must match the real file's byte count on disk exactly (queried straight back
+     * from `ContentResolver`, not re-derived by this test), and `DURATION` must be within 400ms of
+     * the known 3000ms of PCM actually fed to the encoder (500ms encoder AAC frame/priming
+     * tolerance). Before the fix, `SIZE` sits at whatever a near-empty file was at early-commit
+     * time and `DURATION` sits at 0 -- both fail this assertion. A test that only checked the row
+     * existed (as every other test in this file does) would have passed throughout this bug's
+     * entire life; this test would not.
+     */
+    @Test
+    fun forwardRecording_mediaStoreRowMatchesFinishedFileAfterStop() {
+        val sampleRateHz = 16_000
+        val toneHz = 1000.0
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
+        val buffer = RingBuffer(capacityBytes = 200_000, bytesPerSecond = config.bytesPerSecond)
+
+        val name = "blackbox_${runId}_refinalize_test.m4a"
+        val engine = ForwardRecordingEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
+            writeCursorProvider = { buffer.writeCursor() },
+            oldestCursorProvider = { buffer.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = sink,
+        )
+
+        val startResult = engine.start(customDisplayName = name)
+        assertTrue("start should succeed: $startResult", startResult is ForwardRecordingState.Recording)
+
+        // Feed a known 3 seconds of PCM so the finished file is unambiguously non-trivial.
+        val totalMillis = 3_000L
+        val chunkMillis = 50L
+        val totalChunks = (totalMillis / chunkMillis).toInt()
+        val toneChunk = ToneGenerator.tone(
+            frequencyHz = toneHz,
+            sampleRateHz = sampleRateHz,
+            durationMillis = chunkMillis,
+            channelCount = 1,
+        )
+        repeat(totalChunks) {
+            buffer.write(toneChunk)
+            Thread.sleep(10)
+        }
+
+        val stopResult = engine.stop()
+        assertTrue("stop should succeed: $stopResult", stopResult is ForwardRecordingState.Success)
+
+        val row = sink.queryRecordings().firstOrNull { it.displayName == name }
+        assertNotNull("recording row must exist in MediaStore", row)
+        insertedUris += row!!.uri
+
+        // Ground truth: the real file's byte count on disk, read directly via ParcelFileDescriptor
+        // -- independent of whatever MediaStore's SIZE column claims.
+        val realSizeBytes = resolver.openFileDescriptor(row.uri, "r")!!.use { it.statSize }
+        assertTrue("finished file must be substantially larger than an early-commit stub (${realSizeBytes}B)", realSizeBytes > 4_000L)
+
+        assertEquals(
+            "MediaStore SIZE (${row.sizeBytes}) must match the real on-disk file size ($realSizeBytes)",
+            realSizeBytes,
+            row.sizeBytes,
+        )
+        assertTrue(
+            "MediaStore DURATION (${row.durationMillis}ms) must be within 400ms of the known ${totalMillis}ms recorded",
+            row.durationMillis in (totalMillis - 400L)..(totalMillis + 400L),
+        )
+    }
+
     @Test
     fun forwardRecording_resourceCleanupAcrossSequentialSessions() {
         val sampleRateHz = 16_000
