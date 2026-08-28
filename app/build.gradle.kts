@@ -47,21 +47,33 @@ fun getGitCommitCount(): Int {
     }
 }
 
-fun computeDynamicVersionName(baseVersion: String = "v0.3.0"): String {
+fun getLatestGitTag(): String {
+    return try {
+        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0").start()
+        val tag = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        tag.ifBlank { "v0.3.1" }
+    } catch (_: Exception) {
+        "v0.3.1"
+    }
+}
+
+fun computeDynamicVersionName(): String {
     val refType = System.getenv("GITHUB_REF_TYPE")
     val refName = System.getenv("GITHUB_REF_NAME")?.takeIf { it.isNotBlank() }
     val branch = getGitBranch()
     val sha = getGitCommitShortSha()
     val buildNumber = computeDynamicVersionCode()
-    // A tag push (production release) uses the tag name directly (e.g. v0.3.0).
-    // Any other build (main/staging, feature branches, local dev) includes the build number and short commit SHA.
+    val latestTag = getLatestGitTag()
+
+    // A tag push (production release) uses the tag name directly (e.g. v0.3.1 / v0.3.2).
     if (refType == "tag" && !refName.isNullOrBlank()) {
         return refName
     }
     val effectiveBase = if (!refName.isNullOrBlank() && refName.startsWith("v") && !refName.contains("-") && refName.length > 2) {
         refName
     } else {
-        baseVersion
+        latestTag
     }
     return if (branch.startsWith("v") && branch != "v" && !branch.contains("-")) {
         effectiveBase
@@ -88,7 +100,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = computeDynamicVersionCode()
-        versionName = computeDynamicVersionName("v0.3.0")
+        versionName = computeDynamicVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

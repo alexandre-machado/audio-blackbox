@@ -1,6 +1,5 @@
-What's new in version 0.3.1:
-• Modernized Dashboard with real-time Mic Input Level (VU meter) and circular buffer RAM progress bar
-• Redesigned Settings screen with audio engine specifications and local privacy guarantee
-• Forward recording always captures the recent buffered past before continuing live
-• Shortened notification action labels and enhanced Gallery layout with responsive flow
+What's new in version 0.3.2:
+• Streamlined Gallery UI: Compact Material 3 icon actions (Play/Pause, Share, Delete) aligned in the header row
+• Reduced recording card height and enhanced playback seeker controls
+• Modernized interactive documentation and landing page
 • Purely local offline processing, zero telemetry, and complete privacy
