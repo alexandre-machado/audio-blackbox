@@ -87,11 +87,18 @@ class RetentionCeilingMeasurementTest {
         return runtime.totalMemory() - runtime.freeMemory()
     }
 
+    /** What one window's run cost: peak used heap, and the ring buffer's own backing array. */
+    private data class Measurement(val peakBytes: Long, val backingBytes: Long) {
+        /** Peak relative to the buffer itself. ~1.15 for a bounded drain; ~2.0 if the export
+         * materialises the whole window again, which is issue #72's regression. */
+        val peakToBacking: Float get() = peakBytes.toFloat() / backingBytes.toFloat()
+    }
+
     /**
-     * Allocates, fills and fully exports a window of [minutes], returning peak used heap, or
-     * `null` if the device could not do it.
+     * Allocates, fills and fully exports a window of [minutes], returning what it cost, or `null`
+     * if the device could not do it.
      */
-    private fun measure(minutes: Int): Long? {
+    private fun measure(minutes: Int): Measurement? {
         val config = AudioConfig(bufferDurationMinutes = minutes)
         val capacityBytes = config.totalBufferBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
@@ -138,7 +145,7 @@ class RetentionCeilingMeasurementTest {
                 return null
             }
             assertTrue("$minutes min: export wrote nothing", sink.committedBytes > 0)
-            peak
+            Measurement(peakBytes = peak, backingBytes = capacityBytes.toLong())
         } catch (e: OutOfMemoryError) {
             Log.w(TAG, "$minutes min: OOM -- ${e.message}")
             null
@@ -151,20 +158,52 @@ class RetentionCeilingMeasurementTest {
     }
 
     /**
-     * The permanent regression assertion: whatever else this file reports, the window the app
-     * actually ships as its maximum has to work. If a future change reintroduces a
-     * window-proportional allocation, this is what goes red.
+     * The permanent regression assertion.
+     *
+     * Two claims, and only the second one guards issue #72. That the shipped maximum allocates and
+     * exports is worth checking but is not a regression test: @rev's review of this PR showed the
+     * pre-#114 cost at 45 minutes (~82 MB backing plus an ~82 MB snapshot copy) still fits under
+     * the CI emulator's 192 MB ceiling, so a success-only assertion stays green with the bug fully
+     * present. The peak-to-backing ratio is what actually distinguishes a bounded drain from a
+     * whole-window copy, on any device and at any heap size.
      */
     @Test
     fun theShippedMaximumRetentionWindowCanBeAllocatedAndExported() {
         val minutes = AudioConfig.RETENTION_WINDOW_MAX_MINUTES
-        val peak = measure(minutes)
+        val result = measure(minutes)
         assertEquals(
             "the shipped maximum retention window ($minutes min) must be exportable on this device",
             true,
-            peak != null,
+            result != null,
         )
-        Log.i(TAG, "shipped max $minutes min -> peak ${peak!! / MB} MB")
+        val measurement = result!!
+        Log.i(
+            TAG,
+            "shipped max $minutes min -> backing ${measurement.backingBytes / MB} MB, " +
+                "peak ${measurement.peakBytes / MB} MB, ratio ${measurement.peakToBacking}",
+        )
+
+        // THE assertion that actually guards issue #72, and the reason "it exported without
+        // throwing" is not enough on its own.
+        //
+        // @rev's finding on this PR: at the shipped 45-minute window the pre-#114 export cost
+        // ~82 MB of backing plus an ~82 MB snapshot copy = ~164 MB, which still fits under the CI
+        // emulator's 192 MB heap ceiling. So a success-only assertion stays green with the
+        // regression fully present -- it was measuring the device, not the code. Only a window
+        // large enough to actually exhaust the heap would have caught it, and the shipped maximum
+        // deliberately is not that.
+        //
+        // The ratio is what distinguishes the two implementations regardless of heap size or
+        // device: a bounded drain adds a fixed chunk on top of the buffer, so peak tracks backing
+        // (measured 1.15-1.23 across 30-90 minute windows). Materialising the window again puts it
+        // at ~2.0. The threshold sits above every measured value and well below the regression.
+        assertTrue(
+            "peak heap was ${measurement.peakToBacking}x the ring buffer's backing array " +
+                "(${measurement.peakBytes / MB} MB peak vs ${measurement.backingBytes / MB} MB backing). " +
+                "The export must add a bounded drain chunk, not a second copy of the window -- " +
+                "anything approaching 2x means issue #72's snapshot allocation is back.",
+            measurement.peakToBacking < MAX_PEAK_TO_BACKING_RATIO,
+        )
     }
 
     /**
@@ -180,8 +219,8 @@ class RetentionCeilingMeasurementTest {
 
         var largestOk = 0
         for (minutes in CANDIDATE_MINUTES) {
-            val peak = measure(minutes)
-            if (peak == null) {
+            val measurement = measure(minutes)
+            if (measurement == null) {
                 Log.i(TAG, String.format("%4d min | %8s | DID NOT FIT", minutes, "-"))
                 break
             }
@@ -189,10 +228,11 @@ class RetentionCeilingMeasurementTest {
             Log.i(
                 TAG,
                 String.format(
-                    "%4d min | %5d MB | ok (backing %d MB)",
+                    "%4d min | %5d MB | ok (backing %d MB, ratio %.2f)",
                     minutes,
-                    peak / MB,
-                    AudioConfig(bufferDurationMinutes = minutes).totalBufferBytes / MB,
+                    measurement.peakBytes / MB,
+                    measurement.backingBytes / MB,
+                    measurement.peakToBacking,
                 ),
             )
         }
@@ -207,6 +247,14 @@ class RetentionCeilingMeasurementTest {
     private companion object {
         const val TAG = "RetentionCeiling"
         const val MB = 1024L * 1024L
+
+        /**
+         * Ceiling on peak-heap-over-backing-array. Measured values ran 1.15-1.23 across
+         * 30-90 minute windows; issue #72's whole-window snapshot copy puts it at ~2.0. Set above
+         * every observed value and far below the regression, so it discriminates the two
+         * implementations rather than the device they run on.
+         */
+        const val MAX_PEAK_TO_BACKING_RATIO = 1.5f
 
         /** Steps past the shipped 45-minute maximum, in the stepper's own 5-minute increments. */
         val CANDIDATE_MINUTES = listOf(30, 45, 60, 75, 90, 105, 120, 150, 180)
