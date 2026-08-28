@@ -249,6 +249,17 @@ class ForwardRecordingEngine(
         var cursor = initialCursor
         var totalBytesDrained = 0L
         val handledGaps = initialGaps.toMutableSet()
+        var lastRefinalizeAtNanos = System.nanoTime()
+
+        // Re-finalizes the MediaStore row's SIZE/DURATION from what has actually been written so
+        // far (issue #140/#53 item 3). Never lets a refinalize failure interrupt the recording (see
+        // StreamingExportTarget.refinalizeMetadata's doc); target.refinalizeMetadata is itself
+        // already best-effort/non-throwing, this is defense in depth.
+        fun refinalize() {
+            try {
+                target.refinalizeMetadata()
+            } catch (_: Throwable) {}
+        }
 
         try {
             while (!stopRequested.get() && !cancelRequested.get()) {
@@ -299,6 +310,21 @@ class ForwardRecordingEngine(
                                     _state.value = ForwardRecordingState.Recording(displayName, totalBytesDrained)
                                 }
                             }
+                        }
+
+                        // Periodic re-finalization (#47 item 3 / issue #140): a clean stop() alone
+                        // does not protect a long recording against process death mid-session --
+                        // the whole point of a "black box" is surviving exactly that kind of
+                        // unexpected termination, and stop-time-only re-finalization would leave the
+                        // row permanently claiming near-zero size/duration in that case, the same
+                        // "leaked wrong state" class of bug #47 already ruled out for IS_PENDING.
+                        // Throttled off wall-clock time (not iteration count, since chunk size is
+                        // data-dependent) so it never turns into a MediaStore update per drain
+                        // iteration.
+                        val nowNanos = System.nanoTime()
+                        if (nowNanos - lastRefinalizeAtNanos >= REFINALIZE_INTERVAL_NANOS) {
+                            refinalize()
+                            lastRefinalizeAtNanos = nowNanos
                         }
 
                         if (result.remainingBytes == 0L && !stopRequested.get()) {
@@ -359,6 +385,10 @@ class ForwardRecordingEngine(
                 )
             }
         } finally {
+            // Authoritative final settle (issue #140): runs on every exit path -- clean stop,
+            // cancel, and error/exception alike -- so the row is never left at a stale mid-session
+            // value once the drain thread is actually done writing to it, whichever way it ended.
+            refinalize()
             try {
                 writer.close()
             } catch (_: Throwable) {}
@@ -378,6 +408,9 @@ class ForwardRecordingEngine(
         const val DEFAULT_DRAIN_CHUNK_SIZE_BYTES = 4096
         private const val POLL_INTERVAL_MILLIS = 50L
         private const val FINAL_DRAIN_TIMEOUT_NANOS = 5_000_000_000L // 5 seconds
+
+        /** Throttle for periodic mid-recording MediaStore re-finalization (issue #140). */
+        private const val REFINALIZE_INTERVAL_NANOS = 5_000_000_000L // 5 seconds
 
         fun generateDisplayName(date: Date, extension: String = StreamingAacWriter.FILE_EXTENSION): String {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)

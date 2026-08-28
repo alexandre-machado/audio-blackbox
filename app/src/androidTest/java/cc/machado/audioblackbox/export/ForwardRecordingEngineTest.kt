@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.export
 
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.machado.audioblackbox.audio.AudioConfig
@@ -16,6 +17,20 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+
+/**
+ * How far the MediaStore `DURATION` column may sit from the PCM actually fed to the encoder before
+ * the recording counts as truncated.
+ *
+ * Sized off the app's own documented AAC priming delay -- 2048 samples, pinned in issue #37, whose
+ * ceiling across the supported sample rates is 128ms -- plus one AAC frame of rounding, then rounded
+ * up to 200ms. The number is deliberately close to that ceiling: a looser bound (the 400ms this
+ * started at, ~3x the ceiling) would let a real truncation regression anywhere in the 128-400ms range
+ * pass green, which is precisely the range a codec or container change would land in. If a legitimate
+ * change pushes real durations past this, raise it against a recomputed ceiling and say why -- do not
+ * widen it to make a red test go away.
+ */
+private const val DURATION_TOLERANCE_MILLIS = 200L
 
 /**
  * Instrumented tests for [ForwardRecordingEngine] (issue #54).
@@ -226,6 +241,114 @@ class ForwardRecordingEngineTest {
         val row = recordings.firstOrNull { it.displayName == name }
         assertNotNull("recording row must exist", row)
         insertedUris += row!!.uri
+    }
+
+    /**
+     * Regression test for issue #140: the row `MediaStoreSink.openStreaming` early-commits (issue
+     * #53) is never re-finalized when the recording stops, so `SIZE`/`DURATION` are left at
+     * whatever the platform derived from the almost-empty file at open time.
+     *
+     * ## Oracle
+     * After [ForwardRecordingEngine.stop] returns [ForwardRecordingState.Success], the MediaStore
+     * row's `SIZE` must match the real file's byte count on disk exactly (queried straight back
+     * from `ContentResolver`, not re-derived by this test), and `DURATION` must be within
+     * [DURATION_TOLERANCE_MILLIS] of the known 3000ms of PCM actually fed to the encoder. Before the
+     * fix, `SIZE` sits at whatever a near-empty file was at early-commit time and `DURATION` sits at
+     * 0 -- both fail this assertion. A test that only checked the row existed (as every other test
+     * in this file does) would have passed throughout this bug's entire life; this test would not.
+     *
+     * The refresh must also not corrupt the row it refreshes, which is what the last two assertions
+     * are for. `MediaScannerConnection.scanFile` is being pointed at a path that is *already* an
+     * indexed row, and a scan that fails to match it to the existing row inserts a second one and/or
+     * re-attributes ownership to the scanner rather than this app. Both would be invisible to a
+     * SIZE/DURATION check while breaking the gallery: a duplicate shows the recording twice, and a
+     * lost `OWNER_PACKAGE_NAME` is the mechanism behind issue #59, where the app loses sight of its
+     * own files. Note the row lookup below is deliberately `single`, not `firstOrNull` -- the latter
+     * would happily pick the first of two duplicates and pass.
+     */
+    @Test
+    fun forwardRecording_mediaStoreRowMatchesFinishedFileAfterStop() {
+        val sampleRateHz = 16_000
+        val toneHz = 1000.0
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
+        val buffer = RingBuffer(capacityBytes = 200_000, bytesPerSecond = config.bytesPerSecond)
+
+        val name = "blackbox_${runId}_refinalize_test.m4a"
+        val engine = ForwardRecordingEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
+            writeCursorProvider = { buffer.writeCursor() },
+            oldestCursorProvider = { buffer.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = sink,
+        )
+
+        val startResult = engine.start(customDisplayName = name)
+        assertTrue("start should succeed: $startResult", startResult is ForwardRecordingState.Recording)
+
+        // Feed a known 3 seconds of PCM so the finished file is unambiguously non-trivial.
+        val totalMillis = 3_000L
+        val chunkMillis = 50L
+        val totalChunks = (totalMillis / chunkMillis).toInt()
+        val toneChunk = ToneGenerator.tone(
+            frequencyHz = toneHz,
+            sampleRateHz = sampleRateHz,
+            durationMillis = chunkMillis,
+            channelCount = 1,
+        )
+        repeat(totalChunks) {
+            buffer.write(toneChunk)
+            Thread.sleep(10)
+        }
+
+        val stopResult = engine.stop()
+        assertTrue("stop should succeed: $stopResult", stopResult is ForwardRecordingState.Success)
+
+        // `single`, not `firstOrNull`: this both asserts the row exists and asserts the re-finalizing
+        // scan did not insert a duplicate alongside it. It throws if there are 0 or 2+ matches.
+        val matches = sink.queryRecordings().filter { it.displayName == name }
+        assertEquals(
+            "exactly one MediaStore row must carry this display name, found ${matches.size} " +
+                "-- more than one means the re-finalizing scan inserted a duplicate row",
+            1,
+            matches.size,
+        )
+        val row = matches.single()
+        insertedUris += row.uri
+
+        // Ground truth: the real file's byte count on disk, read directly via ParcelFileDescriptor
+        // -- independent of whatever MediaStore's SIZE column claims.
+        val realSizeBytes = resolver.openFileDescriptor(row.uri, "r")!!.use { it.statSize }
+        assertTrue("finished file must be substantially larger than an early-commit stub (${realSizeBytes}B)", realSizeBytes > 4_000L)
+
+        assertEquals(
+            "MediaStore SIZE (${row.sizeBytes}) must match the real on-disk file size ($realSizeBytes)",
+            realSizeBytes,
+            row.sizeBytes,
+        )
+        assertTrue(
+            "MediaStore DURATION (${row.durationMillis}ms) must be within ${DURATION_TOLERANCE_MILLIS}ms " +
+                "of the known ${totalMillis}ms recorded",
+            row.durationMillis in
+                (totalMillis - DURATION_TOLERANCE_MILLIS)..(totalMillis + DURATION_TOLERANCE_MILLIS),
+        )
+
+        // Ownership must survive the scan. MediaScannerConnection runs as the platform's media
+        // process, so a scan that re-inserts rather than updates leaves the row owned by someone
+        // else -- at which point this app can no longer see or delete its own recording (issue #59)
+        // even though the file is still on disk. Read straight off the row, not through
+        // RecordingRow, which does not project this column.
+        val owner = resolver.query(
+            row.uri,
+            arrayOf(MediaStore.Audio.Media.OWNER_PACKAGE_NAME),
+            null, null, null,
+        )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        assertEquals(
+            "the re-finalizing scan must leave OWNER_PACKAGE_NAME as this app; losing it is the " +
+                "mechanism behind issue #59",
+            context.packageName,
+            owner,
+        )
     }
 
     @Test

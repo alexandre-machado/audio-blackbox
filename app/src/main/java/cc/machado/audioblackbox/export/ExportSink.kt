@@ -86,6 +86,24 @@ interface StreamingExportTarget : Closeable, AutoCloseable {
     fun finish()
 
     /**
+     * Re-finalizes this row's `SIZE`/`DURATION` metadata to reflect what has actually been written
+     * so far (issue #140). Issue #53's early commit clears `IS_PENDING` as soon as the row is
+     * created, before any audio is written, so the platform derives `SIZE`/`DURATION` from an
+     * almost-empty file at that point and never revisits them on its own -- nothing else in this
+     * codebase called `scanFile`/`MediaScannerConnection`/`ContentResolver.notifyChange` for this
+     * row before this method existed. `SIZE`/`DURATION` are platform-computed columns for audio
+     * rows: writing them directly via `ContentValues` is silently dropped (confirmed empirically),
+     * so implementations must trigger the platform's own recompute rather than set the values
+     * themselves. Safe to call repeatedly while still writing (mid-recording progress -- `DURATION`
+     * will read back as stale or 0 until [finish] writes the container's duration atom, but `SIZE`
+     * still reflects real bytes on disk) and once more after [finish] (the authoritative, final
+     * value for both). Must never throw -- a metadata refresh failing is not a reason to fail or
+     * abort an otherwise-successful recording; implementations swallow their own errors and leave
+     * the row as it was on failure.
+     */
+    fun refinalizeMetadata()
+
+    /**
      * Closes underlying descriptors and streams safely without deleting the committed destination.
      */
     override fun close()

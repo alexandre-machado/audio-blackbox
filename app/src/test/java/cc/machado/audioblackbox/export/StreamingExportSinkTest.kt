@@ -43,6 +43,7 @@ class StreamingExportSinkTest {
         var isFinished = false
         var isClosed = false
         var isDeleted = false
+        var refinalizeCallCount = 0
 
         override val fileDescriptor: FileDescriptor
             get() = fos.fd
@@ -53,6 +54,10 @@ class StreamingExportSinkTest {
         override fun finish() {
             isFinished = true
             close()
+        }
+
+        override fun refinalizeMetadata() {
+            refinalizeCallCount++
         }
 
         override fun close() {
