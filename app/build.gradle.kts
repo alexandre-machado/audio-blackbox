@@ -224,3 +224,10 @@ tasks.withType<Test> {
         showStandardStreams = true
     }
 }
+
+// Issue #148: Ensure the release merged manifest is always generated before unit tests run,
+// allowing ManifestPermissionSecurityTest to deterministically assert zero network permissions.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    dependsOn("processReleaseMainManifest")
+    inputs.file(layout.buildDirectory.file("intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"))
+}
