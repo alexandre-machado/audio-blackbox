@@ -1,7 +1,7 @@
-What's new in version 0.3.0:
-• Two primary actions: Save the Past (last 5/15/30 min) and Forward Continuous Recording
-• Real-time streaming AAC recorder with live timeline gap preservation
-• Built-in recordings gallery with native player, seek slider, and share intent
-• Quick Settings Tile to start and stop capture with a single tap
-• One-tap prompt notification to resume continuous recording after device reboot
-• Enhanced navigation bar and edge-to-edge layout polish
+What's new:
+• Recording no longer gets stuck when another app takes the microphone — it recovers on its own.
+• Starting a recording no longer pauses your music.
+• "Record everything" now includes the audio already held in the buffer, not only what comes next.
+• Saved recordings show the correct size and length in the gallery.
+• No analytics of any kind: nothing leaves your device.
+• Clearer notification buttons and a refreshed icon.
