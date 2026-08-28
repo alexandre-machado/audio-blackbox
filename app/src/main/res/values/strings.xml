@@ -61,7 +61,12 @@
     <string name="dashboard_app_subtitle">Continuous Memory Audio Recorder</string>
     <string name="dashboard_engine_sample_rate">16.0 kHz</string>
     <string name="dashboard_mic_level_label">Mic input level</string>
-    <string name="dashboard_mic_level_percent">%1$d%%</string>
+    <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
+    <!-- Not "MUTED": nothing here detects a muted microphone. It means the peak sat at or
+         below AudioLevel.MIN_DBFS, which is silence, a covered mic, or another app holding
+         the mic. Naming a cause the app cannot observe is the habit this meter was
+         rewritten to end. -->
+    <string name="dashboard_mic_level_no_signal">NO SIGNAL</string>
     <string name="dashboard_buffer_ram_label">Circular buffer (RAM only)</string>
     <string name="dashboard_buffer_ram_explanation">Holding audio in RAM. Once full, the oldest sound is overwritten continuously without writing to disk.</string>
     <string name="dashboard_save_card_title">Save recent audio (Lookback)</string>

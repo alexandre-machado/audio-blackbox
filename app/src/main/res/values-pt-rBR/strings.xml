@@ -56,7 +56,12 @@
     <string name="dashboard_app_subtitle">Gravador de Áudio Contínuo em Memória</string>
     <string name="dashboard_engine_sample_rate">16.0 kHz</string>
     <string name="dashboard_mic_level_label">Nível do microfone</string>
-    <string name="dashboard_mic_level_percent">%1$d%%</string>
+    <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
+    <!-- Not "MUTED": nothing here detects a muted microphone. It means the peak sat at or
+         below AudioLevel.MIN_DBFS, which is silence, a covered mic, or another app holding
+         the mic. Naming a cause the app cannot observe is the habit this meter was
+         rewritten to end. -->
+    <string name="dashboard_mic_level_no_signal">SEM SINAL</string>
     <string name="dashboard_buffer_ram_label">Buffer circular (apenas RAM)</string>
     <string name="dashboard_buffer_ram_explanation">Mantendo áudio na memória RAM. Ao encher, o som mais antigo é sobrescrito continuamente sem gravar em disco.</string>
     <string name="dashboard_save_card_title">Salvar o passado (Lookback)</string>

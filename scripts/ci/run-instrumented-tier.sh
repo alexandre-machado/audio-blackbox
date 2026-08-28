@@ -63,10 +63,38 @@ mapfile -t EMULATOR_SERIALS < <(adb devices | awk '$2=="device" && $1 ~ /^emulat
 if [[ "${#EMULATOR_SERIALS[@]}" -eq 0 ]]; then
   fail "No booted emulator found in 'adb devices' (only emulator-* serials are eligible; a physical device is never driven by this script)."
 fi
+# More than one emulator is normal on a self-hosted runner: the machine belongs to a human who
+# may have an AVD of their own open, and CI does not get to assume the box is idle. Rather than
+# refusing to run (which is what happened when a manually started emulator-5556 collided with
+# CI's emulator-5554 and failed the tier before a single test ran), pick *our own* AVD out of the
+# list. Only fall back to "there must be exactly one" when there is nothing to match against.
 if [[ "${#EMULATOR_SERIALS[@]}" -gt 1 ]]; then
-  fail "Multiple emulator serials found (${EMULATOR_SERIALS[*]}); this script assumes exactly one."
+  if [[ -n "${ANDROID_SERIAL:-}" ]]; then
+    # An explicit override always wins, and must actually be present.
+    if ! printf '%s\n' "${EMULATOR_SERIALS[@]}" | grep -qx "$ANDROID_SERIAL"; then
+      fail "ANDROID_SERIAL=$ANDROID_SERIAL is not among the booted emulators (${EMULATOR_SERIALS[*]})."
+    fi
+    SERIAL="$ANDROID_SERIAL"
+  elif [[ -n "${AVD_NAME:-}" ]]; then
+    # Ask each emulator which AVD it is running and keep the one this workflow created.
+    SERIAL=""
+    for candidate in "${EMULATOR_SERIALS[@]}"; do
+      candidate_avd="$(adb -s "$candidate" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+      if [[ "$candidate_avd" == "$AVD_NAME" ]]; then
+        SERIAL="$candidate"
+        break
+      fi
+    done
+    if [[ -z "$SERIAL" ]]; then
+      fail "Multiple emulators booted (${EMULATOR_SERIALS[*]}) and none is running AVD '$AVD_NAME'."
+    fi
+    log "Multiple emulators booted (${EMULATOR_SERIALS[*]}); selected $SERIAL running AVD '$AVD_NAME'."
+  else
+    fail "Multiple emulator serials found (${EMULATOR_SERIALS[*]}) and neither ANDROID_SERIAL nor AVD_NAME is set to disambiguate."
+  fi
+else
+  SERIAL="${EMULATOR_SERIALS[0]}"
 fi
-SERIAL="${EMULATOR_SERIALS[0]}"
 ADB=(adb -s "$SERIAL")
 log "Target emulator: $SERIAL"
 
@@ -80,8 +108,14 @@ TEST_APK="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 [[ -f "$TEST_APK" ]] || fail "$TEST_APK not found after assemble."
 
 log "Installing app + test APKs..."
-"${ADB[@]}" install -r -t "$APP_APK" >/dev/null
-"${ADB[@]}" install -r -t "$TEST_APK" >/dev/null
+# -d (allow version downgrade) is required on a persistent runner, not optional. versionCode is
+# `100 + GITHUB_RUN_NUMBER` (app/build.gradle.kts), and the AVD is not wiped between runs here, so
+# whatever the highest-numbered run installed stays on the device. Any later job with a lower run
+# number -- a re-run of an older run, or a branch built before a newer one landed -- then fails
+# with INSTALL_FAILED_VERSION_DOWNGRADE before a single test executes. On the ephemeral hosted
+# runners this script was written for, the emulator was fresh every time and this could not happen.
+"${ADB[@]}" install -r -d -t "$APP_APK" >/dev/null
+"${ADB[@]}" install -r -d -t "$TEST_APK" >/dev/null
 
 # `install -r` keeps the app's data dir, so captures from an earlier run on the same emulator
 # would otherwise be pulled and uploaded as if this run had produced them -- and would make the
