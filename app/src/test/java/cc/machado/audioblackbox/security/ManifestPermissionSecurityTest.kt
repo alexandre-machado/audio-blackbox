@@ -7,40 +7,68 @@ import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Security & Privacy defense-in-depth check for issue #119 -- NOT the load-bearing guarantee.
+ * Security & Privacy manifest permission verification (issue #119, #148).
  *
- * This class used to carry two methods and neither reliably guarded the privacy claim published
- * in `docs/release/privacy-policy.md` ("It is physically impossible for the app to send data over
- * the network") -- see issue #129:
+ * Asserts that:
+ * 1. The source manifest declares no network permissions directly and strips AD_ID.
+ * 2. The **merged release manifest** (the output of AGP manifest merging across all dependencies)
+ *    declares strictly zero network permissions (`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`,
+ *    `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE`) and no `AD_ID`.
  *
- * - The source-manifest check (kept below, renamed) can never fail for the regression it was
- *   originally described as covering: `src/main/AndroidManifest.xml` never declared `INTERNET`
- *   even while Firebase Analytics was linked (issue #119's own finding) -- a dependency merges
- *   that permission in at build time, and this file cannot see that.
- * - The merged-manifest check has been deleted outright rather than kept `if (exists())`-guarded:
- *   on a clean checkout, or in any unit-test job where `processReleaseMainManifest`/
- *   `processDebugMainManifest` has not run, its loop body never executed and the test passed
- *   vacuously -- green while proving nothing. There is no unit-test-safe way to *require* that
- *   Gradle-generated file exists without coupling this test's execution order to another task, so
- *   this class does not attempt to reconstruct the merged-manifest guarantee at all anymore.
- *
- * The real guarantee -- the one that actually reads what the OS installed, which is the true
- * output of manifest merging and therefore cannot be fooled by any of the above -- is
- * [cc.machado.audioblackbox.PermissionsRegressionTest], an *instrumented* test lifted from the
- * closed PR #122 (`privacy/119-remove-firebase-analytics`). See its doc for why
- * `PackageManager.getPackageInfo(..., GET_PERMISSIONS)` on the installed package is the durable
- * form of this assertion.
+ * Task coupling: `testDebugUnitTest` in `app/build.gradle.kts` explicitly depends on
+ * `processReleaseMainManifest` to guarantee the merged release manifest is generated prior to test execution.
+ * If the manifest file is missing, the test fails loudly with an explicit AssertionError rather than skipping.
  */
 class ManifestPermissionSecurityTest {
 
-    /**
-     * Defense-in-depth only, explicitly not the regression guard: this cannot fail merely because
-     * some future dependency merges `INTERNET` back in via its own manifest (see class doc) -- it
-     * only catches the source manifest itself being edited to add a network permission directly.
-     * Kept because that is still a real, if narrower, thing worth catching cheaply on every unit
-     * test run, not because it substitutes for
-     * [cc.machado.audioblackbox.PermissionsRegressionTest].
-     */
+    @Test
+    fun mergedReleaseManifest_declaresZeroNetworkPermissions() {
+        val manifestFile = resolveMergedReleaseManifest()
+
+        val permissions = extractPermissions(manifestFile)
+
+        assertFalse("Merged release manifest must NOT request android.permission.INTERNET", permissions.contains("android.permission.INTERNET"))
+        assertFalse("Merged release manifest must NOT request android.permission.ACCESS_NETWORK_STATE", permissions.contains("android.permission.ACCESS_NETWORK_STATE"))
+        assertFalse("Merged release manifest must NOT request android.permission.ACCESS_WIFI_STATE", permissions.contains("android.permission.ACCESS_WIFI_STATE"))
+        assertFalse("Merged release manifest must NOT request android.permission.CHANGE_WIFI_STATE", permissions.contains("android.permission.CHANGE_WIFI_STATE"))
+        assertFalse("Merged release manifest must NOT request android.permission.CHANGE_NETWORK_STATE", permissions.contains("android.permission.CHANGE_NETWORK_STATE"))
+
+        val expectedPermissions = setOf(
+            "android.permission.RECORD_AUDIO",
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+            "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "cc.machado.audioblackbox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        )
+        assertTrue(
+            "Merged release manifest permissions ($permissions) must be a subset of expected permissions ($expectedPermissions)",
+            expectedPermissions.containsAll(permissions),
+        )
+    }
+
+    @Test
+    fun mergedReleaseManifest_doesNotContainAdvertisingIdPermission() {
+        val manifestFile = resolveMergedReleaseManifest()
+        val permissions = extractPermissions(manifestFile)
+        assertFalse(
+            "Merged release manifest must NOT contain com.google.android.gms.permission.AD_ID",
+            permissions.contains("com.google.android.gms.permission.AD_ID"),
+        )
+    }
+
+    private fun resolveMergedReleaseManifest(): File {
+        val candidates = listOf(
+            File("build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"),
+            File("app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"),
+        )
+        return candidates.firstOrNull { it.exists() }
+            ?: throw AssertionError(
+                "Merged release manifest is missing! Expected at ${candidates.map { it.absolutePath }}. " +
+                    "testDebugUnitTest must depend on processReleaseMainManifest.",
+            )
+    }
     @Test
     fun sourceManifestDefenseInDepth_doesNotDirectlyDeclareNetworkPermissions() {
         val manifestFile = File("src/main/AndroidManifest.xml")
