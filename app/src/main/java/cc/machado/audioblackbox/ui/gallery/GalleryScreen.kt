@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.gallery
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,12 +13,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -27,6 +30,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -34,12 +38,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -48,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.FlightOrange
 
 /**
  * Hosts [GalleryViewModel] and renders [GalleryScreen] against its live state -- the same
@@ -233,6 +240,9 @@ private fun RecordingCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -255,6 +265,7 @@ private fun RecordingCard(
                     Text(
                         text = durationSizeLabel,
                         style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -265,6 +276,10 @@ private fun RecordingCard(
                 ) {
                     FilledIconButton(
                         onClick = onPlayPauseClicked,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = FlightOrange,
+                            contentColor = Color.White,
+                        ),
                         modifier = Modifier
                             .size(38.dp)
                             .semantics { contentDescription = playPauseCd },
@@ -341,6 +356,10 @@ private fun RecordingCard(
                         value = positionMillis.toFloat().coerceIn(0f, sliderMax),
                         onValueChange = { onSeek(it.toLong()) },
                         valueRange = 0f..sliderMax,
+                        colors = SliderDefaults.colors(
+                            thumbColor = FlightOrange,
+                            activeTrackColor = FlightOrange,
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .semantics { contentDescription = seekCd },
@@ -352,11 +371,13 @@ private fun RecordingCard(
                         Text(
                             text = formatDurationClock(positionMillis),
                             style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             text = formatDurationClock(durationMillis),
                             style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
