@@ -10,7 +10,7 @@ import org.mockito.kotlin.mock
 /**
  * The oracle issue #7 requires: [android.net.Uri]s are mocked (final Android framework class,
  * mockable via mockito-core's inline mock maker without Robolectric -- same convention as
- * [cc.machado.audioblackbox.service.AudioFocusTrackerTest]) purely as opaque identities, since
+ * [cc.machado.audioblackbox.audio.AudioCaptureEngineTest]) purely as opaque identities, since
  * nothing here needs a real content:// uri to resolve.
  */
 class GalleryMappingTest {

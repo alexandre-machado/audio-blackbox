@@ -19,7 +19,7 @@ import org.junit.Test
  *
  * These exercise [PeriodicNotificationRefresher] directly, not [RecorderService]: `RecorderService`
  * extends `android.app.Service` and cannot be instantiated in a plain JUnit test in this repo (no
- * Robolectric, per this repo's convention -- see `AudioFocusTrackerTest`/`AudioCaptureEngineTest`
+ * Robolectric, per this repo's convention -- see `AudioCaptureEngineTest`
  * for the same constraint elsewhere). Everything Service-specific (posting to
  * `NotificationManager`, wiring `engine.state`/`exportEngine.state`, `onDestroy` cancelling
  * `serviceScope`) is a thin, untested wiring layer around this class; what actually decides

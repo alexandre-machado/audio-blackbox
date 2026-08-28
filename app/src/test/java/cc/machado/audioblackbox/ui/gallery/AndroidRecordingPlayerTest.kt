@@ -18,7 +18,7 @@ import org.mockito.kotlin.whenever
  * Covers [AndroidRecordingPlayer]'s own responsibility for the "only one item plays at a time"
  * invariant (issue #7), plus audio-focus request/denial/loss -- all against a mocked
  * [MediaPlayer]/[AudioManager] (final Android framework classes, mockable via mockito-core's
- * inline mock maker, same convention as [cc.machado.audioblackbox.service.AudioFocusTrackerTest]
+ * inline mock maker, same convention as [cc.machado.audioblackbox.audio.AudioCaptureEngineTest]
  * and [cc.machado.audioblackbox.audio.AudioCaptureEngineTest]) -- no Robolectric, no real device.
  *
  * [MediaPlayer.prepareAsync] is asynchronous in production; here the
