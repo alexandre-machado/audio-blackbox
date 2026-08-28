@@ -135,17 +135,11 @@ class RetentionCeilingMeasurementTest {
                 payloadEncoder = PassthroughEncoder(),
             )
 
-            // MUTATION PROBE (issue #72 non-vacuity, reverted in the next commit): simulates the
-            // pre-#114 RingBuffer.snapshot() by materialising the whole window a second time
-            // alongside the export. If the ratio assertion is doing its job, this must go red.
-            val mutantSnapshot = ByteArray(capacityBytes)
-            mutantSnapshot[0] = 1
             val result = engine.export(
                 durationMillis = minutes.toLong() * 60_000L,
                 minutesLabel = minutes,
             )
             val peak = usedHeapBytes() - before
-            check(mutantSnapshot[0] == 1.toByte()) // keep the probe alive past the measurement
             if (result !is ExportState.Success) {
                 Log.w(TAG, "$minutes min: export did not succeed: $result")
                 return null
