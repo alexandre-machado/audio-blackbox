@@ -4,34 +4,43 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -39,7 +48,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
-import androidx.compose.material3.Button
 
 /**
  * Hosts [GalleryViewModel] and renders [GalleryScreen] against its live state -- the same
@@ -216,7 +224,6 @@ private fun RecordingCard(
         formatFileSize(recording.sizeBytes),
     )
     val isPlaying = item.playback is ItemPlaybackState.Playing
-    val playPauseLabel = stringResource(if (isPlaying) R.string.gallery_pause else R.string.gallery_play)
     val playPauseCd = stringResource(
         if (isPlaying) R.string.gallery_pause_cd else R.string.gallery_play_cd,
         capturedAtLabel,
@@ -224,10 +231,90 @@ private fun RecordingCard(
     val shareCd = stringResource(R.string.gallery_share_cd, capturedAtLabel)
     val deleteCd = stringResource(R.string.gallery_delete_cd, capturedAtLabel)
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = capturedAtLabel, style = MaterialTheme.typography.titleMedium)
-            Text(text = durationSizeLabel, style = MaterialTheme.typography.bodyMedium)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = capturedAtLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = durationSizeLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledIconButton(
+                        onClick = onPlayPauseClicked,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .semantics { contentDescription = playPauseCd },
+                    ) {
+                        if (isPlaying) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_pause),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onShareClicked,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .semantics { contentDescription = shareCd },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = onDeleteClicked,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .semantics { contentDescription = deleteCd },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
 
             val activePlayback = item.playback
             if (activePlayback is ItemPlaybackState.Playing || activePlayback is ItemPlaybackState.Paused) {
@@ -243,38 +330,36 @@ private fun RecordingCard(
                 )
                 val seekCd = stringResource(R.string.gallery_seek_cd, elapsedTotalLabel)
                 val sliderMax = durationMillis.coerceAtLeast(1L).toFloat()
-                Slider(
-                    value = positionMillis.toFloat().coerceIn(0f, sliderMax),
-                    onValueChange = { onSeek(it.toLong()) },
-                    valueRange = 0f..sliderMax,
+                
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentDescription = seekCd },
-                )
-                Text(text = elapsedTotalLabel, style = MaterialTheme.typography.bodySmall)
-            }
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = onPlayPauseClicked,
-                    modifier = Modifier.semantics { contentDescription = playPauseCd },
+                        .padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Text(text = playPauseLabel, maxLines = 1)
-                }
-                OutlinedButton(
-                    onClick = onShareClicked,
-                    modifier = Modifier.semantics { contentDescription = shareCd },
-                ) {
-                    Text(text = stringResource(R.string.gallery_share), maxLines = 1)
-                }
-                OutlinedButton(
-                    onClick = onDeleteClicked,
-                    modifier = Modifier.semantics { contentDescription = deleteCd },
-                ) {
-                    Text(text = stringResource(R.string.gallery_delete), maxLines = 1)
+                    Slider(
+                        value = positionMillis.toFloat().coerceIn(0f, sliderMax),
+                        onValueChange = { onSeek(it.toLong()) },
+                        valueRange = 0f..sliderMax,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentDescription = seekCd },
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = formatDurationClock(positionMillis),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = formatDurationClock(durationMillis),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
