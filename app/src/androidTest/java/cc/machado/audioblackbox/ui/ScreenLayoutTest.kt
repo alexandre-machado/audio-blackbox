@@ -33,6 +33,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.math.absoluteValue
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.unit.dp
 
 /**
  * The screen-layout harness (issue #78), established after PR #74 shipped a floating bottom bar
@@ -340,32 +342,66 @@ class ScreenLayoutTest {
         assertSaveSectionValid(ptLocale)
     }
 
+    /**
+     * Every gallery row action must be reachable at compact width, in this locale.
+     *
+     * ## Why this no longer looks at text
+     * Issue #153 was a *text* bug -- the pt-BR "Excluir" label wrapping mid-word -- so this
+     * originally found the button by its visible label and asserted the label occupied one line.
+     * PR #179 then replaced those labelled buttons with compact `IconButton`s, at which point there
+     * was no label left to wrap and this assertion started failing on `main` while looking for text
+     * the UI had deliberately stopped rendering.
+     *
+     * The requirement underneath #153 survives that redesign and is what is asserted here instead:
+     * the destructive action has to be **visible and inside the viewport** at the narrowest
+     * supported width, in both locales. A Delete the user cannot see is a worse outcome than a
+     * Delete whose label wraps, and it is the failure an icon row can still produce -- by pushing
+     * the last button off the edge -- which is exactly what a text-only assertion would now miss.
+     *
+     * Mid-word wrapping is no longer possible by construction rather than by assertion: an icon has
+     * no text to break. That is a stronger guarantee than the one it replaces, so #153 does not need
+     * a text assertion to stay closed.
+     */
     private fun assertGalleryActionButtonsValid(locale: Locale) {
-        val deleteText = localizedString(locale, R.string.gallery_delete)
-        val deleteNode = composeRule.onAllNodesWithText(deleteText)[0]
-        deleteNode.assertIsDisplayed()
+        val rootRight = composeRule.onRoot().getUnclippedBoundsInRoot().right
 
-        var layoutResult: TextLayoutResult? = null
-        deleteNode.performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
-            val list = mutableListOf<TextLayoutResult>()
-            val handled = it(list)
-            if (handled && list.isNotEmpty()) {
-                layoutResult = list[0]
-            }
+        // Content descriptions are formatted with the recording's timestamp, so match on the
+        // stable prefix rather than reconstructing the whole string from the fixture.
+        for (cdRes in GALLERY_ACTION_CONTENT_DESCRIPTIONS) {
+            // These are format strings ("Delete recording from %1$s"), so they must be resolved
+            // WITH an argument -- localizedString goes through getString(id, vararg), and an empty
+            // vararg makes Android's String.format throw MissingFormatArgumentException on the
+            // placeholder rather than returning the raw template. Substituting a sentinel and
+            // cutting at it yields the locale-correct literal prefix without reaching for raw
+            // resource access, and without depending on where in the string the placeholder sits.
+            val sentinel = "\u0000TIMESTAMP\u0000"
+            val prefix = localizedString(locale, cdRes, sentinel).substringBefore(sentinel).trim()
+            assertTrue(
+                "content description template for $cdRes has no stable prefix to match on",
+                prefix.isNotEmpty(),
+            )
+
+            val nodes = composeRule.onAllNodesWithContentDescription(prefix, substring = true)
+            val node = nodes[0]
+            node.assertIsDisplayed()
+
+            val bounds = node.getUnclippedBoundsInRoot()
+            assertTrue(
+                "the gallery action \"$prefix\" starts off the left edge (${bounds.left} < 0)",
+                bounds.left >= 0.dp,
+            )
+            assertTrue(
+                "the gallery action \"$prefix\" runs past the right edge " +
+                    "(${bounds.right} > $rootRight) -- the action row does not fit at compact width",
+                bounds.right <= rootRight,
+            )
         }
-        assertTrue(
-            "the delete button label ($deleteText) should have a layout result",
-            layoutResult != null,
-        )
-        assertTrue(
-            "the delete button label ($deleteText) wrapped to ${layoutResult!!.lineCount} lines, expected 1 line",
-            layoutResult!!.lineCount == 1,
-        )
     }
 
     /**
-     * Oracle: fails if the gallery action buttons ("Play", "Share", "Delete" / "Reproduzir",
-     * "Compartilhar", "Excluir") wrap mid-word inside their button containers under compact width (issue #153).
+     * Oracle: fails if any gallery row action (play/pause, share, delete) is clipped or pushed
+     * outside the viewport at compact width, in pt-BR -- the locale whose longer strings made
+     * issue #153 visible in the first place.
      */
     @Test
     fun galleryActionButtonsDoNotWrapInCompactWidthWithPortugueseLocale() {
@@ -443,6 +479,17 @@ class ScreenLayoutTest {
     }
 
     private companion object {
+        /**
+         * The gallery row's actions, identified by content description because PR #179 made them
+         * icon-only. Play/pause alternates between two strings depending on playback state, so the
+         * play variant is the one the idle fixture renders.
+         */
+        val GALLERY_ACTION_CONTENT_DESCRIPTIONS = listOf(
+            R.string.gallery_play_cd,
+            R.string.gallery_share_cd,
+            R.string.gallery_delete_cd,
+        )
+
         /** Guards against reading a minimum-scroll landing spot as a reachability failure. */
         const val CAME_TO_REST =
             " It came to rest there after the smallest scroll that brings it into the viewport, so" +
