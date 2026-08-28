@@ -1,6 +1,5 @@
-Novidades da versão 0.3.1:
-• Painel modernizado com medidor de nível do microfone (VU meter) e barra visual de RAM do buffer
-• Tela de Ajustes redesenhada com especificações do motor de áudio e garantia de privacidade
-• Gravação contínua ao vivo agora sempre inclui o passado retido antes de seguir gravando
-• Notificações e botões da Galeria aprimorados com layout responsivo
+Novidades da versão 0.3.2:
+• Galeria modernizada com botões compactos de ícones (Reproduzir/Pausar, Compartilhar, Excluir) alinhados no cabeçalho
+• Altura reduzida dos cartões de áudio e controle aprimorado da barra de progresso
+• Documentação e hotsite interativo atualizados
 • Processamento 100% local, zero telemetria e privacidade total
