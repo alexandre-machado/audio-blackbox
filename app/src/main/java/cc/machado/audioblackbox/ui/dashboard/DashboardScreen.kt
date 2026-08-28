@@ -13,32 +13,42 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +58,7 @@ import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import java.util.Locale
 
 /**
  * Hosts [DashboardViewModel] and renders [DashboardScreen] against its live state. The seam
@@ -90,11 +101,13 @@ fun DashboardScreen(
             .verticalScroll(rememberScrollState())
             .padding(DASHBOARD_PADDING),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(DASHBOARD_PADDING),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        StatusSection(uiState.captureStatus)
-        BufferSection(uiState)
-        EngineToggle(uiState.engineSwitch, onToggleEngine)
+        AppHeader()
+        EngineCard(
+            uiState = uiState,
+            onToggleEngine = onToggleEngine,
+        )
         SaveSection(uiState, onSaveRecent)
         ForwardRecordingSection(
             forwardState = uiState.forwardRecordingState,
@@ -113,7 +126,49 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun StatusSection(status: CaptureStatus) {
+private fun AppHeader() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_waveform_mic),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(R.string.dashboard_app_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EngineCard(
+    uiState: DashboardUiState,
+    onToggleEngine: () -> Unit,
+) {
+    val status = uiState.captureStatus
     val (labelRes, explanationRes) = when (status) {
         is CaptureStatus.Idle -> R.string.dashboard_status_idle to R.string.dashboard_idle_explanation
         is CaptureStatus.Recording -> R.string.dashboard_status_recording to R.string.dashboard_recording_explanation
@@ -124,42 +179,233 @@ private fun StatusSection(status: CaptureStatus) {
     val explanation = stringResource(explanationRes)
     val announcement = stringResource(R.string.dashboard_status_announcement, label)
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (status is CaptureStatus.Recording) {
-                RecordingPulse()
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .background(statusColor(status), CircleShape),
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Status Header + Sample Rate Pill
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (status is CaptureStatus.Recording) {
+                        RecordingPulse()
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(statusColor(status), CircleShape),
+                        )
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Text(
+                        text = stringResource(R.string.dashboard_engine_sample_rate),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+
+            // Mic Input Level (VU Meter)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_waveform_mic),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_mic_level_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    Text(
+                        text = if (status is CaptureStatus.Recording) "45%" else "0%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                MicLevelMeter(isRecording = status is CaptureStatus.Recording)
+            }
+
+            // Circular Buffer (RAM only)
+            BufferRamVisualizer(uiState)
+
+            // Switch / Toggle Engine
+            EngineToggle(uiState.engineSwitch, onToggleEngine)
+
+            if (explanation.isNotEmpty()) {
+                Text(
+                    text = explanation,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(text = label, style = MaterialTheme.typography.headlineMedium)
+            if (status is CaptureStatus.Error && status.message.isNotBlank()) {
+                Text(
+                    text = status.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
-        if (explanation.isNotEmpty()) {
-            Text(
-                text = explanation,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp),
+    }
+}
+
+@Composable
+private fun MicLevelMeter(
+    isRecording: Boolean,
+    modifier: Modifier = Modifier,
+    segmentCount: Int = 18,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "mic-level")
+    val animatedLevel by if (isRecording) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 0.75f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "mic-level-anim",
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
+
+    val activeSegments = if (isRecording) {
+        (animatedLevel * segmentCount).toInt().coerceIn(1, segmentCount)
+    } else {
+        0
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (i in 0 until segmentCount) {
+            val isActive = i < activeSegments
+            val color = if (isActive) {
+                if (i >= (segmentCount * 0.85f).toInt()) {
+                    MaterialTheme.colorScheme.error
+                } else if (i >= (segmentCount * 0.65f).toInt()) {
+                    MaterialTheme.colorScheme.tertiary
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(color),
             )
         }
-        if (status is CaptureStatus.Error && status.message.isNotBlank()) {
+    }
+}
+
+@Composable
+private fun BufferRamVisualizer(uiState: DashboardUiState) {
+    val bufferedMin = uiState.bufferedMillis.toFloat() / 60_000f
+    val capacityMin = uiState.capacityMillis.toFloat() / 60_000f
+    val percentage = if (capacityMin > 0f) ((bufferedMin / capacityMin) * 100f).toInt().coerceIn(0, 100) else 0
+    val fraction = if (uiState.capacityMillis > 0) {
+        (uiState.bufferedMillis.toFloat() / uiState.capacityMillis.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val bufferedLabel = formatMillisAsClock(uiState.bufferedMillis)
+    val capacityLabel = formatMillisAsClock(uiState.capacityMillis)
+    val progressCd = stringResource(R.string.dashboard_buffer_status_cd, bufferedLabel, capacityLabel)
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_ram_memory),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.dashboard_buffer_ram_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
             Text(
-                text = status.message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp),
+                text = String.format(Locale.US, "%.1f min / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .semantics { contentDescription = progressCd },
+        )
+
+        Text(
+            text = stringResource(R.string.dashboard_buffer_ram_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -177,7 +423,7 @@ private fun RecordingPulse() {
     )
     Box(
         modifier = Modifier
-            .size(16.dp)
+            .size(12.dp)
             .alpha(alpha)
             .background(MaterialTheme.colorScheme.primary, CircleShape)
             .clearAndSetSemantics {},
@@ -189,40 +435,6 @@ private fun statusColor(status: CaptureStatus): Color = when (status) {
     is CaptureStatus.Paused -> Color(0xFFF9A825)
     is CaptureStatus.Error -> Color(0xFFB3261E)
     is CaptureStatus.Recording -> Color.Unspecified
-}
-
-@Composable
-private fun BufferSection(uiState: DashboardUiState) {
-    val bufferedLabel = formatMillisAsClock(uiState.bufferedMillis)
-    val capacityLabel = formatMillisAsClock(uiState.capacityMillis)
-    val statusText = stringResource(R.string.dashboard_buffer_status, bufferedLabel, capacityLabel)
-    val progressCd = stringResource(R.string.dashboard_buffer_status_cd, bufferedLabel, capacityLabel)
-    val fraction = if (uiState.capacityMillis > 0) {
-        (uiState.bufferedMillis.toFloat() / uiState.capacityMillis.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        LinearProgressIndicator(
-            progress = { fraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = progressCd },
-        )
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (uiState.isBufferFull) {
-            Text(
-                text = stringResource(R.string.dashboard_buffer_full_notice),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-    }
 }
 
 @Composable
@@ -256,7 +468,7 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.titleMedium)
+            Text(text = label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
             Text(text = stateText, style = MaterialTheme.typography.bodyMedium, color = stateColor)
         }
         Switch(
@@ -288,10 +500,27 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = explanation, style = MaterialTheme.typography.bodySmall)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_bookmark_save),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.dashboard_save_card_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(text = explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Button(
                 onClick = onSaveRecent,
@@ -314,24 +543,31 @@ private fun ForwardRecordingSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_continuous_record),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.dashboard_forward_card_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             when (forwardState) {
                 is ForwardRecordingUiState.Recording -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        RecordingPulse()
-                        Text(
-                            text = stringResource(R.string.dashboard_forward_recording_title),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
                     val elapsedFormatted = formatMillisAsClock(forwardState.elapsedMillis)
                     val elapsedText = stringResource(R.string.dashboard_forward_elapsed_label, elapsedFormatted)
                     val elapsedCd = stringResource(R.string.dashboard_forward_elapsed_cd, elapsedFormatted)
@@ -347,6 +583,7 @@ private fun ForwardRecordingSection(
                         Text(
                             text = elapsedText,
                             style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag(FORWARD_ELAPSED_TEST_TAG),
                         )
                         Text(
@@ -370,6 +607,7 @@ private fun ForwardRecordingSection(
                     Text(
                         text = stringResource(R.string.dashboard_forward_explanation),
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(
                         onClick = onStart,
@@ -418,9 +656,10 @@ private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(text = body, style = MaterialTheme.typography.bodyMedium)
             if (dismissible) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
@@ -459,9 +698,10 @@ private fun ForwardOutcomeNotice(
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(text = body, style = MaterialTheme.typography.bodyMedium)
             OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                 Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
