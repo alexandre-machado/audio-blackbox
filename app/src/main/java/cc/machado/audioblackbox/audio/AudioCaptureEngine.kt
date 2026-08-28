@@ -89,6 +89,17 @@ class AudioCaptureEngine(
     private val _gaps = MutableStateFlow<List<PauseGap>>(emptyList())
     val gaps: StateFlow<List<PauseGap>> = _gaps.asStateFlow()
 
+    // Live microphone input level in 0f..1f, recomputed from the PCM of every read() (see
+    // captureLoop). Written only from the capture thread; MutableStateFlow's setter is thread-safe
+    // and conflates for a slow collector, so the UI reads whatever the most recent block measured
+    // without the capture loop ever blocking on it.
+    //
+    // Forced back to 0f whenever audio is not reaching the ring buffer -- paused, stopped, or
+    // errored. That is the honesty requirement this exists for: the meter must read empty exactly
+    // when nothing is being captured, including while another app holds the microphone.
+    private val _inputLevel = MutableStateFlow(0f)
+    val inputLevel: StateFlow<Float> = _inputLevel.asStateFlow()
+
     // Guards state transitions and the fields below. Only `write()`-equivalent work (the
     // capture loop's read/write) happens outside this lock, on the dedicated capture thread.
     private val lock = Any()
@@ -248,6 +259,7 @@ class AudioCaptureEngine(
             audioRecord = record
             stopRequested = false
             paused = false
+            _inputLevel.value = 0f
             _gaps.value = emptyList()
             generation += 1
             val myGeneration = generation
@@ -318,6 +330,10 @@ class AudioCaptureEngine(
             if (_state.value is CaptureState.Recording) {
                 paused = true
                 pauseStartMillis = clock()
+                // The capture loop stops measuring while paused, so without this the meter would
+                // freeze at the last level it saw instead of dropping to empty -- the exact
+                // "looks alive while it is not" failure this meter was rewritten to end.
+                _inputLevel.value = 0f
                 _state.value = CaptureState.Paused
             }
         }
@@ -362,7 +378,10 @@ class AudioCaptureEngine(
             while (!stopRequested) {
                 val bytesRead = record.read(scratch, 0, scratch.size)
                 if (bytesRead > 0) {
-                    if (!paused) buffer.write(scratch, 0, bytesRead)
+                    if (!paused) {
+                        buffer.write(scratch, 0, bytesRead)
+                        _inputLevel.value = AudioLevel.peakLevel(scratch, 0, bytesRead)
+                    }
                 } else if (bytesRead < 0) {
                     val reason = mapReadError(bytesRead)
                     synchronized(lock) {
@@ -380,6 +399,7 @@ class AudioCaptureEngine(
             // newer session has already superseded this thread -- it's this thread's own buffer,
             // never shared, so clearing it is always safe (see PR #20 review, finding 3).
             buffer.clear()
+            _inputLevel.value = 0f
             synchronized(lock) {
                 try {
                     record.stop()

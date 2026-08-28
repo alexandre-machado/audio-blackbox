@@ -2,8 +2,10 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import androidx.annotation.StringRes
 import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.audio.AudioLevel
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Formats a millisecond duration as `MM:SS` for the buffer indicator (e.g. `754_000L` ->
  * `"12:34"`). A small, purely-presentational helper -- not audio/export logic -- so it is fine
@@ -32,4 +34,18 @@ fun CaptureErrorReason.toUserMessageRes(): Int = when (this) {
     CaptureErrorReason.READ_BAD_VALUE -> R.string.capture_error_read_bad_value
     CaptureErrorReason.READ_DEAD_OBJECT -> R.string.capture_error_read_dead_object
     CaptureErrorReason.READ_UNKNOWN_ERROR -> R.string.capture_error_read_unknown_error
+}
+
+/**
+ * Converts a meter level in `0f..1f` back to the dBFS figure shown beside the bar.
+ *
+ * [cc.machado.audioblackbox.audio.AudioLevel.peakLevel] maps
+ * [cc.machado.audioblackbox.audio.AudioLevel.MIN_DBFS]..0 dB onto 0f..1f, so this is that mapping
+ * inverted -- presentation only, and deliberately not part of the measurement: the engine reports
+ * one number and the UI decides how to render it, the same split every other value on this screen
+ * follows.
+ */
+fun dbfsFor(level: Float): Int {
+    val clamped = level.coerceIn(0f, 1f)
+    return (AudioLevel.MIN_DBFS + clamped * -AudioLevel.MIN_DBFS).roundToInt()
 }
