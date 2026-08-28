@@ -65,7 +65,7 @@
 
     <string name="dashboard_idle_explanation">Recording is stopped. Nothing is being recorded right now. Turn on the switch below to begin continuous background recording.</string>
     <string name="dashboard_recording_explanation">Recording continues in the background. When the buffer fills up, the oldest audio is automatically replaced with the newest.</string>
-    <string name="dashboard_paused_explanation">Recording is paused because the microphone is being used by a call. Recording will resume automatically once the call ends.</string>
+    <string name="dashboard_paused_explanation">Recording is paused because another app is using the microphone. Recording will resume automatically once the microphone is free.</string>
 
     <!-- Capture error reasons (issue #39) -->
     <string name="capture_error_buffer_allocation_failed">Not enough device memory to allocate the audio buffer. Try reducing the retention window in Settings.</string>
@@ -82,7 +82,7 @@
     <string name="dashboard_engine_switch_label">Continuous recording</string>
     <string name="dashboard_engine_switch_state_on">On — recording continuously</string>
     <string name="dashboard_engine_switch_state_off">Off — nothing is being recorded</string>
-    <string name="dashboard_engine_switch_state_paused">Paused — a call is using the microphone; recording will resume automatically once it ends</string>
+    <string name="dashboard_engine_switch_state_paused">Paused — another app is using the microphone; recording will resume automatically</string>
     <string name="dashboard_engine_switch_state_starting">Starting…</string>
     <string name="dashboard_engine_switch_state_stopping">Stopping…</string>
     <string name="dashboard_engine_switch_state_error">Off — recording stopped because of an error</string>

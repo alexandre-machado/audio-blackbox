@@ -60,7 +60,7 @@
 
     <string name="dashboard_idle_explanation">A gravação está parada. Nada está sendo gravado agora. Ative o interruptor abaixo para começar a gravação contínua em segundo plano.</string>
     <string name="dashboard_recording_explanation">A gravação continua em segundo plano. Quando o buffer enche, o áudio mais antigo é substituído automaticamente pelo mais recente.</string>
-    <string name="dashboard_paused_explanation">Gravação pausada porque o microfone está sendo usado por uma chamada. A gravação será retomada automaticamente assim que a chamada terminar.</string>
+    <string name="dashboard_paused_explanation">Gravação pausada porque outro aplicativo está usando o microfone. A gravação será retomada automaticamente assim que o microfone ficar livre.</string>
 
     <!-- Motivos de erro de captura (issue #39) -->
     <string name="capture_error_buffer_allocation_failed">Memória insuficiente para alocar o buffer de áudio. Tente reduzir a janela de retenção em Ajustes.</string>
@@ -77,7 +77,7 @@
     <string name="dashboard_engine_switch_label">Gravação contínua</string>
     <string name="dashboard_engine_switch_state_on">Ligado — gravando continuamente</string>
     <string name="dashboard_engine_switch_state_off">Desligado — nada está sendo gravado</string>
-    <string name="dashboard_engine_switch_state_paused">Pausado — uma ligação está usando o microfone; a gravação será retomada automaticamente quando ela terminar</string>
+    <string name="dashboard_engine_switch_state_paused">Pausado — outro aplicativo está usando o microfone; a gravação será retomada automaticamente</string>
     <string name="dashboard_engine_switch_state_starting">Iniciando…</string>
     <string name="dashboard_engine_switch_state_stopping">Parando…</string>
     <string name="dashboard_engine_switch_state_error">Desligado — a gravação parou por causa de um erro</string>

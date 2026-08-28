@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -127,12 +128,14 @@ class RecorderService : Service() {
     // documented no-op and interruption pause/resume simply does not fire automatically. minSdk is
     // 29 for other reasons (see AudioConfig/build.gradle.kts); this is a known, accepted gap on
     // that one OS version rather than something unit-testable or silently pretended away.
+    //
+    // The decision itself lives in MicrophoneSilencing.decide, not here (issue #155): an anonymous
+    // callback taking a framework Parcelable is unreachable from a JVM test, which is how the
+    // strand bug this replaces survived unnoticed.
     private val recordingCallback = object : AudioManager.AudioRecordingCallback() {
         override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-            val sessionId = engine.audioSessionId ?: return
-            val ourConfig = configs.firstOrNull { it.clientAudioSessionId == sessionId } ?: return
-            if (ourConfig.isClientSilenced) engine.pause() else engine.resume()
+            applySilencingDecision(configs.toActiveCaptures())
         }
     }
 
@@ -161,6 +164,22 @@ class RecorderService : Service() {
         // (issue #30).
         serviceScope.launch {
             notificationRefresher.run { refreshNotification() }
+        }
+        // Watchdog for the silencing strand (issue #155). Deliberately not folded into
+        // PeriodicNotificationRefresher: that one only ticks while Recording (see its
+        // collectLatest), which is exactly the state we are *not* in when stranded -- it would
+        // never run in the only situation this exists for. Ticks solely while Paused, so a
+        // healthy recording session pays nothing for it, and stops on its own the moment the
+        // reconcile below succeeds in resuming.
+        serviceScope.launch {
+            captureState.collectLatest { current ->
+                if (current is CaptureState.Paused) {
+                    while (true) {
+                        delay(SILENCING_RECHECK_INTERVAL_MILLIS)
+                        reconcileSilencing()
+                    }
+                }
+            }
         }
         // Same reactive pattern, applied to ExportEngine's own StateFlow (PR #28 review,
         // `@sec`/`@techlead` finding 4): Exporting/Success/Error each need to reach the
@@ -414,6 +433,35 @@ class RecorderService : Service() {
         manager.notify(RecorderNotification.NOTIFICATION_ID, currentNotification())
     }
 
+    /** Maps the framework's configuration list onto the one field the decision needs, so
+     * [MicrophoneSilencing.decide] never has to see a `Parcelable` it cannot be tested against. */
+    private fun List<AudioRecordingConfiguration>.toActiveCaptures(): List<ActiveCapture> =
+        map { ActiveCapture(sessionId = it.clientAudioSessionId, isSilenced = it.isClientSilenced) }
+
+    private fun applySilencingDecision(active: List<ActiveCapture>) {
+        when (MicrophoneSilencing.decide(engine.audioSessionId, active)) {
+            SilencingDecision.PAUSE -> engine.pause()
+            SilencingDecision.RESUME -> engine.resume()
+            SilencingDecision.NOT_CAPTURING -> Unit
+        }
+    }
+
+    /**
+     * Re-derives the pause/resume decision from the framework's *current* state rather than
+     * waiting for another `onRecordingConfigChanged` (issue #155).
+     *
+     * The callback above is edge-triggered: it only runs when some recording configuration
+     * changes. Every recovery from a silenced state therefore depends on an event that may simply
+     * never arrive -- and because being wrongly stuck in Paused means the ring buffer silently
+     * holds nothing while the notification still reads as running, "we believe the event always
+     * arrives" is not a strong enough basis for the one failure mode that destroys the product.
+     * This is the level-triggered counterpart: it asks the framework what is true right now.
+     */
+    private fun reconcileSilencing() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        applySilencingDecision(audioManager.activeRecordingConfigurations.toActiveCaptures())
+    }
+
     companion object {
         private const val TAG = "RecorderService"
         private const val MILLIS_PER_MINUTE = 60_000L
@@ -421,6 +469,13 @@ class RecorderService : Service() {
         // How long a Save outcome (Success/Error) stays reflected in the persistent notification
         // before exportEngine's state is reset to Idle -- see the onCreate() collector comment.
         private const val EXPORT_OUTCOME_VISIBLE_MILLIS = 8_000L
+
+        // How often, while Paused, to re-ask the framework whether we are still silenced
+        // (issue #155). Only ever runs in the Paused state, so this is not a background poll on a
+        // healthy session. Short enough that a missed un-silencing event costs seconds of audio
+        // rather than the whole session, long enough that a genuine interruption (a phone call)
+        // is not re-queried dozens of times for no benefit.
+        private const val SILENCING_RECHECK_INTERVAL_MILLIS = 5_000L
 
         const val ACTION_START = "cc.machado.audioblackbox.service.action.START"
         const val ACTION_STOP = "cc.machado.audioblackbox.service.action.STOP"
