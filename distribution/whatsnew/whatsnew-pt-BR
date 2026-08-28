@@ -1,7 +1,6 @@
-Novidades da versão 0.3.0:
-• Duas ações principais: Salvar o Passado (últimos 5/15/30 min) e Gravar para Frente
-• Gravação contínua em streaming AAC em tempo real com preservação de áudio
-• Galeria integrada com player de reprodução, controle de avanço e compartilhamento
-• Botão nas Configurações Rápidas (Quick Settings) para iniciar e parar com 1 toque
-• Notificação para retomar gravação após reiniciar o celular
-• Barra de navegação aprimorada e layout otimizado
+Novidades da versão 0.3.1:
+• Painel modernizado com medidor de nível do microfone (VU meter) e barra visual de RAM do buffer
+• Tela de Ajustes redesenhada com especificações do motor de áudio e garantia de privacidade
+• Gravação contínua ao vivo agora sempre inclui o passado retido antes de seguir gravando
+• Notificações e botões da Galeria aprimorados com layout responsivo
+• Processamento 100% local, zero telemetria e privacidade total

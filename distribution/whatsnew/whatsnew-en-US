@@ -1,7 +1,6 @@
-What's new in version 0.3.0:
-• Two primary actions: Save the Past (last 5/15/30 min) and Forward Continuous Recording
-• Real-time streaming AAC recorder with live timeline gap preservation
-• Built-in recordings gallery with native player, seek slider, and share intent
-• Quick Settings Tile to start and stop capture with a single tap
-• One-tap prompt notification to resume continuous recording after device reboot
-• Enhanced navigation bar and edge-to-edge layout polish
+What's new in version 0.3.1:
+• Modernized Dashboard with real-time Mic Input Level (VU meter) and circular buffer RAM progress bar
+• Redesigned Settings screen with audio engine specifications and local privacy guarantee
+• Forward recording always captures the recent buffered past before continuing live
+• Shortened notification action labels and enhanced Gallery layout with responsive flow
+• Purely local offline processing, zero telemetry, and complete privacy
