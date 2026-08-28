@@ -11,11 +11,16 @@
   <a href="docs/release/privacy-policy.md"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
   <a href="https://m3.material.io"><img src="https://img.shields.io/badge/Design-Material%203-6750A4.svg" alt="Material 3"></a>
   <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Beta_Testing-01875F.svg?logo=googleplay&logoColor=white" alt="Google Play Beta"></a>
+  <a href="https://alexandre.machado.cc/audio-blackbox"><img src="https://img.shields.io/badge/Project_Site-alexandre.machado.cc-FF5722.svg" alt="Project Site"></a>
+</p>
+
+<p align="center">
+  <b><a href="https://alexandre.machado.cc/audio-blackbox">alexandre.machado.cc/audio-blackbox</a></b>
 </p>
 
 ---
 
-**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio (**up to 60 minutes**) in device RAM and writes to storage **only when you explicitly ask it to**.
+**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio (**5 to 45 minutes**, in 5-minute steps) in device RAM and writes to storage **only when you explicitly ask it to**.
 
 Nothing touches your disk or leaves your phone until you press save. You can capture important conversations, ideas, or unexpected events *after* they have already happened.
 
@@ -32,7 +37,7 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 ## ✨ Key Features
 
 - 🎯 **Two Primary Capture Modes**:
-  - **Save Recent Past (Lookback)**: Instantly snapshot the last 5, 15, 30, or custom minutes from the memory ring buffer into an AAC (`.m4a`) or lossless WAV file.
+  - **Save Recent Past (Lookback)**: Instantly snapshot everything currently buffered from the memory ring buffer into an AAC (`.m4a`) or lossless WAV file. One action, always the whole buffer -- the old 5/15/30 selector was retired in #121 because it promised windows the buffer might not hold.
   - **Continuous Live Recording**: Start a forward live recording that automatically preserves the preceding buffer timeline so nothing is lost.
 - 📊 **Real-time Live VU Meter**: 18-capsule reactive microphone input level indicator designed with pure stock Material 3 components.
 - 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).

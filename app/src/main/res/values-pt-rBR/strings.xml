@@ -1,5 +1,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Audio Blackbox</string>
+    <!-- Launcher label only. Overridden per build type so a staging install is
+         distinguishable on the home screen; app_name above stays the product name so the
+         in-app header (DashboardScreen) never renders a build tag into a screenshot. -->
+    <string name="app_launcher_name">Audio Blackbox</string>
 
     <!-- Legal / consent notice -->
     <string name="onboarding_legal_title">Aviso legal</string>
