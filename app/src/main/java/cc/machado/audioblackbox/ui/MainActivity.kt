@@ -127,11 +127,11 @@ class MainActivity : ComponentActivity() {
                                                 RecorderService.saveIntent(this@MainActivity),
                                             )
                                         },
-                                        onStartForwardRecording = { startFromOldest ->
+                                        onStartForwardRecording = {
                                             if (permissionSystem.recordAudioGranted()) {
                                                 ContextCompat.startForegroundService(
                                                     this@MainActivity,
-                                                    RecorderService.startForwardIntent(this@MainActivity, startFromOldest),
+                                                    RecorderService.startForwardIntent(this@MainActivity),
                                                 )
                                             } else {
                                                 refreshStep()

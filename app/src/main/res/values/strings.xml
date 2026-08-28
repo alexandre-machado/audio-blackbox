@@ -49,7 +49,12 @@
     <string name="recorder_notification_forward_recording">Live recording: %1$s</string>
     <string name="recorder_notification_forward_success">Live recording saved: %1$s</string>
     <string name="recorder_notification_forward_error">Live recording failed</string>
-    <string name="recorder_notification_action_start_forward">Record forward</string>
+    <!-- Issue #139: reusing the dashboard's "Salvar o passado e seguir gravando" sentence here
+         would collide under the notification action slot's truncation with "Save last N min"
+         once both start with "Save"/"Salvar", risking a wrong tap that either loses the moment
+         or starts an hours long recording (issue #55). Kept a distinct verb, "Record" instead of
+         "Save", short enough to stay legible at the slot's real width. -->
+    <string name="recorder_notification_action_start_forward">Record everything</string>
     <string name="recorder_notification_action_stop_forward">Stop live</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
@@ -87,7 +92,9 @@
     <string name="dashboard_buffer_status_cd">Audio buffer: %1$s of %2$s in memory</string>
     <string name="dashboard_buffer_full_notice">Buffer full: recording over the oldest audio</string>
 
-    <string name="dashboard_save_title">Save recent audio</string>
+    <!-- Issue #139: the card's title used to duplicate this button's own text one line below it;
+         removed the title, the button label plus the explanation sentence below already carry
+         the meaning. -->
     <string name="dashboard_save_button">Save recent audio</string>
     <string name="dashboard_save_explanation_full">Save the full buffer (%1$d min) to device storage.</string>
     <string name="dashboard_save_explanation_partial">Save the audio recorded so far (%1$s) to device storage.</string>
@@ -103,10 +110,10 @@
     <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
     <string name="dashboard_save_notice_dismiss">OK</string>
 
-    <!-- Forward recording (Action 2, issue #55) -->
-    <string name="dashboard_forward_title">Record forward</string>
-    <string name="dashboard_forward_explanation">Record continuously to a new file from now on while keeping the circular buffer rolling.</string>
-    <string name="dashboard_forward_start_button">Start continuous recording</string>
+    <!-- Forward recording (Action 2, issue #55; always includes the retained past, issue #139).
+         Card title removed here too, same reasoning as dashboard_save_button above. -->
+    <string name="dashboard_forward_explanation">Starts a new file with everything currently buffered, then keeps recording live until you stop -- the rolling buffer keeps running the whole time.</string>
+    <string name="dashboard_forward_start_button">Save the past and keep recording</string>
     <string name="dashboard_forward_recording_title">Recording forward</string>
     <string name="dashboard_forward_elapsed_label">Elapsed time: %1$s</string>
     <string name="dashboard_forward_elapsed_cd">Continuous recording elapsed time: %1$s</string>

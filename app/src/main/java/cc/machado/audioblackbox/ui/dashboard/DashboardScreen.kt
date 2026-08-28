@@ -66,7 +66,7 @@ fun DashboardRoute(
         onToggleEngine = viewModel::toggleEngine,
         onSaveRecent = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
-        onStartForwardRecording = { viewModel.startForwardRecording(false) },
+        onStartForwardRecording = viewModel::startForwardRecording,
         onStopForwardRecording = viewModel::stopForwardRecording,
         onDismissForwardNotice = viewModel::dismissForwardRecordingNotice,
         modifier = modifier,
@@ -291,7 +291,6 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = stringResource(R.string.dashboard_save_title), style = MaterialTheme.typography.titleMedium)
             Text(text = explanation, style = MaterialTheme.typography.bodySmall)
 
             Button(
@@ -368,10 +367,6 @@ private fun ForwardRecordingSection(
                     }
                 }
                 else -> {
-                    Text(
-                        text = stringResource(R.string.dashboard_forward_title),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
                     Text(
                         text = stringResource(R.string.dashboard_forward_explanation),
                         style = MaterialTheme.typography.bodyMedium,

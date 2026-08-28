@@ -58,7 +58,7 @@ class DashboardViewModel(
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
     private val onSaveIntent: () -> Unit = {},
-    private val onStartForwardRecording: (startFromOldest: Boolean) -> Unit = {},
+    private val onStartForwardRecording: () -> Unit = {},
     private val onStopForwardRecording: () -> Unit = {},
 ) : ViewModel() {
 
@@ -352,10 +352,13 @@ class DashboardViewModel(
             _dismissedExportState.value = current
         }
     }
-    fun startForwardRecording(startFromOldest: Boolean = false) {
+    /** Starts a forward recording session. Always includes the retained past (issue #139) --
+     * [ForwardRecordingEngine.start] itself has no forward-only mode anymore, so there is nothing
+     * left for this call to parameterize. */
+    fun startForwardRecording() {
         if (forwardRecordingState.value is ForwardRecordingState.Recording) return
         _dismissedForwardRecordingState.value = null
-        onStartForwardRecording(startFromOldest)
+        onStartForwardRecording()
     }
 
     fun stopForwardRecording() {

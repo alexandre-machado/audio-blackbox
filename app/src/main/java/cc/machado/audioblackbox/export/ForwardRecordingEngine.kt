@@ -127,12 +127,16 @@ class ForwardRecordingEngine(
     }
 
     /**
-     * Starts a live forward recording session.
+     * Starts a live forward recording session. Always drains the retained past first (issue
+     * #139 -- the repo owner's 2026-08-26 decision that forward recording has exactly one mode:
+     * it always includes whatever the ring buffer already retains before continuing live). There
+     * used to be a `startFromOldest` parameter here that let a caller opt out into a forward-only
+     * session; every call site converged on `true`, so the flag was deleted rather than pinned --
+     * a knob with one legal value is exactly the seam that let this regress silently.
      *
-     * @param startFromOldest If true, drains the retained past audio first before continuing live.
      * @param customDisplayName Optional explicit filename.
      */
-    fun start(startFromOldest: Boolean = false, customDisplayName: String? = null): ForwardRecordingState {
+    fun start(customDisplayName: String? = null): ForwardRecordingState {
         synchronized(lock) {
             if (_state.value is ForwardRecordingState.Recording) {
                 return ForwardRecordingState.Error(
@@ -141,11 +145,7 @@ class ForwardRecordingEngine(
                 )
             }
 
-            val startCursor = if (startFromOldest) {
-                oldestCursorProvider() ?: writeCursorProvider()
-            } else {
-                writeCursorProvider()
-            }
+            val startCursor = oldestCursorProvider() ?: writeCursorProvider()
 
             if (startCursor == null) {
                 val err = ForwardRecordingState.Error(
