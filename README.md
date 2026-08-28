@@ -1,106 +1,112 @@
 # Audio Blackbox
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+<p align="center">
+  <img src="docs/design/store/feature_graphic_1024x500.png" alt="Audio Blackbox Banner" width="800">
+</p>
 
-A continuous audio recorder for Android that works like a dashcam: it always holds the
-**last 30 minutes** of audio in RAM, and writes them to a file only when you ask it to.
+<p align="center">
+  <a href="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml"><img src="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
+  <a href="https://developer.android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-3DDC84.svg?logo=android&logoColor=white" alt="Android Platform"></a>
+  <a href="docs/release/privacy-policy.md"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
+  <a href="https://m3.material.io"><img src="https://img.shields.io/badge/Design-Material%203-6750A4.svg" alt="Material 3"></a>
+  <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Beta_Testing-01875F.svg?logo=googleplay&logoColor=white" alt="Google Play Beta"></a>
+</p>
 
-Nothing is persisted until you press save. The engine keeps a rolling window in memory and
-continuously overwrites the oldest audio, so you can capture something *after* it already
-happened.
+---
 
-## Beta testing
+**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio (**up to 60 minutes**) in device RAM and writes to storage **only when you explicitly ask it to**.
 
-The app is in open beta on Google Play. Testing is gated behind a Google Group: Play only
-serves the beta build to accounts that are members, so **join the group first** — installing
-before that gets you the "not available for your account" page.
+Nothing touches your disk or leaves your phone until you press save. You can capture important conversations, ideas, or unexpected events *after* they have already happened.
 
-1. **Join the tester group** — <https://groups.google.com/g/ccmachadoaudioblackbox>
-2. **Accept the test** — <https://play.google.com/apps/testing/cc.machado.audioblackbox>
-3. **Install** — <https://play.google.com/store/apps/details?id=cc.machado.audioblackbox>
+---
 
-Membership can take a few minutes to propagate to Play. If step 3 still says the app is
-unavailable, give it a while before assuming something is broken.
+## 📸 Screenshots
 
-Use the same Google account throughout. The account that joins the group must be the one
-signed in to the Play Store on the device.
+| Dashboard (Live VU Meter & Buffer RAM) | Saved Recordings Gallery | Audio Engine & Privacy Specs |
+| :---: | :---: | :---: |
+| <img src="distribution/metadata/android/en-US/images/phoneScreenshots/1_dashboard.png" width="260" alt="Dashboard Screen"> | <img src="distribution/metadata/android/en-US/images/phoneScreenshots/2_gallery.png" width="260" alt="Gallery Screen"> | <img src="distribution/metadata/android/en-US/images/phoneScreenshots/3_settings.png" width="260" alt="Settings Screen"> |
 
-### What is most useful to report
+---
 
-The app records; the risk is that it records *wrongly* and you only find out later. Reports
-about the following are worth more than general impressions:
+## ✨ Key Features
 
-- **Audio that is missing, truncated, or silent** — especially after a phone call, an alarm,
-  another app grabbing the microphone, or the screen being off for a long stretch.
-- **The service dying in the background.** Which manufacturer and Android version, and what
-  the device was doing when the notification disappeared. OEM battery managers are the usual
-  cause and they differ wildly between brands.
-- **A saved file whose length or size looks wrong** in the gallery.
-- **Anything the app tells you that you could not act on** — an error message that does not
-  say what to do next is a bug in its own right.
+- 🎯 **Two Primary Capture Modes**:
+  - **Save Recent Past (Lookback)**: Instantly snapshot the last 5, 15, 30, or custom minutes from the memory ring buffer into an AAC (`.m4a`) or lossless WAV file.
+  - **Continuous Live Recording**: Start a forward live recording that automatically preserves the preceding buffer timeline so nothing is lost.
+- 📊 **Real-time Live VU Meter**: 18-capsule reactive microphone input level indicator designed with pure stock Material 3 components.
+- 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).
+- 🛡️ **100% Local, Zero-Network Privacy**:
+  - **Zero Network Permissions**: The `android.permission.INTERNET` permission is completely absent from the merged release manifest.
+  - **Zero Telemetry / Crash SDKs**: No Firebase, no analytics, no third-party trackers.
+  - **Local Persistence Only**: Files are saved directly to your device's standard `Recordings/Blackbox/` folder.
+- ⚡ **Seamless Interruption Handling**: Pauses gracefully during phone calls or third-party audio focus grabs, preserving silence gaps to ensure exported timestamps remain perfectly synced.
+- 🔋 **Robust Background Survival**: Dedicated foreground capture service with persistent notifications and guided manufacturer battery-killer bypass.
+- 🎵 **Integrated Audio Player**: Playback, seek, manage, and share your recordings directly inside the app with native Android sharesheets.
+- 🔘 **Quick Settings Tile**: Start and stop capture with a single tap from Android's Quick Settings panel.
 
-Please include your device model and Android version. Open an issue here, or reply on the
-group thread if you would rather not have a GitHub account.
+---
 
-### What the app does not do
+## 🔬 Audio Engine Specifications
 
-Worth knowing before you install something that listens continuously:
+| Parameter | Specification | Details |
+| :--- | :--- | :--- |
+| **Internal Buffer** | 16-bit Linear PCM | Pre-allocated circular ring buffer in RAM |
+| **Sample Rate** | 16,000 Hz (Standard) / 44,100 Hz | Optimized for voice clarity and low memory footprint |
+| **Channel Config** | Mono (1 Channel) | Maximizes retention duration per megabyte |
+| **Export Formats** | AAC LC (`.m4a`) & Lossless WAV | Hardware-accelerated `MediaCodec` streaming encoder |
+| **Storage Destination** | `Recordings/Blackbox/` | Standard Android `MediaStore` collection |
+| **Thread Architecture** | Dedicated Single-Writer | Capture thread performs zero disk I/O and zero IPC |
 
-- It has **no network permission at all**. Not "does not send data" as a promise — the
-  capability is absent from the manifest, so there is no code path that could.
-- There is **no analytics or crash reporting SDK**. That is deliberate ([#119]), and it is why
-  the bug reports above matter: the app cannot tell us anything you do not.
-- Audio stays in RAM until you press save, and saved files go to your own storage. Nothing is
-  uploaded anywhere.
+---
 
-Full details in the [privacy policy](docs/release/privacy-policy.md).
+## 📲 Download & Beta Testing
 
-[#119]: https://github.com/alexandre-machado/audio-blackbox/issues/119
+Audio Blackbox is available in open beta via Google Play:
 
-## Features
+1. **Join the Tester Group** $\rightarrow$ [Google Groups: ccmachadoaudioblackbox](https://groups.google.com/g/ccmachadoaudioblackbox)
+2. **Accept the Web Test Invitation** $\rightarrow$ [Play Store Testing Portal](https://play.google.com/apps/testing/cc.machado.audioblackbox)
+3. **Install on Device** $\rightarrow$ [Google Play Store](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)
 
-- **Rolling in-memory buffer** — a pre-allocated ring buffer holds the most recent audio and
-  overwrites the oldest, with configurable quality (16 kHz mono through 44.1 kHz stereo) to
-  trade audio fidelity against RAM.
-- **Survives the background** — a microphone foreground service with a persistent
-  notification keeps capturing with the app closed and the screen off, including a guided
-  bypass of aggressive OEM battery killers.
-- **Handles interruptions** — recording pauses during phone calls and resumes automatically,
-  and the gap is preserved as real silence so the exported timeline stays accurate.
-- **Save the past** — one action exports the buffered audio as an AAC `.m4a` into
-  `Recordings/Blackbox/` (falling back to `Music/Blackbox/` on API 29-30, where the platform's
-  `Recordings/` root doesn't exist), while recording continues uninterrupted.
-- **Keep recording forward** — start a continuous recording to a new file while the circular
-  buffer keeps rolling behind it.
-- **Play and share** — an in-app gallery lists your saved recordings with an embedded player
-  and a share action to send them anywhere.
+*Note: You can also download signed `.apk` / `.aab` artifacts directly from our [GitHub Releases](https://github.com/alexandre-machado/audio-blackbox/releases).*
 
-## Status
+---
 
-Open beta on Google Play. See [Beta testing](#beta-testing) above to get in.
+## 🛠️ Developer & Build Guide
 
-Work is tracked on the [Audio Blackbox board](https://github.com/users/alexandre-machado/projects/2).
+### Stack Binding
+- **Language**: Kotlin 2.1+
+- **UI Framework**: Jetpack Compose with Material 3 (1.4.0 stable)
+- **Minimum SDK**: Android 10 (API 29)
+- **Target SDK**: Android 16 (API 36 / 37 compile)
+- **Build System**: Gradle with Kotlin DSL (`build.gradle.kts`)
 
-## Stack
+### Local Build & Testing
 
-Kotlin · Jetpack Compose · Material 3 (stable 1.4.0) · Gradle Kotlin DSL
-`minSdk 29` · `targetSdk 36`
+Prerequisites: JDK 17 and Android SDK 37.
 
-## Documentation
+```bash
+# Clone the repository
+git clone https://github.com/alexandre-machado/audio-blackbox.git
+cd audio-blackbox
 
-The full feature specification lives in [`docs/`](docs/README.md), one document per module.
+# Run JVM Unit Tests & Localization Lints (Primary Pre-Merge Gate)
+./gradlew testDebugUnitTest lintDebug
 
-For developer and agent conventions, operational invariants, and testing rules, see [`AGENTS.md`](AGENTS.md).
+# Assemble Debug APK
+./gradlew assembleDebug
+```
 
-For running the app on a physical device, see
-[Running on a physical device from WSL](docs/development/running-on-device.md).
+For testing principles, non-vacuous mutation rules, and architecture invariants, see [`AGENTS.md`](AGENTS.md).
 
-## Recording laws
+---
 
-Recording conversations may require the consent of the participants depending on your
-jurisdiction. You are responsible for how you use this app.
+## ⚖️ Legal & Recording Regulations
 
-## License
+Recording conversations may require one-party or all-party consent depending on your jurisdiction. Audio Blackbox is a tool; you are solely responsible for ensuring your use complies with local laws and privacy regulations.
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE) — see the [LICENSE](LICENSE) file for details.
+---
 
+## 📄 License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).

@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Blackbox — Continuous Ambient Audio Buffer for Android</title>
+  <meta name="description" content="A continuous audio recorder for Android that works like a flight recorder / dashcam: holds the last 30 minutes in RAM, writes to storage only when you ask it to. 100% Private, Zero Network Egress.">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  
+  <!-- Open Graph / Meta -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Audio Blackbox — Continuous Audio Buffer for Android">
+  <meta property="og:description" content="Hold the last 30 minutes of sound in RAM. Save the past after it happened. 100% Local & Private.">
+  <meta property="og:image" content="assets/feature_graphic.png">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #090D16;
+      --bg-card: rgba(18, 24, 38, 0.75);
+      --bg-card-hover: rgba(28, 38, 58, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-color-glow: rgba(56, 189, 248, 0.3);
+      
+      --primary: #38BDF8;
+      --primary-dark: #0284C7;
+      --primary-glow: rgba(56, 189, 248, 0.25);
+      
+      --accent-orange: #FB923C;
+      --accent-green: #34D399;
+      --accent-purple: #A78BFA;
+      
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-full: 9999px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(at 20% 15%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+        radial-gradient(at 80% 30%, rgba(251, 146, 60, 0.06) 0px, transparent 50%),
+        radial-gradient(at 50% 85%, rgba(52, 211, 153, 0.05) 0px, transparent 50%);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(9, 13, 22, 0.8);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 0;
+    }
+
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+
+    .nav-logo img {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 15px rgba(251, 146, 60, 0.3);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-full);
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+      color: #FFFFFF;
+      box-shadow: 0 4px 20px var(--primary-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(56, 189, 248, 0.4);
+      background: linear-gradient(135deg, #38BDF8 0%, #0284C7 100%);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .btn-orange {
+      background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
+      color: #FFFFFF;
+      box-shadow: 0 4px 20px rgba(234, 88, 12, 0.3);
+    }
+
+    .btn-orange:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(251, 146, 60, 0.4);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 80px 0 60px;
+      position: relative;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: var(--radius-full);
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--primary);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: 3.25rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #FFFFFF 30%, #94A3B8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p.lead {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      max-width: 540px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    .hero-badge-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Interactive Phone Mockup */
+    .phone-wrapper {
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+
+    .phone-glow {
+      position: absolute;
+      width: 320px;
+      height: 480px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, transparent 70%);
+      filter: blur(40px);
+      z-index: 0;
+    }
+
+    .phone-mockup {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 340px;
+      background: #0B1120;
+      border: 6px solid #1E293B;
+      border-radius: 40px;
+      padding: 20px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+
+    .phone-camera-island {
+      width: 90px;
+      height: 20px;
+      background: #020617;
+      border-radius: var(--radius-full);
+      margin: 0 auto 16px;
+    }
+
+    .phone-app-card {
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 16px;
+    }
+
+    /* Live VU Meter Simulation */
+    .vu-meter-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .vu-meter-bars {
+      display: flex;
+      gap: 3px;
+      height: 36px;
+      align-items: flex-end;
+    }
+
+    .vu-bar {
+      flex: 1;
+      background: #334155;
+      border-radius: 2px;
+      transition: height 0.08s ease, background-color 0.08s ease;
+      height: 15%;
+    }
+
+    .vu-bar.active-low { background: #38BDF8; }
+    .vu-bar.active-mid { background: #34D399; }
+    .vu-bar.active-high { background: #FB923C; }
+    .vu-bar.active-peak { background: #F87171; }
+
+    /* Buffer RAM Visualizer */
+    .buffer-widget {
+      margin-top: 12px;
+    }
+
+    .buffer-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      margin-bottom: 6px;
+    }
+
+    .buffer-track {
+      width: 100%;
+      height: 8px;
+      background: #1E293B;
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .buffer-progress {
+      width: 98%;
+      height: 100%;
+      background: linear-gradient(90deg, #0284C7, #38BDF8);
+      border-radius: var(--radius-full);
+      animation: bufferPulse 3s infinite ease-in-out;
+    }
+
+    @keyframes bufferPulse {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 1; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6)); }
+    }
+
+    .phone-btn-save {
+      width: 100%;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #EA580C 0%, #9A3412 100%);
+      color: white;
+      font-weight: 700;
+      font-size: 0.95rem;
+      text-align: center;
+      border: none;
+      box-shadow: 0 4px 15px rgba(234, 88, 12, 0.4);
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    .phone-btn-live {
+      width: 100%;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-align: center;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    /* Section Styles */
+    section {
+      padding: 90px 0;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto 50px;
+    }
+
+    .section-tag {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--primary);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .section-title {
+      font-size: 2.25rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: #FFFFFF;
+    }
+
+    .section-desc {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      background: var(--bg-card-hover);
+      border-color: rgba(56, 189, 248, 0.4);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .feature-icon-wrapper {
+      width: 52px;
+      height: 52px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    .icon-blue { background: rgba(56, 189, 248, 0.15); color: #38BDF8; }
+    .icon-orange { background: rgba(251, 146, 60, 0.15); color: #FB923C; }
+    .icon-green { background: rgba(52, 211, 153, 0.15); color: #34D399; }
+    .icon-purple { background: rgba(167, 139, 250, 0.15); color: #A78BFA; }
+
+    .feature-card h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #FFFFFF;
+    }
+
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* Calculator Section */
+    .calc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+
+    .calc-control {
+      margin-bottom: 24px;
+    }
+
+    .calc-label {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+
+    .calc-slider {
+      width: 100%;
+      height: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #1E293B;
+      border-radius: var(--radius-full);
+      outline: none;
+    }
+
+    .calc-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .calc-result-box {
+      background: rgba(11, 17, 32, 0.8);
+      border-radius: var(--radius-md);
+      padding: 30px;
+      border: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    .calc-result-num {
+      font-size: 3.5rem;
+      font-weight: 800;
+      color: var(--primary);
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .calc-result-sub {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Privacy Banner */
+    .privacy-banner {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(2, 44, 34, 0.4) 100%);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 48px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .privacy-icon {
+      font-size: 3.5rem;
+      color: var(--accent-green);
+    }
+
+    .privacy-content h3 {
+      font-size: 1.6rem;
+      margin-bottom: 12px;
+      color: #FFFFFF;
+    }
+
+    .privacy-content p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    /* Screenshots Showcase */
+    .screenshots-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 30px;
+    }
+
+    .screenshot-item {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+    }
+
+    .screenshot-item:hover {
+      transform: scale(1.03);
+    }
+
+    .screenshot-item img {
+      width: 100%;
+      display: block;
+    }
+
+    /* Steps Section */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .step-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      position: relative;
+    }
+
+    .step-number {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 16px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 60px 0 40px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+
+    .footer-col h4 {
+      color: #FFFFFF;
+      margin-bottom: 16px;
+      font-size: 1rem;
+    }
+
+    .footer-col ul {
+      list-style: none;
+    }
+
+    .footer-col ul li {
+      margin-bottom: 10px;
+    }
+
+    .footer-col ul li a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-col ul li a:hover {
+      color: var(--primary);
+    }
+
+    .footer-bottom {
+      border-top: 1px solid var(--border-color);
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .hero-grid, .calc-card, .footer-grid, .privacy-banner {
+        grid-template-columns: 1fr;
+      }
+      .screenshots-row, .steps-grid {
+        grid-template-columns: 1fr;
+      }
+      .hero h1 {
+        font-size: 2.4rem;
+      }
+      .phone-wrapper {
+        margin-top: 40px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="container nav-inner">
+      <a href="#" class="nav-logo">
+        <img src="assets/icon.png" alt="Audio Blackbox Logo">
+        <span>Audio Blackbox</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#specs">Specifications</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+        <li><a href="#beta">Beta Testing</a></li>
+        <li><a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank" class="btn btn-secondary">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="container hero-grid">
+      <div>
+        <div class="badge-pill">
+          <span style="display:inline-block; width:8px; height:8px; background:var(--accent-green); border-radius:50%; margin-right:4px;"></span>
+          100% Private • Zero Network Egress • GPL-3.0
+        </div>
+        <h1>The Audio Blackbox for Android</h1>
+        <p class="lead">
+          A continuous ambient memory recorder. It holds the last 30 minutes of sound in RAM and writes to storage <strong>only when you explicitly ask it to</strong>.
+        </p>
+
+        <div class="hero-actions">
+          <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox" target="_blank" class="btn btn-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.792 12 3.61 22.186a2.008 2.008 0 0 1-.61-1.425V3.24c0-.547.22-1.044.609-1.426zm11.602 11.602l2.392 2.392-12.79 7.382 10.398-9.774zm0-2.832L4.813 0.81l12.79 7.383-2.392 2.391zm1.414 1.416l3.528 2.037c.854.493.854 1.302 0 1.795l-3.528 2.037-2.122-2.122 2.122-2.122l-.001-.025z"/></svg>
+            Join Google Play Beta
+          </a>
+          <a href="https://github.com/alexandre-machado/audio-blackbox/releases" target="_blank" class="btn btn-secondary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+            Releases (.apk)
+          </a>
+        </div>
+
+        <div class="hero-badges">
+          <div class="hero-badge-item">
+            <span style="color:var(--accent-green)">✓</span> Android 10+ (API 29+)
+          </div>
+          <div class="hero-badge-item">
+            <span style="color:var(--accent-green)">✓</span> Material 3
+          </div>
+          <div class="hero-badge-item">
+            <span style="color:var(--accent-green)">✓</span> 100% Kotlin & Compose
+          </div>
+          <div class="hero-badge-item">
+            <span style="color:var(--accent-green)">✓</span> Open Source (GPL-3.0)
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Interactive Simulator -->
+      <div class="phone-wrapper">
+        <div class="phone-glow"></div>
+        <div class="phone-mockup">
+          <div class="phone-camera-island"></div>
+          
+          <div class="phone-app-card">
+            <div style="font-size:0.75rem; font-weight:700; color:var(--primary); text-transform:uppercase; margin-bottom:4px;">ENGINE ACTIVE</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#FFFFFF; margin-bottom:12px;">Rolling Buffer Status</div>
+            
+            <div class="vu-meter-header">
+              <span>MIC INPUT (VU)</span>
+              <span id="vu-db-text">-22 dB</span>
+            </div>
+            <div class="vu-meter-bars" id="vu-meter-container">
+              <!-- 18 VU bars generated dynamically -->
+            </div>
+
+            <div class="buffer-widget">
+              <div class="buffer-label-row">
+                <span style="color:var(--text-muted)">Buffer Retention</span>
+                <span id="buffer-stat-text" style="font-family:'JetBrains Mono'; color:var(--text-main); font-weight:600;">29:52 / 30:00 (54.8 MB)</span>
+              </div>
+              <div class="buffer-track">
+                <div class="buffer-progress"></div>
+              </div>
+            </div>
+          </div>
+
+          <button class="phone-btn-save" onclick="triggerSimulatedSave()">
+            💾 Save Past 30 Minutes (.m4a)
+          </button>
+          
+          <button class="phone-btn-live">
+            ⏺ Start Continuous Live Record
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Core Features Section -->
+  <section id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Capabilities</span>
+        <h2 class="section-title">Designed for Total Privacy & Instant Recall</h2>
+        <p class="section-desc">Continuous ambient capture without wearing out your SSD, draining your battery, or uploading a single byte to the cloud.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-orange">⏱</div>
+          <h3>Save the Past (Lookback)</h3>
+          <p>Captured an unexpected joke, brainstorm breakthrough, or critical instruction? Tap save and Audio Blackbox writes the last 5 to 60 minutes directly to disk.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-green">🛡</div>
+          <h3>Zero Network Permission</h3>
+          <p><code>INTERNET</code> permission is strictly absent from the application manifest. It cannot send telemetry, ping analytics, or upload sound. Full offline guarantee.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-blue">⚡</div>
+          <h3>Dedicated Capture Loop</h3>
+          <p>Zero disk I/O and zero IPC allocations on the audio capture thread. Guaranteed single-writer synchronization eliminates dropouts and GC pauses.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-purple">📞</div>
+          <h3>Call & Focus Handling</h3>
+          <p>Pauses automatically during incoming phone calls and audio focus grabs. The gap is preserved as true silence so exported timeline timestamps never drift.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-blue">🔋</div>
+          <h3>OEM Battery Survival</h3>
+          <p>Foreground service with active notification and guided manufacturer battery-optimization bypass keeps recording uninterrupted even with the screen off.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-orange">🎵</div>
+          <h3>In-App Audio Player</h3>
+          <p>Manage, listen, seek, and share your exported `.m4a` (AAC) or `.wav` recordings directly to messaging apps and clouds via Android Sharesheets.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Calculator / Technical Specs -->
+  <section id="specs">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Memory Architecture</span>
+        <h2 class="section-title">Predictable RAM Footprint</h2>
+        <p class="section-desc">Audio Blackbox allocates its circular buffer once at startup. Slide to calculate exact RAM consumption.</p>
+      </div>
+
+      <div class="calc-card">
+        <div>
+          <div class="calc-control">
+            <div class="calc-label">
+              <span>Retention Window</span>
+              <span id="calc-min-val" style="color:var(--primary); font-family:'JetBrains Mono'">30 minutes</span>
+            </div>
+            <input type="range" min="5" max="60" value="30" step="5" class="calc-slider" id="calc-slider" oninput="updateMemoryCalc()">
+          </div>
+
+          <div class="calc-control">
+            <div class="calc-label">
+              <span>Sample Rate & Format</span>
+              <span style="color:var(--text-muted)">16-bit PCM Mono</span>
+            </div>
+            <select id="calc-rate-select" onchange="updateMemoryCalc()" style="width:100%; padding:12px; border-radius:var(--radius-sm); background:#1E293B; color:white; border:1px solid var(--border-color); outline:none; font-family:'Inter'">
+              <option value="16000" selected>16,000 Hz (Speech Optimized — 32 KB/s)</option>
+              <option value="44100">44,100 Hz (Full Spectrum Studio — 88.2 KB/s)</option>
+            </select>
+          </div>
+
+          <div style="font-size:0.85rem; color:var(--text-dim); line-height:1.5;">
+            * Standard 16 kHz Mono is ideal for spoken conversations, interviews, and meetings with high intelligibility and minimal memory impact.
+          </div>
+        </div>
+
+        <div class="calc-result-box">
+          <div class="calc-result-sub" style="text-transform:uppercase; letter-spacing:0.05em; font-weight:700; margin-bottom:8px;">RAM Buffer Allocation</div>
+          <div class="calc-result-num" id="calc-ram-mb">54.9 MB</div>
+          <div class="calc-result-sub" id="calc-stats-detail">32.0 KB/sec continuous throughput</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section id="screenshots">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Visuals</span>
+        <h2 class="section-title">Native Material 3 Interface</h2>
+        <p class="section-desc">Adheres strictly to modern Android 16 design principles, dynamic color schemes, and system responsiveness.</p>
+      </div>
+
+      <div class="screenshots-row">
+        <div class="screenshot-item">
+          <img src="assets/screenshot_dashboard.png" alt="Dashboard Screen">
+        </div>
+        <div class="screenshot-item">
+          <img src="assets/screenshot_gallery.png" alt="Gallery Screen">
+        </div>
+        <div class="screenshot-item">
+          <img src="assets/screenshot_settings.png" alt="Settings Screen">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Privacy Proof -->
+  <section id="privacy">
+    <div class="container">
+      <div class="privacy-banner">
+        <div class="privacy-icon">🔒</div>
+        <div class="privacy-content">
+          <h3>Architecturally Private by Design</h3>
+          <p>
+            Many recording apps require cloud logins, background analytics, and periodic syncing. Audio Blackbox contains <strong>no internet permission</strong> in its Android manifest, has <strong>no analytics SDKs</strong>, and never touches remote servers. Your voice stays in volatile memory until you save it to local storage.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Beta Onboarding -->
+  <section id="beta">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Open Beta</span>
+        <h2 class="section-title">Get Audio Blackbox on Google Play</h2>
+        <p class="section-desc">Join our tester community in 3 simple steps.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">01</div>
+          <h3 style="margin-bottom:10px; color:#FFF;">Join Google Group</h3>
+          <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:16px;">Google Play gates beta builds to members of the community group.</p>
+          <a href="https://groups.google.com/g/ccmachadoaudioblackbox" target="_blank" class="btn btn-secondary" style="font-size:0.85rem;">Join Group &rarr;</a>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">02</div>
+          <h3 style="margin-bottom:10px; color:#FFF;">Accept Web Test</h3>
+          <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:16px;">Enroll your Google Account to receive the testing build track.</p>
+          <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox" target="_blank" class="btn btn-secondary" style="font-size:0.85rem;">Accept Invite &rarr;</a>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">03</div>
+          <h3 style="margin-bottom:10px; color:#FFF;">Install App</h3>
+          <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:16px;">Download directly from the Google Play Store on your device.</p>
+          <a href="https://play.google.com/store/apps/details?id=cc.machado.audioblackbox" target="_blank" class="btn btn-primary" style="font-size:0.85rem;">Open Play Store &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="nav-logo" style="margin-bottom:16px;">
+            <img src="assets/icon.png" alt="Logo">
+            <span>Audio Blackbox</span>
+          </div>
+          <p style="color:var(--text-muted); max-width:360px; margin-bottom:16px;">
+            Continuous ambient memory recorder for Android. Built with Kotlin, Jetpack Compose, and Material 3.
+          </p>
+        </div>
+        <div class="footer-col">
+          <h4>Documentation</h4>
+          <ul>
+            <li><a href="https://github.com/alexandre-machado/audio-blackbox/blob/main/docs/README.md" target="_blank">Architecture Specs</a></li>
+            <li><a href="https://github.com/alexandre-machado/audio-blackbox/blob/main/AGENTS.md" target="_blank">AGENTS.md & Invariants</a></li>
+            <li><a href="https://github.com/alexandre-machado/audio-blackbox/blob/main/docs/release/privacy-policy.md" target="_blank">Privacy Policy</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Open Source</h4>
+          <ul>
+            <li><a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank">GitHub Repository</a></li>
+            <li><a href="https://github.com/alexandre-machado/audio-blackbox/releases" target="_blank">Releases & APKs</a></li>
+            <li><a href="https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE" target="_blank">GPL-3.0 License</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 Alexandre Machado. Licensed under GNU GPL v3.0.</div>
+        <div>Recording conversations may require participant consent under local laws.</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Interactive JavaScript -->
+  <script>
+    // VU Meter Animation
+    const vuContainer = document.getElementById('vu-meter-container');
+    const vuDbText = document.getElementById('vu-db-text');
+    const totalBars = 18;
+    const bars = [];
+
+    for (let i = 0; i < totalBars; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'vu-bar';
+      vuContainer.appendChild(bar);
+      bars.push(bar);
+    }
+
+    function updateVuMeter() {
+      // Simulate natural speech ambient fluctuations
+      const baseLevel = 0.35 + Math.sin(Date.now() / 400) * 0.25 + (Math.random() * 0.2);
+      const activeCount = Math.floor(baseLevel * totalBars);
+      const db = Math.round(-45 + (baseLevel * 42));
+      vuDbText.innerText = `${db} dB`;
+
+      bars.forEach((bar, idx) => {
+        if (idx < activeCount) {
+          const heightPct = 25 + Math.min(75, (idx / totalBars) * 100);
+          bar.style.height = `${heightPct}%`;
+          if (idx < 10) bar.className = 'vu-bar active-low';
+          else if (idx < 14) bar.className = 'vu-bar active-mid';
+          else if (idx < 16) bar.className = 'vu-bar active-high';
+          else bar.className = 'vu-bar active-peak';
+        } else {
+          bar.style.height = '15%';
+          bar.className = 'vu-bar';
+        }
+      });
+    }
+
+    setInterval(updateVuMeter, 100);
+
+    // Memory Calculator
+    function updateMemoryCalc() {
+      const minutes = parseInt(document.getElementById('calc-slider').value, 10);
+      const sampleRate = parseInt(document.getElementById('calc-rate-select').value, 10);
+      
+      document.getElementById('calc-min-val').innerText = `${minutes} minutes`;
+      
+      // 16-bit = 2 bytes per sample, 1 channel mono
+      const bytesPerSec = sampleRate * 2 * 1;
+      const totalBytes = minutes * 60 * bytesPerSec;
+      const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+      const kbSec = (bytesPerSec / 1024).toFixed(1);
+
+      document.getElementById('calc-ram-mb').innerText = `${totalMB} MB`;
+      document.getElementById('calc-stats-detail').innerText = `${kbSec} KB/sec continuous throughput`;
+    }
+
+    function triggerSimulatedSave() {
+      alert("✅ Snapshot Exported! Saved 30-minute .m4a AAC recording to Recordings/Blackbox/ (Mock Demo)");
+    }
+  </script>
+</body>
+</html>
