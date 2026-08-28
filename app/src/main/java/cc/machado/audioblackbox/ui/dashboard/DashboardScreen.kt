@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -58,6 +60,11 @@ import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.AvionicsGreen
+import cc.machado.audioblackbox.ui.theme.CautionAmber
+import cc.machado.audioblackbox.ui.theme.FlightOrange
+import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
+import cc.machado.audioblackbox.ui.theme.WarningRed
 import java.util.Locale
 
 /**
@@ -135,15 +142,16 @@ private fun AppHeader() {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = RoundedCornerShape(12.dp),
+            color = FlightOrangeContainer,
+            border = BorderStroke(1.dp, FlightOrange.copy(alpha = 0.4f)),
             modifier = Modifier.size(44.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     painter = painterResource(R.drawable.ic_waveform_mic),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    tint = FlightOrange,
                     modifier = Modifier.size(24.dp),
                 )
             }
@@ -157,6 +165,7 @@ private fun AppHeader() {
             Text(
                 text = stringResource(R.string.dashboard_app_subtitle),
                 style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -187,8 +196,9 @@ private fun EngineCard(
                 contentDescription = announcement
             },
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         ),
     ) {
         Column(
@@ -221,13 +231,15 @@ private fun EngineCard(
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Text(
                         text = stringResource(R.string.dashboard_engine_sample_rate),
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
@@ -249,7 +261,7 @@ private fun EngineCard(
                             painter = painterResource(R.drawable.ic_waveform_mic),
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = FlightOrange,
                         )
                         Text(
                             text = stringResource(R.string.dashboard_mic_level_label),
@@ -258,7 +270,7 @@ private fun EngineCard(
                         )
                     }
                     Text(
-                        text = if (status is CaptureStatus.Recording) "45%" else "0%",
+                        text = if (status is CaptureStatus.Recording) "-18 dBFS" else "MUTED",
                         style = MaterialTheme.typography.labelMedium,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -295,7 +307,7 @@ private fun EngineCard(
 private fun MicLevelMeter(
     isRecording: Boolean,
     modifier: Modifier = Modifier,
-    segmentCount: Int = 18,
+    segmentCount: Int = 20,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "mic-level")
     val animatedLevel by if (isRecording) {
@@ -329,11 +341,11 @@ private fun MicLevelMeter(
             val isActive = i < activeSegments
             val color = if (isActive) {
                 if (i >= (segmentCount * 0.85f).toInt()) {
-                    MaterialTheme.colorScheme.error
+                    WarningRed
                 } else if (i >= (segmentCount * 0.65f).toInt()) {
-                    MaterialTheme.colorScheme.tertiary
+                    CautionAmber
                 } else {
-                    MaterialTheme.colorScheme.primary
+                    AvionicsGreen
                 }
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
@@ -342,7 +354,7 @@ private fun MicLevelMeter(
                 modifier = Modifier
                     .weight(1f)
                     .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(2.dp))
                     .background(color),
             )
         }
@@ -376,7 +388,7 @@ private fun BufferRamVisualizer(uiState: DashboardUiState) {
                     painter = painterResource(R.drawable.ic_ram_memory),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = FlightOrange,
                 )
                 Text(
                     text = stringResource(R.string.dashboard_buffer_ram_label),
@@ -394,6 +406,8 @@ private fun BufferRamVisualizer(uiState: DashboardUiState) {
 
         LinearProgressIndicator(
             progress = { fraction },
+            color = FlightOrange,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
@@ -425,16 +439,16 @@ private fun RecordingPulse() {
         modifier = Modifier
             .size(12.dp)
             .alpha(alpha)
-            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .background(AvionicsGreen, CircleShape)
             .clearAndSetSemantics {},
     )
 }
 
 private fun statusColor(status: CaptureStatus): Color = when (status) {
     is CaptureStatus.Idle -> Color.Gray
-    is CaptureStatus.Paused -> Color(0xFFF9A825)
-    is CaptureStatus.Error -> Color(0xFFB3261E)
-    is CaptureStatus.Recording -> Color.Unspecified
+    is CaptureStatus.Paused -> CautionAmber
+    is CaptureStatus.Error -> WarningRed
+    is CaptureStatus.Recording -> AvionicsGreen
 }
 
 @Composable
@@ -453,7 +467,7 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
     val stateColor = when {
         engineSwitch.pending -> MaterialTheme.colorScheme.onSurfaceVariant
         engineSwitch.error != null -> MaterialTheme.colorScheme.error
-        engineSwitch.paused -> Color(0xFFF9A825)
+        engineSwitch.paused -> CautionAmber
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -501,7 +515,8 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
@@ -512,7 +527,7 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
                     painter = painterResource(R.drawable.ic_bookmark_save),
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = FlightOrange,
                 )
                 Text(
                     text = stringResource(R.string.dashboard_save_card_title),
@@ -525,11 +540,21 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
             Button(
                 onClick = onSaveRecent,
                 enabled = canSave,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FlightOrange,
+                    contentColor = Color.White,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(48.dp)
                     .semantics { contentDescription = buttonCd },
             ) {
-                Text(text = stringResource(R.string.dashboard_save_button))
+                Text(
+                    text = stringResource(R.string.dashboard_save_button),
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
@@ -544,7 +569,8 @@ private fun ForwardRecordingSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -558,7 +584,7 @@ private fun ForwardRecordingSection(
                     painter = painterResource(R.drawable.ic_continuous_record),
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = FlightOrange,
                 )
                 Text(
                     text = stringResource(R.string.dashboard_forward_card_title),

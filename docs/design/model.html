@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Blackbox — Avionics Design System & Living UI Model</title>
+  <meta name="description" content="Interactive living design prototype and Material 3 design system for Audio Blackbox based on US Aviation and Cockpit Avionics standards.">
+  <link rel="icon" type="image/png" href="../assets/icon.png">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* Aviation / Cockpit Design Tokens */
+      --color-flight-orange: #FF5722;
+      --color-flight-orange-hover: #F4511E;
+      --color-flight-orange-light: #FF8A50;
+      --color-flight-orange-dark: #BF360C;
+      --color-flight-orange-glow: rgba(255, 87, 34, 0.35);
+
+      --color-nvis-green: #10B981;
+      --color-nvis-green-glow: rgba(16, 185, 129, 0.4);
+      --color-nvis-green-dim: #064E3B;
+
+      --color-caution-amber: #F59E0B;
+      --color-caution-amber-glow: rgba(245, 158, 11, 0.4);
+
+      --color-warning-red: #EF4444;
+      --color-warning-red-glow: rgba(239, 68, 68, 0.4);
+
+      --color-telemetry-cyan: #06B6D4;
+      --color-telemetry-cyan-glow: rgba(6, 182, 212, 0.3);
+
+      --color-cockpit-bg: #0A0E17;
+      --color-cockpit-panel: #111827;
+      --color-cockpit-panel-raised: #1A2234;
+      --color-cockpit-border: rgba(255, 255, 255, 0.08);
+      --color-cockpit-border-strong: rgba(255, 255, 255, 0.16);
+
+      --color-text-stencil: #F8FAFC;
+      --color-text-muted: #94A3B8;
+      --color-text-dim: #64748B;
+
+      --radius-rivet: 4px;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--color-cockpit-bg);
+      color: var(--color-text-stencil);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(255, 87, 34, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    }
+
+    /* Top Banner Header */
+    .top-header {
+      background: rgba(17, 24, 39, 0.95);
+      border-bottom: 1px solid var(--color-cockpit-border);
+      backdrop-filter: blur(12px);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .top-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .top-brand img {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+    }
+
+    .top-brand-title {
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .top-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      background: rgba(255, 87, 34, 0.15);
+      color: var(--color-flight-orange);
+      border: 1px solid rgba(255, 87, 34, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .top-nav-links {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .top-nav-links a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .top-nav-links a:hover {
+      color: var(--color-flight-orange);
+    }
+
+    /* Layout Workbench */
+    .workbench {
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 32px;
+      max-width: 1440px;
+      margin: 24px auto;
+      padding: 0 24px 60px;
+    }
+
+    @media (max-width: 1024px) {
+      .workbench {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==========================================================================
+       PHONE HARDWARE SIMULATOR (LEFT COLUMN)
+       ========================================================================== */
+    .simulator-container {
+      position: sticky;
+      top: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .phone-device {
+      width: 390px;
+      background: #080C14;
+      border: 10px solid #1E293B;
+      border-radius: 48px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 40px rgba(255, 87, 34, 0.15);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Status Bar */
+    .phone-status-bar {
+      padding: 12px 24px 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .camera-island {
+      width: 80px;
+      height: 18px;
+      background: #020617;
+      border-radius: var(--radius-full);
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    /* Phone Screen Content */
+    .phone-screen {
+      padding: 12px 18px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: 720px;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .phone-screen::-webkit-scrollbar { display: none; }
+
+    /* App Header / Avionics Data Plate */
+    .app-header-plate {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    .plate-title-group h2 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #FFFFFF;
+    }
+
+    .plate-subtitle {
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--color-flight-orange);
+      text-transform: uppercase;
+    }
+
+    /* Avionics Rivet Card */
+    .avionics-card {
+      background: var(--color-cockpit-panel);
+      border: 1px solid var(--color-cockpit-border-strong);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Subtle Screw Rivets on Card Corners */
+    .avionics-card::before, .avionics-card::after {
+      content: "＋";
+      position: absolute;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: #475569;
+      line-height: 1;
+    }
+    .avionics-card::before { top: 6px; left: 8px; }
+    .avionics-card::after { top: 6px; right: 8px; }
+
+    .card-label-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--color-text-dim);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    /* Korry-Style Annunciator Switch Status */
+    .annunciator-box {
+      background: #090D15;
+      border: 1.5px solid var(--color-cockpit-border-strong);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .annunciator-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .led-bulb {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--color-nvis-green);
+      box-shadow: 0 0 10px var(--color-nvis-green-glow);
+      animation: ledPulse 2s infinite ease-in-out;
+    }
+
+    @keyframes ledPulse {
+      0%, 100% { opacity: 0.7; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 6px var(--color-nvis-green)); }
+    }
+
+    .annunciator-text-top {
+      font-size: 0.75rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--color-nvis-green);
+      letter-spacing: 0.05em;
+    }
+
+    .annunciator-text-sub {
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--color-text-muted);
+    }
+
+    /* Switch Toggle */
+    .switch-toggle {
+      width: 44px;
+      height: 24px;
+      background: var(--color-flight-orange);
+      border-radius: var(--radius-full);
+      padding: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .switch-knob {
+      width: 20px;
+      height: 20px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      transform: translateX(20px);
+      transition: transform 0.2s;
+    }
+
+    /* Remove Before Flight Tag Banner */
+    .rbf-tag {
+      background: #B91C1C;
+      border: 1px solid #EF4444;
+      border-radius: 4px;
+      padding: 8px 12px;
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(185, 28, 28, 0.4);
+      position: relative;
+    }
+
+    .rbf-tag::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px #7F1D1D;
+    }
+
+    /* VU Meter Segmented LED Bars */
+    .vu-meter-rack {
+      background: #090D15;
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .vu-rack-header {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--color-text-muted);
+      margin-bottom: 6px;
+    }
+
+    .vu-rack-bars {
+      display: flex;
+      gap: 3px;
+      height: 22px;
+      align-items: flex-end;
+    }
+
+    .vu-led-seg {
+      flex: 1;
+      height: 20%;
+      background: #1E293B;
+      border-radius: 1.5px;
+      transition: height 0.06s ease, background-color 0.06s ease;
+    }
+
+    .vu-led-seg.active-green {
+      background: var(--color-nvis-green);
+      box-shadow: 0 0 6px var(--color-nvis-green-glow);
+    }
+    .vu-led-seg.active-amber {
+      background: var(--color-caution-amber);
+      box-shadow: 0 0 6px var(--color-caution-amber-glow);
+    }
+    .vu-led-seg.active-red {
+      background: var(--color-warning-red);
+      box-shadow: 0 0 8px var(--color-warning-red-glow);
+    }
+
+    /* FDR Flight Tape Ruler / Buffer RAM */
+    .tape-visualizer {
+      background: #090D15;
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+
+    .tape-header {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--color-text-muted);
+      margin-bottom: 6px;
+    }
+
+    .tape-ruler-track {
+      height: 14px;
+      background: #1E293B;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      background-image: repeating-linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.15) 0px,
+        rgba(255, 255, 255, 0.15) 1px,
+        transparent 1px,
+        transparent 8px
+      );
+    }
+
+    .tape-fill {
+      height: 100%;
+      width: 98%;
+      background: linear-gradient(90deg, #EA580C 0%, #FF5722 80%, #FF8A50 100%);
+      border-radius: 3px;
+      box-shadow: 0 0 10px rgba(255, 87, 34, 0.4);
+      position: relative;
+    }
+
+    .tape-fill::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #FFFFFF;
+      box-shadow: 0 0 6px #FFFFFF;
+    }
+
+    /* Lookback Big Button (Flight Recorder CTA) */
+    .btn-lookback-cta {
+      width: 100%;
+      background: linear-gradient(135deg, #FF5722 0%, #D84315 100%);
+      color: #FFFFFF;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-weight: 800;
+      font-size: 0.92rem;
+      font-family: 'Inter', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 6px 20px var(--color-flight-orange-glow), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      transition: all 0.15s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-lookback-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(255, 87, 34, 0.5);
+    }
+
+    .btn-lookback-cta:active {
+      transform: translateY(1px);
+      box-shadow: 0 3px 10px var(--color-flight-orange-glow);
+    }
+
+    /* Gallery Compact Row in Model */
+    .gallery-preview-card {
+      background: rgba(26, 34, 52, 0.7);
+      border: 1px solid var(--color-cockpit-border-strong);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+    }
+
+    .gallery-row-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .gallery-meta h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .gallery-meta span {
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--color-text-muted);
+    }
+
+    .gallery-actions-rack {
+      display: flex;
+      gap: 6px;
+    }
+
+    .gallery-icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--color-cockpit-border);
+      color: var(--color-text-stencil);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .gallery-icon-btn.play {
+      background: var(--color-flight-orange);
+      border-color: var(--color-flight-orange-light);
+      color: white;
+    }
+
+    .gallery-icon-btn:hover {
+      transform: scale(1.08);
+    }
+
+    /* Bottom Nav Bar */
+    .phone-bottom-nav {
+      background: rgba(17, 24, 39, 0.95);
+      border-top: 1px solid var(--color-cockpit-border);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin-top: auto;
+    }
+
+    .nav-tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      color: var(--color-text-dim);
+      font-size: 0.65rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .nav-tab-item.active {
+      color: var(--color-flight-orange);
+    }
+
+    .nav-tab-item svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* ==========================================================================
+       DESIGN CONTROL TOWER (RIGHT COLUMN)
+       ========================================================================== */
+    .control-tower {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .section-box {
+      background: var(--color-cockpit-panel);
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+
+    .section-box-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-box-desc {
+      font-size: 0.88rem;
+      color: var(--color-text-muted);
+      margin-bottom: 20px;
+    }
+
+    /* Palette Swatches */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+    }
+
+    .swatch-card {
+      background: #090D15;
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .swatch-card:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .swatch-color {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+
+    .swatch-info h5 {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .swatch-info code {
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--color-text-muted);
+    }
+
+    /* Interactive State Control Buttons */
+    .state-buttons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .state-btn {
+      background: #1A2234;
+      border: 1px solid var(--color-cockpit-border);
+      color: var(--color-text-stencil);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+
+    .state-btn:hover {
+      background: #243048;
+      border-color: var(--color-flight-orange);
+    }
+
+    .state-btn.active {
+      background: rgba(255, 87, 34, 0.2);
+      border-color: var(--color-flight-orange);
+      color: #FFFFFF;
+    }
+
+    /* Code Snippet Box */
+    .code-box {
+      background: #090D15;
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: #38BDF8;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+
+    .code-comment { color: #64748B; }
+    .code-keyword { color: #F472B6; }
+    .code-string { color: #34D399; }
+    .code-func { color: #FBBF24; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header class="top-header">
+    <div class="top-brand">
+      <img src="../assets/icon.png" alt="Audio Blackbox Icon">
+      <div class="top-brand-title">
+        <span>Audio Blackbox</span>
+        <span class="top-tag">LIVING DESIGN MODEL</span>
+      </div>
+    </div>
+    <div class="top-nav-links">
+      <a href="../index.html">← Back to Hotsite</a>
+      <a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank">GitHub Repository</a>
+    </div>
+  </header>
+
+  <!-- Main Workbench -->
+  <main class="workbench">
+
+    <!-- LEFT: Phone Simulator -->
+    <div class="simulator-container">
+      <div class="phone-device">
+        <div class="camera-island"></div>
+        <div class="phone-status-bar">
+          <span>12:00</span>
+          <span>● REC // 100%</span>
+        </div>
+
+        <div class="phone-screen" id="phone-screen-root">
+
+          <!-- Header / Data Plate -->
+          <div class="app-header-plate">
+            <div class="plate-title-group">
+              <h2>Audio Blackbox</h2>
+              <div class="plate-subtitle">FLIGHT RECORDER // VOLATILE RAM</div>
+            </div>
+            <div style="font-size: 1.2rem;">🔒</div>
+          </div>
+
+          <!-- Annunciator / Status Card -->
+          <div class="avionics-card">
+            <div class="card-label-bar">
+              <span>SYS STATUS // ANNUNCIATOR</span>
+              <span id="annunciator-spec-tag">16.0 kHz PCM</span>
+            </div>
+
+            <!-- Active Annunciator Mode -->
+            <div class="annunciator-box" id="annunciator-active-box">
+              <div class="annunciator-indicator">
+                <div class="led-bulb" id="annunciator-led"></div>
+                <div>
+                  <div class="annunciator-text-top" id="annunciator-title">RECORDER ARMED & RUNNING</div>
+                  <div class="annunciator-text-sub" id="annunciator-sub">CH-01 · 16-BIT · VOLATILE MEMORY</div>
+                </div>
+              </div>
+              <div class="switch-toggle" id="engine-switch" onclick="toggleEngineState()">
+                <div class="switch-knob" id="switch-knob"></div>
+              </div>
+            </div>
+
+            <!-- Remove Before Flight Standby Tag -->
+            <div class="rbf-tag" id="rbf-standby-tag">
+              <span>REMOVE BEFORE FLIGHT // RECORDER STANDBY</span>
+            </div>
+
+            <!-- VU Meter -->
+            <div class="vu-meter-rack">
+              <div class="vu-rack-header">
+                <span>MIC INPUT LEVEL (VU)</span>
+                <span id="vu-db-readout">-18 dBFS</span>
+              </div>
+              <div class="vu-rack-bars" id="vu-rack-bars">
+                <!-- 20 segments generated via JS -->
+              </div>
+            </div>
+
+            <!-- Buffer RAM Flight Tape -->
+            <div class="tape-visualizer">
+              <div class="tape-header">
+                <span>CIRCULAR BUFFER RETENTION</span>
+                <span id="tape-time-readout" style="color:var(--color-flight-orange)">29:54 / 30:00 (54.8 MB)</span>
+              </div>
+              <div class="tape-ruler-track">
+                <div class="tape-fill" id="tape-progress-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Primary Lookback CTA -->
+          <button class="btn-lookback-cta" onclick="alert('💾 Lookback Snapshot Triggered: Saved last 30 minutes to Recordings/Blackbox/ (AAC .m4a)')">
+            <span>💾 EXTRACT PAST 30 MIN (.M4A)</span>
+          </button>
+
+          <!-- Recent Flight Recording (Gallery Row) -->
+          <div class="avionics-card" style="padding-top: 16px;">
+            <div class="card-label-bar">
+              <span>LATEST FLIGHT LOG // MEDIASTORE</span>
+              <span>1 ITEM</span>
+            </div>
+
+            <div class="gallery-preview-card">
+              <div class="gallery-row-header">
+                <div class="gallery-meta">
+                  <h4>11:39 AM · Aug 28, 2026</h4>
+                  <span>05:00 · 2.4 MB · AAC M4A</span>
+                </div>
+                <div class="gallery-actions-rack">
+                  <button class="gallery-icon-btn play" title="Play">▶</button>
+                  <button class="gallery-icon-btn" title="Share">↗</button>
+                  <button class="gallery-icon-btn" title="Delete" style="color:#F87171">🗑</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Phone Bottom Nav -->
+        <div class="phone-bottom-nav">
+          <div class="nav-tab-item active">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Cockpit</span>
+          </div>
+          <div class="nav-tab-item">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <span>Recordings</span>
+          </div>
+          <div class="nav-tab-item">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span>Avionics</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Control Tower & Specs -->
+    <div class="control-tower">
+
+      <!-- Interactive State Simulator -->
+      <div class="section-box">
+        <div class="section-box-title">
+          <span>🎛️ Simulation Controls</span>
+        </div>
+        <div class="section-box-desc">
+          Test real-time visual states of the avionics instrumentation and annunciator logic.
+        </div>
+
+        <div class="state-buttons-grid">
+          <button class="state-btn active" onclick="setSimState('RECORDING')">🟢 Nominal Recording</button>
+          <button class="state-btn" onclick="setSimState('PAUSED')">🟡 Phone Call / Preempted</button>
+          <button class="state-btn" onclick="setSimState('IDLE')">🔴 Standby / Disarmed</button>
+          <button class="state-btn" onclick="setSimState('OVERFLOW')">🟠 Buffer Saturated (30m)</button>
+        </div>
+
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <label style="font-size:0.85rem; font-family:'JetBrains Mono'; color:var(--color-text-muted)">MIC NOISE LEVEL:</label>
+          <input type="range" min="10" max="95" value="45" id="mic-noise-slider" style="flex:1;">
+        </div>
+      </div>
+
+      <!-- Color Palette Tokens -->
+      <div class="section-box">
+        <div class="section-box-title">
+          <span>🎨 Aerospace Color Palette & M3 Mapping</span>
+        </div>
+        <div class="section-box-desc">
+          Official FED-STD-595 aero specifications harmonized for Jetpack Compose Material 3 tokens.
+        </div>
+
+        <div class="palette-grid">
+          <div class="swatch-card" onclick="navigator.clipboard.writeText('#FF5722'); alert('Copied #FF5722 (Flight Orange)')">
+            <div class="swatch-color" style="background:#FF5722;"></div>
+            <div class="swatch-info">
+              <h5>Flight Orange</h5>
+              <code>#FF5722 (FED 12197)</code>
+            </div>
+          </div>
+
+          <div class="swatch-card" onclick="navigator.clipboard.writeText('#10B981'); alert('Copied #10B981 (NVIS Green)')">
+            <div class="swatch-color" style="background:#10B981;"></div>
+            <div class="swatch-info">
+              <h5>NVIS Green</h5>
+              <code>#10B981 (Avionics)</code>
+            </div>
+          </div>
+
+          <div class="swatch-card" onclick="navigator.clipboard.writeText('#F59E0B'); alert('Copied #F59E0B (Caution Amber)')">
+            <div class="swatch-color" style="background:#F59E0B;"></div>
+            <div class="swatch-info">
+              <h5>Caution Amber</h5>
+              <code>#F59E0B (Korry Amber)</code>
+            </div>
+          </div>
+
+          <div class="swatch-card" onclick="navigator.clipboard.writeText('#EF4444'); alert('Copied #EF4444 (Safety Red)')">
+            <div class="swatch-color" style="background:#EF4444;"></div>
+            <div class="swatch-info">
+              <h5>Safety Red</h5>
+              <code>#EF4444 (RBF Red)</code>
+            </div>
+          </div>
+
+          <div class="swatch-card" onclick="navigator.clipboard.writeText('#0A0E17'); alert('Copied #0A0E17 (Cockpit Slate)')">
+            <div class="swatch-color" style="background:#0A0E17;"></div>
+            <div class="swatch-info">
+              <h5>Cockpit Slate</h5>
+              <code>#0A0E17 (Dark Surface)</code>
+            </div>
+          </div>
+
+          <div class="swatch-card" onclick="navigator.clipboard.writeText('#1A2234'); alert('Copied #1A2234 (Gunmetal Card)')">
+            <div class="swatch-color" style="background:#1A2234;"></div>
+            <div class="swatch-info">
+              <h5>Gunmetal Panel</h5>
+              <code>#1A2234 (M3 Card)</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Implementation Specs & Compose Blueprint -->
+      <div class="section-box">
+        <div class="section-box-title">
+          <span>📦 Compose Architecture Blueprint</span>
+        </div>
+        <div class="section-box-desc">
+          Ready-to-use Compose pattern preserving 100% of the single-writer capture contract.
+        </div>
+
+        <div class="code-box">
+<span class="code-comment">// Material 3 Avionics Data Plate Card</span>
+<span class="code-keyword">@Composable</span>
+<span class="code-keyword">fun</span> <span class="code-func">AvionicsCard</span>(
+    title: <span class="code-keyword">String</span>,
+    specTag: <span class="code-keyword">String</span>,
+    content: <span class="code-keyword">@Composable</span> () -> <span class="code-keyword">Unit</span>
+) {
+    <span class="code-func">Card</span>(
+        shape = <span class="code-func">RoundedCornerShape</span>(<span class="code-string">16.dp</span>),
+        colors = <span class="code-func">CardDefaults</span>.cardColors(
+            containerColor = Color(<span class="code-string">0xFF111827</span>)
+        ),
+        border = <span class="code-func">BorderStroke</span>(<span class="code-string">1.dp</span>, Color(<span class="code-string">0xFF334155</span>))
+    ) {
+        <span class="code-func">Column</span>(modifier = Modifier.padding(<span class="code-string">16.dp</span>)) {
+            <span class="code-func">Row</span>(horizontalArrangement = Arrangement.SpaceBetween) {
+                <span class="code-func">Text</span>(text = title.uppercase(), fontFamily = FontFamily.Monospace)
+                <span class="code-func">Text</span>(text = specTag, color = Color(<span class="code-string">0xFFFF5722</span>))
+            }
+            content()
+        }
+    }
+}
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Interactive JavaScript Engine -->
+  <script>
+    // VU Meter Generator
+    const vuRack = document.getElementById('vu-rack-bars');
+    const vuDbText = document.getElementById('vu-db-readout');
+    const totalBars = 22;
+    const bars = [];
+
+    for (let i = 0; i < totalBars; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'vu-led-seg';
+      vuRack.appendChild(bar);
+      bars.push(bar);
+    }
+
+    let currentState = 'RECORDING';
+
+    function updateVu() {
+      if (currentState !== 'RECORDING') {
+        bars.forEach(b => { b.style.height = '15%'; b.className = 'vu-led-seg'; });
+        vuDbText.innerText = currentState === 'PAUSED' ? 'PAUSED' : 'MUTED';
+        return;
+      }
+
+      const noiseBase = parseInt(document.getElementById('mic-noise-slider').value, 10) / 100;
+      const wave = 0.25 + Math.sin(Date.now() / 350) * 0.2 + (Math.random() * 0.25);
+      const level = Math.min(1.0, noiseBase * wave * 1.6);
+      const activeCount = Math.floor(level * totalBars);
+      const db = Math.round(-48 + (level * 45));
+      vuDbText.innerText = `${db} dBFS`;
+
+      bars.forEach((bar, idx) => {
+        if (idx < activeCount) {
+          bar.style.height = `${30 + (idx / totalBars) * 70}%`;
+          if (idx < 14) bar.className = 'vu-led-seg active-green';
+          else if (idx < 19) bar.className = 'vu-led-seg active-amber';
+          else bar.className = 'vu-led-seg active-red';
+        } else {
+          bar.style.height = '15%';
+          bar.className = 'vu-led-seg';
+        }
+      });
+    }
+
+    setInterval(updateVu, 80);
+
+    // State Handler
+    function setSimState(state) {
+      currentState = state;
+      document.querySelectorAll('.state-btn').forEach(btn => btn.classList.remove('active'));
+      
+      const led = document.getElementById('annunciator-led');
+      const title = document.getElementById('annunciator-title');
+      const sub = document.getElementById('annunciator-sub');
+      const rbfTag = document.getElementById('rbf-standby-tag');
+      const annunciatorBox = document.getElementById('annunciator-active-box');
+      const knob = document.getElementById('switch-knob');
+      const sw = document.getElementById('engine-switch');
+
+      if (state === 'RECORDING') {
+        event && event.target && event.target.classList.add('active');
+        led.style.background = 'var(--color-nvis-green)';
+        led.style.boxShadow = '0 0 10px var(--color-nvis-green-glow)';
+        title.innerText = 'RECORDER ARMED & RUNNING';
+        title.style.color = 'var(--color-nvis-green)';
+        sub.innerText = 'CH-01 · 16.0 kHz PCM · VOLATILE RAM';
+        rbfTag.style.display = 'none';
+        annunciatorBox.style.display = 'flex';
+        knob.style.transform = 'translateX(20px)';
+        sw.style.background = 'var(--color-flight-orange)';
+      } else if (state === 'PAUSED') {
+        event && event.target && event.target.classList.add('active');
+        led.style.background = 'var(--color-caution-amber)';
+        led.style.boxShadow = '0 0 10px var(--color-caution-amber-glow)';
+        title.innerText = '▲ MASTER CAUTION: MIC BUSY';
+        title.style.color = 'var(--color-caution-amber)';
+        sub.innerText = 'PHONE CALL IN PROGRESS · GAP PRESERVED';
+        rbfTag.style.display = 'none';
+        annunciatorBox.style.display = 'flex';
+      } else if (state === 'IDLE') {
+        event && event.target && event.target.classList.add('active');
+        rbfTag.style.display = 'flex';
+        annunciatorBox.style.display = 'none';
+      } else if (state === 'OVERFLOW') {
+        event && event.target && event.target.classList.add('active');
+        led.style.background = 'var(--color-flight-orange)';
+        title.innerText = 'BUFFER SATURATED // ROLLING';
+        title.style.color = 'var(--color-flight-orange)';
+        sub.innerText = 'OVERWRITING OLDEST AUDIO IN RAM';
+      }
+    }
+
+    function toggleEngineState() {
+      if (currentState === 'RECORDING') {
+        setSimState('IDLE');
+      } else {
+        setSimState('RECORDING');
+      }
+    }
+  </script>
+</body>
+</html>
