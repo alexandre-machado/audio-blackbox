@@ -151,3 +151,125 @@ internal fun galleryFixture() = cc.machado.audioblackbox.ui.gallery.GalleryUiSta
     isLoading = false,
     items = emptyList(),
 )
+
+// --- Showcase fixtures (issue #151) ----------------------------------------------------------
+//
+// A SECOND, separate fixture set, used only by ScreenshotCaptureTest's store captures. The layout
+// fixtures above must not be reused for that and must not be "improved" to look nicer: every one of
+// them is deliberately an awkward state -- paused, buffer full, a notice open, a dirty pending
+// change -- chosen so the content overflows COMPACT_WINDOW_HEIGHT. That overflow is the only
+// condition under which issue #78's bug (a bottom bar drawn *over* content rather than reserving
+// space for it) is observable at all, so softening them would leave ScreenLayoutTest passing
+// against the broken layout. That is exactly the vacuous-test failure #78 was filed to avoid.
+//
+// These, by contrast, answer a different question: what should someone see in the Play Store
+// listing before they have ever run the app. Every state below is one the app really reaches; none
+// is an error, an interruption or an empty state. The store screenshots previously came from the
+// layout fixtures, which is why the published listing led with "Recording is paused because the
+// microphone is being used by a call."
+
+/** Recording normally, roughly two thirds of the way through a 30-minute buffer, nothing to dismiss. */
+internal fun showcaseDashboardFixture() = DashboardViewModel.mapUiState(
+    captureState = CaptureState.Recording,
+    bufferedMillis = 18L * 60_000L,
+    capacityMinutes = 30,
+    saveState = SaveUiState.Idle,
+)
+
+/** Settled on a 30-minute retention window: committed == pending, so no dirty notice and no dialog. */
+internal fun showcaseSettingsFixture() = SettingsViewModel.mapUiState(
+    committedMinutes = 30,
+    pendingMinutes = 30,
+    pendingConfirmationMinutes = null,
+)
+
+/**
+ * Three saved recordings rather than the empty state.
+ *
+ * Names follow the real `blackbox_<yyyy-MM-dd_HH-mm-ss>_<window>min.m4a` pattern, because
+ * `GalleryViewModel` parses the capture time back out of the filename -- a name that did not match
+ * would silently fall back to `DATE_ADDED` and render a date unrelated to the one in the name, which
+ * is a detail a reader of the screenshot would notice even if a test would not. Sizes are consistent
+ * with the durations at the app's default bitrate rather than round numbers.
+ *
+ * All three are [ItemPlaybackState.Stopped]: a screenshot of a mid-playback progress bar would
+ * advertise a specific position that means nothing out of context.
+ */
+internal fun showcaseGalleryFixture(): cc.machado.audioblackbox.ui.gallery.GalleryUiState {
+    fun item(name: String, minutes: Long, sizeBytes: Long, capturedAtMillis: Long) =
+        cc.machado.audioblackbox.ui.gallery.RecordingListItem(
+            recording = cc.machado.audioblackbox.ui.gallery.RecordingItem(
+                uri = android.net.Uri.parse("content://media/external/audio/media/$capturedAtMillis"),
+                displayName = name,
+                mimeType = "audio/mp4",
+                sizeBytes = sizeBytes,
+                durationMillis = minutes * 60_000L,
+                capturedAtMillis = capturedAtMillis,
+            ),
+            playback = cc.machado.audioblackbox.ui.gallery.ItemPlaybackState.Stopped,
+        )
+    return cc.machado.audioblackbox.ui.gallery.GalleryUiState(
+        isLoading = false,
+        items = listOf(
+            // capturedAtMillis must agree with the timestamp in the name beside it. The screen
+            // renders capturedAtMillis, so a mismatch shows a date the filename contradicts -- and
+            // this fixture bypasses GalleryViewModel.mapRowsToItems, which is what would normally
+            // derive one from the other. Values are those timestamps at UTC-3.
+            item("blackbox_2026-08-27_14-32-10_30min.m4a", 30, 28_918_272L, 1_787_851_930_000L),
+            item("blackbox_2026-08-26_09-05-44_15min.m4a", 15, 14_459_136L, 1_787_745_944_000L),
+            item("blackbox_2026-08-24_19-48-02_30min.m4a", 30, 28_918_272L, 1_787_611_682_000L),
+        ),
+    )
+}
+
+/**
+ * [HarnessApp] with the showcase fixtures and its destination driven from outside.
+ *
+ * Externally driven on purpose: [HarnessApp] keeps its own `rememberSaveable` selection and is
+ * navigated by clicking the bottom bar, which means resolving each tab's label string. Under a
+ * pinned locale those labels are not the ones the instrumentation's own context would return, so a
+ * capture run would have to look them up through the localized context to find the node. Passing the
+ * destination in removes that coupling entirely -- the capture never needs to know what any tab is
+ * called in the language being captured.
+ */
+@Composable
+internal fun ShowcaseApp(destination: Destination) {
+    AudioBlackboxTheme {
+        AppScaffold(
+            selectedDestination = destination,
+            onSelectDestination = {},
+            showBottomBar = true,
+        ) {
+            when (destination) {
+                Destination.DASHBOARD -> DashboardScreen(
+                    uiState = showcaseDashboardFixture(),
+                    onToggleEngine = {},
+                    onSaveRecent = {},
+                    onDismissSaveNotice = {},
+                    onStartForwardRecording = {},
+                    onStopForwardRecording = {},
+                    onDismissForwardNotice = {},
+                )
+                Destination.GALLERY -> cc.machado.audioblackbox.ui.gallery.GalleryScreen(
+                    uiState = showcaseGalleryFixture(),
+                    onPlayPauseClicked = {},
+                    onSeek = {},
+                    onShareClicked = {},
+                    onDeleteRequested = {},
+                    onDeleteConfirmed = {},
+                    onDeleteCancelled = {},
+                    onDeleteErrorDismissed = {},
+                )
+                Destination.SETTINGS -> SettingsScreen(
+                    uiState = showcaseSettingsFixture(),
+                    onDecrement = {},
+                    onIncrement = {},
+                    onApply = {},
+                    onConfirmRetentionWindowChange = {},
+                    onCancelRetentionWindowChange = {},
+                    onAcknowledgeClampNotice = {},
+                )
+            }
+        }
+    }
+}
