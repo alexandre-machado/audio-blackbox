@@ -108,8 +108,14 @@ TEST_APK="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 [[ -f "$TEST_APK" ]] || fail "$TEST_APK not found after assemble."
 
 log "Installing app + test APKs..."
-"${ADB[@]}" install -r -t "$APP_APK" >/dev/null
-"${ADB[@]}" install -r -t "$TEST_APK" >/dev/null
+# -d (allow version downgrade) is required on a persistent runner, not optional. versionCode is
+# `100 + GITHUB_RUN_NUMBER` (app/build.gradle.kts), and the AVD is not wiped between runs here, so
+# whatever the highest-numbered run installed stays on the device. Any later job with a lower run
+# number -- a re-run of an older run, or a branch built before a newer one landed -- then fails
+# with INSTALL_FAILED_VERSION_DOWNGRADE before a single test executes. On the ephemeral hosted
+# runners this script was written for, the emulator was fresh every time and this could not happen.
+"${ADB[@]}" install -r -d -t "$APP_APK" >/dev/null
+"${ADB[@]}" install -r -d -t "$TEST_APK" >/dev/null
 
 # `install -r` keeps the app's data dir, so captures from an earlier run on the same emulator
 # would otherwise be pulled and uploaded as if this run had produced them -- and would make the
