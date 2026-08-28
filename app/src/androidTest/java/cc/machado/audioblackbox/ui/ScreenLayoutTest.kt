@@ -340,6 +340,67 @@ class ScreenLayoutTest {
         assertSaveSectionValid(ptLocale)
     }
 
+    private fun assertGalleryActionButtonsValid(locale: Locale) {
+        val deleteText = localizedString(locale, R.string.gallery_delete)
+        val deleteNode = composeRule.onAllNodesWithText(deleteText)[0]
+        deleteNode.assertIsDisplayed()
+
+        var layoutResult: TextLayoutResult? = null
+        deleteNode.performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+            val list = mutableListOf<TextLayoutResult>()
+            val handled = it(list)
+            if (handled && list.isNotEmpty()) {
+                layoutResult = list[0]
+            }
+        }
+        assertTrue(
+            "the delete button label ($deleteText) should have a layout result",
+            layoutResult != null,
+        )
+        assertTrue(
+            "the delete button label ($deleteText) wrapped to ${layoutResult!!.lineCount} lines, expected 1 line",
+            layoutResult!!.lineCount == 1,
+        )
+    }
+
+    /**
+     * Oracle: fails if the gallery action buttons ("Play", "Share", "Delete" / "Reproduzir",
+     * "Compartilhar", "Excluir") wrap mid-word inside their button containers under compact width (issue #153).
+     */
+    @Test
+    fun galleryActionButtonsDoNotWrapInCompactWidthWithPortugueseLocale() {
+        val ptLocale = Locale.forLanguageTag("pt-BR")
+        composeRule.setContent {
+            val ptConfig = Configuration(LocalConfiguration.current).apply {
+                setLocale(ptLocale)
+            }
+            val ptContext = LocalContext.current.createConfigurationContext(ptConfig)
+            CompositionLocalProvider(
+                LocalConfiguration provides ptConfig,
+                LocalContext provides ptContext,
+            ) {
+                CompactHarnessApp(
+                    Destination.GALLERY,
+                    galleryUiState = showcaseGalleryFixture(),
+                )
+            }
+        }
+
+        assertGalleryActionButtonsValid(ptLocale)
+    }
+
+    @Test
+    fun galleryActionButtonsDoNotWrapInCompactWidth() {
+        composeRule.setContent {
+            CompactHarnessApp(
+                Destination.GALLERY,
+                galleryUiState = showcaseGalleryFixture(),
+            )
+        }
+
+        assertGalleryActionButtonsValid(Locale.ENGLISH)
+    }
+
     // ---- helpers ----
 
     /** The bar's own [androidx.compose.material3.Surface], i.e. its visible rectangle. */
