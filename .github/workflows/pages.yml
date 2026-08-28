@@ -23,7 +23,11 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    # Self-hosted, like every other job in this repo (#171/#172). Safe here without the
+    # head-repo fork guard the CI jobs carry, because this workflow has no `pull_request`
+    # trigger at all -- it runs only on a push to main and on manual dispatch, neither of
+    # which a fork can cause. The repository guard below still blocks it in a fork.
+    runs-on: self-hosted
     if: github.repository == 'alexandre-machado/audio-blackbox'
     steps:
       - name: Checkout
