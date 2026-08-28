@@ -1,5 +1,7 @@
 # Audio Blackbox
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 A continuous audio recorder for Android that works like a dashcam: it always holds the
 **last 30 minutes** of audio in RAM, and writes them to a file only when you ask it to.
 
@@ -97,3 +99,8 @@ For running the app on a physical device, see
 
 Recording conversations may require the consent of the participants depending on your
 jurisdiction. You are responsible for how you use this app.
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE) — see the [LICENSE](LICENSE) file for details.
+
