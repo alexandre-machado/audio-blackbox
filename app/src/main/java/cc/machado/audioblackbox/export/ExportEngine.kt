@@ -47,9 +47,7 @@ enum class ExportFailureReason {
     CANCELLED,
 
     /** [ExportEngine.export] was called while a previous call on this same instance was still
-     * running (double-tap on the notification's Save action, or an OS-redelivered Intent -- the
-     * same class of duplicate dispatch this codebase already guards
-     * [cc.machado.audioblackbox.service.RecorderService]'s `requestAudioFocus()` against). */
+     * running (double-tap on the notification's Save action, or an OS-redelivered Intent). */
     EXPORT_ALREADY_IN_PROGRESS,
 
     /** Something other than the failure modes above threw while exporting (a future regression,
@@ -187,8 +185,7 @@ class ExportEngine(
      *
      * If an export is already running on this instance, returns
      * [ExportFailureReason.EXPORT_ALREADY_IN_PROGRESS] immediately without touching
-     * [readSinceProvider]/[sink] -- mirrors [cc.machado.audioblackbox.service.AudioFocusTracker]'s
-     * "check before acting" dedup rather than letting two exports interleave.
+     * [readSinceProvider]/[sink] -- "check before acting" dedup rather than letting two exports interleave.
      */
     fun export(durationMillis: Long, minutesLabel: Int, secondsLabel: Int? = null): ExportState {
         synchronized(exportLock) {

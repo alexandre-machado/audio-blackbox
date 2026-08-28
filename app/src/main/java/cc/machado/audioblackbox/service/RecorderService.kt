@@ -5,8 +5,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioRecordingConfiguration
 import android.os.Build
@@ -59,7 +57,6 @@ import kotlinx.coroutines.withContext
 class RecorderService : Service() {
 
     private lateinit var audioManager: AudioManager
-    private lateinit var focusTracker: AudioFocusTracker
 
     // Service-scoped: collects engine.state reactively (see onCreate) so the notification can
     // never go stale between the two user-initiated call sites, and hosts the off-main-thread
@@ -123,14 +120,6 @@ class RecorderService : Service() {
         )
     }
 
-    // Ignoring intent: see class doc on the AudioFocus criterion of issue #3 -- losing audio
-    // focus must not stop the service. This listener's only job is to prove that a focus-change
-    // callback firing never crashes and never triggers a stop; it deliberately does nothing else.
-    // Only the AudioRecordingCallback below (matched to our own session) drives pause()/resume().
-    private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-        Log.d(TAG, "onAudioFocusChange($focusChange) -- ignored, capture continues")
-    }
-
     // Matches AudioRecordingConfiguration.clientAudioSessionId against engine.audioSessionId so
     // this only reacts to *our* session being silenced, not some unrelated app's. isClientSilenced
     // requires API 30 (R); below that there is no framework signal for "the mic was taken by a
@@ -151,7 +140,6 @@ class RecorderService : Service() {
         super.onCreate()
         _isServiceRunning.value = true
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        focusTracker = AudioFocusTracker(audioManager)
         RecorderNotification.ensureChannel(this)
         audioManager.registerAudioRecordingCallback(recordingCallback, null)
         // Reactive notification refresh (PR #23 review, `@sec` finding 1 / `@rev` finding 2):
@@ -279,7 +267,6 @@ class RecorderService : Service() {
 
     override fun onDestroy() {
         audioManager.unregisterAudioRecordingCallback(recordingCallback)
-        focusTracker.abandon()
         // Defensive cleanup for the case where this service is destroyed some other way than
         // through stopServiceCompletely() (e.g. the OS force-destroys it directly). In the common
         // case stopServiceCompletely() has already driven engine.stop() to completion before ever
@@ -314,7 +301,6 @@ class RecorderService : Service() {
             Log.w(TAG, "handleStart(): RECORD_AUDIO not granted, refusing to start capture")
             return
         }
-        requestAudioFocus()
         engine.start()
         // No explicit refreshNotification() call here: the serviceScope collector registered in
         // onCreate() reacts to the engine.state emission engine.start() just produced. Relying on
@@ -340,7 +326,6 @@ class RecorderService : Service() {
             forwardRecordingEngine.stop()
             engine.stop()
             withContext(Dispatchers.Main.immediate) {
-                focusTracker.abandon()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -411,22 +396,6 @@ class RecorderService : Service() {
                 }
                 else -> Unit
             }
-        }
-    }
-
-    private fun requestAudioFocus() {
-        // focusTracker.request() abandons any request it already holds before installing this
-        // one, so a repeated ACTION_START (duplicate tap, redelivered intent) can never leak a
-        // prior registration with AudioManager (PR #23 review, `@rev` finding 4).
-        focusTracker.request {
-            val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
-                .build()
-            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                .setAudioAttributes(attributes)
-                .setOnAudioFocusChangeListener(focusChangeListener)
-                .build()
         }
     }
 

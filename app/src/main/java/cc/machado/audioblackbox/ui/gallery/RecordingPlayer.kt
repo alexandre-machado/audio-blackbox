@@ -61,15 +61,11 @@ interface RecordingPlayer {
 
 /**
  * [RecordingPlayer] backed by a real [MediaPlayer]. Requests audio focus with
- * [AudioAttributes.USAGE_MEDIA] on its own [AudioFocusRequest] registration -- a registration
- * entirely separate from, and unrelated to, whatever
- * [cc.machado.audioblackbox.service.AudioFocusTracker] the still-recording
- * [cc.machado.audioblackbox.service.RecorderService] holds for the *microphone capture* side
- * (issue #3/#4). Pausing this player on an incoming call therefore never touches, and cannot be
- * confused with, capture still running in the background -- issue #7's "must not interfere with
- * the recording service still capturing" requirement. [cc.machado.audioblackbox.service.AudioFocusTracker]
- * itself is not reused here because it discards `requestAudioFocus`'s return value, and this class
- * needs to know whether focus was actually granted before it may start playback at all.
+ * [AudioAttributes.USAGE_MEDIA] on its own [AudioFocusRequest] registration -- playback arbitration
+ * entirely separate from [cc.machado.audioblackbox.service.RecorderService]'s background microphone
+ * capture (issue #3/#4, #154). Pausing this player on an incoming call therefore never touches,
+ * and cannot be confused with, capture still running in the background -- issue #7's "must not
+ * interfere with the recording service still capturing" requirement.
  *
  * [play]/[pause]/[resume]/[stop] are all synchronous from the caller's point of view but the
  * underlying player prepares asynchronously ([MediaPlayer.prepareAsync]): [playback] only
