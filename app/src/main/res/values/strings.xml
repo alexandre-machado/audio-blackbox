@@ -42,7 +42,7 @@
     <string name="recorder_notification_buffered">Buffer: %1$s</string>
     <string name="recorder_notification_action_save">Save last %1$d min</string>
     <string name="recorder_notification_action_save_seconds">Save last %1$d s</string>
-    <string name="recorder_notification_action_stop">Stop recording</string>
+    <string name="recorder_notification_action_stop">Stop</string>
     <string name="recorder_notification_export_exporting">Saving recording…</string>
     <string name="recorder_notification_export_success">Recording saved: %1$s</string>
     <string name="recorder_notification_export_error">Failed to save recording</string>
