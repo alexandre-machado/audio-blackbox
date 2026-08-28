@@ -1,30 +1,40 @@
 package cc.machado.audioblackbox.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,15 +94,12 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        SettingsHeader()
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement, onApply)
-        AboutSection(versionName = versionName)
+        AudioSpecsSection()
+        PrivacySection(versionName = versionName)
     }
     uiState.retentionStepper.pendingConfirmationMinutes?.let { pendingMinutes ->
         RetentionDiscardDialog(
@@ -103,6 +110,44 @@ fun SettingsScreen(
     }
     uiState.clampNotice?.let { notice ->
         ClampNoticeDialog(notice = notice, onAcknowledge = onAcknowledgeClampNotice)
+    }
+}
+
+@Composable
+private fun SettingsHeader() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings_gear),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(R.string.settings_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -118,19 +163,10 @@ private fun RetentionStepperSection(
     onIncrement: () -> Unit,
     onApply: () -> Unit,
 ) {
-    // Locked while a discard confirmation is showing (mirrors SettingsViewModel's own guard in
-    // incrementPending/decrementPending/commitPendingRetentionWindow) -- the controls are visibly
-    // disabled here too, not just ignored, so the user is not left tapping a control that silently
-    // does nothing.
     val locked = stepper.pendingConfirmationMinutes != null
     val valueLabel = stringResource(R.string.settings_retention_value, stepper.pendingMinutes, stepper.approxPendingRamMb)
     val decrementCd = stringResource(R.string.settings_retention_decrement_cd)
     val incrementCd = stringResource(R.string.settings_retention_increment_cd)
-    // Re-announced to a screen reader on every pending-value change, same LiveRegion pattern
-    // DashboardScreen's StatusSection/EngineToggle already use -- the announcement adds the
-    // active/not-yet-applied state on top of the visible "%d min (~%d MB)" label, which is exactly
-    // the kind of information issue #66 flagged as missing when a *_cd string merely repeats its
-    // visible label.
     val stateAnnouncement = if (stepper.isDirty) {
         stringResource(R.string.settings_retention_value_pending_cd, stepper.pendingMinutes, stepper.approxPendingRamMb)
     } else {
@@ -139,11 +175,31 @@ private fun RetentionStepperSection(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = stringResource(R.string.settings_retention_title), style = MaterialTheme.typography.titleMedium)
-            Text(text = stringResource(R.string.settings_retention_explanation), style = MaterialTheme.typography.bodySmall)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_ram_memory),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.settings_retention_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_retention_explanation),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             Row(
                 modifier = Modifier
@@ -162,7 +218,7 @@ private fun RetentionStepperSection(
                 ) {
                     Text(text = "−", style = MaterialTheme.typography.headlineSmall)
                 }
-                Text(text = valueLabel, style = MaterialTheme.typography.headlineSmall)
+                Text(text = valueLabel, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 IconButton(
                     onClick = onIncrement,
                     enabled = stepper.canIncrement && !locked,
@@ -172,8 +228,6 @@ private fun RetentionStepperSection(
                 }
             }
 
-            // The pending-vs-active distinction issue #73 requires stay visible, not just tracked
-            // internally: shown only while the two actually differ.
             if (stepper.isDirty) {
                 Text(
                     text = stringResource(R.string.settings_retention_pending_notice, stepper.committedMinutes),
@@ -193,31 +247,120 @@ private fun RetentionStepperSection(
     }
 }
 
-/**
- * About section displaying the app version.
- */
 @Composable
-private fun AboutSection(
-    modifier: Modifier = Modifier,
-    versionName: String = BuildConfig.VERSION_NAME,
-) {
+private fun AudioSpecsSection() {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_audio_specs),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.settings_specs_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            SpecRow(label = stringResource(R.string.settings_specs_format_label), value = stringResource(R.string.settings_specs_format_value))
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(label = stringResource(R.string.settings_specs_export_label), value = stringResource(R.string.settings_specs_export_value))
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(label = stringResource(R.string.settings_specs_sample_rate_label), value = stringResource(R.string.settings_specs_sample_rate_value), isMonospace = true)
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(label = stringResource(R.string.settings_specs_channels_label), value = stringResource(R.string.settings_specs_channels_value))
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(label = stringResource(R.string.settings_specs_persistence_label), value = stringResource(R.string.settings_specs_persistence_value))
+        }
+    }
+}
+
+@Composable
+private fun SpecRow(label: String, value: String, isMonospace: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            fontFamily = if (isMonospace) FontFamily.Monospace else FontFamily.Default,
+        )
+    }
+}
+
+@Composable
+private fun PrivacySection(
+    versionName: String = BuildConfig.VERSION_NAME,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_privacy_shield),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.settings_privacy_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Text(
-                text = stringResource(R.string.settings_about_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = stringResource(R.string.settings_version_label, versionName),
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.settings_privacy_explanation),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_about_title),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = stringResource(R.string.settings_version_label, versionName),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }
@@ -248,12 +391,7 @@ private fun RetentionDiscardDialog(pendingMinutes: Int, onConfirm: () -> Unit, o
     )
 }
 
-/** Issue #84: shown at most once ever, when [SettingsUiState.clampNotice] is non-null -- a user
- * whose stored retention window (e.g. 60 min) was silently clamped down by issue #72's interim
- * safety clamp (to [ClampNotice.newMinutes], e.g. 45) gets exactly this one explanation of the old
- * value, the new value, and why. Dismissing it (the only action offered -- there is nothing to
- * confirm or cancel, just acknowledge) calls [onAcknowledge], which persists that it has been seen
- * so it never shows again. */
+/** Shown when the user's stored retention window was clamped down on load (issue #84). */
 @Composable
 private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
     AlertDialog(
@@ -278,63 +416,52 @@ private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
 
 // ---- Previews ----
 
-private fun previewState(
-    pendingMinutes: Int = 30,
+private fun previewStepperState(
     committedMinutes: Int = 30,
-    pendingConfirmationMinutes: Int? = null,
-    clampNotice: ClampNotice? = null,
-): SettingsUiState = SettingsViewModel.mapUiState(committedMinutes, pendingMinutes, pendingConfirmationMinutes, clampNotice)
+    pendingMinutes: Int = 30,
+    canDecrement: Boolean = true,
+    canIncrement: Boolean = true,
+    pendingConfirmation: Int? = null,
+): SettingsUiState = SettingsUiState(
+    retentionStepper = RetentionStepperUiState(
+        committedMinutes = committedMinutes,
+        pendingMinutes = pendingMinutes,
+        approxPendingRamMb = pendingMinutes * 2,
+        isDirty = committedMinutes != pendingMinutes,
+        canDecrement = canDecrement,
+        canIncrement = canIncrement,
+        pendingConfirmationMinutes = pendingConfirmation,
+    ),
+)
 
-@Preview(showBackground = true, name = "Default (30 min, not dirty)")
+@Preview(showBackground = true, name = "Clean (30 min)")
 @Composable
-private fun SettingsScreenDefaultPreview() {
+private fun SettingsScreenCleanPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(), {}, {}, {}, {}, {}, {})
     }
 }
 
-@Preview(showBackground = true, name = "Pending change (not yet applied)")
+@Preview(showBackground = true, name = "Dirty (30 -> 45 min)")
 @Composable
-private fun SettingsScreenPendingPreview() {
+private fun SettingsScreenDirtyPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(pendingMinutes = 45, committedMinutes = 30), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(pendingMinutes = 45), {}, {}, {}, {}, {}, {})
     }
 }
 
-@Preview(showBackground = true, name = "At minimum bound")
+@Preview(showBackground = true, name = "At minimum (5 min)")
 @Composable
-private fun SettingsScreenMinBoundPreview() {
+private fun SettingsScreenAtMinPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(pendingMinutes = 5, committedMinutes = 5), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(committedMinutes = 5, pendingMinutes = 5, canDecrement = false), {}, {}, {}, {}, {}, {})
     }
 }
 
-@Preview(showBackground = true, name = "At maximum bound")
+@Preview(showBackground = true, name = "At maximum (45 min)")
 @Composable
-private fun SettingsScreenMaxBoundPreview() {
+private fun SettingsScreenAtMaxPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewState(pendingMinutes = 60, committedMinutes = 60), {}, {}, {}, {}, {}, {})
-    }
-}
-
-@Preview(showBackground = true, name = "Discard confirmation")
-@Composable
-private fun SettingsScreenConfirmPreview() {
-    AudioBlackboxTheme {
-        SettingsScreen(
-            previewState(pendingMinutes = 60, committedMinutes = 30, pendingConfirmationMinutes = 60),
-            {}, {}, {}, {}, {}, {},
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "Clamp-down notice (issue #84)")
-@Composable
-private fun SettingsScreenClampNoticePreview() {
-    AudioBlackboxTheme {
-        SettingsScreen(
-            previewState(clampNotice = ClampNotice(previousMinutes = 60, newMinutes = 45)),
-            {}, {}, {}, {}, {}, {},
-        )
+        SettingsScreen(previewStepperState(committedMinutes = 45, pendingMinutes = 45, canIncrement = false), {}, {}, {}, {}, {}, {})
     }
 }

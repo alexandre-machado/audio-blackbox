@@ -154,7 +154,21 @@
     <!-- Tela de ajustes / controle deslizante de retenção (issue #73, substituindo os chips
          fixos das issues #45/#57) -->
     <string name="settings_title">Ajustes</string>
-    <string name="settings_retention_title">Retenção em memória</string>
+    <string name="settings_subtitle">Buffer de áudio e preferências do aplicativo</string>
+    <string name="settings_specs_title">Especificações do motor de áudio</string>
+    <string name="settings_specs_format_label">Formato de áudio</string>
+    <string name="settings_specs_format_value">PCM 16-bit (Buffer Circular)</string>
+    <string name="settings_specs_export_label">Formato de exportação</string>
+    <string name="settings_specs_export_value">AAC (.m4a) / WAV sem perdas</string>
+    <string name="settings_specs_sample_rate_label">Taxa de amostragem</string>
+    <string name="settings_specs_sample_rate_value">16000 Hz</string>
+    <string name="settings_specs_channels_label">Canais</string>
+    <string name="settings_specs_channels_value">Mono (1 canal)</string>
+    <string name="settings_specs_persistence_label">Modo de persistência</string>
+    <string name="settings_specs_persistence_value">MediaStore (Armazenamento local)</string>
+    <string name="settings_privacy_title">Privacidade e processamento local</string>
+    <string name="settings_privacy_explanation">O Audio Blackbox opera puramente local no seu aparelho. O áudio do microfone é mantido em memória RAM temporária e sobrescrito automaticamente. Zero telemetria, relatórios de falha ou fluxos de áudio são enviados para servidores remotos.</string>
+    <string name="settings_retention_title">Janela de retenção do buffer</string>
     <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. Use os botões abaixo para escolher um valor e depois toque em Aplicar.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES limitam o

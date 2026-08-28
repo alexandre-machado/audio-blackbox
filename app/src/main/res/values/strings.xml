@@ -163,7 +163,21 @@
     <!-- Settings screen / retention stepper (issue #73, superseding the dashboard's chip
          selector from #45/#57) -->
     <string name="settings_title">Settings</string>
-    <string name="settings_retention_title">Memory retention</string>
+    <string name="settings_subtitle">Audio buffer &amp; application preferences</string>
+    <string name="settings_specs_title">Audio engine specifications</string>
+    <string name="settings_specs_format_label">Audio format</string>
+    <string name="settings_specs_format_value">16-bit PCM (Ring Buffer)</string>
+    <string name="settings_specs_export_label">Export format</string>
+    <string name="settings_specs_export_value">AAC (.m4a) / Lossless WAV</string>
+    <string name="settings_specs_sample_rate_label">Sample rate</string>
+    <string name="settings_specs_sample_rate_value">16000 Hz</string>
+    <string name="settings_specs_channels_label">Channel count</string>
+    <string name="settings_specs_channels_value">Mono (1 channel)</string>
+    <string name="settings_specs_persistence_label">Persistence mode</string>
+    <string name="settings_specs_persistence_value">MediaStore (Local storage)</string>
+    <string name="settings_privacy_title">Privacy &amp; local processing</string>
+    <string name="settings_privacy_explanation">Audio Blackbox operates purely locally on your device. Microphone audio is kept in transient RAM and overwritten automatically. Zero telemetry, crash reports, or audio streams are ever sent to remote servers.</string>
+    <string name="settings_retention_title">Rolling buffer retention window</string>
     <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Use the buttons below to choose a value, then tap Apply.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES bound the
