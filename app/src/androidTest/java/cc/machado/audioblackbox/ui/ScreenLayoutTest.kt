@@ -368,8 +368,14 @@ class ScreenLayoutTest {
         // Content descriptions are formatted with the recording's timestamp, so match on the
         // stable prefix rather than reconstructing the whole string from the fixture.
         for (cdRes in GALLERY_ACTION_CONTENT_DESCRIPTIONS) {
-            val template = localizedString(locale, cdRes)
-            val prefix = template.substringBefore("%1\$s").trim()
+            // These are format strings ("Delete recording from %1$s"), so they must be resolved
+            // WITH an argument -- localizedString goes through getString(id, vararg), and an empty
+            // vararg makes Android's String.format throw MissingFormatArgumentException on the
+            // placeholder rather than returning the raw template. Substituting a sentinel and
+            // cutting at it yields the locale-correct literal prefix without reaching for raw
+            // resource access, and without depending on where in the string the placeholder sits.
+            val sentinel = "\u0000TIMESTAMP\u0000"
+            val prefix = localizedString(locale, cdRes, sentinel).substringBefore(sentinel).trim()
             assertTrue(
                 "content description template for $cdRes has no stable prefix to match on",
                 prefix.isNotEmpty(),
