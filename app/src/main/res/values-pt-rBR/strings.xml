@@ -53,6 +53,14 @@
     <string name="recorder_notification_action_stop_forward">Parar ao vivo</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
+    <string name="dashboard_app_subtitle">Gravador de Áudio Contínuo em Memória</string>
+    <string name="dashboard_engine_sample_rate">16.0 kHz</string>
+    <string name="dashboard_mic_level_label">Nível do microfone</string>
+    <string name="dashboard_buffer_ram_label">Buffer circular (apenas RAM)</string>
+    <string name="dashboard_buffer_ram_explanation">Mantendo áudio na memória RAM. Ao encher, o som mais antigo é sobrescrito continuamente sem gravar em disco.</string>
+    <string name="dashboard_save_card_title">Salvar o passado (Lookback)</string>
+    <string name="dashboard_forward_card_title">Gravação contínua ao vivo</string>
+
     <string name="dashboard_status_idle">Parado</string>
     <string name="dashboard_status_recording">Gravando</string>
     <string name="dashboard_status_paused">Pausado</string>

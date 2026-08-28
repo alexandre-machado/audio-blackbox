@@ -58,6 +58,14 @@
     <string name="recorder_notification_action_stop_forward">Stop live</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
+    <string name="dashboard_app_subtitle">Continuous Memory Audio Recorder</string>
+    <string name="dashboard_engine_sample_rate">16.0 kHz</string>
+    <string name="dashboard_mic_level_label">Mic input level</string>
+    <string name="dashboard_buffer_ram_label">Circular buffer (RAM only)</string>
+    <string name="dashboard_buffer_ram_explanation">Holding audio in RAM. Once full, the oldest sound is overwritten continuously without writing to disk.</string>
+    <string name="dashboard_save_card_title">Save recent audio (Lookback)</string>
+    <string name="dashboard_forward_card_title">Continuous live recording</string>
+
     <string name="dashboard_status_idle">Stopped</string>
     <string name="dashboard_status_recording">Recording</string>
     <string name="dashboard_status_paused">Paused</string>
