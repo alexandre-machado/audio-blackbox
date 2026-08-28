@@ -42,6 +42,7 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 internal fun HarnessApp(
     initialDestination: Destination,
     dashboardUiState: cc.machado.audioblackbox.ui.dashboard.DashboardUiState = dashboardFixture(),
+    galleryUiState: cc.machado.audioblackbox.ui.gallery.GalleryUiState = galleryFixture(),
 ) {
     var selected by rememberSaveable { mutableStateOf(initialDestination) }
     AudioBlackboxTheme {
@@ -61,7 +62,7 @@ internal fun HarnessApp(
                     onDismissForwardNotice = {},
                 )
                 Destination.GALLERY -> cc.machado.audioblackbox.ui.gallery.GalleryScreen(
-                    uiState = galleryFixture(),
+                    uiState = galleryUiState,
                     onPlayPauseClicked = {},
                     onSeek = {},
                     onShareClicked = {},
@@ -103,9 +104,10 @@ internal fun HarnessApp(
 internal fun CompactHarnessApp(
     initialDestination: Destination,
     dashboardUiState: cc.machado.audioblackbox.ui.dashboard.DashboardUiState = dashboardFixture(),
+    galleryUiState: cc.machado.audioblackbox.ui.gallery.GalleryUiState = galleryFixture(),
 ) {
     Box(modifier = Modifier.requiredSize(COMPACT_WINDOW_WIDTH, COMPACT_WINDOW_HEIGHT)) {
-        HarnessApp(initialDestination, dashboardUiState)
+        HarnessApp(initialDestination, dashboardUiState, galleryUiState)
     }
 }
 

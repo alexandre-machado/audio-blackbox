@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -253,24 +254,27 @@ private fun RecordingCard(
                 Text(text = elapsedTotalLabel, style = MaterialTheme.typography.bodySmall)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Button(
                     onClick = onPlayPauseClicked,
                     modifier = Modifier.semantics { contentDescription = playPauseCd },
                 ) {
-                    Text(text = playPauseLabel)
+                    Text(text = playPauseLabel, maxLines = 1)
                 }
                 OutlinedButton(
                     onClick = onShareClicked,
                     modifier = Modifier.semantics { contentDescription = shareCd },
                 ) {
-                    Text(text = stringResource(R.string.gallery_share))
+                    Text(text = stringResource(R.string.gallery_share), maxLines = 1)
                 }
                 OutlinedButton(
                     onClick = onDeleteClicked,
                     modifier = Modifier.semantics { contentDescription = deleteCd },
                 ) {
-                    Text(text = stringResource(R.string.gallery_delete))
+                    Text(text = stringResource(R.string.gallery_delete), maxLines = 1)
                 }
             }
         }
