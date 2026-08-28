@@ -566,7 +566,16 @@ class RecorderService : Service() {
         // used to be handed out) would never see another transition once `_engine` moves on.
         private val _captureState = MutableStateFlow<CaptureState>(_engine.state.value)
         val captureState: StateFlow<CaptureState> = _captureState.asStateFlow()
+
+        // Forwarded the same way and for the same reason as `captureState` above: a
+        // retention-window rebuild replaces `_engine` wholesale, and a collector bound directly to
+        // the old engine's `inputLevel` would sit at its last value forever after that -- a frozen
+        // meter, which is precisely the failure this level was made real to avoid.
+        private val _inputLevel = MutableStateFlow(0f)
+        val inputLevel: StateFlow<Float> = _inputLevel.asStateFlow()
+
         private var engineForwardingJob: Job? = null
+        private var levelForwardingJob: Job? = null
 
         // Companion-owned, process-lifetime scope for the forwarding job above -- mirrors
         // `engine`'s own "lives in Companion, not inside any Activity/Service instance" lifetime
@@ -590,6 +599,11 @@ class RecorderService : Service() {
             engineForwardingJob?.cancel()
             engineForwardingJob = forwardingScope.launch {
                 newEngine.state.collect { _captureState.value = it }
+            }
+            levelForwardingJob?.cancel()
+            _inputLevel.value = 0f
+            levelForwardingJob = forwardingScope.launch {
+                newEngine.inputLevel.collect { _inputLevel.value = it }
             }
         }
 

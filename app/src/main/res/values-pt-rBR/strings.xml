@@ -56,6 +56,7 @@
     <string name="dashboard_app_subtitle">Gravador de Áudio Contínuo em Memória</string>
     <string name="dashboard_engine_sample_rate">16.0 kHz</string>
     <string name="dashboard_mic_level_label">Nível do microfone</string>
+    <string name="dashboard_mic_level_percent">%1$d%%</string>
     <string name="dashboard_buffer_ram_label">Buffer circular (apenas RAM)</string>
     <string name="dashboard_buffer_ram_explanation">Mantendo áudio na memória RAM. Ao encher, o som mais antigo é sobrescrito continuamente sem gravar em disco.</string>
     <string name="dashboard_save_card_title">Salvar o passado (Lookback)</string>

@@ -108,4 +108,8 @@ data class DashboardUiState(
     val isBufferFull: Boolean,
     val saveState: SaveUiState,
     val forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
+    /** Live microphone peak level in `0f..1f`, measured from the captured PCM by
+     * [cc.machado.audioblackbox.audio.AudioLevel.peakLevel]. Always `0f` unless
+     * [captureStatus] is [CaptureStatus.Recording] -- see [DashboardViewModel.mapUiState]. */
+    val inputLevel: Float = 0f,
 )

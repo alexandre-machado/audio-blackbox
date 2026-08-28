@@ -1,6 +1,7 @@
 package cc.machado.audioblackbox.ui.dashboard
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -59,6 +60,7 @@ import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Hosts [DashboardViewModel] and renders [DashboardScreen] against its live state. The seam
@@ -258,13 +260,18 @@ private fun EngineCard(
                         )
                     }
                     Text(
-                        text = if (status is CaptureStatus.Recording) "45%" else "0%",
+                        // uiState.inputLevel is already forced to 0f unless Recording
+                        // (DashboardViewModel.mapUiState), so this needs no state check of its own.
+                        text = stringResource(
+                            R.string.dashboard_mic_level_percent,
+                            (uiState.inputLevel * 100f).roundToInt(),
+                        ),
                         style = MaterialTheme.typography.labelMedium,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                MicLevelMeter(isRecording = status is CaptureStatus.Recording)
+                MicLevelMeter(level = uiState.inputLevel)
             }
 
             // Circular Buffer (RAM only)
@@ -291,32 +298,33 @@ private fun EngineCard(
     }
 }
 
+/**
+ * Segmented meter driven by the microphone's real peak level (issue #175).
+ *
+ * [level] comes from [cc.machado.audioblackbox.audio.AudioLevel.peakLevel] over the PCM actually
+ * captured. It previously came from an `infiniteRepeatable` animation swinging 0.25..0.75 next to
+ * a hardcoded "45%", which meant the meter reported a healthy signal whether or not the microphone
+ * was hearing anything -- including while capture was silenced by another app.
+ *
+ * A short `animateFloatAsState` smooths the bar between measurements. That is presentation only:
+ * it interpolates towards a value the microphone really produced and settles on it, unlike the
+ * previous animation, which *was* the value. Zero must therefore be reachable and visibly empty --
+ * `activeSegments` floors rather than coercing to a minimum of 1, so silence shows no lit segment
+ * at all.
+ */
 @Composable
 private fun MicLevelMeter(
-    isRecording: Boolean,
+    level: Float,
     modifier: Modifier = Modifier,
     segmentCount: Int = 18,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "mic-level")
-    val animatedLevel by if (isRecording) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 0.75f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "mic-level-anim",
-        )
-    } else {
-        remember { mutableFloatStateOf(0f) }
-    }
+    val smoothedLevel by animateFloatAsState(
+        targetValue = level.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 120, easing = LinearEasing),
+        label = "mic-level",
+    )
 
-    val activeSegments = if (isRecording) {
-        (animatedLevel * segmentCount).toInt().coerceIn(1, segmentCount)
-    } else {
-        0
-    }
+    val activeSegments = (smoothedLevel * segmentCount).toInt().coerceIn(0, segmentCount)
 
     Row(
         modifier = modifier
@@ -896,3 +904,4 @@ const val FORWARD_STOP_BUTTON_TEST_TAG = "dashboard_forward_stop_button"
 
 /** Test tag for the forward recording elapsed clock display. */
 const val FORWARD_ELAPSED_TEST_TAG = "dashboard_forward_elapsed"
+
