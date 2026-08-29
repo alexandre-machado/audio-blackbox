@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          Debug-build-only, like androidx.compose.ui:ui-test-manifest's own placeholder
+          ComponentActivity (added via debugImplementation, so it also lands here rather than in
+          app/src/main; see ScreenshotHostActivity's doc). Declaring it in this debug source set,
+          not app/src/androidTest, is what makes it part of the app-under-test's own package and
+          process: an androidTest-declared activity ships in the separate test APK, so
+          instrumentation refuses to launch it there (RuntimeException: Intent in process
+          cc.machado.audioblackbox.staging resolved to different process
+          cc.machado.audioblackbox.staging.test); it must be the tested app's own activity, the
+          same as MainActivity is. Never included in a release build.
+        -->
+        <activity
+            android:name=".ui.ScreenshotHostActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AudioBlackbox" />
+    </application>
+
+</manifest>
