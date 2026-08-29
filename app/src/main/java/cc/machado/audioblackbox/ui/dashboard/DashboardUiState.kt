@@ -1,6 +1,7 @@
 package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
 
@@ -108,6 +109,7 @@ data class DashboardUiState(
     val isBufferFull: Boolean,
     val saveState: SaveUiState,
     val forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
+    val qualityPreset: QualityPreset = QualityPreset.VOICE,
     /** Live microphone peak level in `0f..1f`, measured from the captured PCM by
      * [cc.machado.audioblackbox.audio.AudioLevel.peakLevel]. Always `0f` unless
      * [captureStatus] is [CaptureStatus.Recording] -- see [DashboardViewModel.mapUiState]. */

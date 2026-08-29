@@ -237,4 +237,15 @@
     <!-- Seção Sobre / Versão do app -->
     <string name="settings_about_title">Sobre</string>
     <string name="settings_version_label">Versão %1$s</string>
+
+    <!-- Diagnóstico de Incidentes / Telemetria de Erro (issue #206) -->
+    <string name="dashboard_error_telemetry_title">Diagnóstico do Incidente</string>
+    <string name="dashboard_error_telemetry_code">Código: %1$s</string>
+    <string name="dashboard_error_telemetry_preset">Predefinição: %1$s</string>
+    <string name="dashboard_error_telemetry_buffer">Buffer: %1$d min (%2$s)</string>
+    <string name="dashboard_error_action_retry">Tentar novamente</string>
+    <string name="dashboard_error_action_copy">Copiar relatório</string>
+    <string name="dashboard_error_action_share">Compartilhar log</string>
+    <string name="dashboard_error_copied_toast">Relatório de incidente copiado</string>
+    <string name="dashboard_error_share_chooser_title">Compartilhar Relatório de Incidente</string>
 </resources>
