@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.permissions.AndroidPermissionSystem
 import cc.machado.audioblackbox.permissions.BatteryOptimization
+import cc.machado.audioblackbox.permissions.CURRENT_CONSENT_VERSION
 import cc.machado.audioblackbox.permissions.OnboardingPreferences
 import cc.machado.audioblackbox.permissions.OnboardingStep
 import cc.machado.audioblackbox.permissions.PermissionResolver
@@ -56,7 +58,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var recordAudioLauncher: ActivityResultLauncher<String>
     private lateinit var notificationsLauncher: ActivityResultLauncher<String>
     private lateinit var settingsLauncher: ActivityResultLauncher<Intent>
-    private lateinit var batteryOptimizationLauncher: ActivityResultLauncher<Intent>
+    private lateinit var batteryOptimizationOnboardingLauncher: ActivityResultLauncher<Intent>
+    private lateinit var batteryOptimizationBannerLauncher: ActivityResultLauncher<Intent>
 
     private var stepState by mutableStateOf(OnboardingStep.DONE)
     private var recordAudioGrantedState by mutableStateOf(false)
@@ -79,7 +82,21 @@ class MainActivity : ComponentActivity() {
         settingsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             refreshStep()
         }
-        batteryOptimizationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        // Fired automatically when onboarding reaches REQUEST_BATTERY_OPTIMIZATION. This Intent
+        // has no reliable result callback (issue #213) -- the system dialog or Settings page it
+        // opens doesn't tell us whether the user granted or declined the exemption -- so
+        // completion is marked unconditionally here rather than made to depend on the outcome.
+        // If the exemption really was granted, refreshStep()'s live isIgnoringBatteryOptimizations
+        // query already resolves to DONE on its own; if declined, hasSkippedBatteryOptimization
+        // stops the resolver from asking again, matching "stays last and skippable".
+        batteryOptimizationOnboardingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            preferences.hasSkippedBatteryOptimization = true
+            refreshStep()
+        }
+        // Post-onboarding banner (BatteryOptimizationBanner): only refreshes the live state so
+        // the banner disappears once granted; never touches hasSkippedBatteryOptimization since
+        // onboarding is already done by the time this launcher can fire.
+        batteryOptimizationBannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             refreshStep()
         }
 
@@ -167,7 +184,7 @@ class MainActivity : ComponentActivity() {
                         if (!isIgnoringBatteryOptimizationsState) {
                             BatteryOptimizationBanner(
                                 onRequestBatteryExemption = {
-                                    batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
+                                    batteryOptimizationBannerLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
                                 },
                             )
                         }
@@ -181,11 +198,42 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     } else {
+                        // Issue #213: REQUEST_RECORD_AUDIO / REQUEST_NOTIFICATIONS /
+                        // REQUEST_BATTERY_OPTIMIZATION render nothing in OnboardingScreen -- this
+                        // effect fires the real OS prompt/Intent directly as a side effect of the
+                        // step changing, so the happy path shows only the native dialogs with no
+                        // app-drawn page in between. Keyed on stepState so it fires exactly once
+                        // per step, not on every recomposition.
+                        LaunchedEffect(stepState) {
+                            when (stepState) {
+                                OnboardingStep.REQUEST_RECORD_AUDIO ->
+                                    recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                OnboardingStep.REQUEST_NOTIFICATIONS ->
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notificationsLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                OnboardingStep.REQUEST_BATTERY_OPTIMIZATION ->
+                                    batteryOptimizationOnboardingLauncher.launch(
+                                        BatteryOptimization.bestAvailableIntent(this@MainActivity),
+                                    )
+                                else -> Unit
+                            }
+                        }
                         OnboardingScreen(
                             step = stepState,
-                            onContinueLegalNotice = {
-                                preferences.hasSeenLegalNotice = true
+                            onAcceptConsent = {
+                                preferences.consentVersionAccepted = CURRENT_CONSENT_VERSION
+                                preferences.consentAcceptedAtMillis = System.currentTimeMillis()
                                 refreshStep()
+                            },
+                            onDeclineConsent = {
+                                // Compliance-critical (issue #213, docs/release/play-store.md):
+                                // decline must exit without recording consent, so a relaunch
+                                // shows the consent screen again rather than skipping ahead.
+                                finishAffinity()
+                            },
+                            onOpenPrivacyPolicy = {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
                             },
                             onRequestRecordAudio = {
                                 recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
@@ -197,15 +245,6 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenAppSettings = {
                                 settingsLauncher.launch(appSettingsIntent())
-                            },
-                            onRequestBatteryExemption = {
-                                // Explicitly the Activity: `this` inside AppScaffold's content slot
-                                // is its ColumnScope receiver.
-                                batteryOptimizationLauncher.launch(BatteryOptimization.bestAvailableIntent(this@MainActivity))
-                            },
-                            onSkipBatteryOptimization = {
-                                preferences.hasSkippedBatteryOptimization = true
-                                refreshStep()
                             },
                         )
                     }
@@ -247,7 +286,9 @@ class MainActivity : ComponentActivity() {
             ),
             apiLevel = permissionSystem.apiLevel,
             isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations,
-            hasSeenLegalNotice = preferences.hasSeenLegalNotice,
+            hasAcceptedCurrentConsent = preferences.consentVersionAccepted == CURRENT_CONSENT_VERSION,
+            hasRequestedRecordAudio = preferences.hasRequestedRecordAudio,
+            hasRequestedPostNotifications = preferences.hasRequestedPostNotifications,
             hasSkippedBatteryOptimization = preferences.hasSkippedBatteryOptimization,
         )
         stepState = PermissionResolver.resolveNextStep(input)
@@ -257,6 +298,16 @@ class MainActivity : ComponentActivity() {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", packageName, null)
         }
+
+    private companion object {
+        // Issue #213 / docs/release/play-store.md section F item 6: the real hosting location
+        // and URL for the privacy policy is an owner decision not yet made. Pointing at the
+        // repository's rendered privacy-policy.md keeps the consent screen's link functional
+        // (and the actual policy text truthful) in the meantime; revisit once that decision
+        // lands.
+        const val PRIVACY_POLICY_URL =
+            "https://github.com/alexandre-machado/audio-blackbox/blob/main/docs/release/privacy-policy.md"
+    }
 
     /**
      * Starts [RecorderService], the source of truth for whether capture is actually running.

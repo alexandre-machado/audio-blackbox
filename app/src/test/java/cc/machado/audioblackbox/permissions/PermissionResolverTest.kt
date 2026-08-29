@@ -4,9 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Regression tests for the permission-state resolver (issue #4). Pure JVM tests -- no
- * Robolectric, no instrumentation -- because [PermissionResolver] and [PermissionResolverInput]
- * contain no Android framework types.
+ * Regression tests for the permission-state resolver (issue #4, reworked for issue #213's
+ * single-consent-screen-then-sequential-prompts flow). Pure JVM tests -- no Robolectric, no
+ * instrumentation -- because [PermissionResolver] and [PermissionResolverInput] contain no
+ * Android framework types.
  */
 class PermissionResolverTest {
 
@@ -15,29 +16,41 @@ class PermissionResolverTest {
         postNotificationsStatus: PermissionStatus = PermissionStatus.GRANTED,
         apiLevel: Int = 34,
         isIgnoringBatteryOptimizations: Boolean = true,
-        hasSeenLegalNotice: Boolean = true,
+        hasAcceptedCurrentConsent: Boolean = true,
+        hasRequestedRecordAudio: Boolean = true,
+        hasRequestedPostNotifications: Boolean = true,
         hasSkippedBatteryOptimization: Boolean = false,
     ) = PermissionResolverInput(
         recordAudioStatus = recordAudioStatus,
         postNotificationsStatus = postNotificationsStatus,
         apiLevel = apiLevel,
         isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations,
-        hasSeenLegalNotice = hasSeenLegalNotice,
+        hasAcceptedCurrentConsent = hasAcceptedCurrentConsent,
+        hasRequestedRecordAudio = hasRequestedRecordAudio,
+        hasRequestedPostNotifications = hasRequestedPostNotifications,
         hasSkippedBatteryOptimization = hasSkippedBatteryOptimization,
     )
 
     @Test
-    fun `legal notice shown first regardless of everything else already being fine`() {
+    fun `consent screen shown first regardless of everything else already being fine`() {
         val result = PermissionResolver.resolveNextStep(
-            input(hasSeenLegalNotice = false, recordAudioStatus = PermissionStatus.GRANTED)
+            input(hasAcceptedCurrentConsent = false, recordAudioStatus = PermissionStatus.GRANTED)
         )
-        assertEquals(OnboardingStep.LEGAL_NOTICE, result)
+        assertEquals(OnboardingStep.CONSENT, result)
     }
 
     @Test
-    fun `record audio denied after legal notice routes to audio rationale`() {
+    fun `record audio never requested before fires the OS prompt directly, no rationale page`() {
         val result = PermissionResolver.resolveNextStep(
-            input(recordAudioStatus = PermissionStatus.DENIED)
+            input(recordAudioStatus = PermissionStatus.DENIED, hasRequestedRecordAudio = false)
+        )
+        assertEquals(OnboardingStep.REQUEST_RECORD_AUDIO, result)
+    }
+
+    @Test
+    fun `record audio denied after being requested once already routes to recovery rationale`() {
+        val result = PermissionResolver.resolveNextStep(
+            input(recordAudioStatus = PermissionStatus.DENIED, hasRequestedRecordAudio = true)
         )
         assertEquals(OnboardingStep.AUDIO_RATIONALE, result)
     }
@@ -51,9 +64,25 @@ class PermissionResolverTest {
     }
 
     @Test
-    fun `notifications requested on api 33+ when audio already granted`() {
+    fun `notifications never requested before fires the OS prompt directly on api 33+`() {
         val result = PermissionResolver.resolveNextStep(
-            input(apiLevel = 33, postNotificationsStatus = PermissionStatus.DENIED)
+            input(
+                apiLevel = 33,
+                postNotificationsStatus = PermissionStatus.DENIED,
+                hasRequestedPostNotifications = false,
+            )
+        )
+        assertEquals(OnboardingStep.REQUEST_NOTIFICATIONS, result)
+    }
+
+    @Test
+    fun `notifications denied after being requested once already routes to recovery rationale`() {
+        val result = PermissionResolver.resolveNextStep(
+            input(
+                apiLevel = 33,
+                postNotificationsStatus = PermissionStatus.DENIED,
+                hasRequestedPostNotifications = true,
+            )
         )
         assertEquals(OnboardingStep.NOTIFICATIONS_RATIONALE, result)
     }
@@ -77,11 +106,11 @@ class PermissionResolverTest {
     }
 
     @Test
-    fun `battery optimization step shown when not exempt and not skipped`() {
+    fun `battery optimization requested when not exempt and not skipped`() {
         val result = PermissionResolver.resolveNextStep(
             input(isIgnoringBatteryOptimizations = false, hasSkippedBatteryOptimization = false)
         )
-        assertEquals(OnboardingStep.BATTERY_OPTIMIZATION, result)
+        assertEquals(OnboardingStep.REQUEST_BATTERY_OPTIMIZATION, result)
     }
 
     @Test
@@ -93,7 +122,7 @@ class PermissionResolverTest {
     }
 
     @Test
-    fun `battery optimization step skipped when user explicitly declined it`() {
+    fun `battery optimization declined still resolves to done -- completion never depends on its outcome`() {
         val result = PermissionResolver.resolveNextStep(
             input(isIgnoringBatteryOptimizations = false, hasSkippedBatteryOptimization = true)
         )
@@ -108,7 +137,7 @@ class PermissionResolverTest {
                 postNotificationsStatus = PermissionStatus.GRANTED,
                 apiLevel = 34,
                 isIgnoringBatteryOptimizations = true,
-                hasSeenLegalNotice = true,
+                hasAcceptedCurrentConsent = true,
                 hasSkippedBatteryOptimization = false,
             )
         )
@@ -117,14 +146,17 @@ class PermissionResolverTest {
 
     @Test
     fun `audio permission revoked after onboarding completed routes back to audio rationale, never trusting a stale done state`() {
-        // Simulates: user finished onboarding once, then revoked RECORD_AUDIO in system
-        // Settings. The legal notice flag stays true (shown once, forever) but the fresh
-        // permission query must still route back to the rationale step -- this is the
-        // "never trust the persisted flag as proof of a granted permission" requirement.
+        // Simulates: user finished onboarding once (so hasRequestedRecordAudio is true from that
+        // original request), then revoked RECORD_AUDIO in system Settings. The accepted consent
+        // stays recorded (same wording version) but the fresh permission query must still route
+        // back to the recovery rationale step -- this is the "never trust the persisted flag as
+        // proof of a granted permission" requirement, and it must land on the *rationale* page,
+        // not silently re-fire the OS dialog, since the user has already been asked once before.
         val result = PermissionResolver.resolveNextStep(
             input(
-                hasSeenLegalNotice = true,
+                hasAcceptedCurrentConsent = true,
                 recordAudioStatus = PermissionStatus.DENIED,
+                hasRequestedRecordAudio = true,
             )
         )
         assertEquals(OnboardingStep.AUDIO_RATIONALE, result)
@@ -135,6 +167,7 @@ class PermissionResolverTest {
         val result = PermissionResolver.resolveNextStep(
             input(
                 recordAudioStatus = PermissionStatus.DENIED,
+                hasRequestedRecordAudio = true,
                 postNotificationsStatus = PermissionStatus.PERMANENTLY_DENIED,
                 isIgnoringBatteryOptimizations = false,
             )
@@ -147,10 +180,65 @@ class PermissionResolverTest {
         val result = PermissionResolver.resolveNextStep(
             input(
                 postNotificationsStatus = PermissionStatus.DENIED,
+                hasRequestedPostNotifications = true,
                 isIgnoringBatteryOptimizations = false,
             )
         )
         assertEquals(OnboardingStep.NOTIFICATIONS_RATIONALE, result)
+    }
+
+    // -- issue #213: consent versioning and legacy migration --
+
+    @Test
+    fun `stored older consent wording version re-shows consent screen without re-requesting already-granted permissions`() {
+        // hasAcceptedCurrentConsent = false simulates a stored consentVersionAccepted lower than
+        // CURRENT_CONSENT_VERSION -- i.e. the user accepted an older wording. Both dangerous
+        // permissions are already GRANTED at the OS level; the resolver must show CONSENT (so
+        // the user can accept the new wording) but must not, itself, cause either permission to
+        // be re-requested -- there is no REQUEST_RECORD_AUDIO/REQUEST_NOTIFICATIONS step reachable
+        // until CONSENT is accepted again, and once it is, GRANTED short-circuits straight past
+        // both requests.
+        val result = PermissionResolver.resolveNextStep(
+            input(
+                hasAcceptedCurrentConsent = false,
+                recordAudioStatus = PermissionStatus.GRANTED,
+                postNotificationsStatus = PermissionStatus.GRANTED,
+                isIgnoringBatteryOptimizations = true,
+            )
+        )
+        assertEquals(OnboardingStep.CONSENT, result)
+    }
+
+    @Test
+    fun `legacy user with seen_legal_notice true and granted permissions lands in a sane state, not stuck or re-onboarded for permissions`() {
+        // A pre-#213 install has no consentVersionAccepted at all (defaults to 0, below
+        // CURRENT_CONSENT_VERSION) regardless of the old seen_legal_notice flag, since consent
+        // acceptance and permission grants are tracked independently and the old flag carried no
+        // wording version. The sane state is: show CONSENT once for the new wording, and once
+        // accepted, do not re-request permissions the user already granted.
+        val stillNeedsConsent = PermissionResolver.resolveNextStep(
+            input(
+                hasAcceptedCurrentConsent = false,
+                recordAudioStatus = PermissionStatus.GRANTED,
+                postNotificationsStatus = PermissionStatus.GRANTED,
+                isIgnoringBatteryOptimizations = true,
+                hasRequestedRecordAudio = true,
+                hasRequestedPostNotifications = true,
+            )
+        )
+        assertEquals(OnboardingStep.CONSENT, stillNeedsConsent)
+
+        val afterReAccepting = PermissionResolver.resolveNextStep(
+            input(
+                hasAcceptedCurrentConsent = true,
+                recordAudioStatus = PermissionStatus.GRANTED,
+                postNotificationsStatus = PermissionStatus.GRANTED,
+                isIgnoringBatteryOptimizations = true,
+                hasRequestedRecordAudio = true,
+                hasRequestedPostNotifications = true,
+            )
+        )
+        assertEquals(OnboardingStep.DONE, afterReAccepting)
     }
 
     // -- resolvePermissionStatus: disambiguating never-asked / denied / permanently-denied --

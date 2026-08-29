@@ -5,12 +5,19 @@
          in-app header (DashboardScreen) never renders a build tag into a screenshot. -->
     <string name="app_launcher_name">Audio Blackbox</string>
 
-    <!-- Legal / consent notice -->
-    <string name="onboarding_legal_title">Legal notice</string>
-    <string name="onboarding_legal_body">Audio Blackbox continuously records audio in the background. Recording conversations may require the consent of everyone involved, depending on the laws of your jurisdiction. You are responsible for using this app in accordance with applicable law.</string>
-    <string name="onboarding_legal_continue">I understand, continue</string>
+    <!-- Single consent screen (issue #213): why (continuous background capture), what (rolling
+         in-memory buffer) and how (never transmitted, written to disk only on explicit Save),
+         inline and visible above the buttons; see docs/release/play-store.md's
+         prominent-disclosure analysis. One combined acceptance covering recording + privacy, not
+         per-item checkboxes (product decision, 2026-08-29), with a visible decline. -->
+    <string name="onboarding_consent_title">Before you start</string>
+    <string name="onboarding_consent_body">Audio Blackbox continuously records ambient audio in the background, keeping only the most recent minutes in a rolling in-memory buffer. Audio stays only in this device\'s memory and is never sent anywhere. It\'s saved to a file only when you tap Save. Recording conversations may require the consent of everyone involved, depending on the laws of your jurisdiction, and you\'re responsible for using this app in accordance with applicable law.</string>
+    <string name="onboarding_consent_accept">Accept and continue</string>
+    <string name="onboarding_consent_decline">Decline and exit</string>
+    <string name="onboarding_consent_privacy_link">Privacy policy</string>
 
-    <!-- RECORD_AUDIO rationale -->
+    <!-- RECORD_AUDIO rationale (recovery only, after a denial: issue #213 fires the OS prompt
+         directly the first time, with no page in front of it) -->
     <string name="onboarding_audio_title">Microphone permission</string>
     <string name="onboarding_audio_body">Audio Blackbox needs microphone access to record the last few minutes of audio in a continuous buffer. Without this permission, the app can\'t record anything.</string>
     <string name="onboarding_audio_grant">Allow microphone</string>
@@ -20,7 +27,7 @@
     <string name="onboarding_audio_denied_body">You\'ve permanently denied microphone access. Audio Blackbox can\'t record without it. Open the app settings and allow microphone access manually.</string>
     <string name="onboarding_open_settings">Open app settings</string>
 
-    <!-- POST_NOTIFICATIONS rationale -->
+    <!-- POST_NOTIFICATIONS rationale (recovery only, same reasoning as onboarding_audio_title above) -->
     <string name="onboarding_notifications_title">Notification permission</string>
     <string name="onboarding_notifications_body">Audio Blackbox records in the background using a foreground service, which requires a persistent notification showing that recording is active. Without this permission, Android may stop the service.</string>
     <string name="onboarding_notifications_grant">Allow notifications</string>
@@ -29,11 +36,10 @@
     <string name="onboarding_notifications_denied_title">Notifications blocked</string>
     <string name="onboarding_notifications_denied_body">You\'ve permanently denied the notifications permission. Open the app settings to allow it manually and make sure background recording keeps working.</string>
 
-    <!-- Battery optimization -->
-    <string name="onboarding_battery_title">Battery optimization</string>
-    <string name="onboarding_battery_body">Some manufacturers (Samsung, Xiaomi, among others) aggressively kill background apps to save battery. To keep continuous recording from being interrupted, it\'s recommended that you exempt Audio Blackbox from battery optimization.</string>
+    <!-- Battery optimization: issue #213 removed the full-screen step (the system exemption
+         prompt fires directly instead); onboarding_battery_grant/onboarding_battery_warning
+         below stay, reused by the post-onboarding BatteryOptimizationBanner. -->
     <string name="onboarding_battery_grant">Exempt from battery optimization</string>
-    <string name="onboarding_battery_skip">Skip for now</string>
     <string name="onboarding_battery_warning">Without this exemption, the system may interrupt background recording. You can turn it on later in the app settings.</string>
 
     <!-- Recorder foreground service notification -->

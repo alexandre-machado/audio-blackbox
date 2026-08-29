@@ -373,10 +373,14 @@ for whoever next touches that string:
 > "Audio stays only in this device's memory and is never sent anywhere. It's saved
 > to a file only when you tap Save."
 
-I did not verify whether the current onboarding screen requires an explicit
-two-option accept/decline action (vs. a single "I understand, continue" /
-"Entendi, continuar" button, per locale) — that's a UI-flow check, not a
-strings check, and is listed as an open question in section F.
+**Update (issue #213, 2026-08-29):** both gaps above are closed. The four-screen
+flow collapsed into a single consent screen (`onboarding_consent_body`) that
+states why/what/how before any permission is requested, incorporating the
+suggested sentence above verbatim, and offers an explicit, visibly-available
+decline action (`onboarding_consent_decline`) that exits the app without
+recording consent — no longer a single "I understand, continue" button with no
+way out. This was previously listed as an open question in section F; that
+entry is resolved below.
 
 ## E. Store listing
 
@@ -502,11 +506,10 @@ the feature graphic and phone screenshots.
    and higher rejection-on-first-submission rates industry-wide, even when
    ultimately approved. **Budget for at least one rejection-and-resubmission cycle
    as the expected case, not the worst case.**
-5. **Not resolved by this document**: whether the current onboarding screen
-   (issue #19) presents a true two-option accept/decline choice, or a single
-   acknowledgment button — Play's prominent-disclosure policy specifically wants
-   the former. This needs a UI walkthrough, not a strings-file read, and
-   `app/src/main/res/values/strings.xml` is off-limits in this PR regardless.
+5. **Resolved (issue #213, 2026-08-29)**: the onboarding screen now presents a
+   true two-option accept/decline choice (`onboarding_consent_accept` /
+   `onboarding_consent_decline`) on a single consent screen, closing the gap
+   this item used to flag.
 6. **Not resolved**: privacy-policy hosting location and URL (section A.2) — owner
    decision, blocking everything downstream of it in Play Console.
 7. **Not resolved**: which locale(s) to publish the *store listing* in. Issue
