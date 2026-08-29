@@ -176,7 +176,22 @@ internal fun showcaseDashboardFixture() = DashboardViewModel.mapUiState(
     bufferedMillis = 18L * 60_000L,
     capacityMinutes = 30,
     saveState = SaveUiState.Idle,
+    // A mid-scale level, so the meter renders as it does when the app is actually hearing
+    // something. Needed because the CI emulator has no host audio device behind its virtual
+    // microphone: the real meter (#175) correctly reports silence there, so an unset level
+    // publishes a store screenshot reading "NO SIGNAL" beside an empty bar, which makes a working
+    // app look broken.
+    //
+    // This is a rendering fixture, not the app: every other value here is fabricated too (the
+    // buffered 18 minutes, the 30-minute capacity, the gallery's three recordings). What #175
+    // ended was the *shipped app* inventing a level for real users. Depicting a representative
+    // state in a store image is a different thing, and the meter still shows exactly what this
+    // level would produce.
+    inputLevel = SHOWCASE_INPUT_LEVEL,
 )
+
+/** ~0.62 lands around -23 dBFS on AudioLevel's scale: clearly active, nowhere near clipping. */
+private const val SHOWCASE_INPUT_LEVEL = 0.62f
 
 /** Settled on a 30-minute retention window: committed == pending, so no dirty notice and no dialog. */
 internal fun showcaseSettingsFixture() = SettingsViewModel.mapUiState(
