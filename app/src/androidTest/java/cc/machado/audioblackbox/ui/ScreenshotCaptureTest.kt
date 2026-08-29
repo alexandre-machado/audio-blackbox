@@ -49,10 +49,11 @@ import java.io.File
 class ScreenshotCaptureTest {
 
     // ScreenshotHostActivity, not the generic ComponentActivity createAndroidComposeRule would
-    // otherwise launch: it carries Theme.AudioBlackbox (dark windowBackground) so a capture's
-    // unpainted strips render the app's real dark ground instead of ui-test-manifest's own
-    // placeholder theme, which is hardcoded light regardless of this app's manifest (PR #227
-    // review, `@rev`/`@sec` -- see ScreenshotHostActivity's doc for the full history).
+    // otherwise launch: it carries a dark windowBackground (Theme.ScreenshotHost) matching the
+    // app's own cockpit_bg, so a capture's unpainted strips render the app's real dark ground
+    // instead of ui-test-manifest's own placeholder theme, which is hardcoded light regardless of
+    // this app's manifest (PR #227 review, `@rev`/`@sec` -- see ScreenshotHostActivity's doc for
+    // the full history).
     @get:Rule
     val composeRule = createAndroidComposeRule<ScreenshotHostActivity>()
 

@@ -16,9 +16,11 @@ import androidx.activity.ComponentActivity
  * bottom of every store screenshot, where the app's own dark `cockpit_bg` should be).
  *
  * This activity is declared in `app/src/androidTest/AndroidManifest.xml` with
- * `android:theme="@style/Theme.AudioBlackbox"` -- the same theme [cc.machado.audioblackbox.MainActivity]
- * carries in the shipped app -- so any unpainted strip renders the same dark `windowBackground` a
- * real user would see, instead of the test library's unrelated light one. It adds no behaviour of
- * its own; it exists purely to carry a different manifest theme than the library's placeholder.
+ * `android:theme="@style/Theme.ScreenshotHost"`, this module's own dark-background theme (see that
+ * style's doc for why it is a local copy of the app's `cockpit_bg` rather than a reference to the
+ * app's own `Theme.AudioBlackbox`), matching what [cc.machado.audioblackbox.MainActivity]'s real
+ * `windowBackground` shows in production. Any unpainted strip renders that same dark colour, instead
+ * of the test library's unrelated light one. This activity adds no behaviour of its own; it exists
+ * purely to carry a different manifest theme than the library's placeholder.
  */
 class ScreenshotHostActivity : ComponentActivity()

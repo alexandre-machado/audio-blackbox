@@ -3,17 +3,18 @@
 
     <application>
         <!--
-          Carries the app's real Theme.AudioBlackbox (dark windowBackground) so
+          Theme.ScreenshotHost (this module's own res/values/themes.xml): a dark windowBackground so
           ScreenshotCaptureTest's captures render correctly wherever Compose content does not paint
           over the window, unlike androidx.compose.ui:ui-test-manifest's own placeholder
           ComponentActivity, which that library hardcodes to a light platform theme regardless of
           this app's manifest. See ScreenshotHostActivity's doc for the full history (PR #227
-          review).
+          review) and Theme.ScreenshotHost's doc for why this is a local theme rather than a
+          reference to the app's own Theme.AudioBlackbox.
         -->
         <activity
             android:name="cc.machado.audioblackbox.ui.ScreenshotHostActivity"
             android:exported="false"
-            android:theme="@style/Theme.AudioBlackbox" />
+            android:theme="@style/Theme.ScreenshotHost" />
     </application>
 
 </manifest>

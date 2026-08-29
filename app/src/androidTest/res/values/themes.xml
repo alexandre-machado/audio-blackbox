@@ -1,0 +1,19 @@
+<resources>
+    <!--
+      ScreenshotHostActivity's theme. Not a reference to the app's own @style/Theme.AudioBlackbox:
+      the instrumented test APK links its manifest against its own resource package (its namespace
+      is this app's namespace plus a ".test" suffix, separate from the app-under-test's), so an
+      unqualified `@style/Theme.AudioBlackbox` reference does not resolve there (AAPT: "resource
+      style/Theme.AudioBlackbox not found"), and a package-qualified reference to the app's
+      namespace is not a resource link androidTest manifests can make either. A local style with the
+      same windowBackground sidesteps that entirely.
+
+      #0A0E17 is a literal copy of app/src/main/res/values/colors.xml's cockpit_bg, not a reference
+      to it, for the same cross-package reason. Keep the two in sync if the cockpit ground ever
+      changes (see themes.xml/colors.xml in app/src/main/res for the app-side copy and the same
+      warning).
+    -->
+    <style name="Theme.ScreenshotHost" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0A0E17</item>
+    </style>
+</resources>
