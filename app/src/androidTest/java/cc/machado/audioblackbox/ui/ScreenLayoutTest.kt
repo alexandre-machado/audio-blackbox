@@ -496,11 +496,15 @@ class ScreenLayoutTest {
      */
     @Test
     fun galleryHeaderAlignsWithDashboardHeaderUnderTheSharedGutter() {
+        // A single setContent, switched via the tab -- as the other cross-destination tests in
+        // this file do -- rather than a second setContent call, which AndroidComposeTestRule
+        // rejects once an Activity already has content.
         composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
         val dashboardTitleLeft = composeRule.onNodeWithText(string(R.string.app_name))
             .getUnclippedBoundsInRoot().left
 
-        composeRule.setContent { HarnessApp(Destination.GALLERY) }
+        galleryTab().performClick()
+
         val galleryTitle = composeRule.onNodeWithText(string(R.string.gallery_title))
         galleryTitle.assertIsDisplayed()
         val galleryTitleLeft = galleryTitle.getUnclippedBoundsInRoot().left
@@ -553,6 +557,8 @@ class ScreenLayoutTest {
     private fun dashboardTab() = tab(string(R.string.nav_dashboard_label))
 
     private fun settingsTab() = tab(string(R.string.nav_settings_label))
+
+    private fun galleryTab() = tab(string(R.string.nav_gallery_label))
 
     /** Unique element that only the dashboard renders. */
     private fun dashboardMarker() =
