@@ -39,11 +39,19 @@ class SettingsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        cc.machado.audioblackbox.service.RecorderService.rebuildEngineIfIdle(
+            newBufferDurationMinutes = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+            newPreset = cc.machado.audioblackbox.audio.QualityPreset.DEFAULT,
+        )
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        cc.machado.audioblackbox.service.RecorderService.rebuildEngineIfIdle(
+            newBufferDurationMinutes = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+            newPreset = cc.machado.audioblackbox.audio.QualityPreset.DEFAULT,
+        )
     }
 
     // ---- Stepper: bounds and step arithmetic ----
@@ -95,12 +103,12 @@ class SettingsViewModelTest {
     @Test
     fun `stepping the pending value never persists or rebuilds anything on its own`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Int>()
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
-            onRebuildEngine = { minutes -> rebuildCalls += minutes; true },
+            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -124,12 +132,12 @@ class SettingsViewModelTest {
     @Test
     fun `committing while Idle applies immediately -- nothing buffered, nothing to lose`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Int>()
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
-            onRebuildEngine = { minutes -> rebuildCalls += minutes; true },
+            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -139,7 +147,7 @@ class SettingsViewModelTest {
         vm.commitPendingRetentionWindow()
         runCurrent()
 
-        assertEquals(listOf(35), rebuildCalls)
+        assertEquals(listOf(35 to cc.machado.audioblackbox.audio.QualityPreset.VOICE), rebuildCalls)
         assertEquals(35, preferences.currentBufferDurationMinutes())
         assertNull(
             "an Idle-engine commit must never show the discard dialog",
@@ -152,14 +160,14 @@ class SettingsViewModelTest {
     @Test
     fun `committing while Recording does not persist or rebuild -- it only surfaces the confirmation once`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Int>()
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         var stopCalls = 0
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
             onStopEngine = { stopCalls++ },
-            onRebuildEngine = { minutes -> rebuildCalls += minutes; true },
+            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -189,7 +197,7 @@ class SettingsViewModelTest {
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
-            onRebuildEngine = { true },
+            onRebuildEngine = { _, _ -> true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -219,7 +227,7 @@ class SettingsViewModelTest {
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
-            onRebuildEngine = { true },
+            onRebuildEngine = { _, _ -> true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -245,19 +253,20 @@ class SettingsViewModelTest {
     @Test
     fun `confirming the change stops the engine, waits for Idle, then persists and rebuilds`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Int>()
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         var stopCalls = 0
         val captureState = MutableStateFlow<CaptureState>(CaptureState.Recording)
-        // A real RecorderService.bufferDurationMinutesFlow updates the instant rebuildEngineIfIdle
-        // succeeds (see that method's doc) -- this fake mirrors that so the isDirty assertion below
-        // reflects the real end-to-end behaviour, not an artifact of a capacity fake that never moves.
         val capacityMinutesFlow = MutableStateFlow(30)
         val vm = SettingsViewModel(
             captureState = captureState,
             capacityMinutesFlow = capacityMinutesFlow,
             retentionWindowPreferences = preferences,
             onStopEngine = { stopCalls++ },
-            onRebuildEngine = { minutes -> rebuildCalls += minutes; capacityMinutesFlow.value = minutes; true },
+            onRebuildEngine = { minutes, preset ->
+                rebuildCalls += (minutes to preset)
+                capacityMinutesFlow.value = minutes
+                true
+            },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -271,9 +280,6 @@ class SettingsViewModelTest {
         vm.confirmRetentionWindowChange()
         runCurrent()
 
-        // onStopEngine fired, but the real engine (out of this test's reach) has not actually
-        // reached Idle yet -- confirmRetentionWindowChange must wait for that transition, not
-        // apply the moment the button is tapped.
         assertEquals(1, stopCalls)
         assertTrue(
             "must not persist/rebuild before captureState actually reaches Idle",
@@ -285,12 +291,10 @@ class SettingsViewModelTest {
             observed.last().retentionStepper.pendingConfirmationMinutes,
         )
 
-        // The engine actually finishes stopping (what onStopEngine's real RecorderService wiring
-        // would eventually cause).
         captureState.value = CaptureState.Idle
         runCurrent()
 
-        assertEquals(listOf(35), rebuildCalls)
+        assertEquals(listOf(35 to cc.machado.audioblackbox.audio.QualityPreset.VOICE), rebuildCalls)
         assertEquals(35, preferences.currentBufferDurationMinutes())
         assertFalse(
             "once committed, pending and committed agree again",
@@ -303,14 +307,14 @@ class SettingsViewModelTest {
     @Test
     fun `cancelling the change leaves the engine and the persisted value untouched, and keeps the pending value`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Int>()
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         var stopCalls = 0
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
             onStopEngine = { stopCalls++ },
-            onRebuildEngine = { minutes -> rebuildCalls += minutes; true },
+            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -328,9 +332,6 @@ class SettingsViewModelTest {
         assertEquals(0, stopCalls)
         assertTrue(rebuildCalls.isEmpty())
         assertEquals(30, preferences.currentBufferDurationMinutes())
-        // Cancelling closes the dialog but does not revert the stepper -- the user's pending
-        // edit is still theirs to apply again or keep adjusting (issue #73: do not commit
-        // implicitly, but also do not silently discard what the user was editing).
         assertEquals(35, observed.last().retentionStepper.pendingMinutes)
 
         job.cancel()
@@ -339,12 +340,12 @@ class SettingsViewModelTest {
     @Test
     fun `committing the already-current value is a no-op`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Int>()
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
-            onRebuildEngine = { minutes -> rebuildCalls += minutes; true },
+            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -356,6 +357,46 @@ class SettingsViewModelTest {
         assertTrue("committing the current value must not rebuild or persist anything", rebuildCalls.isEmpty())
         assertEquals(30, preferences.currentBufferDurationMinutes())
         assertNull(observed.last().retentionStepper.pendingConfirmationMinutes)
+
+        job.cancel()
+    }
+
+    // ---- Issue #193: Quality Preset selection and bounds ----
+
+    @Test
+    fun `selecting a quality preset marks state as dirty and adjusts max selectable retention`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
+        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
+            retentionWindowPreferences = preferences,
+            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
+            maxMemoryBytesProvider = { 256 * 1024 * 1024L },
+            usedMemoryBytesProvider = { 30 * 1024 * 1024L },
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, observed.last().selectedPreset)
+        assertFalse(observed.last().retentionStepper.isDirty)
+
+        vm.selectQualityPreset(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY)
+        runCurrent()
+
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, observed.last().selectedPreset)
+        assertTrue(observed.last().retentionStepper.isDirty)
+        // High fidelity on a 256MB heap has a lower ceiling than 30 min -- pending minutes should be clamped down
+        assertTrue(observed.last().retentionStepper.pendingMinutes <= observed.last().retentionStepper.maxSelectableMinutes)
+
+        vm.commitPendingRetentionWindow()
+        runCurrent()
+
+        assertEquals(1, rebuildCalls.size)
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, rebuildCalls.first().second)
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, preferences.currentQualityPreset())
 
         job.cancel()
     }
@@ -435,7 +476,11 @@ class SettingsViewModelTest {
 
     @Test
     fun `mapUiState reports approxPendingRamMb from the pending value, not the committed one`() {
-        val state = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 45, pendingConfirmationMinutes = null)
+        val state = SettingsViewModel.mapUiState(
+            committedMinutes = 30,
+            pendingMinutes = 45,
+            pendingConfirmation = null,
+        )
         assertTrue(
             "45 min should be roughly the documented ~86 MB, not 30 min's ~58 MB",
             state.retentionStepper.approxPendingRamMb in 75..95,
@@ -444,32 +489,23 @@ class SettingsViewModelTest {
 
     @Test
     fun `mapUiState marks isDirty only when pending and committed disagree`() {
-        val clean = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 30, pendingConfirmationMinutes = null)
-        val dirty = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 35, pendingConfirmationMinutes = null)
+        val clean = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 30, pendingConfirmation = null)
+        val dirty = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 35, pendingConfirmation = null)
         assertFalse(clean.retentionStepper.isDirty)
         assertTrue(dirty.retentionStepper.isDirty)
     }
 
     @Test
-    fun `mapUiState disables decrement only at the minimum and increment only at the maximum`() {
-        val atMin = SettingsViewModel.mapUiState(
-            committedMinutes = AudioConfig.RETENTION_WINDOW_MIN_MINUTES,
-            pendingMinutes = AudioConfig.RETENTION_WINDOW_MIN_MINUTES,
-            pendingConfirmationMinutes = null,
+    fun `mapUiState computes memory budget across all three quality presets`() {
+        val state = SettingsViewModel.mapUiState(
+            committedMinutes = 30,
+            pendingMinutes = 30,
+            maxMemoryBytes = 256 * 1024 * 1024L,
+            usedMemoryBytes = 20 * 1024 * 1024L,
         )
-        assertFalse(atMin.retentionStepper.canDecrement)
-        assertTrue(atMin.retentionStepper.canIncrement)
-
-        val atMax = SettingsViewModel.mapUiState(
-            committedMinutes = AudioConfig.RETENTION_WINDOW_MAX_MINUTES,
-            pendingMinutes = AudioConfig.RETENTION_WINDOW_MAX_MINUTES,
-            pendingConfirmationMinutes = null,
-        )
-        assertTrue(atMax.retentionStepper.canDecrement)
-        assertFalse(atMax.retentionStepper.canIncrement)
-
-        val middle = SettingsViewModel.mapUiState(committedMinutes = 30, pendingMinutes = 30, pendingConfirmationMinutes = null)
-        assertTrue(middle.retentionStepper.canDecrement)
-        assertTrue(middle.retentionStepper.canIncrement)
+        assertEquals(3, state.qualityPresets.size)
+        val voice = state.qualityPresets.first { it.preset == cc.machado.audioblackbox.audio.QualityPreset.VOICE }
+        val hiFi = state.qualityPresets.first { it.preset == cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY }
+        assertTrue(voice.maxRetentionMinutes >= hiFi.maxRetentionMinutes)
     }
 }

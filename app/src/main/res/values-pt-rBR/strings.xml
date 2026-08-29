@@ -174,6 +174,7 @@
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Canais</string>
     <string name="settings_specs_channels_value">Mono (1 canal)</string>
+    <string name="settings_specs_channels_stereo_value">Estéreo (2 canais)</string>
     <string name="settings_specs_persistence_label">Modo de persistência</string>
     <string name="settings_specs_persistence_value">MediaStore (Armazenamento local)</string>
     <string name="settings_privacy_title">Privacidade e processamento local</string>
@@ -197,6 +198,20 @@
     <string name="settings_retention_confirm_body">Trocar para %1$d min exige parar a gravação, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
     <string name="settings_retention_confirm_accept">Parar e trocar</string>
     <string name="settings_retention_confirm_cancel">Cancelar</string>
+
+    <!-- Seletor de qualidade de áudio (issue #193) -->
+    <string name="settings_quality_preset_title">Predefinição de qualidade</string>
+    <string name="settings_quality_preset_explanation">Escolha entre maior tempo de retenção ou maior fidelidade de áudio. Maior qualidade usa mais memória RAM por minuto.</string>
+    <string name="settings_preset_voice_title">Voz</string>
+    <string name="settings_preset_voice_specs">16 kHz · Mono</string>
+    <string name="settings_preset_voice_desc">Otimizado para conversas com a maior janela de retenção.</string>
+    <string name="settings_preset_balanced_title">Equilibrado</string>
+    <string name="settings_preset_balanced_specs">32 kHz · Mono</string>
+    <string name="settings_preset_balanced_desc">Maior clareza com uso moderado de memória.</string>
+    <string name="settings_preset_high_fidelity_title">Alta fidelidade</string>
+    <string name="settings_preset_high_fidelity_specs">44.1 kHz · Estéreo</string>
+    <string name="settings_preset_high_fidelity_desc">Qualidade de estúdio usando os múltiplos microfones do aparelho.</string>
+    <string name="settings_preset_max_window">Máx.: %1$d min</string>
 
     <!-- Aviso de redução por clamp (issue #84): mostrado no máximo uma vez, só para quem tinha um
          valor de retenção salvo (50/55/60, persistido antes do clamp temporário da issue #72) que

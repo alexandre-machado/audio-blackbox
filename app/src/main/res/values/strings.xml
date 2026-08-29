@@ -183,6 +183,7 @@
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Channel count</string>
     <string name="settings_specs_channels_value">Mono (1 channel)</string>
+    <string name="settings_specs_channels_stereo_value">Stereo (2 channels)</string>
     <string name="settings_specs_persistence_label">Persistence mode</string>
     <string name="settings_specs_persistence_value">MediaStore (Local storage)</string>
     <string name="settings_privacy_title">Privacy &amp; local processing</string>
@@ -206,6 +207,20 @@
     <string name="settings_retention_confirm_body">Switching to %1$d min requires stopping the recording, which discards all audio currently in memory. That recording can\'t be recovered afterward.</string>
     <string name="settings_retention_confirm_accept">Stop and switch</string>
     <string name="settings_retention_confirm_cancel">Cancel</string>
+
+    <!-- Quality preset selector (issue #193) -->
+    <string name="settings_quality_preset_title">Audio quality preset</string>
+    <string name="settings_quality_preset_explanation">Choose between longer retention time or higher audio fidelity. Higher fidelity uses more RAM per minute.</string>
+    <string name="settings_preset_voice_title">Voice</string>
+    <string name="settings_preset_voice_specs">16 kHz · Mono</string>
+    <string name="settings_preset_voice_desc">Optimized for speech with the longest retention window.</string>
+    <string name="settings_preset_balanced_title">Balanced</string>
+    <string name="settings_preset_balanced_specs">32 kHz · Mono</string>
+    <string name="settings_preset_balanced_desc">Higher clarity with moderate memory usage.</string>
+    <string name="settings_preset_high_fidelity_title">High fidelity</string>
+    <string name="settings_preset_high_fidelity_specs">44.1 kHz · Stereo</string>
+    <string name="settings_preset_high_fidelity_desc">Studio quality engaging device microphone arrays.</string>
+    <string name="settings_preset_max_window">Max: %1$d min</string>
 
     <!-- Clamp-down notice (issue #84): shown at most once, only to a user whose stored retention
          window (50/55/60, persisted before issue #72's interim clamp) was reduced on load. Never

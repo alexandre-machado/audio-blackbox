@@ -318,4 +318,41 @@ class RetentionWindowPreferencesTest {
 
         assertEquals(15, preferences.currentBufferDurationMinutes())
     }
+
+    // ---- Issue #193: QualityPreset persistence ----
+
+    private val rawKeyQualityPreset = androidx.datastore.preferences.core.stringPreferencesKey("quality_preset")
+
+    @Test
+    fun `before any preset has been persisted, the value is VOICE (historical default)`() = runTest {
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.currentQualityPreset())
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.qualityPresetFlow.first())
+    }
+
+    @Test
+    fun `a persisted quality preset survives process restart`() = runTest {
+        val firstJob = SupervisorJob()
+        val firstScope = CoroutineScope(firstJob)
+        val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
+        DataStoreRetentionWindowPreferences(firstDataStore).setQualityPreset(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY)
+        firstJob.cancelAndJoin()
+
+        val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
+
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, reloaded.currentQualityPreset())
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, reloaded.qualityPresetFlow.first())
+    }
+
+    @Test
+    fun `an unknown persisted quality preset string falls back to VOICE default without throwing`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyQualityPreset] = "UNKNOWN_FUTURE_PRESET" }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.currentQualityPreset())
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.qualityPresetFlow.first())
+    }
 }

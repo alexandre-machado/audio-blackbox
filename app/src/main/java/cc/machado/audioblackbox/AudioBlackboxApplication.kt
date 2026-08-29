@@ -1,6 +1,7 @@
 package cc.machado.audioblackbox
 
 import android.app.Application
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
 import kotlinx.coroutines.runBlocking
@@ -16,7 +17,7 @@ import kotlinx.coroutines.runBlocking
  *
  * `runBlocking` here is deliberate and narrowly scoped: this runs once per process, in
  * `Application.onCreate` -- before any Activity/Service exists to block a user-visible frame --
- * and reads a `DataStore` file that at most holds a handful of bytes (one Int), so the blocking
+ * and reads a `DataStore` file that at most holds a handful of bytes (one Int and one String), so the blocking
  * window is a local disk read, not network or contended I/O. This is the ONE place in this
  * codebase allowed to block on `DataStore`; every other consumer (the dashboard's retention
  * selector) reads it reactively via [RetentionWindowPreferences.bufferDurationMinutesFlow].
@@ -27,6 +28,7 @@ class AudioBlackboxApplication : Application() {
         super.onCreate()
         val preferences: RetentionWindowPreferences = DataStoreRetentionWindowPreferences(this)
         PreloadedRetentionWindow.minutes = runBlocking { preferences.currentBufferDurationMinutes() }
+        PreloadedRetentionWindow.preset = runBlocking { preferences.currentQualityPreset() }
     }
 }
 
@@ -43,4 +45,7 @@ class AudioBlackboxApplication : Application() {
 object PreloadedRetentionWindow {
     @Volatile
     var minutes: Int = cc.machado.audioblackbox.audio.AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+
+    @Volatile
+    var preset: QualityPreset = QualityPreset.DEFAULT
 }

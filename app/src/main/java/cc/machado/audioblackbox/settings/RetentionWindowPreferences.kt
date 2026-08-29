@@ -6,9 +6,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.QualityPreset
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -85,6 +88,15 @@ interface RetentionWindowPreferences {
     /** Marks the currently-pending [clampNoticeFlow] value (if any) as shown, so it never surfaces
      * again. A no-op call with nothing pending is harmless. */
     suspend fun acknowledgeClampNotice()
+
+    /** Reactive (issue #193), defaults to [QualityPreset.DEFAULT] ([QualityPreset.VOICE]). */
+    val qualityPresetFlow: Flow<QualityPreset>
+
+    /** Synchronous read of the currently stored [QualityPreset]. */
+    suspend fun currentQualityPreset(): QualityPreset
+
+    /** Persists [preset]. */
+    suspend fun setQualityPreset(preset: QualityPreset)
 }
 
 /** Issue #84: what [RetentionWindowPreferences.clampNoticeFlow] hands the UI to render "your
@@ -214,9 +226,20 @@ class DataStoreRetentionWindowPreferences(private val dataStore: DataStore<Prefe
         dataStore.edit { prefs -> prefs[KEY_CLAMP_NOTICE_ACKNOWLEDGED] = true }
     }
 
+    override val qualityPresetFlow: Flow<QualityPreset> = dataStore.data.map { prefs ->
+        QualityPreset.fromStoredName(prefs[KEY_QUALITY_PRESET])
+    }
+
+    override suspend fun currentQualityPreset(): QualityPreset = qualityPresetFlow.first()
+
+    override suspend fun setQualityPreset(preset: QualityPreset) {
+        dataStore.edit { prefs -> prefs[KEY_QUALITY_PRESET] = preset.name }
+    }
+
     companion object {
         private val KEY_BUFFER_DURATION_MINUTES = intPreferencesKey("buffer_duration_minutes")
         private val KEY_CLAMP_NOTICE_ACKNOWLEDGED = booleanPreferencesKey("clamp_notice_acknowledged")
+        private val KEY_QUALITY_PRESET = stringPreferencesKey("quality_preset")
 
         /** Production factory: builds the real, disk-backed [DataStoreRetentionWindowPreferences]
          * from a [Context] -- the constructor above stays [Context]-free for testability (see its
@@ -244,10 +267,12 @@ class InMemoryRetentionWindowPreferences(
     // going through a real DataStore -- production code never passes this (a fresh in-memory
     // instance always starts at a valid, un-clamped initialMinutes).
     initialClampNotice: ClampNotice? = null,
+    initialQualityPreset: QualityPreset = QualityPreset.DEFAULT,
 ) : RetentionWindowPreferences {
 
     private val state = kotlinx.coroutines.flow.MutableStateFlow(initialMinutes)
     private val clampNoticeState = kotlinx.coroutines.flow.MutableStateFlow(initialClampNotice)
+    private val qualityPresetState = kotlinx.coroutines.flow.MutableStateFlow(initialQualityPreset)
 
     override val bufferDurationMinutesFlow: Flow<Int> = state
 
@@ -266,5 +291,13 @@ class InMemoryRetentionWindowPreferences(
 
     override suspend fun acknowledgeClampNotice() {
         clampNoticeState.value = null
+    }
+
+    override val qualityPresetFlow: Flow<QualityPreset> = qualityPresetState
+
+    override suspend fun currentQualityPreset(): QualityPreset = qualityPresetState.value
+
+    override suspend fun setQualityPreset(preset: QualityPreset) {
+        qualityPresetState.value = preset
     }
 }

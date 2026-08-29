@@ -51,6 +51,11 @@ import cc.machado.audioblackbox.ui.theme.AvionicsGreen
 import cc.machado.audioblackbox.ui.theme.FlightOrange
 import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import cc.machado.audioblackbox.audio.QualityPreset
+
 /**
  * Hosts [SettingsViewModel] and renders [SettingsScreen] against its live state -- same
  * Route/Screen seam as [cc.machado.audioblackbox.ui.dashboard.DashboardRoute], so every visual
@@ -73,6 +78,7 @@ fun SettingsRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     SettingsScreen(
         uiState = uiState,
+        onSelectQualityPreset = viewModel::selectQualityPreset,
         onDecrement = viewModel::decrementPending,
         onIncrement = viewModel::incrementPending,
         onApply = viewModel::commitPendingRetentionWindow,
@@ -86,6 +92,7 @@ fun SettingsRoute(
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
+    onSelectQualityPreset: (QualityPreset) -> Unit,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
     onApply: () -> Unit,
@@ -104,8 +111,12 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         SettingsHeader()
+        QualityPresetSection(
+            presets = uiState.qualityPresets,
+            onSelectQualityPreset = onSelectQualityPreset,
+        )
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement, onApply)
-        AudioSpecsSection()
+        AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         PrivacySection(versionName = versionName)
     }
     uiState.retentionStepper.pendingConfirmationMinutes?.let { pendingMinutes ->
@@ -267,7 +278,133 @@ private fun RetentionStepperSection(
 }
 
 @Composable
-private fun AudioSpecsSection() {
+private fun QualityPresetSection(
+    presets: List<QualityPresetOption>,
+    onSelectQualityPreset: (QualityPreset) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_audio_specs),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = FlightOrange,
+                )
+                Text(
+                    text = stringResource(R.string.settings_quality_preset_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_quality_preset_explanation),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            presets.forEach { option ->
+                val isSelected = option.isSelected
+                val (titleRes, specsRes, descRes) = when (option.preset) {
+                    QualityPreset.VOICE -> Triple(
+                        R.string.settings_preset_voice_title,
+                        R.string.settings_preset_voice_specs,
+                        R.string.settings_preset_voice_desc,
+                    )
+                    QualityPreset.BALANCED -> Triple(
+                        R.string.settings_preset_balanced_title,
+                        R.string.settings_preset_balanced_specs,
+                        R.string.settings_preset_balanced_desc,
+                    )
+                    QualityPreset.HIGH_FIDELITY -> Triple(
+                        R.string.settings_preset_high_fidelity_title,
+                        R.string.settings_preset_high_fidelity_specs,
+                        R.string.settings_preset_high_fidelity_desc,
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) FlightOrangeContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSelected) FlightOrange else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectQualityPreset(option.preset) },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onSelectQualityPreset(option.preset) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = FlightOrange,
+                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        )
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(titleRes),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isSelected) FlightOrange.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(1.dp, if (isSelected) FlightOrange.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant),
+                                ) {
+                                    Text(
+                                        text = stringResource(specsRes),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) FlightOrange else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                            Text(
+                                text = stringResource(descRes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_preset_max_window, option.maxRetentionMinutes),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isSelected) FlightOrange else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFAULT) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -299,9 +436,20 @@ private fun AudioSpecsSection() {
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             SpecRow(label = stringResource(R.string.settings_specs_export_label), value = stringResource(R.string.settings_specs_export_value))
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-            SpecRow(label = stringResource(R.string.settings_specs_sample_rate_label), value = stringResource(R.string.settings_specs_sample_rate_value), isMonospace = true)
+            SpecRow(
+                label = stringResource(R.string.settings_specs_sample_rate_label),
+                value = "${selectedPreset.sampleRateHz} Hz",
+                isMonospace = true,
+            )
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-            SpecRow(label = stringResource(R.string.settings_specs_channels_label), value = stringResource(R.string.settings_specs_channels_value))
+            SpecRow(
+                label = stringResource(R.string.settings_specs_channels_label),
+                value = if (selectedPreset.channelCount == 1) {
+                    stringResource(R.string.settings_specs_channels_value)
+                } else {
+                    stringResource(R.string.settings_specs_channels_stereo_value)
+                },
+            )
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             SpecRow(label = stringResource(R.string.settings_specs_persistence_label), value = stringResource(R.string.settings_specs_persistence_value))
         }
@@ -443,6 +591,7 @@ private fun previewStepperState(
     canDecrement: Boolean = true,
     canIncrement: Boolean = true,
     pendingConfirmation: Int? = null,
+    selectedPreset: QualityPreset = QualityPreset.VOICE,
 ): SettingsUiState = SettingsUiState(
     retentionStepper = RetentionStepperUiState(
         committedMinutes = committedMinutes,
@@ -453,13 +602,19 @@ private fun previewStepperState(
         canIncrement = canIncrement,
         pendingConfirmationMinutes = pendingConfirmation,
     ),
+    qualityPresets = listOf(
+        QualityPresetOption(QualityPreset.VOICE, maxRetentionMinutes = 45, isSelected = selectedPreset == QualityPreset.VOICE),
+        QualityPresetOption(QualityPreset.BALANCED, maxRetentionMinutes = 30, isSelected = selectedPreset == QualityPreset.BALANCED),
+        QualityPresetOption(QualityPreset.HIGH_FIDELITY, maxRetentionMinutes = 15, isSelected = selectedPreset == QualityPreset.HIGH_FIDELITY),
+    ),
+    selectedPreset = selectedPreset,
 )
 
 @Preview(showBackground = true, name = "Clean (30 min)")
 @Composable
 private fun SettingsScreenCleanPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(), {}, {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -467,7 +622,7 @@ private fun SettingsScreenCleanPreview() {
 @Composable
 private fun SettingsScreenDirtyPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(pendingMinutes = 45), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(pendingMinutes = 45), {}, {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -475,7 +630,7 @@ private fun SettingsScreenDirtyPreview() {
 @Composable
 private fun SettingsScreenAtMinPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(committedMinutes = 5, pendingMinutes = 5, canDecrement = false), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(committedMinutes = 5, pendingMinutes = 5, canDecrement = false), {}, {}, {}, {}, {}, {}, {})
     }
 }
 
@@ -483,6 +638,6 @@ private fun SettingsScreenAtMinPreview() {
 @Composable
 private fun SettingsScreenAtMaxPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(committedMinutes = 45, pendingMinutes = 45, canIncrement = false), {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(committedMinutes = 45, pendingMinutes = 45, canIncrement = false), {}, {}, {}, {}, {}, {}, {})
     }
 }
