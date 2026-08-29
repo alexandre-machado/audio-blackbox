@@ -73,8 +73,6 @@ Audio Blackbox is available in open beta via Google Play:
 2. **Accept the Web Test Invitation** $\rightarrow$ [Play Store Testing Portal](https://play.google.com/apps/testing/cc.machado.audioblackbox)
 3. **Install on Device** $\rightarrow$ [Google Play Store](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)
 
-*Note: You can also download signed `.apk` / `.aab` artifacts directly from our [GitHub Releases](https://github.com/alexandre-machado/audio-blackbox/releases).*
-
 ---
 
 ## 🛠️ Developer & Build Guide
