@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -17,21 +19,9 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Instance-level regression test for [DashboardViewModel.requestSave]'s double-tap guard
- * (issue #40 follow-up): a rapid second tap must not dispatch a second save intent while the
- * first one is still in flight -- previously only the window-option-enabled check guarded
- * [DashboardViewModel.requestSave], which does not change between two calls in the same tick, so
- * nothing stopped a duplicate dispatch. This is the one instance-behaviour test issue #40 needs
- * despite full instance-test coverage otherwise being issue #41/PR #42's scope -- the defect is
- * specific to this PR's own change (issue #40 item 2 wiring real `ExportState` onto the screen is
- * what turns the duplicate dispatch into a *visible* error).
- *
- * Uses [StandardTestDispatcher] (`kotlinx-coroutines-test`), never a real `delay`: the whole
- * scenario is "two calls with no time passing between them", which is exactly what calling
- * [DashboardViewModel.requestSave] twice in a row, synchronously, already reproduces -- no
- * virtual-time advance is needed to prove the double dispatch, only to let the ViewModel's
- * `init` collector (which observes [ExportState] to release the guard once a real export starts)
- * run in the second test below.
+ * Instance-level regression test for [DashboardViewModel.requestSave] and [DashboardViewModel.startForwardRecording]'s
+ * double-tap guards (issues #40 and #208): a rapid second tap must not dispatch a second intent while the
+ * first one is still in flight.
  */
 class DashboardViewModelDoubleTapTest {
 
@@ -46,14 +36,25 @@ class DashboardViewModelDoubleTapTest {
     }
 
     private fun newViewModel(
-        exportState: MutableStateFlow<ExportState>,
-        onSaveIntent: () -> Unit,
+        exportState: MutableStateFlow<ExportState> = MutableStateFlow(ExportState.Idle),
+        onSaveIntent: () -> Unit = {},
     ) = DashboardViewModel(
         captureState = MutableStateFlow(CaptureState.Recording),
         bufferedDurationMillisProvider = { 30 * 60_000L },
         capacityMinutesFlow = MutableStateFlow(30),
         exportState = exportState,
         onSaveIntent = onSaveIntent,
+    )
+
+    private fun newForwardViewModel(
+        forwardRecordingState: MutableStateFlow<ForwardRecordingState> = MutableStateFlow(ForwardRecordingState.Idle),
+        onStartForwardRecording: () -> Unit = {},
+    ) = DashboardViewModel(
+        captureState = MutableStateFlow(CaptureState.Recording),
+        bufferedDurationMillisProvider = { 30 * 60_000L },
+        capacityMinutesFlow = MutableStateFlow(30),
+        forwardRecordingState = forwardRecordingState,
+        onStartForwardRecording = onStartForwardRecording,
     )
 
     @Test
@@ -233,5 +234,173 @@ class DashboardViewModelDoubleTapTest {
             2,
             dispatchCount,
         )
+    }
+
+    // ---- Forward Recording Double-Tap Tests (Issue #208) ----
+
+    @Test
+    fun `two rapid startForwardRecording calls before round trip starts dispatch exactly one start intent`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        var dispatchCount = 0
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) { dispatchCount++ }
+
+        viewModel.startForwardRecording()
+        viewModel.startForwardRecording()
+
+        assertEquals(
+            "a second startForwardRecording() while the first is still awaiting a real ForwardRecordingState " +
+                "must be ignored, not dispatched a second time",
+            1,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `once forward recording actually starts, startForwardRecording is rejected until it finishes`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        var dispatchCount = 0
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) { dispatchCount++ }
+
+        viewModel.startForwardRecording()
+        assertEquals(1, dispatchCount)
+
+        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "blackbox_2026-08-29_11-00-00.m4a", bytesWritten = 0)
+        runCurrent()
+
+        viewModel.startForwardRecording()
+        assertEquals(
+            "a tap while forward recording is Recording must be ignored",
+            1,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `once a prior forward recording has finished, a later startForwardRecording is allowed again`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        var dispatchCount = 0
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) { dispatchCount++ }
+
+        viewModel.startForwardRecording()
+        assertEquals(1, dispatchCount)
+
+        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "rec1.m4a", bytesWritten = 100)
+        runCurrent()
+        forwardRecordingState.value = ForwardRecordingState.Success(displayName = "rec1.m4a", bytesWritten = 100)
+        runCurrent()
+        forwardRecordingState.value = ForwardRecordingState.Idle
+        runCurrent()
+
+        viewModel.startForwardRecording()
+        assertEquals(
+            "a later, genuinely new start request must not be blocked after previous recording finished",
+            2,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `a forward recording dispatch that throws leaves startForwardRecording usable for the next call`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        var dispatchCount = 0
+        var shouldThrow = true
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) {
+            dispatchCount++
+            if (shouldThrow) error("onStartForwardRecording boom")
+        }
+
+        assertThrows(IllegalStateException::class.java) { viewModel.startForwardRecording() }
+        assertEquals(1, dispatchCount)
+
+        shouldThrow = false
+        viewModel.startForwardRecording()
+        assertEquals(
+            "a throwing dispatch must not permanently lock startForwardRecording out",
+            2,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `a forward recording dispatch that silently never reaches the service is released by timeout backstop`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        var dispatchCount = 0
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) { dispatchCount++ }
+
+        viewModel.startForwardRecording()
+        assertEquals(1, dispatchCount)
+
+        advanceTimeBy(5_001L)
+        runCurrent()
+
+        viewModel.startForwardRecording()
+        assertEquals(
+            "a dispatch that never produces a real ForwardRecordingState transition must still release " +
+                "the guard once the timeout backstop elapses",
+            2,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `a stale timeout from a throwing forward recording dispatch does not release a later dispatch guard early`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        var dispatchCount = 0
+        var shouldThrow = true
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) {
+            dispatchCount++
+            if (shouldThrow) error("onStartForwardRecording boom")
+        }
+
+        assertThrows(IllegalStateException::class.java) { viewModel.startForwardRecording() }
+        assertEquals(1, dispatchCount)
+
+        shouldThrow = false
+        advanceTimeBy(2_000L)
+        runCurrent()
+        viewModel.startForwardRecording()
+        assertEquals(2, dispatchCount)
+
+        advanceTimeBy(3_000L) // t: 2000 -> 5000
+        runCurrent()
+
+        viewModel.startForwardRecording()
+        assertEquals(
+            "a stale backstop Job from the first (thrown) dispatch must not release the second dispatch's guard early",
+            2,
+            dispatchCount,
+        )
+    }
+
+    @Test
+    fun `retrying startForwardRecording from Error state is guarded against double tap and dispatches exactly once`() = runTest {
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(
+            ForwardRecordingState.Error(ForwardRecordingFailureReason.SINK_OPEN_FAILED, "failed"),
+        )
+        var dispatchCount = 0
+        val viewModel = newForwardViewModel(forwardRecordingState = forwardRecordingState) { dispatchCount++ }
+
+        // Double tap on Retry button in error notice
+        viewModel.startForwardRecording()
+        viewModel.startForwardRecording()
+
+        assertEquals(
+            "retrying from Error state must also guard against in-flight double tap and dispatch exactly once",
+            1,
+            dispatchCount,
+        )
+
+        // Real state transition arrives
+        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "rec_retry.m4a", bytesWritten = 0)
+        runCurrent()
+
+        // Guard is released by recording state
+        forwardRecordingState.value = ForwardRecordingState.Success(displayName = "rec_retry.m4a", bytesWritten = 50)
+        runCurrent()
+        forwardRecordingState.value = ForwardRecordingState.Idle
+        runCurrent()
+
+        viewModel.startForwardRecording()
+        assertEquals(2, dispatchCount)
     }
 }

@@ -173,6 +173,14 @@ class DashboardViewModel(
     // own confirmation or its own backstop has actually arrived.
     private var dispatchTimeoutJob: Job? = null
 
+    // Mirrors saveDispatchPending for startForwardRecording() (issue #208): protects against rapid
+    // double-taps before RecorderService has transitioned forwardRecordingState, avoiding duplicate
+    // start dispatches and race conditions.
+    private var forwardDispatchPending = false
+
+    // Mirrors dispatchTimeoutJob for startForwardRecording() (issue #208).
+    private var forwardDispatchTimeoutJob: Job? = null
+
     // True from the moment toggleEngine() dispatches a start/stop request until captureState is
     // observed to actually change (issue #46) -- the *only* local state this class keeps for the
     // engine switch, and it never substitutes for the real CaptureState: it only ever gates
@@ -215,11 +223,16 @@ class DashboardViewModel(
             }
         }
 
-        // Mirrors the exportState collector above for forward recording's own Error (issue #206).
+        // Mirrors the exportState collector above for forward recording's own Error and dispatch release (issues #206, #208).
         viewModelScope.launch {
             forwardRecordingState.collect { state ->
                 if (state is ForwardRecordingState.Error) {
                     _forwardErrorSnapshot.value = freshForwardErrorSnapshot()
+                }
+                if (state !is ForwardRecordingState.Idle) {
+                    forwardDispatchPending = false
+                    forwardDispatchTimeoutJob?.cancel()
+                    forwardDispatchTimeoutJob = null
                 }
             }
         }
@@ -454,11 +467,32 @@ class DashboardViewModel(
     }
     /** Starts a forward recording session. Always includes the retained past (issue #139) --
      * [ForwardRecordingEngine.start] itself has no forward-only mode anymore, so there is nothing
-     * left for this call to parameterize. */
+     * left for this call to parameterize.
+     *
+     * Protected by [forwardDispatchPending] against rapid double-taps while a dispatch is in flight (issue #208).
+     */
     fun startForwardRecording() {
-        if (forwardRecordingState.value is ForwardRecordingState.Recording) return
+        if (forwardDispatchPending || forwardRecordingState.value is ForwardRecordingState.Recording) return
+        forwardDispatchPending = true
         _dismissedForwardRecordingState.value = null
-        onStartForwardRecording()
+
+        forwardDispatchTimeoutJob = viewModelScope.launch {
+            delay(DISPATCH_TIMEOUT_MILLIS)
+            forwardDispatchPending = false
+            forwardDispatchTimeoutJob = null
+        }
+
+        var dispatchThrew = true
+        try {
+            onStartForwardRecording()
+            dispatchThrew = false
+        } finally {
+            if (dispatchThrew) {
+                forwardDispatchPending = false
+                forwardDispatchTimeoutJob?.cancel()
+                forwardDispatchTimeoutJob = null
+            }
+        }
     }
 
     fun stopForwardRecording() {
