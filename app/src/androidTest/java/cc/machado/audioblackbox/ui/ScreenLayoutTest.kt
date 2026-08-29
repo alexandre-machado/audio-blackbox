@@ -6,12 +6,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import cc.machado.audioblackbox.ui.dashboard.DASHBOARD_PADDING
 import cc.machado.audioblackbox.ui.dashboard.ENGINE_SWITCH_TEST_TAG
+import cc.machado.audioblackbox.ui.dashboard.SAVE_BUTTON_TEST_TAG
+import cc.machado.audioblackbox.ui.dashboard.FORWARD_START_BUTTON_TEST_TAG
+import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import java.util.Locale
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -254,10 +258,10 @@ class ScreenLayoutTest {
                 "its left edge is at ${switchBounds.left}, but the root window left edge is at ${rootBounds.left}.",
             switchBounds.left >= rootBounds.left,
         )
-        val expectedMaxRight = rootBounds.right - DASHBOARD_PADDING
+        val expectedMaxRight = rootBounds.right - SCREEN_GUTTER
         assertTrue(
             "the continuous recording switch right edge is at ${switchBounds.right}, expected to be at or within " +
-                "$expectedMaxRight (accounting for $DASHBOARD_PADDING dashboard padding).",
+                "$expectedMaxRight (accounting for $SCREEN_GUTTER dashboard padding).",
             (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
         )
     }
@@ -294,10 +298,10 @@ class ScreenLayoutTest {
                 "its right edge is at ${switchBounds.right}, but the root window right edge is at ${rootBounds.right}.",
             switchBounds.right <= rootBounds.right,
         )
-        val expectedMaxRight = rootBounds.right - DASHBOARD_PADDING
+        val expectedMaxRight = rootBounds.right - SCREEN_GUTTER
         assertTrue(
             "the continuous recording switch right edge is at ${switchBounds.right}, expected to be at or within " +
-                "$expectedMaxRight (accounting for $DASHBOARD_PADDING dashboard padding).",
+                "$expectedMaxRight (accounting for $SCREEN_GUTTER dashboard padding).",
             (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
         )
     }
@@ -437,7 +441,101 @@ class ScreenLayoutTest {
         assertGalleryActionButtonsValid(Locale.ENGLISH)
     }
 
+    /**
+     * Regression test for issue #221, Finding A: the forward-recording start/stop buttons carried
+     * no `colors = ...` override at all, so they fell through to `MaterialTheme.colorScheme.primary`
+     * -- the wallpaper-derived dynamic colour on API 31+ -- while every sibling card-level primary
+     * CTA (Save, Settings Apply) overrode to `FlightOrange`. `dashboardFixture()`'s default forward
+     * state renders the *start* button (it is [ForwardRecordingUiState.Idle]-adjacent, not
+     * `Recording`), which is what this reads.
+     *
+     * Oracle: fails if the pixel sampled from each button's container differs -- i.e. if the two
+     * card-level primary CTAs render in different colours. This is the exact defect: it must fail
+     * against pre-#221 `main` (dynamic colour vs. `FlightOrange`) and pass once both buttons share
+     * [cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors]. The sample point is offset from
+     * dead centre towards the top of each button rather than exactly centred: a button's label is
+     * centred both ways, so the exact centre pixel can land on an anti-aliased text glyph (blended
+     * towards white) rather than the solid container colour underneath it, which is what this is
+     * actually about.
+     */
+    @Test
+    fun forwardRecordingStartButtonMatchesSaveButtonsContainerColour() {
+        composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
+
+        val saveButton = composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG)
+        saveButton.performScrollTo()
+        saveButton.assertIsDisplayed()
+        val saveColor = saveButton.containerPixelColor()
+
+        val forwardStartButton = composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG)
+        forwardStartButton.performScrollTo()
+        forwardStartButton.assertIsDisplayed()
+        val forwardColor = forwardStartButton.containerPixelColor()
+
+        assertTrue(
+            "the forward-recording start button's container colour ($forwardColor) does not " +
+                "match the Save button's ($saveColor) -- every card-level primary CTA must share " +
+                "the same FlightOrange override (issue #221)",
+            saveColor == forwardColor,
+        )
+    }
+
+    /**
+     * Regression test for issue #221, Finding B point 1: Gallery used to host its own `Scaffold`
+     * nested inside the app's single outer `Scaffold` (`AppScaffold.kt`), applying its own
+     * `innerPadding` on top of the one `AppScaffold` already applied. Dashboard and Gallery now
+     * share the exact same header composable (`ScreenHeader`) and the exact same outer gutter
+     * (`SCREEN_GUTTER`), so their header titles must land at the same horizontal offset from the
+     * content area's left edge -- comparing the two directly, rather than asserting a hand-computed
+     * absolute offset, is what actually pins "no extra padding of Gallery's own stacked on top of
+     * AppScaffold's" without also having to hardcode the header badge's width and spacing here.
+     *
+     * Oracle: fails if Gallery's header title sits further right than Dashboard's (an extra,
+     * un-budgeted inset -- e.g. a second `Scaffold`'s own default content padding stacked on top of
+     * `AppScaffold`'s) or further left (no gutter applied at all).
+     */
+    @Test
+    fun galleryHeaderAlignsWithDashboardHeaderUnderTheSharedGutter() {
+        // A single setContent, switched via the tab -- as the other cross-destination tests in
+        // this file do -- rather than a second setContent call, which AndroidComposeTestRule
+        // rejects once an Activity already has content.
+        composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
+        val dashboardTitleLeft = composeRule.onNodeWithText(string(R.string.app_name))
+            .getUnclippedBoundsInRoot().left
+
+        galleryTab().performClick()
+
+        val galleryTitle = composeRule.onNodeWithText(string(R.string.gallery_title))
+        galleryTitle.assertIsDisplayed()
+        val galleryTitleLeft = galleryTitle.getUnclippedBoundsInRoot().left
+
+        assertTrue(
+            "the gallery header title's left edge is at $galleryTitleLeft, but the dashboard " +
+                "header title's (the same ScreenHeader pattern, under the same SCREEN_GUTTER) is " +
+                "at $dashboardTitleLeft -- Gallery must not apply any padding of its own on top of " +
+                "AppScaffold's.",
+            (galleryTitleLeft - dashboardTitleLeft).value.absoluteValue <= GAP_TOLERANCE_DP,
+        )
+    }
+
     // ---- helpers ----
+
+    /**
+     * Samples a pixel from this node's rendered container colour, for colour-equality assertions
+     * (issue #221) that a bounds/clipping check cannot express. Horizontally centred (clear of the
+     * rounded corners on either side) but offset towards the top rather than vertically centred: a
+     * button's label is centred both ways, so the exact centre pixel risks landing on an
+     * anti-aliased text glyph -- blended towards white -- rather than the solid container colour
+     * this is actually about. A point 15% down from the top, at the horizontal centre, sits inside
+     * the flat top edge of the rounded rect (no corner curvature at the horizontal centre) and
+     * above a vertically-centred label.
+     */
+    private fun SemanticsNodeInteraction.containerPixelColor(): androidx.compose.ui.graphics.Color {
+        val pixelMap = captureToImage().toPixelMap()
+        val x = pixelMap.width / 2
+        val y = (pixelMap.height * 0.15f).toInt().coerceIn(0, pixelMap.height - 1)
+        return pixelMap[x, y]
+    }
 
     /** The bar's own [androidx.compose.material3.Surface], i.e. its visible rectangle. */
     private fun bottomBarTop(): Dp =
@@ -459,6 +557,8 @@ class ScreenLayoutTest {
     private fun dashboardTab() = tab(string(R.string.nav_dashboard_label))
 
     private fun settingsTab() = tab(string(R.string.nav_settings_label))
+
+    private fun galleryTab() = tab(string(R.string.nav_gallery_label))
 
     /** Unique element that only the dashboard renders. */
     private fun dashboardMarker() =

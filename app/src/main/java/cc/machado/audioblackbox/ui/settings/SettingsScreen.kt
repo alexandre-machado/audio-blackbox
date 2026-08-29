@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -30,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -46,10 +44,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.BuildConfig
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.settings.ClampNotice
+import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
+import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
+import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
 import cc.machado.audioblackbox.ui.theme.FlightOrange
 import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
+import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
+import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
+import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
 
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.RadioButton
@@ -106,9 +110,9 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(SCREEN_GUTTER),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         SettingsHeader()
         QualityPresetSection(
@@ -133,42 +137,11 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsHeader() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = FlightOrangeContainer,
-            border = BorderStroke(1.dp, FlightOrange.copy(alpha = 0.4f)),
-            modifier = Modifier.size(44.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_settings_gear),
-                    contentDescription = null,
-                    tint = FlightOrange,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(R.string.settings_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    ScreenHeader(
+        icon = painterResource(R.drawable.ic_settings_gear),
+        title = stringResource(R.string.settings_title),
+        subtitle = stringResource(R.string.settings_subtitle),
+    )
 }
 
 /** The retention-window stepper (issue #73) -- how many minutes of audio the ring buffer is
@@ -195,11 +168,11 @@ private fun RetentionStepperSection(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.padding(CARD_INNER_PADDING), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -260,12 +233,7 @@ private fun RetentionStepperSection(
             Button(
                 onClick = onApply,
                 enabled = stepper.isDirty && !locked,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FlightOrange,
-                    contentColor = Color.White,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                ),
+                colors = primaryCtaButtonColors(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -284,12 +252,12 @@ private fun QualityPresetSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -407,12 +375,12 @@ private fun QualityPresetSection(
 private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFAULT) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -483,12 +451,12 @@ private fun PrivacySection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
