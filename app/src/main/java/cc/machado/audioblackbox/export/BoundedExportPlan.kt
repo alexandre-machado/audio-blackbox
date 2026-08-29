@@ -1,6 +1,7 @@
 package cc.machado.audioblackbox.export
 
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.FormatSegment
 import cc.machado.audioblackbox.audio.PauseGap
 import cc.machado.audioblackbox.audio.ReadSinceResult
 import java.io.IOException
@@ -8,43 +9,32 @@ import java.io.IOException
 /**
  * One segment of a bounded export's output stream, in ring-buffer cursor space rather than array
  * space (issue #72). A [Raw] segment is real PCM that must be read from the ring buffer via
- * [cc.machado.audioblackbox.audio.RingBuffer.readSince]; a [Silence] segment is wall-clock gap
- * filling that never touches the ring buffer at all. Segments are always emitted oldest-first, so
- * concatenating every segment's bytes in order reproduces exactly what [GapFiller.fill] would have
- * returned for the same inputs -- see [BoundedExportPlanner]'s doc for why the two are provably
- * the same computation, just staged differently.
+ * [cc.machado.audioblackbox.audio.RingBuffer.readSince] (recorded under [config]); a [Silence]
+ * segment is wall-clock gap filling that never touches the ring buffer at all.
  */
 sealed interface PlanSegment {
     val length: Long
 
-    data class Raw(val cursorStart: Long, override val length: Long) : PlanSegment
+    data class Raw(
+        val cursorStart: Long,
+        override val length: Long,
+        val config: AudioConfig = AudioConfig(),
+    ) : PlanSegment
+
     data class Silence(override val length: Long) : PlanSegment
 }
 
-/** The fully-resolved shape of one bounded export: [segments] to read/synthesize in order, and
- * [totalOutputBytes] -- the exact sum of every segment's length, needed up front by formats (WAV)
- * whose header declares the payload size before any payload bytes are written. */
+/** The fully-resolved shape of one bounded export: [segments] to read/synthesize in order,
+ * [totalOutputBytes] declared in [targetConfig], and [targetConfig] itself (issue #194). */
 data class BoundedExportPlan(
     val segments: List<PlanSegment>,
     val totalOutputBytes: Long,
+    val targetConfig: AudioConfig = AudioConfig(),
 )
 
 /**
  * Computes a [BoundedExportPlan] for one bounded "save the past" export without ever touching PCM
- * bytes (issue #72) -- every input here is a timestamp, a cursor, or a byte count, which is why
- * this can run entirely before the ring buffer is read even once.
- *
- * ## Why this is the same computation as [GapFiller.fill], just staged differently
- * [GapFiller.fill] walks a raw PCM array, splicing in silence at gap offsets and trimming the
- * front to fit [AudioConfig] and a target duration. Every decision it makes (where a gap's raw
- * offset falls, how much silence to insert, how many leading bytes to drop for the target-size
- * trim) is derived purely from wall-clock timestamps and byte-rate arithmetic -- never from the
- * PCM bytes' *values*. So the same decisions can be made first, as a plan over cursor ranges, and
- * the PCM read deferred until a chunk is actually needed ([BoundedExportReader]). This is what
- * lets the bounded export path avoid ever allocating a destination array proportional to the whole
- * retention window: [GapFiller.fill] is kept, untouched and still tested, purely as the *oracle*
- * this class's output is checked against (see `BoundedExportEquivalenceTest`), not because
- * anything in production still calls it.
+ * bytes (issue #72, multi-format segments in issue #194).
  */
 object BoundedExportPlanner {
 
@@ -55,16 +45,61 @@ object BoundedExportPlanner {
         gaps: List<PauseGap>,
         config: AudioConfig,
         targetDurationMillis: Long,
+    ): BoundedExportPlan = plan(
+        startCursor = startCursor,
+        rawLength = rawLength,
+        windowStart = windowStart,
+        gaps = gaps,
+        segments = listOf(FormatSegment(startCursor, config)),
+        targetConfig = config,
+        targetDurationMillis = targetDurationMillis,
+    )
+
+    fun plan(
+        startCursor: Long,
+        rawLength: Long,
+        windowStart: Long,
+        gaps: List<PauseGap>,
+        segments: List<FormatSegment>,
+        targetConfig: AudioConfig,
+        targetDurationMillis: Long,
     ): BoundedExportPlan {
         require(startCursor >= 0) { "startCursor must not be negative, was $startCursor" }
         require(rawLength >= 0) { "rawLength must not be negative, was $rawLength" }
         require(targetDurationMillis >= 0) {
             "targetDurationMillis must not be negative, was $targetDurationMillis"
         }
-        val bytesPerSecond = config.bytesPerSecond
-        val bytesPerFrame = config.bytesPerFrame
-        val windowEnd = windowStart + millisFor(rawLength, bytesPerSecond)
 
+        val rawEndCursor = startCursor + rawLength
+        val activeSegs = if (segments.isNotEmpty()) {
+            segments.sortedBy { it.startOffset }
+        } else {
+            listOf(FormatSegment(startCursor, targetConfig))
+        }
+
+        // 1. Calculate raw sub-ranges across format segments
+        data class RawSubRange(val start: Long, val end: Long, val config: AudioConfig)
+        val subRanges = mutableListOf<RawSubRange>()
+        for (i in activeSegs.indices) {
+            val seg = activeSegs[i]
+            val nextStart = if (i + 1 < activeSegs.size) activeSegs[i + 1].startOffset else rawEndCursor
+            val rStart = maxOf(startCursor, seg.startOffset)
+            val rEnd = minOf(rawEndCursor, nextStart)
+            if (rEnd > rStart) {
+                subRanges += RawSubRange(rStart, rEnd, seg.config)
+            }
+        }
+        if (subRanges.isEmpty() && rawLength > 0L) {
+            subRanges += RawSubRange(startCursor, rawEndCursor, targetConfig)
+        }
+
+        // Calculate total raw duration
+        var totalRawDurationMillis = 0L
+        for (sr in subRanges) {
+            totalRawDurationMillis += millisFor(sr.end - sr.start, sr.config.bytesPerSecond)
+        }
+
+        val windowEnd = windowStart + totalRawDurationMillis
         val relevantGaps = gaps
             .map {
                 PauseGap(
@@ -76,60 +111,144 @@ object BoundedExportPlanner {
             .sortedBy { it.startTimestampMillis }
 
         val rawSegments = mutableListOf<PlanSegment>()
-        var rawPos = 0L
-        var cumulativeGapMillis = 0L
-        for (gap in relevantGaps) {
-            val wallClockDeltaMillis = gap.startTimestampMillis - windowStart - cumulativeGapMillis
-            var rawOffset = alignDown(bytesFor(wallClockDeltaMillis, bytesPerSecond), bytesPerFrame)
-            rawOffset = rawOffset.coerceIn(rawPos, rawLength)
-            if (rawOffset > rawPos) {
-                rawSegments += PlanSegment.Raw(startCursor + rawPos, rawOffset - rawPos)
+        var currentWallClock = windowStart
+        var gapIndex = 0
+
+        for (sr in subRanges) {
+            var rangeCursor = sr.start
+            val rangeBytesPerSecond = sr.config.bytesPerSecond
+            val rangeBytesPerFrame = sr.config.bytesPerFrame
+
+            while (rangeCursor < sr.end) {
+                if (gapIndex < relevantGaps.size) {
+                    val nextGap = relevantGaps[gapIndex]
+                    if (nextGap.startTimestampMillis <= currentWallClock) {
+                        // Gap is right now
+                        val silenceBytes = alignDown(
+                            bytesFor(nextGap.durationMillis, targetConfig.bytesPerSecond),
+                            targetConfig.bytesPerFrame,
+                        )
+                        if (silenceBytes > 0) {
+                            rawSegments += PlanSegment.Silence(silenceBytes)
+                        }
+                        currentWallClock += nextGap.durationMillis
+                        gapIndex++
+                        continue
+                    }
+
+                    val msUntilGap = nextGap.startTimestampMillis - currentWallClock
+                    val bytesUntilGap = alignDown(bytesFor(msUntilGap, rangeBytesPerSecond), rangeBytesPerFrame)
+                    val availableBytes = sr.end - rangeCursor
+                    val takeBytes = minOf(availableBytes, bytesUntilGap)
+
+                    if (takeBytes > 0) {
+                        rawSegments += PlanSegment.Raw(rangeCursor, takeBytes, sr.config)
+                        rangeCursor += takeBytes
+                        currentWallClock += millisFor(takeBytes, rangeBytesPerSecond)
+                    } else if (bytesUntilGap <= 0) {
+                        // Reached gap boundary
+                        val silenceBytes = alignDown(
+                            bytesFor(nextGap.durationMillis, targetConfig.bytesPerSecond),
+                            targetConfig.bytesPerFrame,
+                        )
+                        if (silenceBytes > 0) {
+                            rawSegments += PlanSegment.Silence(silenceBytes)
+                        }
+                        currentWallClock += nextGap.durationMillis
+                        gapIndex++
+                    }
+                } else {
+                    val remainingBytes = sr.end - rangeCursor
+                    if (remainingBytes > 0) {
+                        rawSegments += PlanSegment.Raw(rangeCursor, remainingBytes, sr.config)
+                        rangeCursor += remainingBytes
+                        currentWallClock += millisFor(remainingBytes, rangeBytesPerSecond)
+                    }
+                }
             }
-            rawPos = rawOffset
-
-            val silenceBytes = alignDown(bytesFor(gap.durationMillis, bytesPerSecond), bytesPerFrame)
-            if (silenceBytes > 0) rawSegments += PlanSegment.Silence(silenceBytes)
-            cumulativeGapMillis += gap.durationMillis
-        }
-        if (rawLength > rawPos) {
-            rawSegments += PlanSegment.Raw(startCursor + rawPos, rawLength - rawPos)
         }
 
-        val filledLength = rawSegments.sumOf { it.length }
-        val targetBytes = alignDown(bytesFor(targetDurationMillis, bytesPerSecond), bytesPerFrame)
+        // Remaining gaps at the end
+        while (gapIndex < relevantGaps.size) {
+            val gap = relevantGaps[gapIndex++]
+            val silenceBytes = alignDown(
+                bytesFor(gap.durationMillis, targetConfig.bytesPerSecond),
+                targetConfig.bytesPerFrame,
+            )
+            if (silenceBytes > 0) {
+                rawSegments += PlanSegment.Silence(silenceBytes)
+            }
+        }
 
-        val trimmedSegments = if (filledLength > targetBytes) {
-            dropLeading(rawSegments, filledLength - targetBytes)
+        // Calculate total output duration
+        val totalDurationMillis = rawSegments.sumOf { seg ->
+            when (seg) {
+                is PlanSegment.Raw -> millisFor(seg.length, seg.config.bytesPerSecond)
+                is PlanSegment.Silence -> millisFor(seg.length, targetConfig.bytesPerSecond)
+            }
+        }
+
+        val trimmedSegments = if (totalDurationMillis > targetDurationMillis) {
+            dropLeadingDuration(rawSegments, totalDurationMillis - targetDurationMillis, targetConfig)
         } else {
             rawSegments
         }
 
+        val totalOutputBytes = trimmedSegments.sumOf { seg ->
+            when (seg) {
+                is PlanSegment.Raw -> {
+                    val ms = millisFor(seg.length, seg.config.bytesPerSecond)
+                    alignDown(bytesFor(ms, targetConfig.bytesPerSecond), targetConfig.bytesPerFrame)
+                }
+                is PlanSegment.Silence -> seg.length
+            }
+        }
+
         return BoundedExportPlan(
             segments = trimmedSegments,
-            totalOutputBytes = trimmedSegments.sumOf { it.length },
+            totalOutputBytes = totalOutputBytes,
+            targetConfig = targetConfig,
         )
     }
 
-    /** Drops [excess] bytes from the front of [segments] (matching [GapFiller.fill]'s "keep the
-     * most recent target bytes" trim), shrinking or removing leading segments as needed without
-     * ever materializing their bytes. */
-    private fun dropLeading(segments: List<PlanSegment>, excess: Long): List<PlanSegment> {
-        var remainingToDrop = excess
+    private fun dropLeadingDuration(
+        segments: List<PlanSegment>,
+        excessMillis: Long,
+        targetConfig: AudioConfig,
+    ): List<PlanSegment> {
+        var remainingMsToDrop = excessMillis
         val result = mutableListOf<PlanSegment>()
         for (segment in segments) {
-            if (remainingToDrop <= 0L) {
+            if (remainingMsToDrop <= 0L) {
                 result += segment
                 continue
             }
-            if (segment.length <= remainingToDrop) {
-                remainingToDrop -= segment.length
-                continue // this whole segment is dropped
+            val segMs = when (segment) {
+                is PlanSegment.Raw -> millisFor(segment.length, segment.config.bytesPerSecond)
+                is PlanSegment.Silence -> millisFor(segment.length, targetConfig.bytesPerSecond)
             }
-            val kept = segment.length - remainingToDrop
-            remainingToDrop = 0L
+            if (segMs <= remainingMsToDrop) {
+                remainingMsToDrop -= segMs
+                continue
+            }
+            val keptMs = segMs - remainingMsToDrop
+            remainingMsToDrop = 0L
             result += when (segment) {
-                is PlanSegment.Raw -> PlanSegment.Raw(segment.cursorStart + (segment.length - kept), kept)
-                is PlanSegment.Silence -> PlanSegment.Silence(kept)
+                is PlanSegment.Raw -> {
+                    val keptBytes = alignDown(
+                        bytesFor(keptMs, segment.config.bytesPerSecond),
+                        segment.config.bytesPerFrame,
+                    )
+                    val dropBytes = segment.length - keptBytes
+                    PlanSegment.Raw(segment.cursorStart + dropBytes, keptBytes, segment.config)
+                }
+                is PlanSegment.Silence -> {
+                    val keptBytes = alignDown(
+                        bytesFor(keptMs, targetConfig.bytesPerSecond),
+                        targetConfig.bytesPerFrame,
+                    )
+                    PlanSegment.Silence(keptBytes)
+                }
             }
         }
         return result
@@ -139,7 +258,7 @@ object BoundedExportPlanner {
         ((millis * bytesPerSecond) / MILLIS_PER_SECOND).coerceAtLeast(0L)
 
     private fun millisFor(bytes: Long, bytesPerSecond: Int): Long =
-        (bytes * MILLIS_PER_SECOND) / bytesPerSecond
+        if (bytesPerSecond > 0) (bytes * MILLIS_PER_SECOND) / bytesPerSecond else 0L
 
     private fun alignDown(bytes: Long, bytesPerFrame: Int): Long = bytes - (bytes % bytesPerFrame)
 
@@ -147,9 +266,7 @@ object BoundedExportPlanner {
 }
 
 /** Thrown when a [BoundedExportReader] discovers, mid-drain, that the ring buffer no longer holds
- * a byte range the plan committed to reading (issue #72 / #29: a save must never silently
- * truncate into a shorter file that looks complete -- this makes that failure visible by aborting
- * the whole export instead). */
+ * a byte range the plan committed to reading (issue #72 / #29). */
 sealed class BoundedExportDrainException(
     val reason: ExportFailureReason,
     message: String,
@@ -179,18 +296,7 @@ sealed class BoundedExportDrainException(
 /**
  * Bounded [PayloadChunkSource] over a [BoundedExportPlan]: pulls PCM for [PlanSegment.Raw] ranges
  * from [readSinceProvider] (`RingBuffer.readSince`) in chunks of at most [chunkSizeBytes], and
- * synthesizes zero-filled chunks for [PlanSegment.Silence] ranges -- never allocating a buffer
- * proportional to the plan's total length. This is the whole point of the plan/reader split (issue
- * #72): peak extra allocation here is O(chunkSizeBytes), independent of the retention window.
- *
- * Lapped/reset detection ([BoundedExportDrainException]) mirrors
- * [cc.machado.audioblackbox.export.ForwardRecordingEngine]'s drain loop exactly -- same primitive,
- * same failure shapes, deliberately not a second divergent protocol (see [RingBuffer.readSince]'s
- * doc and this repo's issue #47 decision record).
- *
- * "Stop means stop" residue discipline: each chunk returned is zeroed the moment the *next* call
- * (or [close]) proves it is no longer needed, so no live-mic PCM outlives its use in this class's
- * own state any longer than necessary.
+ * converts them via [PcmAudioConverter] into [BoundedExportPlan.targetConfig] if needed (issue #194).
  */
 class BoundedExportReader(
     private val plan: BoundedExportPlan,
@@ -202,6 +308,9 @@ class BoundedExportReader(
     private var cursorInSegment: Long = plan.segments.firstOrNull()?.let { segmentStart(it) } ?: 0L
     private var remainingInSegment: Long = plan.segments.firstOrNull()?.length ?: 0L
     private var lastChunk: ByteArray? = null
+    private var currentConverter: PcmAudioConverter? = null
+    private var lastSegmentIndex = -1
+    private var pendingFlushedBytes: ByteArray? = null
 
     init {
         require(chunkSizeBytes > 0) { "chunkSizeBytes must be positive, was $chunkSizeBytes" }
@@ -209,32 +318,64 @@ class BoundedExportReader(
 
     override fun nextChunk(): ByteArray? {
         zeroLastChunk()
+
+        val pending = pendingFlushedBytes
+        if (pending != null && pending.isNotEmpty()) {
+            pendingFlushedBytes = null
+            lastChunk = pending
+            return pending
+        }
+
         while (segmentIndex < plan.segments.size) {
             if (remainingInSegment <= 0L) {
+                val flushed = currentConverter?.flush()
+                currentConverter = null
                 segmentIndex++
                 if (segmentIndex < plan.segments.size) {
                     val next = plan.segments[segmentIndex]
                     cursorInSegment = segmentStart(next)
                     remainingInSegment = next.length
                 }
+                if (flushed != null && flushed.isNotEmpty()) {
+                    lastChunk = flushed
+                    return flushed
+                }
                 continue
             }
+            if (segmentIndex != lastSegmentIndex) {
+                lastSegmentIndex = segmentIndex
+                val seg = plan.segments[segmentIndex]
+                currentConverter = if (seg is PlanSegment.Raw && (seg.config.sampleRateHz != plan.targetConfig.sampleRateHz || seg.config.channelCount != plan.targetConfig.channelCount)) {
+                    PcmAudioConverter(seg.config, plan.targetConfig)
+                } else {
+                    null
+                }
+            }
+
             val take = minOf(remainingInSegment, chunkSizeBytes.toLong()).toInt()
-            val chunk = when (val segment = plan.segments[segmentIndex]) {
+            val rawChunk = when (val segment = plan.segments[segmentIndex]) {
                 is PlanSegment.Raw -> readRawChunk(cursorInSegment, take)
                 is PlanSegment.Silence -> ByteArray(take)
             }
             cursorInSegment += take
             remainingInSegment -= take
+
+            val chunk = currentConverter?.convert(rawChunk) ?: rawChunk
             lastChunk = chunk
             return chunk
         }
+
+        val finalFlushed = currentConverter?.flush()
+        currentConverter = null
+        if (finalFlushed != null && finalFlushed.isNotEmpty()) {
+            lastChunk = finalFlushed
+            return finalFlushed
+        }
+
         return null
     }
 
-    /** Zeroes any chunk this reader handed out that the caller can no longer need -- call after
-     * the encode loop exits (success, failure, or cancellation) so a partially-consumed chunk
-     * never outlives this reader. */
+    /** Zeroes any chunk this reader handed out that the caller can no longer need. */
     fun close() {
         zeroLastChunk()
     }
@@ -257,11 +398,6 @@ class BoundedExportReader(
                 result.currentCursor,
             )
             is ReadSinceResult.Data -> {
-                // This range was already fully written before the plan was built (it is strictly
-                // behind the write cursor the plan was computed against), so a short read here can
-                // only mean the reader fell behind and got lapped -- which the branch above already
-                // catches via the sealed result, not via a short Data. Defensive check anyway: never
-                // silently accept less than asked for (issue #29).
                 check(result.bytes.size == length) {
                     "bounded export drain expected $length bytes at cursor $cursor, got " +
                         "${result.bytes.size} (nextCursor=${result.nextCursor})"
@@ -273,6 +409,7 @@ class BoundedExportReader(
 
     private fun segmentStart(segment: PlanSegment): Long = when (segment) {
         is PlanSegment.Raw -> segment.cursorStart
-        is PlanSegment.Silence -> 0L // unused for Silence; cursorInSegment only matters for Raw
+        is PlanSegment.Silence -> 0L
     }
 }
+

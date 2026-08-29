@@ -671,6 +671,17 @@ class RecorderService : Service() {
             Intent(context, RecorderService::class.java).setAction(ACTION_SAVE)
 
         /**
+         * Switches the active quality preset dynamically (issue #194).
+         * If the engine is recording, switches the capture format seamlessly without discarding buffered audio.
+         */
+        fun switchQualityPreset(newPreset: QualityPreset) {
+            val newConfig = newPreset.config(bufferDurationMinutes = _captureConfig.bufferDurationMinutes)
+            _captureConfig = newConfig
+            _qualityPresetFlow.value = newPreset
+            _engine.switchConfig(newConfig)
+        }
+
+        /**
          * Rebuilds the process-lifetime engine at [newBufferDurationMinutes] and [newPreset] (issue #45, #193).
          * Returns `false` and changes nothing if [captureState] is not currently [CaptureState.Idle] --
          * this is the enforcement point for "never silently discard buffered audio because the

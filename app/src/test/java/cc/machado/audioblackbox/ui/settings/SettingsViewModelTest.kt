@@ -508,4 +508,33 @@ class SettingsViewModelTest {
         val hiFi = state.qualityPresets.first { it.preset == cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY }
         assertTrue(voice.maxRetentionMinutes >= hiFi.maxRetentionMinutes)
     }
+
+    @Test
+    fun `switching quality preset alone while Recording does not show discard dialog and switches immediately`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30, initialQualityPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        val switchedPresets = mutableListOf<cc.machado.audioblackbox.audio.QualityPreset>()
+        var stopCalls = 0
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            capacityMinutesFlow = MutableStateFlow(30),
+            qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
+            retentionWindowPreferences = preferences,
+            onStopEngine = { stopCalls++ },
+            onSwitchQualityPreset = { switchedPresets += it },
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        vm.selectQualityPreset(cc.machado.audioblackbox.audio.QualityPreset.BALANCED)
+        vm.commitPendingRetentionWindow()
+        runCurrent()
+
+        assertEquals(0, stopCalls)
+        assertEquals(listOf(cc.machado.audioblackbox.audio.QualityPreset.BALANCED), switchedPresets)
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.BALANCED, preferences.currentQualityPreset())
+        assertNull("no discard confirmation needed for quality preset switch alone (issue #194)", observed.last().retentionStepper.pendingConfirmationMinutes)
+
+        job.cancel()
+    }
 }
