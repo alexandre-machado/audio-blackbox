@@ -249,4 +249,15 @@
     <!-- About / App Version section -->
     <string name="settings_about_title">About</string>
     <string name="settings_version_label">Version %1$s</string>
+
+    <!-- Incident Diagnostics / Error Telemetry (issue #206) -->
+    <string name="dashboard_error_telemetry_title">Incident Diagnostics</string>
+    <string name="dashboard_error_telemetry_code">Code: %1$s</string>
+    <string name="dashboard_error_telemetry_preset">Preset: %1$s</string>
+    <string name="dashboard_error_telemetry_buffer">Buffer: %1$d min (%2$s)</string>
+    <string name="dashboard_error_action_retry">Try again</string>
+    <string name="dashboard_error_action_copy">Copy report</string>
+    <string name="dashboard_error_action_share">Share log</string>
+    <string name="dashboard_error_copied_toast">Incident report copied to clipboard</string>
+    <string name="dashboard_error_share_chooser_title">Share Incident Report</string>
 </resources>

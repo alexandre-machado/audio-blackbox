@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.service.RecorderService
@@ -54,6 +55,7 @@ class DashboardViewModel(
     private val exportState: StateFlow<ExportState> = RecorderService.exportState,
     private val forwardRecordingState: StateFlow<ForwardRecordingState> = RecorderService.forwardRecordingState,
     private val inputLevelFlow: StateFlow<Float> = RecorderService.inputLevel,
+    private val qualityPresetFlow: StateFlow<QualityPreset> = RecorderService.qualityPresetFlow,
     private val audioConfigProvider: () -> AudioConfig = { RecorderService.captureConfig },
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
     private val onStartEngine: () -> Unit = {},
@@ -192,11 +194,16 @@ class DashboardViewModel(
     private val forwardAndDismissedFlow: Flow<Pair<ForwardRecordingState, ForwardRecordingState?>> =
         combine(forwardRecordingState, _dismissedForwardRecordingState) { fwd, dism -> fwd to dism }
 
-    // Three-way rather than a sixth top-level combine argument, for the same reason the two pairs
-    // above are nested: kotlinx.coroutines' typed `combine` overloads stop at five flows.
-    private val capacityEngineTogglePendingAndLevelFlow: Flow<Triple<Int, Boolean, Float>> =
-        combine(capacityMinutesFlow, _engineTogglePending, inputLevelFlow) { capacity, enginePending, level ->
-            Triple(capacity, enginePending, level)
+    private data class ExtraDashboardState(
+        val capacityMinutes: Int,
+        val enginePending: Boolean,
+        val inputLevel: Float,
+        val qualityPreset: QualityPreset,
+    )
+
+    private val extraStateFlow: Flow<ExtraDashboardState> =
+        combine(capacityMinutesFlow, _engineTogglePending, inputLevelFlow, qualityPresetFlow) { capacity, enginePending, level, preset ->
+            ExtraDashboardState(capacity, enginePending, level, preset)
         }
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -204,20 +211,21 @@ class DashboardViewModel(
         bufferedMillisFlow,
         exportAndDismissedFlow,
         forwardAndDismissedFlow,
-        capacityEngineTogglePendingAndLevelFlow,
-    ) { capture, bufferedMillis, (export, dismissedExport), (forward, dismissedForward), (capacityMinutes, enginePending, inputLevel) ->
+        extraStateFlow,
+    ) { capture, bufferedMillis, (export, dismissedExport), (forward, dismissedForward), extra ->
         mapUiState(
             captureState = capture,
             bufferedMillis = bufferedMillis,
-            capacityMinutes = capacityMinutes,
+            capacityMinutes = extra.capacityMinutes,
             saveState = mapSaveUiState(export, dismissedExport),
             forwardRecordingState = mapForwardRecordingUiState(
                 forwardState = forward,
                 dismissed = dismissedForward,
                 bytesPerSecond = audioConfigProvider().bytesPerSecond,
             ),
-            enginePending = enginePending,
-            inputLevel = inputLevel,
+            enginePending = extra.enginePending,
+            inputLevel = extra.inputLevel,
+            qualityPreset = extra.qualityPreset,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -234,6 +242,7 @@ class DashboardViewModel(
             ),
             enginePending = _engineTogglePending.value,
             inputLevel = inputLevelFlow.value,
+            qualityPreset = qualityPresetFlow.value,
         ),
     )
 
@@ -485,6 +494,7 @@ class DashboardViewModel(
             forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
             enginePending: Boolean = false,
             inputLevel: Float = 0f,
+            qualityPreset: QualityPreset = QualityPreset.VOICE,
         ): DashboardUiState {
             val capacityMillis = capacityMinutes.toLong() * MILLIS_PER_MINUTE
             val clampedBufferedMillis = bufferedMillis.coerceIn(0L, capacityMillis)
@@ -497,6 +507,7 @@ class DashboardViewModel(
                 isBufferFull = clampedBufferedMillis >= capacityMillis,
                 saveState = saveState,
                 forwardRecordingState = forwardRecordingState,
+                qualityPreset = qualityPreset,
                 // Zeroed unless actually Recording, and clamped rather than trusted. Paused is the
                 // case that matters: audio is not reaching the ring buffer then, so a meter showing
                 // anything above empty would be claiming capture that is not happening -- the

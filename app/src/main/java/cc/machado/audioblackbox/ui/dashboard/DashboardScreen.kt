@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -124,12 +125,22 @@ fun DashboardScreen(
             onStop = onStopForwardRecording,
         )
         if (uiState.saveState != SaveUiState.Idle) {
-            SaveOutcomeNotice(uiState.saveState, onDismissSaveNotice)
+            SaveOutcomeNotice(
+                saveState = uiState.saveState,
+                uiState = uiState,
+                onDismiss = onDismissSaveNotice,
+                onRetry = onSaveRecent,
+            )
         }
         if (uiState.forwardRecordingState is ForwardRecordingUiState.Success ||
             uiState.forwardRecordingState is ForwardRecordingUiState.Error
         ) {
-            ForwardOutcomeNotice(uiState.forwardRecordingState, onDismissForwardNotice)
+            ForwardOutcomeNotice(
+                forwardState = uiState.forwardRecordingState,
+                uiState = uiState,
+                onDismiss = onDismissForwardNotice,
+                onRetry = onStartForwardRecording,
+            )
         }
     }
 }
@@ -661,7 +672,12 @@ private fun ForwardRecordingSection(
 }
 
 @Composable
-private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
+private fun SaveOutcomeNotice(
+    saveState: SaveUiState,
+    uiState: DashboardUiState,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+) {
     val titleRes: Int
     val body: String
     val dismissible: Boolean
@@ -685,6 +701,7 @@ private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
     }
     val title = stringResource(titleRes)
     val announcement = stringResource(R.string.dashboard_save_outcome_announcement, title, body)
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier
@@ -695,10 +712,90 @@ private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
             },
         shape = RoundedCornerShape(16.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(text = body, style = MaterialTheme.typography.bodyMedium)
-            if (dismissible) {
+
+            if (saveState is SaveUiState.Error) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dashboard_error_telemetry_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_error_telemetry_code, saveState.reason.name),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.dashboard_error_telemetry_preset,
+                                "${uiState.qualityPreset.name} (${uiState.qualityPreset.sampleRateHz} Hz)",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        val capacityMin = (uiState.capacityMillis / 60_000L).toInt()
+                        val bufferedSec = "${uiState.bufferedMillis / 1000L}s"
+                        Text(
+                            text = stringResource(R.string.dashboard_error_telemetry_buffer, capacityMin, bufferedSec),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+
+                val report = remember(saveState, uiState) {
+                    DiagnosticsReportHelper.buildSaveErrorReport(
+                        reason = saveState.reason.name,
+                        message = saveState.message,
+                        preset = uiState.qualityPreset,
+                        capacityMinutes = (uiState.capacityMillis / 60_000L).toInt(),
+                        bufferedMillis = uiState.bufferedMillis,
+                    )
+                }
+                val chooserTitle = stringResource(R.string.dashboard_error_share_chooser_title)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { DiagnosticsReportHelper.copyToClipboard(context, report) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_error_action_copy))
+                    }
+                    Button(
+                        onClick = { DiagnosticsReportHelper.shareReport(context, report, chooserTitle) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_error_action_share))
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+                    }
+                    Button(onClick = onRetry, modifier = Modifier.weight(1f)) {
+                        Text(text = stringResource(R.string.dashboard_error_action_retry))
+                    }
+                }
+            } else if (dismissible) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
                 }
@@ -710,7 +807,9 @@ private fun SaveOutcomeNotice(saveState: SaveUiState, onDismiss: () -> Unit) {
 @Composable
 private fun ForwardOutcomeNotice(
     forwardState: ForwardRecordingUiState,
+    uiState: DashboardUiState,
     onDismiss: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     val titleRes: Int
     val body: String
@@ -727,6 +826,7 @@ private fun ForwardOutcomeNotice(
     }
     val title = stringResource(titleRes)
     val announcement = stringResource(R.string.dashboard_forward_outcome_announcement, title, body)
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier
@@ -737,11 +837,85 @@ private fun ForwardOutcomeNotice(
             },
         shape = RoundedCornerShape(16.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(text = body, style = MaterialTheme.typography.bodyMedium)
-            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+
+            if (forwardState is ForwardRecordingUiState.Error) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dashboard_error_telemetry_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_error_telemetry_code, forwardState.reason.name),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.dashboard_error_telemetry_preset,
+                                "${uiState.qualityPreset.name} (${uiState.qualityPreset.sampleRateHz} Hz)",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+
+                val report = remember(forwardState, uiState) {
+                    DiagnosticsReportHelper.buildForwardErrorReport(
+                        reason = forwardState.reason.name,
+                        message = forwardState.message,
+                        preset = uiState.qualityPreset,
+                        capacityMinutes = (uiState.capacityMillis / 60_000L).toInt(),
+                    )
+                }
+                val chooserTitle = stringResource(R.string.dashboard_error_share_chooser_title)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { DiagnosticsReportHelper.copyToClipboard(context, report) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_error_action_copy))
+                    }
+                    Button(
+                        onClick = { DiagnosticsReportHelper.shareReport(context, report, chooserTitle) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_error_action_share))
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+                    }
+                    Button(onClick = onRetry, modifier = Modifier.weight(1f)) {
+                        Text(text = stringResource(R.string.dashboard_error_action_retry))
+                    }
+                }
+            } else {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+                }
             }
         }
     }
