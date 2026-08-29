@@ -141,7 +141,11 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
                     throw IOException("AAC encode exceeded ${ENCODE_DEADLINE_MILLIS}ms deadline")
                 }
                 if (!inputDone) {
-                    if (pendingChunk == null || pendingOffset >= (pendingChunk?.size ?: 0)) {
+                    while (pendingChunk != null && pendingOffset >= pendingChunk!!.size) {
+                        pendingChunk = chunks.nextChunk()
+                        pendingOffset = 0
+                    }
+                    if (pendingChunk == null) {
                         pendingChunk = chunks.nextChunk()
                         pendingOffset = 0
                     }
@@ -150,15 +154,18 @@ class AacPayloadEncoder(private val tempDir: File) : PayloadEncoder {
                     if (inputIndex >= 0) {
                         val inputBuffer = requireNotNull(codec.getInputBuffer(inputIndex))
                         inputBuffer.clear()
-                        val remainingInChunk = (currentChunk?.size ?: 0) - pendingOffset
-                        val chunkSize = minOf(inputBuffer.remaining(), remainingInChunk)
-                        val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / bytesPerSecond
-                        if (chunkSize > 0 && currentChunk != null) {
-                            inputBuffer.put(currentChunk, pendingOffset, chunkSize)
-                            codec.queueInputBuffer(inputIndex, 0, chunkSize, presentationTimeUs, 0)
-                            pendingOffset += chunkSize
-                            totalBytesFed += chunkSize
+                        if (currentChunk != null) {
+                            val remainingInChunk = currentChunk.size - pendingOffset
+                            val chunkSize = minOf(inputBuffer.remaining(), remainingInChunk)
+                            val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / bytesPerSecond
+                            if (chunkSize > 0) {
+                                inputBuffer.put(currentChunk, pendingOffset, chunkSize)
+                                codec.queueInputBuffer(inputIndex, 0, chunkSize, presentationTimeUs, 0)
+                                pendingOffset += chunkSize
+                                totalBytesFed += chunkSize
+                            }
                         } else {
+                            val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / bytesPerSecond
                             codec.queueInputBuffer(
                                 inputIndex,
                                 0,

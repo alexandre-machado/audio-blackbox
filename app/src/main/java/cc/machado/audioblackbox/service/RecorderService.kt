@@ -107,6 +107,7 @@ class RecorderService : Service() {
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
+            segmentsProvider = { engine.activeSegments() ?: emptyList() },
         )
     }
 
