@@ -5,7 +5,7 @@
         <!--
           Carries the app's real Theme.AudioBlackbox (dark windowBackground) so
           ScreenshotCaptureTest's captures render correctly wherever Compose content does not paint
-          over the window -- unlike androidx.compose.ui:ui-test-manifest's own placeholder
+          over the window, unlike androidx.compose.ui:ui-test-manifest's own placeholder
           ComponentActivity, which that library hardcodes to a light platform theme regardless of
           this app's manifest. See ScreenshotHostActivity's doc for the full history (PR #227
           review).
