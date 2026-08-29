@@ -560,7 +560,6 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
                     .semantics { contentDescription = buttonCd },
             ) {
                 Text(
