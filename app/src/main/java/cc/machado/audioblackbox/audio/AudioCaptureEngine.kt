@@ -180,12 +180,15 @@ class AudioCaptureEngine(
     fun formatAt(streamOffset: Long): AudioConfig? = ringBuffer?.formatAt(streamOffset)
 
     /**
-     * Switches the capture configuration (issue #194). If recording, switches AudioRecord
-     * seamlessly on the capture thread while preserving buffered audio in the ring buffer.
+     * Switches the capture configuration dynamically (issues #194, #223). If recording,
+     * resizes the ring buffer in-place (preserving buffered audio) and switches AudioRecord
+     * seamlessly on the capture thread if the audio format changed.
      */
     fun switchConfig(newConfig: AudioConfig) {
         synchronized(lock) {
             activeConfig = newConfig
+            val newCapacityBytes = newConfig.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+            ringBuffer?.resize(newCapacityBytes)
             if (_state.value is CaptureState.Recording || _state.value is CaptureState.Paused) {
                 pendingConfigSwitch.set(newConfig)
             }
@@ -405,38 +408,44 @@ class AudioCaptureEngine(
             while (!stopRequested) {
                 val targetConfig = pendingConfigSwitch.getAndSet(null)
                 if (targetConfig != null && targetConfig != currentConfig) {
-                    val channelConfig = channelConfigFor(targetConfig.channelCount)
-                    val newMinBufferSize = AudioRecord.getMinBufferSize(
-                        targetConfig.sampleRateHz,
-                        channelConfig,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                    )
-                    if (newMinBufferSize > 0) {
-                        try {
-                            val newRecord = audioRecordFactory(targetConfig, newMinBufferSize)
-                            if (newRecord.state == AudioRecord.STATE_INITIALIZED) {
-                                newRecord.startRecording()
-                                if (newRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                                    try {
-                                        currentRecord.stop()
-                                    } catch (_: Exception) {}
-                                    currentRecord.release()
-                                    currentRecord = newRecord
-                                    synchronized(lock) {
-                                        audioRecord = newRecord
+                    val formatChanged = targetConfig.sampleRateHz != currentConfig.sampleRateHz ||
+                        targetConfig.channelCount != currentConfig.channelCount
+                    if (formatChanged) {
+                        val channelConfig = channelConfigFor(targetConfig.channelCount)
+                        val newMinBufferSize = AudioRecord.getMinBufferSize(
+                            targetConfig.sampleRateHz,
+                            channelConfig,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                        )
+                        if (newMinBufferSize > 0) {
+                            try {
+                                val newRecord = audioRecordFactory(targetConfig, newMinBufferSize)
+                                if (newRecord.state == AudioRecord.STATE_INITIALIZED) {
+                                    newRecord.startRecording()
+                                    if (newRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                                        try {
+                                            currentRecord.stop()
+                                        } catch (_: Exception) {}
+                                        currentRecord.release()
+                                        currentRecord = newRecord
+                                        synchronized(lock) {
+                                            audioRecord = newRecord
+                                        }
+                                        scratch = ByteArray(newMinBufferSize)
+                                        buffer.setFormat(targetConfig)
+                                        currentConfig = targetConfig
+                                    } else {
+                                        newRecord.release()
                                     }
-                                    scratch = ByteArray(newMinBufferSize)
-                                    buffer.setFormat(targetConfig)
-                                    currentConfig = targetConfig
                                 } else {
                                     newRecord.release()
                                 }
-                            } else {
-                                newRecord.release()
+                            } catch (_: Exception) {
+                                // Fallback: keep currentRecord
                             }
-                        } catch (_: Exception) {
-                            // Fallback: keep currentRecord
                         }
+                    } else {
+                        currentConfig = targetConfig
                     }
                 }
 

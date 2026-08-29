@@ -117,11 +117,12 @@ data class FormatSegment(
  * Pure JVM class -- no Android dependency -- so it is testable with plain local unit tests, no
  * Robolectric, no instrumentation.
  *
- * ## Allocation
- * The backing array is allocated exactly once, at construction, to [capacityBytes]. [write]
- * never grows it and never allocates on its hot path: it only does bounds arithmetic and
- * `System.arraycopy` into the pre-allocated array plus pre-allocated marker arrays (see below).
- * When full, [write] silently overwrites the oldest bytes; it never throws on overflow.
+ * ## Allocation & Resizing
+ * The backing array is allocated at construction to [capacityBytes] and can be dynamically
+ * resized in-place via [resize] (issue #223) without discarding buffered audio. [write] never
+ * allocates on its hot path: it only does bounds arithmetic and `System.arraycopy` into the
+ * pre-allocated array plus pre-allocated marker arrays (see below). When full, [write] silently
+ * overwrites the oldest bytes; it never throws on overflow.
  *
  * ## Heterogeneous format segments (issue #194)
  * When audio capture quality presets change mid-stream, [RingBuffer] preserves existing audio
@@ -142,7 +143,7 @@ data class FormatSegment(
  * arrays, the segment list, and the write counters) is guarded by a single intrinsic lock ([lock]).
  */
 class RingBuffer(
-    val capacityBytes: Int,
+    capacityBytes: Int,
     val initialConfig: AudioConfig = AudioConfig(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
@@ -165,12 +166,23 @@ class RingBuffer(
 
     private val lock = Any()
 
-    // Backing store, pre-allocated once. Never resized.
-    private val data = ByteArray(capacityBytes)
+    private var _capacityBytes: Int = capacityBytes
+
+    /** Configured maximum capacity in bytes. */
+    val capacityBytes: Int get() = synchronized(lock) { _capacityBytes }
+
+    // Backing store, dynamically resizable via [resize] (issue #223).
+    private var data = ByteArray(capacityBytes)
 
     // Total bytes ever written (monotonic, unbounded); (totalWritten % capacityBytes) is the
     // next write position. Only ever mutated inside `synchronized(lock)`.
     private var totalWritten: Long = 0L
+
+    // Stream offset of the oldest byte that was ever preserved/retained across resizes (issue #223).
+    private var baseStreamOffset: Long = 0L
+
+    private fun oldestAvailableLocked(): Long =
+        maxOf(baseStreamOffset, totalWritten - _capacityBytes.toLong())
 
     // Active format segments. Preserves format history across quality preset changes (issue #194).
     private val segments = mutableListOf(FormatSegment(startOffset = 0L, config = initialConfig))
@@ -189,7 +201,54 @@ class RingBuffer(
     private var markerNextSlot = 0
 
     /** Bytes currently held in the buffer (<= [capacityBytes]). */
-    fun bufferedBytes(): Long = synchronized(lock) { minOf(totalWritten, capacityBytes.toLong()) }
+    fun bufferedBytes(): Long = synchronized(lock) { totalWritten - oldestAvailableLocked() }
+
+    /**
+     * Resizes the ring buffer capacity in-place without discarding surviving audio (issue #223).
+     *
+     * When expanding ([newCapacityBytes] > [capacityBytes]): preserves 100% of currently buffered audio.
+     * When shrinking ([newCapacityBytes] < [capacityBytes]): preserves the newest [newCapacityBytes] of
+     * audio (FIFO truncation of the oldest bytes exceeding the new capacity), and prunes expired
+     * format segments.
+     *
+     * Monotonic stream coordinates ([totalWritten]) remain continuous, ensuring readers
+     * ([readSince], [snapshot]) continue seamlessly without gap or stream reset.
+     */
+    fun resize(newCapacityBytes: Int) {
+        require(newCapacityBytes > 0) { "newCapacityBytes must be positive, was $newCapacityBytes" }
+        synchronized(lock) {
+            if (newCapacityBytes == _capacityBytes) return
+
+            val oldCapacity = _capacityBytes
+            val oldData = data
+            val newData = ByteArray(newCapacityBytes)
+
+            val oldOldest = oldestAvailableLocked()
+            val availableBytes = totalWritten - oldOldest
+            val bytesToKeep = minOf(availableBytes, newCapacityBytes.toLong()).toInt()
+            val startOffset = totalWritten - bytesToKeep
+
+            var copied = 0
+            while (copied < bytesToKeep) {
+                val currentStreamPos = startOffset + copied
+                val srcPos = (currentStreamPos % oldCapacity).toInt()
+                val dstPos = (currentStreamPos % newCapacityBytes).toInt()
+
+                val srcContiguous = oldCapacity - srcPos
+                val dstContiguous = newCapacityBytes - dstPos
+                val remainingToCopy = bytesToKeep - copied
+                val chunkSize = minOf(remainingToCopy, srcContiguous, dstContiguous)
+
+                System.arraycopy(oldData, srcPos, newData, dstPos, chunkSize)
+                copied += chunkSize
+            }
+
+            data = newData
+            _capacityBytes = newCapacityBytes
+            baseStreamOffset = startOffset
+            pruneExpiredSegmentsLocked()
+        }
+    }
 
     /**
      * Appends a new format segment starting at the current write head (issue #194).
@@ -265,7 +324,7 @@ class RingBuffer(
      * Wall-clock audio duration currently held in the buffer (in milliseconds).
      */
     fun bufferedDurationMillis(): Long = synchronized(lock) {
-        val oldest = totalWritten - minOf(totalWritten, capacityBytes.toLong())
+        val oldest = oldestAvailableLocked()
         durationMillisLocked(oldest, totalWritten)
     }
 
@@ -287,6 +346,7 @@ class RingBuffer(
             segments.clear()
             segments.add(FormatSegment(startOffset = 0L, config = lastConfig))
             totalWritten = 0L
+            baseStreamOffset = 0L
             markerCount = 0
             markerNextSlot = 0
         }
@@ -306,15 +366,15 @@ class RingBuffer(
         synchronized(lock) {
             var srcPos = offset
             var writeLen = length
-            if (writeLen > capacityBytes) {
+            if (writeLen > _capacityBytes) {
                 // This single write is bigger than the whole buffer; only its tail survives.
-                srcPos += writeLen - capacityBytes
-                writeLen = capacityBytes
+                srcPos += writeLen - _capacityBytes
+                writeLen = _capacityBytes
             }
 
             val streamOffset = totalWritten
-            val pos = (streamOffset % capacityBytes).toInt()
-            val firstPart = minOf(writeLen, capacityBytes - pos)
+            val pos = (streamOffset % _capacityBytes).toInt()
+            val firstPart = minOf(writeLen, _capacityBytes - pos)
             System.arraycopy(source, srcPos, data, pos, firstPart)
             val secondPart = writeLen - firstPart
             if (secondPart > 0) {
@@ -332,7 +392,7 @@ class RingBuffer(
     }
 
     private fun pruneExpiredSegmentsLocked() {
-        val oldestAvailable = totalWritten - minOf(totalWritten, capacityBytes.toLong())
+        val oldestAvailable = oldestAvailableLocked()
         while (segments.size > 1 && segments[1].startOffset <= oldestAvailable) {
             segments.removeAt(0)
         }
@@ -346,10 +406,10 @@ class RingBuffer(
     fun snapshot(durationMillis: Long): AudioSnapshot {
         require(durationMillis >= 0) { "durationMillis must not be negative, was $durationMillis" }
         synchronized(lock) {
-            val available = minOf(totalWritten, capacityBytes.toLong())
+            val oldest = oldestAvailableLocked()
+            val available = totalWritten - oldest
             if (available == 0L || durationMillis == 0L) return AudioSnapshot(ByteArray(0), clock())
 
-            val oldest = totalWritten - available
             var remainingMillis = durationMillis
             var currentOffset = totalWritten
 
@@ -376,8 +436,8 @@ class RingBuffer(
             if (length == 0) return AudioSnapshot(ByteArray(0), estimateTimestampLocked(startOffset))
 
             val result = ByteArray(length)
-            val startPos = (startOffset % capacityBytes).toInt()
-            val firstPart = minOf(length, capacityBytes - startPos)
+            val startPos = (startOffset % _capacityBytes).toInt()
+            val firstPart = minOf(length, _capacityBytes - startPos)
             System.arraycopy(data, startPos, result, 0, firstPart)
             val secondPart = length - firstPart
             if (secondPart > 0) {
@@ -400,7 +460,7 @@ class RingBuffer(
      * including the last N minutes"). Equal to [writeCursor] on an empty buffer.
      */
     fun oldestCursor(): Long =
-        synchronized(lock) { totalWritten - minOf(totalWritten, capacityBytes.toLong()) }
+        synchronized(lock) { oldestAvailableLocked() }
 
     /**
      * Incremental drain read (issue #51): returns the PCM written since [cursor], up to
@@ -416,7 +476,7 @@ class RingBuffer(
         synchronized(lock) {
             if (cursor > totalWritten) return ReadSinceResult.StreamReset(cursor, totalWritten)
 
-            val oldestAvailable = totalWritten - minOf(totalWritten, capacityBytes.toLong())
+            val oldestAvailable = oldestAvailableLocked()
             if (cursor < oldestAvailable) {
                 return ReadSinceResult.Lapped(
                     requestedCursor = cursor,
@@ -439,8 +499,8 @@ class RingBuffer(
 
             // Allocation + copy are both under the lock, bounded by `length` (<= maxBytes)
             val result = ByteArray(length)
-            val startPos = (cursor % capacityBytes).toInt()
-            val firstPart = minOf(length, capacityBytes - startPos)
+            val startPos = (cursor % _capacityBytes).toInt()
+            val firstPart = minOf(length, _capacityBytes - startPos)
             System.arraycopy(data, startPos, result, 0, firstPart)
             val secondPart = length - firstPart
             if (secondPart > 0) {
