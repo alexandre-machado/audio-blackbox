@@ -283,6 +283,13 @@ class ForwardRecordingEngine(
                         return
                     }
                     is ReadSinceResult.Lapped -> {
+                        if (cursor == initialCursor) {
+                            // If we are at the initial cursor when starting the drain, the live rolling
+                            // buffer advanced slightly while opening the sink / writer. Recover from the
+                            // oldest available surviving audio cursor (issues #204, #218).
+                            cursor = result.oldestAvailableCursor
+                            continue
+                        }
                         synchronized(lock) {
                             _state.value = ForwardRecordingState.Error(
                                 ForwardRecordingFailureReason.CURSOR_LAPPED,
