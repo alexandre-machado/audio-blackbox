@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Audio Blackbox — Continuous Ambient Audio Buffer for Android</title>
-  <meta name="description" content="A continuous audio recorder for Android that works like a flight recorder / dashcam: holds the last 30 minutes in RAM, writes to storage only when you ask it to. 100% Private, Zero Network Egress.">
+  <meta name="description" content="A continuous audio recorder for Android that works like a flight recorder / dashcam: holds up to the last 45 minutes in RAM, writes to storage only when you ask it to. 100% Private, Zero Network Egress.">
   <link rel="icon" type="image/png" href="assets/icon.png">
   
   <!-- Open Graph / Meta -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="Audio Blackbox — Continuous Audio Buffer for Android">
-  <meta property="og:description" content="Hold the last 30 minutes of sound in RAM. Save the past after it happened. 100% Local & Private.">
+  <meta property="og:description" content="Hold up to the last 45 minutes of sound in RAM. Save the past after it happened. 100% Local & Private.">
   <meta property="og:image" content="assets/feature_graphic.png">
   
   <!-- Fonts -->
@@ -19,29 +19,59 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <style>
+    /*
+     * US Aviation & Aerospace design tokens -- the same system the app ships (#186).
+     * Source of truth: app/src/main/java/cc/machado/audioblackbox/ui/theme/Color.kt,
+     * mirrored in design/model.html. Change them there first, then here.
+     * Derived from FED-STD-595 / AMS-STD-595, MIL-STD cockpit lighting (NVIS green),
+     * and Korry annunciator conventions.
+     */
     :root {
-      --bg-dark: #090D16;
-      --bg-card: rgba(18, 24, 38, 0.75);
-      --bg-card-hover: rgba(28, 38, 58, 0.85);
+      --cockpit-bg: #0A0E17;
+      --cockpit-panel: #111827;
+      --cockpit-panel-raised: #1A2234;
+      --rivet-border: #334155;
+
       --border-color: rgba(255, 255, 255, 0.08);
-      --border-color-glow: rgba(56, 189, 248, 0.3);
-      
-      --primary: #38BDF8;
-      --primary-dark: #0284C7;
-      --primary-glow: rgba(56, 189, 248, 0.25);
-      
-      --accent-orange: #FB923C;
-      --accent-green: #34D399;
-      --accent-purple: #A78BFA;
-      
+      --border-color-strong: rgba(255, 255, 255, 0.16);
+      --border-color-glow: rgba(255, 87, 34, 0.35);
+
+      /* FED-STD-595 #12197 International Orange. The app's primary. */
+      --primary: #FF5722;
+      --primary-hover: #F4511E;
+      --primary-light: #FF8A50;
+      --primary-dark: #BF360C;
+      --primary-glow: rgba(255, 87, 34, 0.35);
+
+      --nvis-green: #10B981;
+      --nvis-green-dim: #064E3B;
+      --nvis-green-glow: rgba(16, 185, 129, 0.4);
+
+      --caution-amber: #F59E0B;
+      --caution-amber-glow: rgba(245, 158, 11, 0.4);
+
+      --warning-red: #EF4444;
+      --warning-red-glow: rgba(239, 68, 68, 0.4);
+
+      --telemetry-cyan: #06B6D4;
+      --telemetry-cyan-glow: rgba(6, 182, 212, 0.3);
+
+      --bg-dark: var(--cockpit-bg);
+      --bg-card: rgba(17, 24, 39, 0.85);
+      --bg-card-hover: rgba(26, 34, 52, 0.95);
+
       --text-main: #F8FAFC;
       --text-muted: #94A3B8;
       --text-dim: #64748B;
-      
+
+      /* Avionics hardware is machined, not moulded: corners stay tight. */
+      --radius-rivet: 4px;
       --radius-sm: 8px;
-      --radius-md: 16px;
-      --radius-lg: 24px;
-      --radius-full: 9999px;
+      --radius-md: 14px;
+      --radius-lg: 14px;
+      --radius-full: 4px;
+
+      --stencil: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
     * {
@@ -56,10 +86,23 @@
       color: var(--text-main);
       line-height: 1.6;
       overflow-x: hidden;
-      background-image: 
-        radial-gradient(at 20% 15%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
-        radial-gradient(at 80% 30%, rgba(251, 146, 60, 0.06) 0px, transparent 50%),
-        radial-gradient(at 50% 85%, rgba(52, 211, 153, 0.05) 0px, transparent 50%);
+      background-image:
+        radial-gradient(at 20% 15%, rgba(255, 87, 34, 0.09) 0px, transparent 50%),
+        radial-gradient(at 80% 30%, rgba(6, 182, 212, 0.06) 0px, transparent 50%),
+        radial-gradient(at 50% 85%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+    }
+
+    /*
+     * Panel hardware. Avionics bays are bolted, not glued: a hairline top highlight
+     * reads as a machined edge catching the cockpit light, which is what separates
+     * this from a generic dark card.
+     */
+    .feature-card, .calc-card, .step-card, .calc-result-box, .phone-app-card {
+      background-image: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.045) 0px,
+        rgba(255, 255, 255, 0) 1px
+      );
     }
 
     /* Container */
@@ -76,7 +119,7 @@
       z-index: 100;
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      background: rgba(9, 13, 22, 0.8);
+      background: rgba(10, 14, 23, 0.88);
       border-bottom: 1px solid var(--border-color);
       padding: 16px 0;
     }
@@ -101,7 +144,7 @@
       width: 36px;
       height: 36px;
       border-radius: var(--radius-sm);
-      box-shadow: 0 0 15px rgba(251, 146, 60, 0.3);
+      box-shadow: 0 0 15px rgba(255, 87, 34, 0.3);
     }
 
     .nav-links {
@@ -138,15 +181,15 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+      background: linear-gradient(135deg, #BF360C 0%, #8F2A08 100%);
       color: #FFFFFF;
       box-shadow: 0 4px 20px var(--primary-glow);
     }
 
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(56, 189, 248, 0.4);
-      background: linear-gradient(135deg, #38BDF8 0%, #0284C7 100%);
+      box-shadow: 0 8px 25px rgba(255, 87, 34, 0.4);
+      background: linear-gradient(135deg, #FF5722 0%, #BF360C 100%);
     }
 
     .btn-secondary {
@@ -162,14 +205,14 @@
     }
 
     .btn-orange {
-      background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
+      background: linear-gradient(135deg, #FF5722 0%, #BF360C 100%);
       color: #FFFFFF;
-      box-shadow: 0 4px 20px rgba(234, 88, 12, 0.3);
+      box-shadow: 0 4px 20px rgba(255, 87, 34, 0.3);
     }
 
     .btn-orange:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(251, 146, 60, 0.4);
+      box-shadow: 0 8px 25px rgba(255, 87, 34, 0.4);
     }
 
     /* Hero Section */
@@ -191,12 +234,13 @@
       gap: 8px;
       padding: 6px 16px;
       border-radius: var(--radius-full);
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      background: rgba(255, 87, 34, 0.1);
+      border: 1px solid rgba(255, 87, 34, 0.3);
       color: var(--primary);
-      font-size: 0.82rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
+      font-family: var(--stencil);
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
       margin-bottom: 24px;
     }
@@ -250,7 +294,7 @@
       position: absolute;
       width: 320px;
       height: 480px;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(255, 87, 34, 0.25) 0%, transparent 70%);
       filter: blur(40px);
       z-index: 0;
     }
@@ -260,8 +304,8 @@
       z-index: 1;
       width: 100%;
       max-width: 340px;
-      background: #0B1120;
-      border: 6px solid #1E293B;
+      background: #0A0E17;
+      border: 6px solid #1A2234;
       border-radius: 40px;
       padding: 20px;
       box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -276,7 +320,7 @@
     }
 
     .phone-app-card {
-      background: rgba(30, 41, 59, 0.6);
+      background: rgba(17, 24, 39, 0.9);
       border-radius: var(--radius-lg);
       padding: 16px;
       border: 1px solid var(--border-color);
@@ -308,10 +352,15 @@
       height: 15%;
     }
 
-    .vu-bar.active-low { background: #38BDF8; }
-    .vu-bar.active-mid { background: #34D399; }
-    .vu-bar.active-high { background: #FB923C; }
-    .vu-bar.active-peak { background: #F87171; }
+    /*
+     * Korry annunciator progression: nominal green, master caution amber, master
+     * warning red. A cockpit meter never runs hot at the quiet end, so the low and
+     * mid bands share the same green -- amber has to mean something.
+     */
+    .vu-bar.active-low  { background: var(--nvis-green); }
+    .vu-bar.active-mid  { background: var(--nvis-green); box-shadow: 0 0 6px var(--nvis-green-glow); }
+    .vu-bar.active-high { background: var(--caution-amber); box-shadow: 0 0 6px var(--caution-amber-glow); }
+    .vu-bar.active-peak { background: var(--warning-red); box-shadow: 0 0 8px var(--warning-red-glow); }
 
     /* Buffer RAM Visualizer */
     .buffer-widget {
@@ -328,7 +377,7 @@
     .buffer-track {
       width: 100%;
       height: 8px;
-      background: #1E293B;
+      background: #1A2234;
       border-radius: var(--radius-full);
       overflow: hidden;
       position: relative;
@@ -337,27 +386,27 @@
     .buffer-progress {
       width: 98%;
       height: 100%;
-      background: linear-gradient(90deg, #0284C7, #38BDF8);
+      background: linear-gradient(90deg, #BF360C, #FF5722);
       border-radius: var(--radius-full);
       animation: bufferPulse 3s infinite ease-in-out;
     }
 
     @keyframes bufferPulse {
       0%, 100% { opacity: 0.85; }
-      50% { opacity: 1; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6)); }
+      50% { opacity: 1; filter: drop-shadow(0 0 8px rgba(255, 87, 34, 0.6)); }
     }
 
     .phone-btn-save {
       width: 100%;
       padding: 14px;
       border-radius: var(--radius-md);
-      background: linear-gradient(135deg, #EA580C 0%, #9A3412 100%);
+      background: linear-gradient(135deg, #FF5722 0%, #BF360C 100%);
       color: white;
       font-weight: 700;
       font-size: 0.95rem;
       text-align: center;
       border: none;
-      box-shadow: 0 4px 15px rgba(234, 88, 12, 0.4);
+      box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4);
       margin-top: 8px;
       cursor: pointer;
     }
@@ -388,15 +437,20 @@
       margin: 0 auto 50px;
     }
 
+    /* Panel legend: stencilled, bracketed, monospaced -- how a cockpit labels a bay. */
     .section-tag {
-      font-size: 0.82rem;
-      font-weight: 700;
+      font-family: var(--stencil);
+      font-size: 0.78rem;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.18em;
       color: var(--primary);
-      margin-bottom: 12px;
+      margin-bottom: 14px;
       display: block;
     }
+
+    .section-tag::before { content: '[ '; color: var(--rivet-border); }
+    .section-tag::after  { content: ' ]'; color: var(--rivet-border); }
 
     .section-title {
       font-size: 2.25rem;
@@ -430,8 +484,8 @@
     .feature-card:hover {
       transform: translateY(-4px);
       background: var(--bg-card-hover);
-      border-color: rgba(56, 189, 248, 0.4);
-      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+      border-color: var(--primary);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5), 0 0 24px rgba(255, 87, 34, 0.12);
     }
 
     .feature-icon-wrapper {
@@ -445,10 +499,11 @@
       margin-bottom: 20px;
     }
 
-    .icon-blue { background: rgba(56, 189, 248, 0.15); color: #38BDF8; }
-    .icon-orange { background: rgba(251, 146, 60, 0.15); color: #FB923C; }
-    .icon-green { background: rgba(52, 211, 153, 0.15); color: #34D399; }
-    .icon-purple { background: rgba(167, 139, 250, 0.15); color: #A78BFA; }
+    /* Annunciator tiles: each channel keeps its own meaning, none of them decorative. */
+    .icon-blue   { background: rgba(6, 182, 212, 0.14);  color: var(--telemetry-cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+    .icon-orange { background: rgba(255, 87, 34, 0.14);  color: var(--primary);        border: 1px solid rgba(255, 87, 34, 0.35); }
+    .icon-green  { background: rgba(16, 185, 129, 0.14); color: var(--nvis-green);     border: 1px solid rgba(16, 185, 129, 0.3); }
+    .icon-purple { background: rgba(245, 158, 11, 0.14); color: var(--caution-amber);  border: 1px solid rgba(245, 158, 11, 0.3); }
 
     .feature-card h3 {
       font-size: 1.3rem;
@@ -492,7 +547,7 @@
       height: 8px;
       -webkit-appearance: none;
       appearance: none;
-      background: #1E293B;
+      background: #1A2234;
       border-radius: var(--radius-full);
       outline: none;
     }
@@ -509,7 +564,7 @@
     }
 
     .calc-result-box {
-      background: rgba(11, 17, 32, 0.8);
+      background: rgba(10, 14, 23, 0.85);
       border-radius: var(--radius-md);
       padding: 30px;
       border: 1px solid var(--border-color);
@@ -532,8 +587,8 @@
 
     /* Privacy Banner */
     .privacy-banner {
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(2, 44, 34, 0.4) 100%);
-      border: 1px solid rgba(52, 211, 153, 0.3);
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.92) 0%, rgba(6, 78, 59, 0.45) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.3);
       border-radius: var(--radius-lg);
       padding: 48px;
       display: grid;
@@ -544,7 +599,7 @@
 
     .privacy-icon {
       font-size: 3.5rem;
-      color: var(--accent-green);
+      color: var(--nvis-green);
     }
 
     .privacy-content h3 {
@@ -601,10 +656,11 @@
 
     .step-number {
       font-size: 2rem;
-      font-weight: 800;
+      font-weight: 600;
       color: var(--primary);
       margin-bottom: 16px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--stencil);
+      letter-spacing: 0.06em;
     }
 
     /* Footer */
@@ -687,7 +743,7 @@
         <li><a href="#specs">Specifications</a></li>
         <li><a href="#privacy">Privacy</a></li>
         <li><a href="#beta">Beta Testing</a></li>
-        <li><a href="design/model.html" style="color:var(--accent-orange); font-weight:600;">🎛️ Design Model</a></li>
+        <li><a href="design/model.html" style="color:var(--primary); font-weight:600;">🎛️ Design Model</a></li>
         <li><a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank" class="btn btn-secondary">GitHub</a></li>
       </ul>
     </div>
@@ -698,12 +754,12 @@
     <div class="container hero-grid">
       <div>
         <div class="badge-pill">
-          <span style="display:inline-block; width:8px; height:8px; background:var(--accent-green); border-radius:50%; margin-right:4px;"></span>
+          <span style="display:inline-block; width:8px; height:8px; background:var(--nvis-green); border-radius:50%; margin-right:4px;"></span>
           100% Private • Zero Network Egress • GPL-3.0
         </div>
         <h1>The Audio Blackbox for Android</h1>
         <p class="lead">
-          A continuous ambient memory recorder. It holds the last 30 minutes of sound in RAM and writes to storage <strong>only when you explicitly ask it to</strong>.
+          A continuous ambient memory recorder. It holds up to the last 45 minutes of sound in RAM — as much as your device can actually spare — and writes to storage <strong>only when you explicitly ask it to</strong>.
         </p>
 
         <div class="hero-actions">
@@ -711,7 +767,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.792 12 3.61 22.186a2.008 2.008 0 0 1-.61-1.425V3.24c0-.547.22-1.044.609-1.426zm11.602 11.602l2.392 2.392-12.79 7.382 10.398-9.774zm0-2.832L4.813 0.81l12.79 7.383-2.392 2.391zm1.414 1.416l3.528 2.037c.854.493.854 1.302 0 1.795l-3.528 2.037-2.122-2.122 2.122-2.122l-.001-.025z"/></svg>
             Join Google Play Beta
           </a>
-          <a href="design/model.html" class="btn btn-secondary" style="border-color:rgba(251,146,60,0.4); color:#FB923C;">
+          <a href="design/model.html" class="btn btn-secondary" style="border-color:rgba(255,87,34,0.4); color:#FF8A50;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
             Design Model
           </a>
@@ -723,16 +779,16 @@
 
         <div class="hero-badges">
           <div class="hero-badge-item">
-            <span style="color:var(--accent-green)">✓</span> Android 10+ (API 29+)
+            <span style="color:var(--nvis-green)">✓</span> Android 10+ (API 29+)
           </div>
           <div class="hero-badge-item">
-            <span style="color:var(--accent-green)">✓</span> Material 3
+            <span style="color:var(--nvis-green)">✓</span> Material 3
           </div>
           <div class="hero-badge-item">
-            <span style="color:var(--accent-green)">✓</span> 100% Kotlin & Compose
+            <span style="color:var(--nvis-green)">✓</span> 100% Kotlin & Compose
           </div>
           <div class="hero-badge-item">
-            <span style="color:var(--accent-green)">✓</span> Open Source (GPL-3.0)
+            <span style="color:var(--nvis-green)">✓</span> Open Source (GPL-3.0)
           </div>
         </div>
       </div>
@@ -758,7 +814,7 @@
             <div class="buffer-widget">
               <div class="buffer-label-row">
                 <span style="color:var(--text-muted)">Buffer Retention</span>
-                <span id="buffer-stat-text" style="font-family:'JetBrains Mono'; color:var(--text-main); font-weight:600;">29:52 / 30:00 (54.8 MB)</span>
+                <span id="buffer-stat-text" style="font-family:'JetBrains Mono'; color:var(--text-main); font-weight:600;">44:51 / 45:00 (82.4 MB)</span>
               </div>
               <div class="buffer-track">
                 <div class="buffer-progress"></div>
@@ -767,7 +823,7 @@
           </div>
 
           <button class="phone-btn-save" onclick="triggerSimulatedSave()">
-            💾 Save Past 30 Minutes (.m4a)
+            💾 Save Past 45 Minutes (.m4a)
           </button>
           
           <button class="phone-btn-live">
@@ -791,7 +847,7 @@
         <div class="feature-card">
           <div class="feature-icon-wrapper icon-orange">⏱</div>
           <h3>Save the Past (Lookback)</h3>
-          <p>Captured an unexpected joke, brainstorm breakthrough, or critical instruction? Tap save and Audio Blackbox writes the last 5 to 60 minutes directly to disk.</p>
+          <p>Captured an unexpected joke, brainstorm breakthrough, or critical instruction? Tap save and Audio Blackbox writes the last 5 to 45 minutes, in 5-minute steps, directly to disk.</p>
         </div>
 
         <div class="feature-card">
@@ -808,8 +864,8 @@
 
         <div class="feature-card">
           <div class="feature-icon-wrapper icon-purple">📞</div>
-          <h3>Call & Focus Handling</h3>
-          <p>Pauses automatically during incoming phone calls and audio focus grabs. The gap is preserved as true silence so exported timeline timestamps never drift.</p>
+          <h3>Concurrent Capture Aware</h3>
+          <p>When another foreground app takes the microphone, Android silences our stream rather than failing it. The service detects that directly and pauses, then resumes the moment the mic is free. The gap is preserved as true silence, so exported timestamps never drift.</p>
         </div>
 
         <div class="feature-card">
@@ -828,7 +884,7 @@
       <!-- Living Design Model Banner -->
       <div style="margin-top: 32px; background: linear-gradient(135deg, rgba(255,87,34,0.12) 0%, rgba(17,24,39,0.9) 100%); border: 1px solid rgba(255,87,34,0.3); border-radius: var(--radius-lg); padding: 28px 32px; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
         <div>
-          <div style="font-family:'JetBrains Mono', monospace; font-size:0.75rem; font-weight:700; color:#FB923C; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">US Aviation Design System</div>
+          <div style="font-family:'JetBrains Mono', monospace; font-size:0.75rem; font-weight:700; color:#FF8A50; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">US Aviation Design System</div>
           <h3 style="font-size:1.4rem; font-weight:800; color:#FFFFFF; margin-bottom:8px;">Avionics Living Design Prototype</h3>
           <p style="color:var(--text-muted); max-width:600px; font-size:0.95rem;">
             Test the interactive cockpit simulator: real-time VU meter, Korry annunciator status lights, "REMOVE BEFORE FLIGHT" safety tag, and flight tape memory buffer in your browser.
@@ -857,29 +913,30 @@
               <span>Retention Window</span>
               <span id="calc-min-val" style="color:var(--primary); font-family:'JetBrains Mono'">30 minutes</span>
             </div>
-            <input type="range" min="5" max="60" value="30" step="5" class="calc-slider" id="calc-slider" oninput="updateMemoryCalc()">
+            <input type="range" min="5" max="45" value="30" step="5" class="calc-slider" id="calc-slider" oninput="updateMemoryCalc()">
           </div>
 
           <div class="calc-control">
             <div class="calc-label">
-              <span>Sample Rate & Format</span>
-              <span style="color:var(--text-muted)">16-bit PCM Mono</span>
+              <span>Quality Preset</span>
+              <span style="color:var(--text-muted)" id="calc-format-label">16-bit PCM · Mono</span>
             </div>
-            <select id="calc-rate-select" onchange="updateMemoryCalc()" style="width:100%; padding:12px; border-radius:var(--radius-sm); background:#1E293B; color:white; border:1px solid var(--border-color); outline:none; font-family:'Inter'">
-              <option value="16000" selected>16,000 Hz (Speech Optimized — 32 KB/s)</option>
-              <option value="44100">44,100 Hz (Full Spectrum Studio — 88.2 KB/s)</option>
+            <select id="calc-rate-select" onchange="updateMemoryCalc()" style="width:100%; padding:12px; border-radius:var(--radius-sm); background:#1A2234; color:white; border:1px solid var(--border-color); outline:none; font-family:'Inter'">
+              <option value="16000:1" selected>Voice — 16,000 Hz mono (31.3 KB/s)</option>
+              <option value="32000:1">Balanced — 32,000 Hz mono (62.5 KB/s)</option>
+              <option value="44100:2">High fidelity — 44,100 Hz stereo (172.3 KB/s)</option>
             </select>
           </div>
 
           <div style="font-size:0.85rem; color:var(--text-dim); line-height:1.5;">
-            * Standard 16 kHz Mono is ideal for spoken conversations, interviews, and meetings with high intelligibility and minimal memory impact.
+            * These are the app's three shipped presets. Voice is the default: 16 kHz mono is ample for speech, which is what an ambient recorder almost always captures, and it buys the longest window by a wide margin. High fidelity is stereo, which is also what engages more than one microphone on devices that have an array.
           </div>
         </div>
 
         <div class="calc-result-box">
           <div class="calc-result-sub" style="text-transform:uppercase; letter-spacing:0.05em; font-weight:700; margin-bottom:8px;">RAM Buffer Allocation</div>
           <div class="calc-result-num" id="calc-ram-mb">54.9 MB</div>
-          <div class="calc-result-sub" id="calc-stats-detail">32.0 KB/sec continuous throughput</div>
+          <div class="calc-result-sub" id="calc-stats-detail">31.3 KB/sec continuous throughput</div>
         </div>
       </div>
     </div>
@@ -890,8 +947,8 @@
     <div class="container">
       <div class="section-header">
         <span class="section-tag">Visuals</span>
-        <h2 class="section-title">Native Material 3 Interface</h2>
-        <p class="section-desc">Adheres strictly to modern Android 16 design principles, dynamic color schemes, and system responsiveness.</p>
+        <h2 class="section-title">Avionics Instrument Interface</h2>
+        <p class="section-desc">Built on Jetpack Compose and Material 3, dressed in a fixed cockpit palette — FED-STD-595 International Orange, NVIS green, Korry annunciator amber — so the state of the recorder reads at a glance.</p>
       </div>
 
       <div class="screenshots-row">
@@ -1038,12 +1095,16 @@
     // Memory Calculator
     function updateMemoryCalc() {
       const minutes = parseInt(document.getElementById('calc-slider').value, 10);
-      const sampleRate = parseInt(document.getElementById('calc-rate-select').value, 10);
-      
+      // Presets mirror QualityPreset.kt: "<sampleRateHz>:<channelCount>".
+      const [sampleRate, channels] = document.getElementById('calc-rate-select').value
+        .split(':').map(v => parseInt(v, 10));
+
       document.getElementById('calc-min-val').innerText = `${minutes} minutes`;
-      
-      // 16-bit = 2 bytes per sample, 1 channel mono
-      const bytesPerSec = sampleRate * 2 * 1;
+      document.getElementById('calc-format-label').innerText =
+        `16-bit PCM · ${channels === 2 ? 'Stereo' : 'Mono'}`;
+
+      // 16-bit PCM = 2 bytes per sample, per channel.
+      const bytesPerSec = sampleRate * 2 * channels;
       const totalBytes = minutes * 60 * bytesPerSec;
       const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
       const kbSec = (bytesPerSec / 1024).toFixed(1);
@@ -1053,7 +1114,7 @@
     }
 
     function triggerSimulatedSave() {
-      alert("✅ Snapshot Exported! Saved 30-minute .m4a AAC recording to Recordings/Blackbox/ (Mock Demo)");
+      alert("✅ Snapshot Exported! Saved 45-minute .m4a AAC recording to Recordings/Blackbox/ (Mock Demo)");
     }
   </script>
 </body>
