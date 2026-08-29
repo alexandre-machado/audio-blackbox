@@ -388,4 +388,29 @@ class ExportEngineTest {
         val name = requireNotNull(sink.openedWith)
         assertTrue("expected the injected encoder's extension, got $name", name.endsWith("_5min.fake"))
     }
+
+    @Test
+    fun `export on saturated ring buffer recovers from leading edge lap when writer advances during sink open`() {
+        val target = FakeTarget()
+        val ring = RingBuffer(capacityBytes = 10_000, bytesPerSecond = config.bytesPerSecond)
+        // Saturated buffer: write 10_000 bytes so buffer is at full capacity
+        ring.write(ByteArray(10_000) { 1 })
+
+        val sink = object : ExportSink {
+            override fun open(displayName: String, mimeType: String): ExportTarget {
+                // Simulate capture thread writing into saturated buffer while sink is opening:
+                // Advances oldestCursor by 100 bytes so initial plan cursor is lapped!
+                ring.write(ByteArray(100) { 2 })
+                return target
+            }
+        }
+
+        val engine = engineFor(ring, sink)
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue("export should succeed, got $result", result is ExportState.Success)
+        assertTrue("target must be committed", target.committed)
+        assertFalse("target must not be aborted", target.aborted)
+        assertTrue("output must contain written data", target.buffer.size() > 0)
+    }
 }

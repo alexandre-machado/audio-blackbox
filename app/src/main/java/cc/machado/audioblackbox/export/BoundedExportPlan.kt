@@ -354,13 +354,28 @@ class BoundedExportReader(
 
             val take = minOf(remainingInSegment, chunkSizeBytes.toLong()).toInt()
             val rawChunk = when (val segment = plan.segments[segmentIndex]) {
-                is PlanSegment.Raw -> readRawChunk(cursorInSegment, take)
+                is PlanSegment.Raw -> {
+                    val raw = readRawChunk(cursorInSegment, take)
+                    if (raw.isEmpty()) {
+                        segmentIndex++
+                        if (segmentIndex < plan.segments.size) {
+                            val next = plan.segments[segmentIndex]
+                            cursorInSegment = segmentStart(next)
+                            remainingInSegment = next.length
+                        }
+                        continue
+                    }
+                    raw
+                }
                 is PlanSegment.Silence -> ByteArray(take)
             }
-            cursorInSegment += take
-            remainingInSegment -= take
+            cursorInSegment += rawChunk.size
+            remainingInSegment -= rawChunk.size
 
             val chunk = currentConverter?.convert(rawChunk) ?: rawChunk
+            if (chunk.isEmpty()) {
+                continue
+            }
             lastChunk = chunk
             return chunk
         }
@@ -388,20 +403,42 @@ class BoundedExportReader(
     private fun readRawChunk(cursor: Long, length: Int): ByteArray {
         when (val result = readSinceProvider(cursor, length)) {
             null -> throw BoundedExportDrainException.CaptureStopped(cursor)
-            is ReadSinceResult.Lapped -> throw BoundedExportDrainException.CursorLapped(
-                result.requestedCursor,
-                result.oldestAvailableCursor,
-                result.lostBytes,
-            )
+            is ReadSinceResult.Lapped -> {
+                // If we are at the start of the first raw segment when starting the drain,
+                // the live rolling buffer advanced slightly while opening the sink / encoder.
+                // Recover from the oldest available surviving audio cursor.
+                val segStart = segmentStart(plan.segments[segmentIndex])
+                if (cursorInSegment == segStart) {
+                    val lostBytes = result.lostBytes
+                    cursorInSegment = result.oldestAvailableCursor
+                    remainingInSegment = (remainingInSegment - lostBytes).coerceAtLeast(0L)
+                    if (remainingInSegment <= 0) return ByteArray(0)
+                    val retryLength = minOf(remainingInSegment, chunkSizeBytes.toLong()).toInt()
+                    return when (val retry = readSinceProvider(result.oldestAvailableCursor, retryLength)) {
+                        null -> throw BoundedExportDrainException.CaptureStopped(result.oldestAvailableCursor)
+                        is ReadSinceResult.Data -> retry.bytes
+                        is ReadSinceResult.Lapped -> throw BoundedExportDrainException.CursorLapped(
+                            retry.requestedCursor,
+                            retry.oldestAvailableCursor,
+                            retry.lostBytes,
+                        )
+                        is ReadSinceResult.StreamReset -> throw BoundedExportDrainException.StreamWasReset(
+                            retry.requestedCursor,
+                            retry.currentCursor,
+                        )
+                    }
+                }
+                throw BoundedExportDrainException.CursorLapped(
+                    result.requestedCursor,
+                    result.oldestAvailableCursor,
+                    result.lostBytes,
+                )
+            }
             is ReadSinceResult.StreamReset -> throw BoundedExportDrainException.StreamWasReset(
                 result.requestedCursor,
                 result.currentCursor,
             )
             is ReadSinceResult.Data -> {
-                check(result.bytes.size == length) {
-                    "bounded export drain expected $length bytes at cursor $cursor, got " +
-                        "${result.bytes.size} (nextCursor=${result.nextCursor})"
-                }
                 return result.bytes
             }
         }
