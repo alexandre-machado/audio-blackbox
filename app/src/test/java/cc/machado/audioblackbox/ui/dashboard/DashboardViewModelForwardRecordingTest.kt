@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
 import cc.machado.audioblackbox.export.ForwardRecordingState
@@ -164,7 +165,9 @@ class DashboardViewModelForwardRecordingTest {
             capacityMinutesFlow = MutableStateFlow(30),
             exportState = MutableStateFlow(ExportState.Idle),
             forwardRecordingState = forwardState,
+            qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE),
             audioConfigProvider = { AudioConfig() },
+            nowMillisProvider = { 1_755_000_300_000L },
         )
 
         val observed = mutableListOf<DashboardUiState>()
@@ -176,7 +179,13 @@ class DashboardViewModelForwardRecordingTest {
         runCurrent()
 
         assertEquals(
-            ForwardRecordingUiState.Error(ForwardRecordingFailureReason.WRITE_FAILED, "Disk full"),
+            ForwardRecordingUiState.Error(
+                reason = ForwardRecordingFailureReason.WRITE_FAILED,
+                message = "Disk full",
+                timestampMillis = 1_755_000_300_000L,
+                capacityMillis = 30 * 60_000L,
+                qualityPreset = QualityPreset.VOICE,
+            ),
             observed.last().forwardRecordingState,
         )
 

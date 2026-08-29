@@ -22,6 +22,25 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** Frozen at the instant [DashboardViewModel] observes an [ExportState.Error] -- see
+ * [SaveUiState.Error]'s doc for why this must not be re-derived from live state on every
+ * recomposition. */
+data class SaveErrorSnapshot(
+    val timestampMillis: Long,
+    val bufferedMillis: Long,
+    val capacityMillis: Long,
+    val qualityPreset: QualityPreset,
+)
+
+/** Frozen at the instant [DashboardViewModel] observes a [ForwardRecordingState.Error] -- see
+ * [ForwardRecordingUiState.Error]'s doc for why this must not be re-derived from live state on
+ * every recomposition. */
+data class ForwardErrorSnapshot(
+    val timestampMillis: Long,
+    val capacityMillis: Long,
+    val qualityPreset: QualityPreset,
+)
+
 /**
  * Maps [RecorderService]'s observable engine/export state onto [DashboardUiState] and dispatches
  * the dashboard's user actions back onto the service. Deliberately does not keep any parallel
@@ -58,6 +77,9 @@ class DashboardViewModel(
     private val qualityPresetFlow: StateFlow<QualityPreset> = RecorderService.qualityPresetFlow,
     private val audioConfigProvider: () -> AudioConfig = { RecorderService.captureConfig },
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
+    // Injectable so a test can pin the "moment of failure" instead of racing System.currentTimeMillis()
+    // (issue #206, `@rev` finding on PR #207 -- see SaveErrorSnapshot/ForwardErrorSnapshot's doc).
+    private val nowMillisProvider: () -> Long = { System.currentTimeMillis() },
     private val onStartEngine: () -> Unit = {},
     private val onStopEngine: () -> Unit = {},
     private val onSaveIntent: () -> Unit = {},
@@ -72,6 +94,35 @@ class DashboardViewModel(
     // just finished) -- that outcome is still worth showing once, not swallowed silently.
     private val _dismissedExportState = MutableStateFlow<ExportState?>(null)
     private val _dismissedForwardRecordingState = MutableStateFlow<ForwardRecordingState?>(null)
+
+    // The frozen "at the moment of failure" snapshots backing SaveUiState.Error/ForwardRecordingUiState.Error
+    // (issue #206, `@rev` finding on PR #207): captured once, below, the instant exportState/
+    // forwardRecordingState is observed to become Error -- never re-derived from live state, which is
+    // what let the old "remember(uiState) { ... }" in DashboardScreen drift to "now" every ~500ms tick
+    // while capture kept running after the failure. Seeded eagerly here (not left null until the
+    // init collectors below run) so uiState's own `initialValue` -- computed further down, still in
+    // this constructor -- is correct even for a ViewModel constructed while an Error already exists
+    // (e.g. after rotation), without depending on Dispatchers.Main.immediate replaying the collector
+    // synchronously before that point.
+    private val _saveErrorSnapshot = MutableStateFlow(
+        if (exportState.value is ExportState.Error) freshSaveErrorSnapshot() else null,
+    )
+    private val _forwardErrorSnapshot = MutableStateFlow(
+        if (forwardRecordingState.value is ForwardRecordingState.Error) freshForwardErrorSnapshot() else null,
+    )
+
+    private fun freshSaveErrorSnapshot(): SaveErrorSnapshot = SaveErrorSnapshot(
+        timestampMillis = nowMillisProvider(),
+        bufferedMillis = bufferedDurationMillisProvider() ?: 0L,
+        capacityMillis = capacityMinutesFlow.value.toLong() * MILLIS_PER_MINUTE,
+        qualityPreset = qualityPresetFlow.value,
+    )
+
+    private fun freshForwardErrorSnapshot(): ForwardErrorSnapshot = ForwardErrorSnapshot(
+        timestampMillis = nowMillisProvider(),
+        capacityMillis = capacityMinutesFlow.value.toLong() * MILLIS_PER_MINUTE,
+        qualityPreset = qualityPresetFlow.value,
+    )
 
     // Polled rather than a StateFlow because AudioCaptureEngine.bufferedDurationMillis() is a
     // plain getter, not itself observable (see that method's doc) -- it changes continuously
@@ -148,10 +199,27 @@ class DashboardViewModel(
         // sets it back to true except a fresh requestSave() call).
         viewModelScope.launch {
             exportState.collect { state ->
+                // Freeze a fresh snapshot every time a (possibly new) Error is observed -- issue
+                // #206, `@rev` finding on PR #207. StateFlow only re-emits on a genuinely distinct
+                // value, so an unrelated recomposition of uiState (e.g. bufferedMillisFlow's tick)
+                // never re-runs this and never re-freezes the snapshot; a second, different Error
+                // correctly gets its own fresh one.
+                if (state is ExportState.Error) {
+                    _saveErrorSnapshot.value = freshSaveErrorSnapshot()
+                }
                 if (state !is ExportState.Idle) {
                     saveDispatchPending = false
                     dispatchTimeoutJob?.cancel()
                     dispatchTimeoutJob = null
+                }
+            }
+        }
+
+        // Mirrors the exportState collector above for forward recording's own Error (issue #206).
+        viewModelScope.launch {
+            forwardRecordingState.collect { state ->
+                if (state is ForwardRecordingState.Error) {
+                    _forwardErrorSnapshot.value = freshForwardErrorSnapshot()
                 }
             }
         }
@@ -199,11 +267,25 @@ class DashboardViewModel(
         val enginePending: Boolean,
         val inputLevel: Float,
         val qualityPreset: QualityPreset,
+        val saveErrorSnapshot: SaveErrorSnapshot?,
+        val forwardErrorSnapshot: ForwardErrorSnapshot?,
     )
 
+    // Bundles the two error snapshots into one Flow<Pair<..>> for the same reason
+    // exportAndDismissedFlow/forwardAndDismissedFlow are nested above -- combine's direct overloads
+    // only go up to 5 flows, and extraStateFlow below already needs 4 others.
+    private val errorSnapshotsFlow: Flow<Pair<SaveErrorSnapshot?, ForwardErrorSnapshot?>> =
+        combine(_saveErrorSnapshot, _forwardErrorSnapshot) { save, forward -> save to forward }
+
     private val extraStateFlow: Flow<ExtraDashboardState> =
-        combine(capacityMinutesFlow, _engineTogglePending, inputLevelFlow, qualityPresetFlow) { capacity, enginePending, level, preset ->
-            ExtraDashboardState(capacity, enginePending, level, preset)
+        combine(
+            capacityMinutesFlow,
+            _engineTogglePending,
+            inputLevelFlow,
+            qualityPresetFlow,
+            errorSnapshotsFlow,
+        ) { capacity, enginePending, level, preset, (saveSnapshot, forwardSnapshot) ->
+            ExtraDashboardState(capacity, enginePending, level, preset, saveSnapshot, forwardSnapshot)
         }
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -217,11 +299,12 @@ class DashboardViewModel(
             captureState = capture,
             bufferedMillis = bufferedMillis,
             capacityMinutes = extra.capacityMinutes,
-            saveState = mapSaveUiState(export, dismissedExport),
+            saveState = mapSaveUiState(export, dismissedExport, extra.saveErrorSnapshot),
             forwardRecordingState = mapForwardRecordingUiState(
                 forwardState = forward,
                 dismissed = dismissedForward,
                 bytesPerSecond = audioConfigProvider().bytesPerSecond,
+                snapshot = extra.forwardErrorSnapshot,
             ),
             enginePending = extra.enginePending,
             inputLevel = extra.inputLevel,
@@ -234,11 +317,12 @@ class DashboardViewModel(
             captureState = captureState.value,
             bufferedMillis = bufferedDurationMillisProvider() ?: 0L,
             capacityMinutes = capacityMinutesFlow.value,
-            saveState = mapSaveUiState(exportState.value, _dismissedExportState.value),
+            saveState = mapSaveUiState(exportState.value, _dismissedExportState.value, _saveErrorSnapshot.value),
             forwardRecordingState = mapForwardRecordingUiState(
                 forwardState = forwardRecordingState.value,
                 dismissed = _dismissedForwardRecordingState.value,
                 bytesPerSecond = audioConfigProvider().bytesPerSecond,
+                snapshot = _forwardErrorSnapshot.value,
             ),
             enginePending = _engineTogglePending.value,
             inputLevel = inputLevelFlow.value,
@@ -447,19 +531,43 @@ class DashboardViewModel(
          * an outcome, it must not keep reappearing every time [uiState] recomposes from an
          * unrelated emission (the buffered-duration tick, in particular, fires every [tickMillis]
          * regardless of export state). */
-        fun mapSaveUiState(exportState: ExportState, dismissed: ExportState?): SaveUiState = when (exportState) {
+        /** [snapshot] is the frozen "at the moment of failure" state -- see [SaveErrorSnapshot]'s
+         * doc -- and backs [SaveUiState.Error]'s own frozen fields (issue #206, `@rev` finding on
+         * PR #207). Defaults to `null` only for callers that don't care about those fields (e.g. a
+         * pure-mapping test asserting solely on [reason]/[message]); production always supplies a
+         * real snapshot captured the instant [DashboardViewModel] observed this [ExportState.Error]. */
+        fun mapSaveUiState(
+            exportState: ExportState,
+            dismissed: ExportState?,
+            snapshot: SaveErrorSnapshot? = null,
+        ): SaveUiState = when (exportState) {
             is ExportState.Idle -> SaveUiState.Idle
             is ExportState.Exporting -> SaveUiState.Exporting
             is ExportState.Success ->
                 if (exportState == dismissed) SaveUiState.Idle else SaveUiState.Success(exportState.displayName)
             is ExportState.Error ->
-                if (exportState == dismissed) SaveUiState.Idle else SaveUiState.Error(exportState.reason, exportState.message)
+                if (exportState == dismissed) {
+                    SaveUiState.Idle
+                } else {
+                    val snap = snapshot ?: SaveErrorSnapshot(0L, 0L, 0L, QualityPreset.DEFAULT)
+                    SaveUiState.Error(
+                        reason = exportState.reason,
+                        message = exportState.message,
+                        timestampMillis = snap.timestampMillis,
+                        bufferedMillis = snap.bufferedMillis,
+                        capacityMillis = snap.capacityMillis,
+                        qualityPreset = snap.qualityPreset,
+                    )
+                }
         }
 
+        /** See [mapSaveUiState]'s doc for [snapshot]'s role -- the same frozen-at-failure snapshot,
+         * here for [ForwardRecordingUiState.Error] (issue #206). */
         fun mapForwardRecordingUiState(
             forwardState: ForwardRecordingState,
             dismissed: ForwardRecordingState?,
             bytesPerSecond: Int,
+            snapshot: ForwardErrorSnapshot? = null,
         ): ForwardRecordingUiState = when (forwardState) {
             is ForwardRecordingState.Idle -> ForwardRecordingUiState.Idle
             is ForwardRecordingState.Recording -> {
@@ -477,8 +585,18 @@ class DashboardViewModel(
                 if (forwardState == dismissed) ForwardRecordingUiState.Idle
                 else ForwardRecordingUiState.Success(forwardState.displayName, forwardState.bytesWritten)
             is ForwardRecordingState.Error ->
-                if (forwardState == dismissed) ForwardRecordingUiState.Idle
-                else ForwardRecordingUiState.Error(forwardState.reason, forwardState.message)
+                if (forwardState == dismissed) {
+                    ForwardRecordingUiState.Idle
+                } else {
+                    val snap = snapshot ?: ForwardErrorSnapshot(0L, 0L, QualityPreset.DEFAULT)
+                    ForwardRecordingUiState.Error(
+                        reason = forwardState.reason,
+                        message = forwardState.message,
+                        timestampMillis = snap.timestampMillis,
+                        capacityMillis = snap.capacityMillis,
+                        qualityPreset = snap.qualityPreset,
+                    )
+                }
         }
 
         /** The single state-mapping oracle issue #6 requires be unit-tested: engine state +
@@ -494,7 +612,7 @@ class DashboardViewModel(
             forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
             enginePending: Boolean = false,
             inputLevel: Float = 0f,
-            qualityPreset: QualityPreset = QualityPreset.VOICE,
+            qualityPreset: QualityPreset = QualityPreset.DEFAULT,
         ): DashboardUiState {
             val capacityMillis = capacityMinutes.toLong() * MILLIS_PER_MINUTE
             val clampedBufferedMillis = bufferedMillis.coerceIn(0L, capacityMillis)

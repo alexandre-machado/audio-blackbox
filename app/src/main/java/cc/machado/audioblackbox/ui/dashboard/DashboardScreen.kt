@@ -60,6 +60,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
@@ -127,7 +128,6 @@ fun DashboardScreen(
         if (uiState.saveState != SaveUiState.Idle) {
             SaveOutcomeNotice(
                 saveState = uiState.saveState,
-                uiState = uiState,
                 onDismiss = onDismissSaveNotice,
                 onRetry = onSaveRecent,
             )
@@ -137,7 +137,6 @@ fun DashboardScreen(
         ) {
             ForwardOutcomeNotice(
                 forwardState = uiState.forwardRecordingState,
-                uiState = uiState,
                 onDismiss = onDismissForwardNotice,
                 onRetry = onStartForwardRecording,
             )
@@ -674,7 +673,6 @@ private fun ForwardRecordingSection(
 @Composable
 private fun SaveOutcomeNotice(
     saveState: SaveUiState,
-    uiState: DashboardUiState,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -740,13 +738,17 @@ private fun SaveOutcomeNotice(
                         Text(
                             text = stringResource(
                                 R.string.dashboard_error_telemetry_preset,
-                                "${uiState.qualityPreset.name} (${uiState.qualityPreset.sampleRateHz} Hz)",
+                                "${saveState.qualityPreset.name} (${saveState.qualityPreset.sampleRateHz} Hz)",
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                         )
-                        val capacityMin = (uiState.capacityMillis / 60_000L).toInt()
-                        val bufferedSec = "${uiState.bufferedMillis / 1000L}s"
+                        // Frozen at the moment of failure (saveState.*), not read live off uiState --
+                        // see SaveUiState.Error's doc (issue #206, `@rev` finding on PR #207): capture
+                        // keeps running after a save failure, so uiState.bufferedMillis/capacityMillis
+                        // keep ticking for as long as this notice stays on screen.
+                        val capacityMin = (saveState.capacityMillis / 60_000L).toInt()
+                        val bufferedSec = "${saveState.bufferedMillis / 1000L}s"
                         Text(
                             text = stringResource(R.string.dashboard_error_telemetry_buffer, capacityMin, bufferedSec),
                             style = MaterialTheme.typography.bodySmall,
@@ -755,13 +757,14 @@ private fun SaveOutcomeNotice(
                     }
                 }
 
-                val report = remember(saveState, uiState) {
+                val report = remember(saveState) {
                     DiagnosticsReportHelper.buildSaveErrorReport(
                         reason = saveState.reason.name,
                         message = saveState.message,
-                        preset = uiState.qualityPreset,
-                        capacityMinutes = (uiState.capacityMillis / 60_000L).toInt(),
-                        bufferedMillis = uiState.bufferedMillis,
+                        preset = saveState.qualityPreset,
+                        capacityMinutes = (saveState.capacityMillis / 60_000L).toInt(),
+                        bufferedMillis = saveState.bufferedMillis,
+                        timestampMillis = saveState.timestampMillis,
                     )
                 }
                 val chooserTitle = stringResource(R.string.dashboard_error_share_chooser_title)
@@ -807,7 +810,6 @@ private fun SaveOutcomeNotice(
 @Composable
 private fun ForwardOutcomeNotice(
     forwardState: ForwardRecordingUiState,
-    uiState: DashboardUiState,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -865,7 +867,7 @@ private fun ForwardOutcomeNotice(
                         Text(
                             text = stringResource(
                                 R.string.dashboard_error_telemetry_preset,
-                                "${uiState.qualityPreset.name} (${uiState.qualityPreset.sampleRateHz} Hz)",
+                                "${forwardState.qualityPreset.name} (${forwardState.qualityPreset.sampleRateHz} Hz)",
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
@@ -873,12 +875,15 @@ private fun ForwardOutcomeNotice(
                     }
                 }
 
-                val report = remember(forwardState, uiState) {
+                // Frozen at the moment of failure (forwardState.*), not read live off uiState --
+                // see ForwardRecordingUiState.Error's doc (issue #206, `@rev` finding on PR #207).
+                val report = remember(forwardState) {
                     DiagnosticsReportHelper.buildForwardErrorReport(
                         reason = forwardState.reason.name,
                         message = forwardState.message,
-                        preset = uiState.qualityPreset,
-                        capacityMinutes = (uiState.capacityMillis / 60_000L).toInt(),
+                        preset = forwardState.qualityPreset,
+                        capacityMinutes = (forwardState.capacityMillis / 60_000L).toInt(),
+                        timestampMillis = forwardState.timestampMillis,
                     )
                 }
                 val chooserTitle = stringResource(R.string.dashboard_error_share_chooser_title)
@@ -1084,8 +1089,12 @@ private fun DashboardScreenSaveErrorPreview() {
                 CaptureStatus.Recording,
                 bufferedMillis = 30 * 60_000L,
                 saveState = SaveUiState.Error(
-                    ExportFailureReason.SINK_OPEN_FAILED,
-                    "MediaStore insert rejected",
+                    reason = ExportFailureReason.SINK_OPEN_FAILED,
+                    message = "MediaStore insert rejected",
+                    timestampMillis = 1_755_000_000_000L,
+                    bufferedMillis = 30 * 60_000L,
+                    capacityMillis = 30 * 60_000L,
+                    qualityPreset = QualityPreset.DEFAULT,
                 ),
             ),
             {}, {}, {}, {}, {}, {},

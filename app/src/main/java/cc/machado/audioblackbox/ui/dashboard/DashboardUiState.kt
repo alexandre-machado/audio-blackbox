@@ -80,8 +80,23 @@ sealed interface SaveUiState {
 
     /** [reason]/[message] are [cc.machado.audioblackbox.export.ExportState.Error]'s own fields,
      * carried through unchanged so a failure is visible on this screen -- not only in the
-     * persistent notification, which was the whole gap issue #40 item 2 closes. */
-    data class Error(val reason: ExportFailureReason, val message: String) : SaveUiState
+     * persistent notification, which was the whole gap issue #40 item 2 closes.
+     *
+     * [timestampMillis]/[bufferedMillis]/[capacityMillis]/[qualityPreset] are a snapshot frozen by
+     * [DashboardViewModel] at the instant this error was produced (issue #206, `@rev` finding on
+     * PR #207), not read live off [DashboardUiState] at render time: capture keeps running after a
+     * save failure, so [DashboardUiState.bufferedMillis] keeps ticking for as long as the error
+     * notice stays on screen. Sourcing the incident report/telemetry from this snapshot instead of
+     * from the live state is what makes "Buffer: X min (Ys) ... at Failure" true regardless of how
+     * long the user takes to tap Share. */
+    data class Error(
+        val reason: ExportFailureReason,
+        val message: String,
+        val timestampMillis: Long,
+        val bufferedMillis: Long,
+        val capacityMillis: Long,
+        val qualityPreset: QualityPreset,
+    ) : SaveUiState
 }
 
 /** Everything [DashboardScreen] needs to render one frame, produced by
@@ -98,7 +113,18 @@ sealed interface ForwardRecordingUiState {
     data object Idle : ForwardRecordingUiState
     data class Recording(val displayName: String, val elapsedMillis: Long) : ForwardRecordingUiState
     data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingUiState
-    data class Error(val reason: ForwardRecordingFailureReason, val message: String) : ForwardRecordingUiState
+
+    /** See [SaveUiState.Error]'s doc for why [timestampMillis]/[capacityMillis]/[qualityPreset] are
+     * a frozen snapshot rather than read live off [DashboardUiState] -- the same drift defect
+     * applied here too (issue #206, `@rev` finding on PR #207): forward recording does not stop
+     * just because it failed to write, so [DashboardUiState] keeps changing under this notice. */
+    data class Error(
+        val reason: ForwardRecordingFailureReason,
+        val message: String,
+        val timestampMillis: Long,
+        val capacityMillis: Long,
+        val qualityPreset: QualityPreset,
+    ) : ForwardRecordingUiState
 }
 
 data class DashboardUiState(
@@ -109,7 +135,7 @@ data class DashboardUiState(
     val isBufferFull: Boolean,
     val saveState: SaveUiState,
     val forwardRecordingState: ForwardRecordingUiState = ForwardRecordingUiState.Idle,
-    val qualityPreset: QualityPreset = QualityPreset.VOICE,
+    val qualityPreset: QualityPreset = QualityPreset.DEFAULT,
     /** Live microphone peak level in `0f..1f`, measured from the captured PCM by
      * [cc.machado.audioblackbox.audio.AudioLevel.peakLevel]. Always `0f` unless
      * [captureStatus] is [CaptureStatus.Recording] -- see [DashboardViewModel.mapUiState]. */

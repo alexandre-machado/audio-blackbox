@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
@@ -112,10 +113,26 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `mapSaveUiState surfaces a fresh Error with its reason and message`() {
+    fun `mapSaveUiState surfaces a fresh Error with its reason, message, and frozen snapshot`() {
         val export = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
-        val mapped = DashboardViewModel.mapSaveUiState(export, dismissed = null)
-        assertEquals(SaveUiState.Error(ExportFailureReason.WRITE_FAILED, "disk full"), mapped)
+        val snapshot = SaveErrorSnapshot(
+            timestampMillis = 1_755_000_000_000L,
+            bufferedMillis = 5 * 60_000L,
+            capacityMillis = 30 * 60_000L,
+            qualityPreset = QualityPreset.VOICE,
+        )
+        val mapped = DashboardViewModel.mapSaveUiState(export, dismissed = null, snapshot = snapshot)
+        assertEquals(
+            SaveUiState.Error(
+                reason = ExportFailureReason.WRITE_FAILED,
+                message = "disk full",
+                timestampMillis = 1_755_000_000_000L,
+                bufferedMillis = 5 * 60_000L,
+                capacityMillis = 30 * 60_000L,
+                qualityPreset = QualityPreset.VOICE,
+            ),
+            mapped,
+        )
     }
 
     @Test
@@ -136,8 +153,24 @@ class DashboardViewModelTest {
     fun `mapSaveUiState still surfaces a new Error even if a different Error was previously dismissed`() {
         val dismissedError = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
         val newError = ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, "insert rejected")
-        val mapped = DashboardViewModel.mapSaveUiState(newError, dismissed = dismissedError)
-        assertEquals(SaveUiState.Error(ExportFailureReason.SINK_OPEN_FAILED, "insert rejected"), mapped)
+        val snapshot = SaveErrorSnapshot(
+            timestampMillis = 1_755_000_100_000L,
+            bufferedMillis = 10 * 60_000L,
+            capacityMillis = 30 * 60_000L,
+            qualityPreset = QualityPreset.VOICE,
+        )
+        val mapped = DashboardViewModel.mapSaveUiState(newError, dismissed = dismissedError, snapshot = snapshot)
+        assertEquals(
+            SaveUiState.Error(
+                reason = ExportFailureReason.SINK_OPEN_FAILED,
+                message = "insert rejected",
+                timestampMillis = 1_755_000_100_000L,
+                bufferedMillis = 10 * 60_000L,
+                capacityMillis = 30 * 60_000L,
+                qualityPreset = QualityPreset.VOICE,
+            ),
+            mapped,
+        )
     }
 
     // ---- mapUiState: the full oracle end to end ----
@@ -253,16 +286,26 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `mapForwardRecordingUiState surfaces Error with reason and message`() {
+    fun `mapForwardRecordingUiState surfaces Error with reason, message, and frozen snapshot`() {
         val forwardState = ForwardRecordingState.Error(
             reason = ForwardRecordingFailureReason.CURSOR_LAPPED,
             message = "Cursor was lapped",
         )
-        val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = null, bytesPerSecond = 32_000)
+        val snapshot = ForwardErrorSnapshot(
+            timestampMillis = 1_755_000_200_000L,
+            capacityMillis = 30 * 60_000L,
+            qualityPreset = QualityPreset.VOICE,
+        )
+        val mapped = DashboardViewModel.mapForwardRecordingUiState(
+            forwardState, dismissed = null, bytesPerSecond = 32_000, snapshot = snapshot,
+        )
         assertEquals(
             ForwardRecordingUiState.Error(
                 reason = ForwardRecordingFailureReason.CURSOR_LAPPED,
                 message = "Cursor was lapped",
+                timestampMillis = 1_755_000_200_000L,
+                capacityMillis = 30 * 60_000L,
+                qualityPreset = QualityPreset.VOICE,
             ),
             mapped,
         )
