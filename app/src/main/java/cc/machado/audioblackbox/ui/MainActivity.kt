@@ -5,7 +5,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
@@ -101,7 +103,17 @@ class MainActivity : ComponentActivity() {
         }
 
         refreshStep()
-        enableEdgeToEdge()
+        // Issue #225: the app is permanently dark on the fixed cockpit ground, so the system bars
+        // must always render light icons/content, regardless of the *device's* light/dark setting
+        // -- `enableEdgeToEdge()`'s no-arg default instead auto-detects style from
+        // `resources.configuration`'s system dark-mode flag, which is exactly the "wallpaper/system
+        // derived" behaviour this issue drops. `SystemBarStyle.dark(...)` pins both bars to their
+        // dark-background (light-icon) style unconditionally, including on the onboarding screens
+        // this same Activity hosts.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+        )
         setContent {
             AudioBlackboxTheme {
                 // Issue #73, PR #74 round 2: hoisted here (not inside MainScreenWithBottomBar,

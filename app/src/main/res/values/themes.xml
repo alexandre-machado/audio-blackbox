@@ -1,3 +1,13 @@
 <resources>
-    <style name="Theme.AudioBlackbox" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Issue #225: the app is permanently dark on the model.html cockpit ground, so the
+      pre-Compose window theme is dark too: android:Theme.Material.NoActionBar (not
+      .Light.NoActionBar), with android:windowBackground pinned to the same cockpit_bg the
+      Compose ColorScheme (ui/theme/Theme.kt) uses for `background`. This is what's visible for
+      the single frame between window creation and AudioBlackboxTheme taking over; leaving it
+      light would flash a white window before the dark UI ever draws.
+    -->
+    <style name="Theme.AudioBlackbox" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/cockpit_bg</item>
+    </style>
 </resources>

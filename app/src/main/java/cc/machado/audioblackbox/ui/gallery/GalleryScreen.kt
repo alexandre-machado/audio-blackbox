@@ -34,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -292,8 +291,8 @@ private fun RecordingCard(
                     FilledIconButton(
                         onClick = onPlayPauseClicked,
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = FlightOrange,
-                            contentColor = Color.White,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                         modifier = Modifier
                             .size(38.dp)

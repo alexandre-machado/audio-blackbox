@@ -5,4 +5,13 @@
       provides contrast and matches modern Material 3 dark themes.
     -->
     <color name="ic_launcher_background">#141418</color>
+
+    <!--
+      Cockpit ground (issue #225, model.html:37-41, color-cockpit-bg custom property). Used only
+      as the pre-Compose android:windowBackground in themes.xml, so the window is already the
+      fixed dark cockpit color for the single frame before AudioBlackboxTheme's Compose
+      ColorScheme (ui/theme/Theme.kt) takes over; keep the two in sync if the cockpit ground
+      ever changes.
+    -->
+    <color name="cockpit_bg">#0A0E17</color>
 </resources>

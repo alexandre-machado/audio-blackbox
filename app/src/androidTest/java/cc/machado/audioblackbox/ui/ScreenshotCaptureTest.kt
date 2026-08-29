@@ -3,8 +3,10 @@ package cc.machado.audioblackbox.ui
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
 import android.os.LocaleList
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -52,11 +54,34 @@ class ScreenshotCaptureTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
+    /**
+     * Mirrors `MainActivity`'s exact `enableEdgeToEdge` call (issue #225), not the no-arg default
+     * this file used before: the no-arg default auto-detects each system bar's scrim style from
+     * `resources.configuration`'s system light/dark-mode flag, drawing a light scrim over the
+     * navigation bar whenever the *device* (or, on the CI emulator, its default profile) is not
+     * itself in dark mode -- entirely independent of the app's own permanently-dark cockpit theme,
+     * and independent of the hosting Activity's `android:windowBackground` too, since a system bar
+     * scrim paints over window content rather than being painted by it. That scrim was the actual
+     * source of the flat light-grey band at the bottom of every store screenshot that `@rev`/`@sec`
+     * found on PR #227 (rows 1794-1919 of the 1080x1920 captures): pinning both bars to
+     * `SystemBarStyle.dark(TRANSPARENT)`, exactly as `MainActivity` does, removes the scrim
+     * unconditionally and lets the app's own dark background show through, regardless of the
+     * device's system-wide light/dark setting.
+     */
+    private fun enableCockpitEdgeToEdge() {
+        composeRule.runOnUiThread {
+            composeRule.activity.enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+            )
+        }
+    }
+
     @Test
     fun capturesAllDestinationsAtTheDeviceWindowSize() {
         // Mirrors MainActivity, which draws edge to edge -- without this the window would be
         // pre-inset by the system bars and the picture would not show what the user sees.
-        composeRule.runOnUiThread { composeRule.activity.enableEdgeToEdge() }
+        enableCockpitEdgeToEdge()
         composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
 
         capture("01-dashboard")
@@ -102,7 +127,7 @@ class ScreenshotCaptureTest {
      */
     @Test
     fun capturesShowcaseInBothLocalesAndTheyDiffer() {
-        composeRule.runOnUiThread { composeRule.activity.enableEdgeToEdge() }
+        enableCockpitEdgeToEdge()
 
         // showcaseDashboardFixture is CaptureState.Recording, which renders an infinite pulse
         // animation. Left on the automatic clock, waitForIdle would never see a settled frame.
