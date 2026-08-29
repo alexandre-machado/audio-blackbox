@@ -5,6 +5,8 @@ import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -431,6 +433,228 @@ class DashboardViewModelInstanceTest {
         // is correctly still ticking -- this test is about the frozen snapshot inside the error
         // notice, not about breaking the live buffer readout.
         assertEquals(14 * 60_000L, observed.last().bufferedMillis)
+
+        job.cancel()
+    }
+
+    // ---- Issue #212: Snapshot re-capture on repeat, different, and interleaved errors ----
+
+    @Test
+    fun `SaveUiState Error re-captures snapshot when a different error reason arrives`() = runTest(testDispatcher) {
+        var now = 1_000L
+        var bufferedMillis = 10_000L
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            bufferedDurationMillisProvider = { bufferedMillis },
+            capacityMinutesFlow = MutableStateFlow(30),
+            exportState = exportState,
+            nowMillisProvider = { now },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // First error at t=1000 with 10s buffered
+        exportState.value = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        runCurrent()
+
+        val firstError = observed.last().saveState as SaveUiState.Error
+        assertEquals(1_000L, firstError.timestampMillis)
+        assertEquals(10_000L, firstError.bufferedMillis)
+        assertEquals(ExportFailureReason.WRITE_FAILED, firstError.reason)
+
+        // Advance time and buffer, then emit a different error reason
+        now = 5_000L
+        bufferedMillis = 20_000L
+        exportState.value = ExportState.Error(ExportFailureReason.CURSOR_LAPPED, "lapped")
+        runCurrent()
+
+        val secondError = observed.last().saveState as SaveUiState.Error
+        assertEquals("different error reason must re-capture timestamp", 5_000L, secondError.timestampMillis)
+        assertEquals("different error reason must re-capture bufferedMillis", 20_000L, secondError.bufferedMillis)
+        assertEquals(ExportFailureReason.CURSOR_LAPPED, secondError.reason)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `SaveUiState Error re-captures snapshot on Error to Success to Error transition`() = runTest(testDispatcher) {
+        var now = 1_000L
+        var bufferedMillis = 10_000L
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            bufferedDurationMillisProvider = { bufferedMillis },
+            capacityMinutesFlow = MutableStateFlow(30),
+            exportState = exportState,
+            nowMillisProvider = { now },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // 1st error
+        exportState.value = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        runCurrent()
+
+        val firstError = observed.last().saveState as SaveUiState.Error
+        assertEquals(1_000L, firstError.timestampMillis)
+
+        // Interleaved success
+        exportState.value = ExportState.Success("rec.m4a", 100)
+        runCurrent()
+
+        // 2nd error at new time
+        now = 10_000L
+        bufferedMillis = 30_000L
+        exportState.value = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full again")
+        runCurrent()
+
+        val secondError = observed.last().saveState as SaveUiState.Error
+        assertEquals("second error after success must capture fresh timestamp", 10_000L, secondError.timestampMillis)
+        assertEquals("second error after success must capture fresh bufferedMillis", 30_000L, secondError.bufferedMillis)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `SaveUiState Error preserves frozen snapshot on repeat identical Error emissions`() = runTest(testDispatcher) {
+        var now = 1_000L
+        var bufferedMillis = 10_000L
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            bufferedDurationMillisProvider = { bufferedMillis },
+            capacityMinutesFlow = MutableStateFlow(30),
+            exportState = exportState,
+            nowMillisProvider = { now },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // First error emission at t=1000
+        exportState.value = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        runCurrent()
+
+        val initialError = observed.last().saveState as SaveUiState.Error
+        assertEquals(1_000L, initialError.timestampMillis)
+
+        // Attempting to emit the exact same error at t=5000 with 25s buffered
+        now = 5_000L
+        bufferedMillis = 25_000L
+        exportState.value = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        runCurrent()
+
+        val unchangedError = observed.last().saveState as SaveUiState.Error
+        assertEquals("identical consecutive error must keep original frozen timestamp", 1_000L, unchangedError.timestampMillis)
+        assertEquals("identical consecutive error must keep original frozen bufferedMillis", 10_000L, unchangedError.bufferedMillis)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `ForwardRecordingUiState Error re-captures snapshot when a different error reason arrives`() = runTest(testDispatcher) {
+        var now = 2_000L
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        val qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            forwardRecordingState = forwardRecordingState,
+            qualityPresetFlow = qualityPresetFlow,
+            nowMillisProvider = { now },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // First error at t=2000
+        forwardRecordingState.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.SINK_OPEN_FAILED, "sink failed")
+        runCurrent()
+
+        val firstError = observed.last().forwardRecordingState as ForwardRecordingUiState.Error
+        assertEquals(2_000L, firstError.timestampMillis)
+        assertEquals(ForwardRecordingFailureReason.SINK_OPEN_FAILED, firstError.reason)
+        assertEquals(QualityPreset.VOICE, firstError.qualityPreset)
+
+        // Quality preset changes, time advances, and different error occurs
+        now = 8_000L
+        qualityPresetFlow.value = QualityPreset.HIGH_FIDELITY
+        forwardRecordingState.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.CURSOR_LAPPED, "cursor lapped")
+        runCurrent()
+
+        val secondError = observed.last().forwardRecordingState as ForwardRecordingUiState.Error
+        assertEquals("different forward error reason must re-capture timestamp", 8_000L, secondError.timestampMillis)
+        assertEquals(ForwardRecordingFailureReason.CURSOR_LAPPED, secondError.reason)
+        assertEquals(QualityPreset.HIGH_FIDELITY, secondError.qualityPreset)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `ForwardRecordingUiState Error re-captures snapshot on Error to Success to Error transition`() = runTest(testDispatcher) {
+        var now = 2_000L
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            forwardRecordingState = forwardRecordingState,
+            nowMillisProvider = { now },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // 1st error
+        forwardRecordingState.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.SINK_OPEN_FAILED, "sink failed")
+        runCurrent()
+
+        val firstError = observed.last().forwardRecordingState as ForwardRecordingUiState.Error
+        assertEquals(2_000L, firstError.timestampMillis)
+
+        // Interleaved success
+        forwardRecordingState.value = ForwardRecordingState.Success("rec.m4a", 100L)
+        runCurrent()
+
+        // 2nd error
+        now = 12_000L
+        forwardRecordingState.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.WRITE_FAILED, "write failed")
+        runCurrent()
+
+        val secondError = observed.last().forwardRecordingState as ForwardRecordingUiState.Error
+        assertEquals("second forward error after success must capture fresh timestamp", 12_000L, secondError.timestampMillis)
+        assertEquals(ForwardRecordingFailureReason.WRITE_FAILED, secondError.reason)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `ForwardRecordingUiState Error preserves frozen snapshot on repeat identical Error emissions`() = runTest(testDispatcher) {
+        var now = 2_000L
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            forwardRecordingState = forwardRecordingState,
+            nowMillisProvider = { now },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // First error emission at t=2000
+        forwardRecordingState.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.SINK_OPEN_FAILED, "sink failed")
+        runCurrent()
+
+        val initialError = observed.last().forwardRecordingState as ForwardRecordingUiState.Error
+        assertEquals(2_000L, initialError.timestampMillis)
+
+        // Attempting to emit the exact same error at t=7000
+        now = 7_000L
+        forwardRecordingState.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.SINK_OPEN_FAILED, "sink failed")
+        runCurrent()
+
+        val unchangedError = observed.last().forwardRecordingState as ForwardRecordingUiState.Error
+        assertEquals("identical consecutive forward error must keep original frozen timestamp", 2_000L, unchangedError.timestampMillis)
 
         job.cancel()
     }
