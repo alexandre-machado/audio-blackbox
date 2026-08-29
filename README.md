@@ -39,7 +39,7 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 - 🎯 **Two Primary Capture Modes**:
   - **Save Recent Past (Lookback)**: Instantly snapshot everything currently buffered from the memory ring buffer into an AAC (`.m4a`) or lossless WAV file. One action, always the whole buffer -- the old 5/15/30 selector was retired in #121 because it promised windows the buffer might not hold.
   - **Continuous Live Recording**: Start a forward live recording that automatically preserves the preceding buffer timeline so nothing is lost.
-- 📊 **Real-time Live VU Meter**: 18-capsule reactive microphone input level indicator designed with pure stock Material 3 components.
+- 📊 **Real-time Live VU Meter**: 18-capsule reactive microphone input level indicator built on Material 3 components, styled with the app's avionics/cockpit brand theme (see `AGENTS.md` §5).
 - 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).
 - 🛡️ **100% Local, Zero-Network Privacy**:
   - **Zero Network Permissions**: The `android.permission.INTERNET` permission is completely absent from the merged release manifest.

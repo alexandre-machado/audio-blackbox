@@ -20,4 +20,10 @@ the S25 in the first place.
 
 ## Decisions
 
-- **Design system** — stock Material 3, stable 1.4.0 line. Recorded in [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9), with the evidence brief that rejected the alternatives.
+- **Design system** — Material 3 (stable 1.4.0 line) themed with the avionics/cockpit
+  brand palette in `ui/theme/Color.kt`. Originally decided as stock-Material-3-only in
+  [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9); superseded by
+  [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220) once PR
+  [#186](https://github.com/alexandre-machado/audio-blackbox/pull/186) shipped the
+  avionics theme and the owner ratified it as the system of record. `docs/design/model.html`
+  is the living prototype for this theme (read-only reference, not authoritative text).

@@ -64,13 +64,33 @@ Three specific vacuous-test traps have shipped in this repository and been caugh
 
 ## 5. Design System Invariants
 
-- **Stock Material 3 Only ([#9](https://github.com/alexandre-machado/audio-blackbox/issues/9), [#15](https://github.com/alexandre-machado/audio-blackbox/pull/15))**:
-  - Built on stable Material 3 (1.4.0 line via Compose BOM; see `[stack]` in [`.agents/team.toml`](.agents/team.toml)).
-  - No Material 3 Expressive, no custom brand design languages or themed widgets. The app maintains a native Android system look and feel.
-- **Dynamic Color**:
-  - Dynamic color is enabled on Android 12+ (`Build.VERSION.SDK_INT >= Build.VERSION_CODES.S`) in `AudioBlackboxTheme`. All UI components must render legibly across wallpaper-derived system color schemes.
-- **Iconography (PR [#74](https://github.com/alexandre-machado/audio-blackbox/pull/74))**:
-  - Use stock Material vector icons (`androidx.compose.material:material-icons-core`), not third-party icon packs or custom glyphs.
+- **Avionics design system is the system of record ([#220](https://github.com/alexandre-machado/audio-blackbox/issues/220), superseding [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9)/[#15](https://github.com/alexandre-machado/audio-blackbox/pull/15))**:
+  - The "Stock Material 3 Only" rule recorded for [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9)/[#15](https://github.com/alexandre-machado/audio-blackbox/pull/15) is **superseded, not deleted**. PR [#186](https://github.com/alexandre-machado/audio-blackbox/pull/186) ("apply US aviation and cockpit avionics styling to Dashboard, Gallery, and Settings", commit `7aea781`) shipped a themed brand palette across all three main screens without a doc update, and PR [#196](https://github.com/alexandre-machado/audio-blackbox/pull/196) (commit `eda6161`) retokenized the landing page against it. The owner ratified the code as the intended direction on 2026-08-29 (see [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220)): the app is an **avionics/cockpit-instrument themed** design language (FED-STD-595 aviation orange, Korry annunciator colors, cockpit dark base), not a stock native-Android look.
+  - **[`ui/theme/Color.kt`](app/src/main/java/cc/machado/audioblackbox/ui/theme/Color.kt) is the palette source of truth.** Any new UI surface pulls its brand colors (`FlightOrange`, `AvionicsGreen`, `CautionAmber`, `WarningRed`, `TelemetryCyan`, `CockpitSlate`/`CockpitPanel`/`CockpitRivetBorder`, etc.) from that file, not ad hoc hex literals.
+  - Material 3 (stable 1.4.0 line, see `[stack]` in [`.agents/team.toml`](.agents/team.toml)) remains the component library and interaction model underneath the theme — this supersession is about color/branding, not about swapping frameworks or adopting Material 3 Expressive.
+- **Semantic colour-role rules (new, [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220))**:
+  - The palette encodes a de-facto annunciator progression already used across Dashboard/Gallery/Settings. It is now a documented rule, not an implicit convention:
+    - **Green (`AvionicsGreen`)** — OK / actively recording.
+    - **Amber (`CautionAmber`)** — paused / caution state (e.g. phone-call interruption).
+    - **Red (`WarningRed`)** — error / warning state.
+    - **Orange (`FlightOrange`)** — brand color, reserved for the card-level primary call-to-action (the "salvar o passado" / forward-recording action and equivalent primary buttons).
+  - **A card-level primary action must use `FlightOrange`, never a state color or the dynamic-theme accent.** This ambiguity — a primary CTA rendering in the wallpaper-derived dynamic color instead of the brand orange — is exactly what let the forward-recording button drift off-brand (see [#221](https://github.com/alexandre-machado/audio-blackbox/issues/221)). State colors (green/amber/red) are reserved for signalling engine/session state, never for a plain navigational or CTA button.
+- **Dynamic color and contrast debt (known open risk, [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220))**:
+  - `AudioBlackboxTheme` (`Theme.kt:28-33`) still enables the platform dynamic color scheme on Android 12+ (`Build.VERSION.SDK_INT >= Build.VERSION_CODES.S`) for the base Material color scheme, while the avionics brand colors (`FlightOrange`, `Color.White` text on it, and the fixed `surfaceVariant`-based cockpit card fills) are hardcoded, not derived from the wallpaper.
+  - This means legibility across arbitrary wallpaper-derived system color schemes is **not currently guaranteed** for the avionics-themed surfaces — a fixed-orange-on-fixed-dark card can end up low-contrast against a dynamic scheme it was never tested against. Treat this as an open risk, not a solved problem, until a follow-up locks the cockpit surfaces to the fixed avionics palette (or otherwise proves contrast) instead of layering them over dynamic color.
+- **Iconography ([#220](https://github.com/alexandre-machado/audio-blackbox/issues/220), supersedes the strict reading of PR [#74](https://github.com/alexandre-machado/audio-blackbox/pull/74))**:
+  - The repo ships custom local vector drawables using stock Material glyph shapes (`ic_waveform_mic`, `ic_ram_memory`, `ic_bookmark_save`, `ic_continuous_record`, `ic_settings_gear`, `ic_pause`, `ic_audio_specs`, `ic_privacy_shield`) instead of, or alongside, `androidx.compose.material:material-icons-core`. This is a real divergence from PR [#74](https://github.com/alexandre-machado/audio-blackbox/pull/74)'s literal "library artifact only" wording, which this rule now blesses: bundled local vector drawables using stock Material glyph designs are permitted (e.g. to control tint/size for notification-bar rules, or to avoid pulling in icon-font sets not needed elsewhere). Third-party icon packs and genuinely novel (non-Material-derived) glyphs are still out of scope.
+
+### Rules carried forward unchanged
+
+The following predate the avionics rewrite and remain in force; they are layout/architecture/behavioral invariants, not color rules, so [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220) does not touch them:
+
+- **One Scaffold / single `innerPadding`** ([#73](https://github.com/alexandre-machado/audio-blackbox/issues/73), [#78](https://github.com/alexandre-machado/audio-blackbox/issues/78)): each screen owns exactly one `Scaffold`, and content consumes the single `innerPadding` it provides.
+- **Route/Screen purity seam**: `*Route` composables own state/ViewModel wiring; `*Screen` composables are pure functions of their parameters, testable without a ViewModel.
+- **PT-BR string expansion** ([#89](https://github.com/alexandre-machado/audio-blackbox/issues/89)): Portuguese strings run 20–50% longer than English; layouts must not clip, unexpectedly wrap, or push action controls off screen.
+- **No fixed heights on action buttons** (PR [#192](https://github.com/alexandre-machado/audio-blackbox/pull/192)): action buttons size to content/padding, not a hardcoded `height()`, so they survive text-length and font-scale variation.
+- **Never fake a signal in the UI** ([#175](https://github.com/alexandre-machado/audio-blackbox/issues/175)): displayed state (recording/paused/error, buffered duration, etc.) must reflect real production state, never a placeholder or optimistic guess.
+- **Live-region semantics** ([#66](https://github.com/alexandre-machado/audio-blackbox/issues/66), [#73](https://github.com/alexandre-machado/audio-blackbox/issues/73)): state changes that matter for accessibility are exposed via Compose semantics live regions, not silently updated visuals only.
 
 ---
 

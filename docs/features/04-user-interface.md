@@ -6,10 +6,17 @@ Tracked in [#6](https://github.com/alexandre-machado/audio-blackbox/issues/6)
 (dashboard) and [#7](https://github.com/alexandre-machado/audio-blackbox/issues/7)
 (gallery, player, share).
 
-The design system is fixed by the decision in
-[#9](https://github.com/alexandre-machado/audio-blackbox/issues/9): **stock Material 3,
-stable 1.4.0 line**, native Android look, no custom brand language and no alpha-only
-Material 3 Expressive components.
+The design system is Material 3 (stable 1.4.0 line, no alpha-only Material 3
+Expressive components) themed with a US aviation/cockpit-avionics brand palette
+(`FlightOrange`, annunciator green/amber/red, cockpit dark base) defined in
+[`ui/theme/Color.kt`](../../app/src/main/java/cc/machado/audioblackbox/ui/theme/Color.kt),
+per [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220). This
+supersedes the original stock-Material-3-only decision in
+[#9](https://github.com/alexandre-machado/audio-blackbox/issues/9), which PR
+[#186](https://github.com/alexandre-machado/audio-blackbox/pull/186) shipped without
+updating this document. See `AGENTS.md` §5 for the semantic colour-role rules
+(green = OK/recording, amber = paused/caution, red = error/warning, orange = brand
+CTA) and the known dynamic-color contrast risk.
 
 ## Main Dashboard
 A clear "Iniciar/Parar motor" toggle plus a visual indicator (animation and timer) showing
