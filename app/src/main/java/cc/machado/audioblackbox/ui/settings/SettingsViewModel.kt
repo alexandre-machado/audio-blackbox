@@ -39,6 +39,7 @@ class SettingsViewModel(
     private val qualityPresetFlow: StateFlow<QualityPreset> = RecorderService.qualityPresetFlow,
     private val onStopEngine: () -> Unit = {},
     private val retentionWindowPreferences: RetentionWindowPreferences = InMemoryRetentionWindowPreferences(),
+    private val onSwitchSettings: ((minutes: Int, preset: QualityPreset) -> Unit)? = null,
     private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.rebuildEngineIfIdle(m, p) },
     private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
@@ -117,23 +118,15 @@ class SettingsViewModel(
         if (!isDirty) return
         if (_pendingConfirmation.value != null) return
 
-        // Quality preset switch alone preserves buffer across the boundary (issue #194)
-        val bufferCapacityChanged = minutes != capacityMinutesFlow.value
-        if (!bufferCapacityChanged || captureState.value is CaptureState.Idle) {
-            applyChanges(minutes, preset)
-        } else {
-            _pendingConfirmation.value = PendingCommit(minutes, preset)
-        }
+        // In-place buffer resizing (issue #223) and quality preset switch (issue #194)
+        // seamlessly preserve buffered audio across the boundary without stopping capture or discarding audio.
+        applyChanges(minutes, preset)
     }
 
     fun confirmRetentionWindowChange() {
         val change = _pendingConfirmation.value ?: return
         _pendingConfirmation.value = null
-        onStopEngine()
-        viewModelScope.launch {
-            captureState.first { it is CaptureState.Idle }
-            applyChanges(change.minutes, change.preset)
-        }
+        applyChanges(change.minutes, change.preset)
     }
 
     fun cancelRetentionWindowChange() {
@@ -144,10 +137,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             retentionWindowPreferences.setBufferDurationMinutes(minutes)
             retentionWindowPreferences.setQualityPreset(preset)
-            if (minutes == capacityMinutesFlow.value) {
-                onSwitchQualityPreset(preset)
+            if (onSwitchSettings != null) {
+                onSwitchSettings.invoke(minutes, preset)
             } else {
+                RecorderService.switchSettings(minutes, preset)
                 onRebuildEngine(minutes, preset)
+                onSwitchQualityPreset(preset)
             }
         }
     }
