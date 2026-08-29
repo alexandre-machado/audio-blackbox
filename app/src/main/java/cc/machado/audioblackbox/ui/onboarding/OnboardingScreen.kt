@@ -8,6 +8,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,25 +23,29 @@ import cc.machado.audioblackbox.permissions.OnboardingStep
  * composable itself holds no state and makes no Android permission/settings calls directly --
  * every action is a callback supplied by the caller (the Activity), which is the only layer
  * allowed to touch the real permission/battery APIs.
+ *
+ * Issue #213: [OnboardingStep.REQUEST_RECORD_AUDIO], [OnboardingStep.REQUEST_NOTIFICATIONS] and
+ * [OnboardingStep.REQUEST_BATTERY_OPTIMIZATION] render nothing here -- the caller launches the
+ * real OS prompt/Intent as a side effect of the step changing, so the user sees the native
+ * dialog directly with no app-drawn page underneath it.
  */
 @Composable
 fun OnboardingScreen(
     step: OnboardingStep,
     modifier: Modifier = Modifier,
-    onContinueLegalNotice: () -> Unit = {},
+    onAcceptConsent: () -> Unit = {},
+    onDeclineConsent: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     onRequestRecordAudio: () -> Unit = {},
     onRequestNotifications: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
-    onRequestBatteryExemption: () -> Unit = {},
-    onSkipBatteryOptimization: () -> Unit = {},
 ) {
     when (step) {
-        OnboardingStep.LEGAL_NOTICE -> OnboardingStepContent(
+        OnboardingStep.CONSENT -> ConsentStepContent(
             modifier = modifier,
-            title = stringResource(R.string.onboarding_legal_title),
-            body = stringResource(R.string.onboarding_legal_body),
-            primaryLabel = stringResource(R.string.onboarding_legal_continue),
-            onPrimaryClick = onContinueLegalNotice,
+            onAccept = onAcceptConsent,
+            onDecline = onDeclineConsent,
+            onOpenPrivacyPolicy = onOpenPrivacyPolicy,
         )
 
         OnboardingStep.AUDIO_RATIONALE -> OnboardingStepContent(
@@ -75,17 +80,55 @@ fun OnboardingScreen(
             onPrimaryClick = onOpenAppSettings,
         )
 
-        OnboardingStep.BATTERY_OPTIMIZATION -> OnboardingStepContent(
-            modifier = modifier,
-            title = stringResource(R.string.onboarding_battery_title),
-            body = stringResource(R.string.onboarding_battery_body),
-            primaryLabel = stringResource(R.string.onboarding_battery_grant),
-            onPrimaryClick = onRequestBatteryExemption,
-            secondaryLabel = stringResource(R.string.onboarding_battery_skip),
-            onSecondaryClick = onSkipBatteryOptimization,
-        )
-
+        OnboardingStep.REQUEST_RECORD_AUDIO,
+        OnboardingStep.REQUEST_NOTIFICATIONS,
+        OnboardingStep.REQUEST_BATTERY_OPTIMIZATION,
         OnboardingStep.DONE -> Unit
+    }
+}
+
+/**
+ * The single consent screen (issue #213). Combines what used to be three full-screen steps
+ * (legal notice, audio rationale, notifications rationale) into one prominent disclosure that
+ * covers why (continuous background capture), what (rolling in-memory buffer) and how (never
+ * transmitted, written to disk only on explicit Save) before any permission is requested --
+ * Play's prominent-disclosure policy, see `docs/release/play-store.md`. The decline action is
+ * the compliance-critical part: it must be as visible as accept, and it must exit without
+ * recording consent.
+ */
+@Composable
+private fun ConsentStepContent(
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Text(text = stringResource(R.string.onboarding_consent_title), style = MaterialTheme.typography.headlineSmall)
+        Column(modifier = Modifier.padding(top = 16.dp)) {
+            Text(text = stringResource(R.string.onboarding_consent_body), style = MaterialTheme.typography.bodyLarge)
+        }
+        Column(modifier = Modifier.padding(top = 16.dp)) {
+            TextButton(onClick = onOpenPrivacyPolicy) {
+                Text(text = stringResource(R.string.onboarding_consent_privacy_link))
+            }
+        }
+        Column(modifier = Modifier.padding(top = 24.dp)) {
+            Button(onClick = onAccept) {
+                Text(text = stringResource(R.string.onboarding_consent_accept))
+            }
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                OutlinedButton(onClick = onDecline) {
+                    Text(text = stringResource(R.string.onboarding_consent_decline))
+                }
+            }
+        }
     }
 }
 
@@ -127,16 +170,24 @@ private fun OnboardingStepContent(
 
 @Preview(showBackground = true)
 @Composable
-private fun OnboardingScreenLegalNoticePreview() {
+private fun OnboardingScreenConsentPreview() {
     MaterialTheme {
-        OnboardingScreen(step = OnboardingStep.LEGAL_NOTICE)
+        OnboardingScreen(step = OnboardingStep.CONSENT)
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-private fun OnboardingScreenBatteryPreview() {
+private fun OnboardingScreenAudioRationalePreview() {
     MaterialTheme {
-        OnboardingScreen(step = OnboardingStep.BATTERY_OPTIMIZATION)
+        OnboardingScreen(step = OnboardingStep.AUDIO_RATIONALE)
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OnboardingScreenAudioPermanentlyDeniedPreview() {
+    MaterialTheme {
+        OnboardingScreen(step = OnboardingStep.AUDIO_PERMANENTLY_DENIED)
     }
 }
