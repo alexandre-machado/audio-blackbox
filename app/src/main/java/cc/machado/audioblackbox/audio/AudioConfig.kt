@@ -67,29 +67,41 @@ data class AudioConfig(
         //   45 min ~= 86.4 MB  -- ceiling, as an INTERIM CLAMP (see hazard table below), not a
         //                         considered permanent design choice.
         //
-        // ## Known hazard this bounds -- issue #72 (open) -- MAX is an interim clamp, not a fix
-        // `RingBuffer.snapshot()` allocates a second full-size copy on save, so peak memory at
-        // save time is roughly 2x the retention window, not 1x. Measured on a real Samsung S25
-        // (dalvik.vm.heapgrowthlimit=256m, no largeHeap declared):
-        //   30 min -> ~115 MB total (backing + snapshot copy) -- fits
-        //   45 min -> ~173 MB -- fits with real margin
-        //   50 min -> ~192 MB -- tight
-        //   55 min -> ~211 MB -- tight, may fail
-        //   60 min -> ~230 MB -- fails, OOM observed on-device, against a 256 MB heapGrowthLimit
-        //                         with no headroom left for the framework, Compose, or GC
-        // MAX was previously kept at 60 on explicit owner instruction (the owner was aware of the
-        // above trade-off and accepted it while #72 waited on a design decision). That decision was
-        // revisited: MAX is temporarily clamped to 45 here -- again on explicit owner approval --
-        // until #72 is actually fixed (streaming the export instead of a whole-buffer snapshot
-        // copy), because the widened stepper (#73) made every one of 35/40/45/50/55 reachable for
-        // the first time, not just the single value 60, which meaningfully raised how often this
-        // hazard could be hit in practice. This is an INTERIM SAFETY CLAMP, not a considered
-        // permanent bound: whoever revisits it after #72 lands should re-run #72's arithmetic
-        // against whatever the then-current audio config (sample rate/channel count) is, not just
-        // copy this table, and should also check
-        // [cc.machado.audioblackbox.settings.RetentionWindowPreferences] for the read-side migration
-        // logic this clamp required (persisted values above the new MAX, e.g. 50/55/60 from before
-        // this change, are clamped down on load rather than crashing or resetting to the default).
+        // ## Peak memory at save -- MEASURED, and no longer 2x the window
+        // This block used to describe `RingBuffer.snapshot()` allocating a second full-size copy
+        // at save time, making peak memory ~2x the retention window. That stopped being true when
+        // issue #72 was fixed in PR #114: the export path drains through `RingBuffer.readSince` in
+        // `ExportEngine.DEFAULT_DRAIN_CHUNK_SIZE_BYTES` (4 KB) chunks and never materialises the
+        // window at all -- `BoundedExportAllocationTest` asserts that allocation size is pinned to
+        // the chunk and independent of the window, at two windows ~40x apart. The old table
+        // outlived the design it described and actively misled a reader into re-deriving a
+        // constraint that no longer exists, which is why it is replaced with measurement here
+        // rather than deleted.
+        //
+        // Measured by `RetentionCeilingMeasurementTest` (androidTest) on the CI emulator,
+        // API 30, dalvik.vm.heapgrowthlimit = 192m, at the production 16 kHz/mono config.
+        // "peak" is used heap across allocate + fill + full export:
+        //   30 min  -> backing  54 MB, peak  64 MB
+        //   45 min  -> backing  82 MB, peak  94 MB   <- current MAX
+        //   60 min  -> backing 109 MB, peak 118 MB
+        //   75 min  -> backing 137 MB, peak 169 MB
+        //   90 min  -> backing 164 MB, peak 188 MB
+        //  105 min  -> OOM (needs 192.3 MB for the backing array alone, against a 192 MB limit)
+        // So peak is backing + ~15%, not 2x backing.
+        //
+        // ## Why MAX is still 45 despite the above
+        // Two reasons, neither of them the old 2x cost:
+        //  1. That harness holds a lightweight sink and encoder and no Compose UI. The real app has
+        //     Compose, the AAC encoder and the foreground notification resident at save time, and
+        //     none of that is in these numbers. 90 min "fitting" at 188 MB against a 192 MB limit
+        //     has 4 MB of headroom, which is not headroom.
+        //  2. Raising MAX interacts with the clamp-down notice built for issue #84 (users whose
+        //     stored 50/55/60 was migrated down to 45 -- see RetentionWindowPreferences), so it is
+        //     a product change, not a constant edit.
+        // Whoever raises it should budget from the *measured* backing cost above plus the app's
+        // real resident footprint, and re-run RetentionCeilingMeasurementTest on the target device
+        // rather than trusting emulator numbers: the CI emulator's 192 MB limit is stricter than
+        // the S25's 256 MB, so these rows are a conservative floor, not a ceiling.
         const val RETENTION_WINDOW_MIN_MINUTES = 5
         const val RETENTION_WINDOW_MAX_MINUTES = 45
         const val RETENTION_WINDOW_STEP_MINUTES = 5

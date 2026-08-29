@@ -390,7 +390,7 @@ class RecorderService : Service() {
         // Dispatched off this Service's main thread for the same ANR reason as
         // stopServiceCompletely(): ExportEngine.export() is blocking I/O (ring buffer copy-out is
         // already bounded/off-thread by the time it gets here, but the WAV encode + MediaStore
-        // write are real disk/IPC work). engine.snapshot()/engine.gaps.value are read from this
+        // write are real disk/IPC work). engine.readSince()/engine.gaps.value are read from this
         // background thread; both are documented safe to call from any thread (see
         // AudioCaptureEngine's field docs).
         //
