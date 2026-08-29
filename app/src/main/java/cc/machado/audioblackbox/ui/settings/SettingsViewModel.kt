@@ -40,6 +40,7 @@ class SettingsViewModel(
     private val onStopEngine: () -> Unit = {},
     private val retentionWindowPreferences: RetentionWindowPreferences = InMemoryRetentionWindowPreferences(),
     private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.rebuildEngineIfIdle(m, p) },
+    private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
     private val usedMemoryBytesProvider: () -> Long = { Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() },
 ) : ViewModel() {
@@ -73,7 +74,7 @@ class SettingsViewModel(
             pendingMinutes = _pendingMinutes.value,
             committedPreset = qualityPresetFlow.value,
             pendingPreset = _pendingPreset.value,
-            pendingConfirmation = _pendingConfirmation.value,
+            pendingConfirmation = null,
             clampNotice = null,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
@@ -115,7 +116,10 @@ class SettingsViewModel(
         val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
         if (!isDirty) return
         if (_pendingConfirmation.value != null) return
-        if (captureState.value is CaptureState.Idle) {
+
+        // Quality preset switch alone preserves buffer across the boundary (issue #194)
+        val bufferCapacityChanged = minutes != capacityMinutesFlow.value
+        if (!bufferCapacityChanged || captureState.value is CaptureState.Idle) {
             applyChanges(minutes, preset)
         } else {
             _pendingConfirmation.value = PendingCommit(minutes, preset)
@@ -140,7 +144,11 @@ class SettingsViewModel(
         viewModelScope.launch {
             retentionWindowPreferences.setBufferDurationMinutes(minutes)
             retentionWindowPreferences.setQualityPreset(preset)
-            onRebuildEngine(minutes, preset)
+            if (minutes == capacityMinutesFlow.value) {
+                onSwitchQualityPreset(preset)
+            } else {
+                onRebuildEngine(minutes, preset)
+            }
         }
     }
 

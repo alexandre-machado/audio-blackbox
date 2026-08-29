@@ -141,6 +141,12 @@ class AudioCaptureEngine(
     // session (see PR #20 review, finding 4).
     @Volatile private var teardownThread: Thread? = null
 
+    private val pendingConfigSwitch = java.util.concurrent.atomic.AtomicReference<AudioConfig?>(null)
+
+    /** Active capture configuration (may be updated across presets without resetting buffer, issue #194). */
+    var activeConfig: AudioConfig = config
+        private set
+
     /** The buffer the capture thread is writing into, or `null` before the first [start] or
      * after [stop] (see [RingBuffer.clear] -- capture is not considered stopped until the raw
      * PCM is unreachable through this method). */
@@ -162,17 +168,37 @@ class AudioCaptureEngine(
      * #72), which needs a window's wall-clock start without a full [snapshot]. */
     fun estimateTimestamp(streamOffset: Long): Long? = ringBuffer?.estimateTimestamp(streamOffset)
 
+    /** Active format segments covering the range `[startCursor, endCursor)` (issue #194). */
+    fun activeSegments(startCursor: Long? = null, endCursor: Long? = null): List<FormatSegment>? {
+        val buf = ringBuffer ?: return null
+        val start = startCursor ?: buf.oldestCursor()
+        val end = endCursor ?: buf.writeCursor()
+        return buf.activeSegments(start, end)
+    }
+
+    /** Format active when [streamOffset] was written (issue #194). */
+    fun formatAt(streamOffset: Long): AudioConfig? = ringBuffer?.formatAt(streamOffset)
+
+    /**
+     * Switches the capture configuration (issue #194). If recording, switches AudioRecord
+     * seamlessly on the capture thread while preserving buffered audio in the ring buffer.
+     */
+    fun switchConfig(newConfig: AudioConfig) {
+        synchronized(lock) {
+            activeConfig = newConfig
+            if (_state.value is CaptureState.Recording || _state.value is CaptureState.Paused) {
+                pendingConfigSwitch.set(newConfig)
+            }
+        }
+    }
+
     /** Whether capture is currently running and the buffer is accessible. */
     fun isRunning(): Boolean = ringBuffer != null && (_state.value is CaptureState.Recording || _state.value is CaptureState.Paused)
 
     /** How much audio the ring buffer currently holds, in milliseconds, or `null` before the
      * first [start] / after [stop]. Used by the foreground service's notification to show
-     * elapsed buffered duration (issue #3) -- not persisted anywhere, purely derived from the
-     * live buffer on demand. */
-    fun bufferedDurationMillis(): Long? {
-        val bufferedBytes = ringBuffer?.bufferedBytes() ?: return null
-        return (bufferedBytes * MILLIS_PER_SECOND) / config.bytesPerSecond
-    }
+     * elapsed buffered duration (issue #3) -- derived from the live multi-format buffer. */
+    fun bufferedDurationMillis(): Long? = ringBuffer?.bufferedDurationMillis()
 
     /** The current session's `AudioRecord.getAudioSessionId()`, or `null` when not
      * Recording/Paused. Lets the foreground service match this engine's session against
@@ -372,11 +398,49 @@ class AudioCaptureEngine(
     }
 
     private fun captureLoop(record: AudioRecord, buffer: RingBuffer, minBufferSize: Int, myGeneration: Long) {
-        // Scratch array allocated once, outside the loop, and reused for every read().
-        val scratch = ByteArray(minBufferSize)
+        var currentRecord = record
+        var currentConfig = config
+        var scratch = ByteArray(minBufferSize)
         try {
             while (!stopRequested) {
-                val bytesRead = record.read(scratch, 0, scratch.size)
+                val targetConfig = pendingConfigSwitch.getAndSet(null)
+                if (targetConfig != null && targetConfig != currentConfig) {
+                    val channelConfig = channelConfigFor(targetConfig.channelCount)
+                    val newMinBufferSize = AudioRecord.getMinBufferSize(
+                        targetConfig.sampleRateHz,
+                        channelConfig,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                    )
+                    if (newMinBufferSize > 0) {
+                        try {
+                            val newRecord = audioRecordFactory(targetConfig, newMinBufferSize)
+                            if (newRecord.state == AudioRecord.STATE_INITIALIZED) {
+                                newRecord.startRecording()
+                                if (newRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                                    try {
+                                        currentRecord.stop()
+                                    } catch (_: Exception) {}
+                                    currentRecord.release()
+                                    currentRecord = newRecord
+                                    synchronized(lock) {
+                                        audioRecord = newRecord
+                                    }
+                                    scratch = ByteArray(newMinBufferSize)
+                                    buffer.setFormat(targetConfig)
+                                    currentConfig = targetConfig
+                                } else {
+                                    newRecord.release()
+                                }
+                            } else {
+                                newRecord.release()
+                            }
+                        } catch (_: Exception) {
+                            // Fallback: keep currentRecord
+                        }
+                    }
+                }
+
+                val bytesRead = currentRecord.read(scratch, 0, scratch.size)
                 if (bytesRead > 0) {
                     if (!paused) {
                         buffer.write(scratch, 0, bytesRead)
@@ -402,11 +466,11 @@ class AudioCaptureEngine(
             _inputLevel.value = 0f
             synchronized(lock) {
                 try {
-                    record.stop()
+                    currentRecord.stop()
                 } catch (_: IllegalStateException) {
                     // Already stopped/uninitialized; release() below still runs.
                 }
-                record.release()
+                currentRecord.release()
                 // Only touch the shared fields if this thread's session is still the current
                 // one. If a newer start() already ran (generation moved on) while this thread was
                 // between its read-error and this cleanup, those fields now belong to the newer

@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.export
 
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.FormatSegment
 import cc.machado.audioblackbox.audio.PauseGap
 import cc.machado.audioblackbox.audio.ReadSinceResult
 import java.io.IOException
@@ -105,6 +106,7 @@ class ExportEngine(
     private val sink: ExportSink,
     private val payloadEncoder: PayloadEncoder,
     private val drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
+    private val segmentsProvider: (() -> List<FormatSegment>?)? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -122,6 +124,7 @@ class ExportEngine(
         sink = sink,
         payloadEncoder = payloadEncoder,
         drainChunkSizeBytes = drainChunkSizeBytes,
+        segmentsProvider = { engine.activeSegments() },
     )
 
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
@@ -231,12 +234,15 @@ class ExportEngine(
                 ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
 
             val gaps = gapsProvider()
+            val activeSegs = segmentsProvider?.invoke() ?: emptyList()
+            val targetConfig = activeSegs.lastOrNull()?.config ?: config
             val plan = BoundedExportPlanner.plan(
                 startCursor = oldestCursor,
                 rawLength = rawLength,
                 windowStart = windowStart,
                 gaps = gaps,
-                config = config,
+                segments = activeSegs,
+                targetConfig = targetConfig,
                 targetDurationMillis = durationMillis,
             )
             val displayName = filenameFor(windowStart, minutesLabel, secondsLabel)
@@ -276,7 +282,7 @@ class ExportEngine(
                 // encode). `reader` pulls chunks bounded by `drainChunkSizeBytes` from the ring
                 // buffer as the encoder asks for them -- the encoder never sees (and this class
                 // never allocates) a buffer proportional to the whole plan (issue #72).
-                payloadEncoder.encode(config, plan.totalOutputBytes, reader, out) { cancelRequested }
+                payloadEncoder.encode(plan.targetConfig, plan.totalOutputBytes, reader, out) { cancelRequested }
             }
         } catch (e: CancellationException) {
             throw e

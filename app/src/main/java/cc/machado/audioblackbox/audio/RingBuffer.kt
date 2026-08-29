@@ -103,6 +103,12 @@ sealed interface ReadSinceResult {
     ) : ReadSinceResult
 }
 
+/** Metadata descriptor for a contiguous range of audio captured under a specific format (issue #194). */
+data class FormatSegment(
+    val startOffset: Long,
+    val config: AudioConfig,
+)
+
 /**
  * Fixed-size, pre-allocated circular buffer of PCM bytes. The single source of truth every
  * other module reads from: [AudioCaptureEngine] is the only writer, exporters and UI are
@@ -117,100 +123,44 @@ sealed interface ReadSinceResult {
  * `System.arraycopy` into the pre-allocated array plus pre-allocated marker arrays (see below).
  * When full, [write] silently overwrites the oldest bytes; it never throws on overflow.
  *
+ * ## Heterogeneous format segments (issue #194)
+ * When audio capture quality presets change mid-stream, [RingBuffer] preserves existing audio
+ * across the boundary without clearing the buffer. Each format change appends a [FormatSegment]
+ * recording the stream offset and [AudioConfig]. Byte<->time math, snapshot duration lookup, and
+ * timestamp estimation transparently interpolate across segments. As the ring wraps and overwrites
+ * old bytes, stale segment descriptors are evicted so memory stays strictly bounded.
+ *
  * ## Per-frame timing
  * Every [write] call records the wall-clock time it happened at, in a small pre-allocated
  * ring of "markers" (parallel `LongArray`s of stream-byte-offset and timestamp, capped at
- * [MARKER_CAPACITY] entries). [snapshot] uses the nearest marker plus [bytesPerSecond] to
- * derive the wall-clock start time of the returned window, interpolating/extrapolating at a
- * constant byte rate between markers. Markers degrade gracefully under the same discard rule
- * as the audio itself: once more than [MARKER_CAPACITY] writes have happened, older markers
- * are overwritten, which only ever costs derived-timestamp precision, never correctness --
- * there is always at least one marker within the buffered window to interpolate from.
+ * [MARKER_CAPACITY] entries). [snapshot] uses the nearest marker plus segment format rates to
+ * derive the wall-clock start time of the returned window.
  *
  * ## Thread safety
  * There is exactly one writer thread ([AudioCaptureEngine]'s capture thread) and readers call
  * [snapshot] from other threads (export, UI). All mutable state (the byte array, the marker
- * arrays, and the write counters) is guarded by a single intrinsic lock ([lock]) taken by both
- * [write] and [snapshot] via `synchronized`. A single lock with no nested/cross locking
- * anywhere in this class rules out deadlock by construction, and mutual exclusion rules out
- * torn reads: a [snapshot] never observes a byte range or marker that [write] is mid-copying.
- * Because audio chunks are small (typically tens of milliseconds of PCM) and reads are
- * infrequent relative to writes, contention on this lock is negligible in practice.
- *
- * [readSince] (issue #51) takes the same single lock and adds no new one, so the deadlock-free
- * -by-construction argument above is unchanged. It differs from [snapshot] in what it holds the
- * lock for: a copy of only the bytes written since the caller's cursor (capped by its `maxBytes`),
- * not up to [capacityBytes]. A drain thread polling every 100-250 ms therefore holds the lock for
- * one poll interval of audio regardless of how large the retention window is -- the cost does not
- * scale with capacity the way [snapshot]'s does, which is why the table below does not apply to
- * it. What is *not* yet measured is the three-way case (continuous writes + continuous drains +
- * an occasional full [snapshot] contending at once); that measurement is issue #22's follow-up and
- * gates the live-writer consumer, not this primitive.
- *
- * One caveat, called out explicitly rather than assumed away: [snapshot] holds this lock across
- * its full body, including the destination array's allocation and a `System.arraycopy` of up to
- * [capacityBytes], which blocks the writer for that duration. **Measured** (issue #22 -- see
- * `RingBufferSnapshotLockBenchmarkTest` / `AudioRecordHeadroomInstrumentedTest`, PR #69), across
- * every retention window the UI actually offers, not just the extremes -- restructured below so
- * the configs that work lead, and the one that does not is impossible to miss:
- *
- * | Config | Works today? | snapshot() worst case observed (x86, 6+ runs) | `AudioRecord` headroom |
- * |---|---|---|---|
- * | 16 kHz/mono/5 min | Yes | 6.4 -- 7.3 ms | 90 ms (CI emulator) / **120 ms (Samsung S25)** |
- * | 16 kHz/mono/15 min | Yes | 14.8 -- 18.6 ms | 90 ms / **120 ms** |
- * | 16 kHz/mono/30 min (today's practical ceiling) | Yes | 30.6 -- 35.5 ms | 90 ms / **120 ms** |
- * | 16 kHz/mono/60 min (no longer offered by the UI -- issue #72's interim clamp lowered the max to 45 min after this table was written) | **No -- OOMs on real device, issue #72** | 16.1 -- 72.8 ms | 90 ms / **120 ms** |
- * | 44.1 kHz/stereo/60 min | **Hypothetical -- no UI path sets this** | 66.6 -- 242.9 ms | 91 ms / **121 ms** |
- *
- * `AudioRecord` headroom depends only on sample rate/channel count, not on retention window, so
- * the same 90/120 ms figure applies to every 16 kHz/mono row -- 5/15/30 min all sit comfortably
- * under it (worst case never exceeds 35.5 ms against a 90+ ms floor). The 60-minute row is the
- * stress case, and it is also the one row that **does not actually run on the target device**:
- * `@techlead` confirmed on the repo owner's real Samsung S25 (SM-S931B, arm64-v8a, Android 16)
- * that allocating this class's ~115.2 MB backing array plus [snapshot]'s ~115.2 MB destination
- * array together exceeds the app's 256 MB Dalvik heap growth limit (no `android:largeHeap`) --
- * `OutOfMemoryError` before any lock timing is reachable. Tracked as **issue #72**, deferred
- * pending a product-design rework; not fixed here. **The ARM copy time at 60 min was therefore
- * never measured on real hardware at all -- every 60-minute number in this doc is x86-only, and
- * that gap should not be read as "measured and fine".**
- *
- * All worst-case figures above are *ranges*, not single numbers, because they are not a stable
- * platform characteristic: one CI run (GitHub Actions `ubuntu-latest`, x86_64) measured
- * 16.1 ms / 66.6 ms for the 60-minute rows, but repeated local runs on two other x86_64 machines
- * measured up to 72.8 ms and 242.9 ms for the same two configs -- a ~4.5x and ~3.6x swing. The
- * likely cause (`@rev`'s read, consistent with what is being measured): every iteration allocates
- * a fresh 9 MB-635 MB destination array, so "worst of 30" mostly measures how unlucky that run's
- * GC pauses were, not a fixed copy throughput. **Treat "worst of 30" as a GC-sensitivity
- * indicator, not a hard ceiling** -- medians (observed single-digit-to-low-20s ms for the
- * 5/15/30/60-minute 16 kHz configs, ~95-115 ms for the hypothetical stereo config) are more
- * stable, but even they will move with heap pressure on a given device.
- *
- * Headroom was measured twice: the CI instrumented tier (API 30 `google_apis` x86_64 emulator)
- * gives 90 ms / 91 ms; the real Samsung S25 gives *better* numbers, 120 ms / 121 ms -- the real
- * device has more headroom than the emulator, not less. Both use the real `minBufferSize * 3`
- * [AudioCaptureEngine] allocates.
- *
- * **Verdict for what the app can actually run today (16 kHz/mono, 5/15/30 min): no redesign
- * needed.** Every observed worst case (up to 35.5 ms at 30 min, the practical ceiling) stays
- * comfortably under both the emulator headroom (90 ms, ~2.5x margin on the noisiest run) and the
- * real device headroom (120 ms, ~3.4x margin). The 60-minute option the UI still offers cannot be
- * given a verdict on real hardware at all -- it fails before the lock is even reached (issue #72).
- *
- * **The hypothetical 44.1 kHz/stereo/60 min config leans unsafe, not merely thin-margin**: its
- * observed worst case (66.6-242.9 ms) exceeds *both* headroom figures (91 ms / 121 ms) in most
- * runs, not just at the extreme. Not reachable through the UI today, so no locking change is
- * warranted for the current app -- but if a future change (issue #47, or a sample-rate setting)
- * ever exposes 44.1 kHz/stereo, `snapshot`'s current lock-the-whole-copy design must be redesigned
- * *before* that ships, not merely re-evaluated (see follow-up issue #71).
+ * arrays, the segment list, and the write counters) is guarded by a single intrinsic lock ([lock]).
  */
 class RingBuffer(
     val capacityBytes: Int,
-    private val bytesPerSecond: Int,
+    val initialConfig: AudioConfig = AudioConfig(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    constructor(
+        capacityBytes: Int,
+        bytesPerSecond: Int,
+        clock: () -> Long = System::currentTimeMillis,
+    ) : this(
+        capacityBytes = capacityBytes,
+        initialConfig = AudioConfig(sampleRateHz = bytesPerSecond / 2, channelCount = 1),
+        clock = clock,
+    )
+
     init {
         require(capacityBytes > 0) { "capacityBytes must be positive, was $capacityBytes" }
-        require(bytesPerSecond > 0) { "bytesPerSecond must be positive, was $bytesPerSecond" }
+        require(initialConfig.bytesPerSecond > 0) {
+            "initialConfig.bytesPerSecond must be positive, was ${initialConfig.bytesPerSecond}"
+        }
     }
 
     private val lock = Any()
@@ -222,6 +172,15 @@ class RingBuffer(
     // next write position. Only ever mutated inside `synchronized(lock)`.
     private var totalWritten: Long = 0L
 
+    // Active format segments. Preserves format history across quality preset changes (issue #194).
+    private val segments = mutableListOf(FormatSegment(startOffset = 0L, config = initialConfig))
+
+    /** Active format of the write head. */
+    val currentConfig: AudioConfig get() = synchronized(lock) { segments.last().config }
+
+    /** Active bytes-per-second rate of the write head (backward-compatible mirror). */
+    val bytesPerSecond: Int get() = synchronized(lock) { segments.last().config.bytesPerSecond }
+
     // Fixed-size marker ring: parallel arrays, pre-allocated once, holding the stream-byte
     // offset and wall-clock timestamp of the most recent MARKER_CAPACITY write() calls.
     private val markerOffsets = LongArray(MARKER_CAPACITY)
@@ -231,6 +190,84 @@ class RingBuffer(
 
     /** Bytes currently held in the buffer (<= [capacityBytes]). */
     fun bufferedBytes(): Long = synchronized(lock) { minOf(totalWritten, capacityBytes.toLong()) }
+
+    /**
+     * Appends a new format segment starting at the current write head (issue #194).
+     * Subsequent writes are stamped with [config] without resetting existing buffered audio.
+     */
+    fun setFormat(config: AudioConfig) {
+        synchronized(lock) {
+            if (segments.last().config != config) {
+                segments.add(FormatSegment(startOffset = totalWritten, config = config))
+                pruneExpiredSegmentsLocked()
+            }
+        }
+    }
+
+    /**
+     * Returns the [AudioConfig] that was active when byte at [streamOffset] was written.
+     */
+    fun formatAt(streamOffset: Long): AudioConfig = synchronized(lock) {
+        formatAtLocked(streamOffset)
+    }
+
+    private fun formatAtLocked(streamOffset: Long): AudioConfig {
+        for (i in (segments.size - 1) downTo 0) {
+            if (streamOffset >= segments[i].startOffset) {
+                return segments[i].config
+            }
+        }
+        return segments.first().config
+    }
+
+    /**
+     * Returns all format segments covering the range `[startCursor, endCursor)` (issue #194).
+     */
+    fun activeSegments(startCursor: Long = oldestCursor(), endCursor: Long = writeCursor()): List<FormatSegment> =
+        synchronized(lock) {
+            if (endCursor <= startCursor) return emptyList()
+            val result = mutableListOf<FormatSegment>()
+            for (i in 0 until segments.size) {
+                val seg = segments[i]
+                val nextStart = if (i + 1 < segments.size) segments[i + 1].startOffset else endCursor
+                if (nextStart > startCursor && seg.startOffset < endCursor) {
+                    result.add(seg)
+                }
+            }
+            result
+        }
+
+    /**
+     * Computes the wall-clock audio duration (in milliseconds) spanning `[startOffset, endOffset)`,
+     * resolving byte rates per segment across heterogeneous formats (issue #194).
+     */
+    fun durationMillis(startOffset: Long, endOffset: Long): Long = synchronized(lock) {
+        durationMillisLocked(startOffset, endOffset)
+    }
+
+    private fun durationMillisLocked(startOffset: Long, endOffset: Long): Long {
+        if (endOffset <= startOffset) return 0L
+        var totalMillis = 0L
+        for (i in 0 until segments.size) {
+            val seg = segments[i]
+            val nextStart = if (i + 1 < segments.size) segments[i + 1].startOffset else endOffset
+            val rangeStart = maxOf(startOffset, seg.startOffset)
+            val rangeEnd = minOf(endOffset, nextStart)
+            if (rangeEnd > rangeStart) {
+                val bytes = rangeEnd - rangeStart
+                totalMillis += (bytes * MILLIS_PER_SECOND) / seg.config.bytesPerSecond
+            }
+        }
+        return totalMillis
+    }
+
+    /**
+     * Wall-clock audio duration currently held in the buffer (in milliseconds).
+     */
+    fun bufferedDurationMillis(): Long = synchronized(lock) {
+        val oldest = totalWritten - minOf(totalWritten, capacityBytes.toLong())
+        durationMillisLocked(oldest, totalWritten)
+    }
 
     /**
      * Zeroes the backing array and resets the buffer to empty, without reallocating (the
@@ -246,6 +283,9 @@ class RingBuffer(
             java.util.Arrays.fill(data, 0)
             java.util.Arrays.fill(markerOffsets, 0)
             java.util.Arrays.fill(markerTimestamps, 0)
+            val lastConfig = segments.last().config
+            segments.clear()
+            segments.add(FormatSegment(startOffset = 0L, config = lastConfig))
             totalWritten = 0L
             markerCount = 0
             markerNextSlot = 0
@@ -287,6 +327,14 @@ class RingBuffer(
             if (markerCount < MARKER_CAPACITY) markerCount++
 
             totalWritten = streamOffset + writeLen
+            pruneExpiredSegmentsLocked()
+        }
+    }
+
+    private fun pruneExpiredSegmentsLocked() {
+        val oldestAvailable = totalWritten - minOf(totalWritten, capacityBytes.toLong())
+        while (segments.size > 1 && segments[1].startOffset <= oldestAvailable) {
+            segments.removeAt(0)
         }
     }
 
@@ -299,11 +347,31 @@ class RingBuffer(
         require(durationMillis >= 0) { "durationMillis must not be negative, was $durationMillis" }
         synchronized(lock) {
             val available = minOf(totalWritten, capacityBytes.toLong())
-            if (available == 0L) return AudioSnapshot(ByteArray(0), clock())
+            if (available == 0L || durationMillis == 0L) return AudioSnapshot(ByteArray(0), clock())
 
-            val requestedBytes = (durationMillis * bytesPerSecond) / MILLIS_PER_SECOND
-            val length = minOf(requestedBytes, available).toInt().coerceAtLeast(0)
-            val startOffset = totalWritten - length
+            val oldest = totalWritten - available
+            var remainingMillis = durationMillis
+            var currentOffset = totalWritten
+
+            for (i in (segments.size - 1) downTo 0) {
+                val seg = segments[i]
+                val segStart = maxOf(oldest, seg.startOffset)
+                if (segStart >= currentOffset) continue
+                val segBytes = currentOffset - segStart
+                val segDurationMillis = (segBytes * MILLIS_PER_SECOND) / seg.config.bytesPerSecond
+                if (remainingMillis <= segDurationMillis) {
+                    val neededBytes = (remainingMillis * seg.config.bytesPerSecond) / MILLIS_PER_SECOND
+                    currentOffset -= neededBytes
+                    remainingMillis = 0L
+                    break
+                } else {
+                    remainingMillis -= segDurationMillis
+                    currentOffset = segStart
+                }
+            }
+
+            val startOffset = maxOf(oldest, currentOffset)
+            val length = (totalWritten - startOffset).toInt().coerceAtLeast(0)
 
             if (length == 0) return AudioSnapshot(ByteArray(0), estimateTimestampLocked(startOffset))
 
@@ -339,34 +407,8 @@ class RingBuffer(
      * [maxBytes], together with the cursor to pass to the next call. Repeated calls threading the
      * returned `nextCursor` back in produce a gap-free, in-order byte stream.
      *
-     * This is deliberately **not** [snapshot] under another name. [snapshot] answers "give me the
-     * last N minutes" and copies up to [capacityBytes]; this answers "give me what I have not seen
-     * yet" and copies `min(totalWritten - cursor, maxBytes)` -- for a drain polling every
-     * 100-250 ms that is one poll interval of audio (a few KB), whatever the retention window is.
-     * Two consequences that are the whole point of the primitive: it never allocates a
-     * second full-size copy of the window (issue #72), and **the lock hold is proportional to the
-     * bytes actually copied, not to capacity** -- a caller that keeps up bounds the writer's worst
-     * case at bytes-per-poll, independently of whether retention is 5 minutes or 45.
-     *
-     * [maxBytes] is deliberately **not** defaulted (PR #86 review, `@sec` / `@rev`). An earlier
-     * revision defaulted it to [capacityBytes] and asked callers in this doc to override it when
-     * seeding from [oldestCursor] -- which meant the one call shape the API anticipates,
-     * `readSince(oldestCursor())`, took the capacity-sized allocate-and-copy-under-the-lock path
-     * by omission: exactly the [snapshot]-shaped cost this primitive exists to avoid, and the
-     * shape behind issue #72's OOM. A comment is not a substitute for a signature that cannot be
-     * misused by accident -- the same principle [ReadSinceResult] follows -- so every caller now
-     * states its own bound. A drain on a 100-250 ms cadence wants about one poll interval of
-     * audio, a few KB; a caller catching up from [oldestCursor] loops with the same small bound
-     * rather than asking for the window in one call.
-     *
-     * Falling behind is reported, never smoothed over: if the ring wrapped past [cursor] the
-     * result is [ReadSinceResult.Lapped] with the exact byte count that was lost, and if the
-     * stream was reset under the caller ([clear]) it is [ReadSinceResult.StreamReset]. Neither is
-     * expressible as a shorter [ReadSinceResult.Data], so a short read always means one thing
-     * only: that is all that had been written yet.
-     *
-     * A negative [cursor] or a non-positive [maxBytes] is a programming error, not a runtime
-     * condition -- no legal sequence of calls produces one -- so those throw.
+     * In the presence of multi-format segments (issue #194), returned chunks are bounded to segment
+     * boundaries so that each chunk contains audio from exactly one [AudioConfig].
      */
     fun readSince(cursor: Long, maxBytes: Int): ReadSinceResult {
         require(cursor >= 0) { "cursor must not be negative, was $cursor" }
@@ -383,11 +425,19 @@ class RingBuffer(
                 )
             }
 
-            val length = minOf(totalWritten - cursor, maxBytes.toLong()).toInt()
+            // Find segment boundary ahead of cursor to avoid multi-format chunks
+            var maxInSegment = (totalWritten - cursor).toInt()
+            for (i in 0 until segments.size) {
+                if (cursor < segments[i].startOffset) {
+                    maxInSegment = minOf(maxInSegment, (segments[i].startOffset - cursor).toInt())
+                    break
+                }
+            }
+
+            val length = minOf(totalWritten - cursor, maxBytes.toLong(), maxInSegment.toLong()).toInt()
             if (length == 0) return ReadSinceResult.Data(EMPTY, cursor, cursor, 0L)
 
-            // Allocation + copy are both under the lock, as in snapshot(), but bounded by
-            // `length` (<= maxBytes) rather than by capacityBytes -- see the doc above.
+            // Allocation + copy are both under the lock, bounded by `length` (<= maxBytes)
             val result = ByteArray(length)
             val startPos = (cursor % capacityBytes).toInt()
             val firstPart = minOf(length, capacityBytes - startPos)
@@ -411,8 +461,7 @@ class RingBuffer(
      * Public wall-clock estimate for an arbitrary [streamOffset] (issue #72's bounded export
      * path needs this to compute a gap-fill window's wall-clock start without paying for a full
      * [snapshot] just to read [AudioSnapshot.startTimestampMillis]). Same marker interpolation
-     * [snapshot] already uses internally, just reachable for a cursor a caller obtained from
-     * [writeCursor]/[oldestCursor] instead of only for whatever [snapshot] itself just copied.
+     * [snapshot] already uses internally, resolving heterogeneous byte rates across segments.
      */
     fun estimateTimestamp(streamOffset: Long): Long {
         require(streamOffset >= 0) { "streamOffset must not be negative, was $streamOffset" }
@@ -435,9 +484,11 @@ class RingBuffer(
 
         val markerOffset = markerOffsets[bestIndex]
         val markerTimestamp = markerTimestamps[bestIndex]
-        val deltaBytes = streamOffset - markerOffset
-        val deltaMillis = (deltaBytes * MILLIS_PER_SECOND) / bytesPerSecond
-        return markerTimestamp + deltaMillis
+        return if (streamOffset >= markerOffset) {
+            markerTimestamp + durationMillisLocked(markerOffset, streamOffset)
+        } else {
+            markerTimestamp - durationMillisLocked(streamOffset, markerOffset)
+        }
     }
 
     private companion object {
