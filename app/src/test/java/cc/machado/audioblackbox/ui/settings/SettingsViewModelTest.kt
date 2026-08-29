@@ -158,16 +158,16 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `committing while Recording does not persist or rebuild -- it only surfaces the confirmation once`() = runTest(testDispatcher) {
+    fun `committing while Recording persists and switches dynamically without stop or confirmation dialog`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
+        val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         var stopCalls = 0
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
             onStopEngine = { stopCalls++ },
-            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
+            onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset) },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -179,160 +179,44 @@ class SettingsViewModelTest {
         vm.commitPendingRetentionWindow()
         runCurrent()
 
-        assertTrue(
-            "a single commit must not rebuild before confirmation, regardless of how many taps preceded it",
-            rebuildCalls.isEmpty(),
-        )
         assertEquals(0, stopCalls)
-        assertEquals(30, preferences.currentBufferDurationMinutes())
-        assertEquals(45, observed.last().retentionStepper.pendingConfirmationMinutes)
-
-        job.cancel()
-    }
-
-    @Test
-    fun `a second commit tap while a confirmation is already pending does not re-show or swap it`() = runTest(testDispatcher) {
-        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val vm = SettingsViewModel(
-            captureState = MutableStateFlow(CaptureState.Recording),
-            capacityMinutesFlow = MutableStateFlow(30),
-            retentionWindowPreferences = preferences,
-            onRebuildEngine = { _, _ -> true },
-        )
-        val observed = mutableListOf<SettingsUiState>()
-        val job = launch { vm.uiState.collect { observed += it } }
-        runCurrent()
-
-        vm.incrementPending()
-        vm.commitPendingRetentionWindow()
-        runCurrent()
-        assertEquals(35, observed.last().retentionStepper.pendingConfirmationMinutes)
-
-        vm.commitPendingRetentionWindow()
-        runCurrent()
-
-        assertEquals(
-            "a stray second tap on Apply while the dialog is up must not replace the pending confirmation",
-            35,
-            observed.last().retentionStepper.pendingConfirmationMinutes,
-        )
-
-        job.cancel()
-    }
-
-    @Test
-    fun `stepping while a confirmation is pending is locked -- it cannot move the value out from under the dialog`() = runTest(testDispatcher) {
-        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val vm = SettingsViewModel(
-            captureState = MutableStateFlow(CaptureState.Recording),
-            capacityMinutesFlow = MutableStateFlow(30),
-            retentionWindowPreferences = preferences,
-            onRebuildEngine = { _, _ -> true },
-        )
-        val observed = mutableListOf<SettingsUiState>()
-        val job = launch { vm.uiState.collect { observed += it } }
-        runCurrent()
-
-        vm.incrementPending()
-        vm.commitPendingRetentionWindow()
-        runCurrent()
-        assertEquals(35, observed.last().retentionStepper.pendingMinutes)
-
-        vm.incrementPending()
-        runCurrent()
-
-        assertEquals(
-            "the stepper must stay locked at the value the pending confirmation refers to",
-            35,
-            observed.last().retentionStepper.pendingMinutes,
-        )
-
-        job.cancel()
-    }
-
-    @Test
-    fun `confirming the change stops the engine, waits for Idle, then persists and rebuilds`() = runTest(testDispatcher) {
-        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
-        var stopCalls = 0
-        val captureState = MutableStateFlow<CaptureState>(CaptureState.Recording)
-        val capacityMinutesFlow = MutableStateFlow(30)
-        val vm = SettingsViewModel(
-            captureState = captureState,
-            capacityMinutesFlow = capacityMinutesFlow,
-            retentionWindowPreferences = preferences,
-            onStopEngine = { stopCalls++ },
-            onRebuildEngine = { minutes, preset ->
-                rebuildCalls += (minutes to preset)
-                capacityMinutesFlow.value = minutes
-                true
-            },
-        )
-        val observed = mutableListOf<SettingsUiState>()
-        val job = launch { vm.uiState.collect { observed += it } }
-        runCurrent()
-
-        vm.incrementPending()
-        vm.commitPendingRetentionWindow()
-        runCurrent()
-        assertEquals(35, observed.last().retentionStepper.pendingConfirmationMinutes)
-
-        vm.confirmRetentionWindowChange()
-        runCurrent()
-
-        assertEquals(1, stopCalls)
-        assertTrue(
-            "must not persist/rebuild before captureState actually reaches Idle",
-            rebuildCalls.isEmpty(),
-        )
-        assertEquals(30, preferences.currentBufferDurationMinutes())
+        assertEquals(listOf(45 to cc.machado.audioblackbox.audio.QualityPreset.VOICE), switchCalls)
+        assertEquals(45, preferences.currentBufferDurationMinutes())
         assertNull(
-            "the dialog itself must close as soon as the user confirms, independent of the engine",
+            "in-place dynamic resize must never show the discard dialog (issue #223)",
             observed.last().retentionStepper.pendingConfirmationMinutes,
-        )
-
-        captureState.value = CaptureState.Idle
-        runCurrent()
-
-        assertEquals(listOf(35 to cc.machado.audioblackbox.audio.QualityPreset.VOICE), rebuildCalls)
-        assertEquals(35, preferences.currentBufferDurationMinutes())
-        assertFalse(
-            "once committed, pending and committed agree again",
-            observed.last().retentionStepper.isDirty,
         )
 
         job.cancel()
     }
 
     @Test
-    fun `cancelling the change leaves the engine and the persisted value untouched, and keeps the pending value`() = runTest(testDispatcher) {
-        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
-        val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
+    fun `committing both retention minutes and quality preset applies both in one atomic switch`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30, initialQualityPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         var stopCalls = 0
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
+            qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
             retentionWindowPreferences = preferences,
             onStopEngine = { stopCalls++ },
-            onRebuildEngine = { minutes, preset -> rebuildCalls += (minutes to preset); true },
+            onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset) },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
         runCurrent()
 
-        vm.incrementPending()
+        vm.decrementPending()
+        vm.selectQualityPreset(cc.machado.audioblackbox.audio.QualityPreset.BALANCED)
         vm.commitPendingRetentionWindow()
         runCurrent()
-        assertEquals(35, observed.last().retentionStepper.pendingConfirmationMinutes)
 
-        vm.cancelRetentionWindowChange()
-        runCurrent()
-
-        assertNull(observed.last().retentionStepper.pendingConfirmationMinutes)
         assertEquals(0, stopCalls)
-        assertTrue(rebuildCalls.isEmpty())
-        assertEquals(30, preferences.currentBufferDurationMinutes())
-        assertEquals(35, observed.last().retentionStepper.pendingMinutes)
+        assertEquals(listOf(25 to cc.machado.audioblackbox.audio.QualityPreset.BALANCED), switchCalls)
+        assertEquals(25, preferences.currentBufferDurationMinutes())
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.BALANCED, preferences.currentQualityPreset())
+        assertNull(observed.last().retentionStepper.pendingConfirmationMinutes)
 
         job.cancel()
     }

@@ -672,14 +672,40 @@ class RecorderService : Service() {
             Intent(context, RecorderService::class.java).setAction(ACTION_SAVE)
 
         /**
+         * Switches retention duration and/or quality preset dynamically (issues #194, #223).
+         * If the engine is recording or paused, dynamically resizes the buffer and/or switches
+         * the capture format seamlessly without discarding surviving buffered audio.
+         */
+        fun switchSettings(
+            newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
+            newPreset: QualityPreset = _qualityPresetFlow.value,
+        ) {
+            require(isValidRetentionMinutes(newBufferDurationMinutes)) {
+                "newBufferDurationMinutes must be in " +
+                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} " +
+                    "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
+            }
+            val newConfig = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
+            _captureConfig = newConfig
+            _bufferDurationMinutesFlow.value = newBufferDurationMinutes
+            _qualityPresetFlow.value = newPreset
+            _engine.switchConfig(newConfig)
+        }
+
+        /**
          * Switches the active quality preset dynamically (issue #194).
          * If the engine is recording, switches the capture format seamlessly without discarding buffered audio.
          */
         fun switchQualityPreset(newPreset: QualityPreset) {
-            val newConfig = newPreset.config(bufferDurationMinutes = _captureConfig.bufferDurationMinutes)
-            _captureConfig = newConfig
-            _qualityPresetFlow.value = newPreset
-            _engine.switchConfig(newConfig)
+            switchSettings(newBufferDurationMinutes = _captureConfig.bufferDurationMinutes, newPreset = newPreset)
+        }
+
+        /**
+         * Switches the retention window duration dynamically (issue #223).
+         * If the engine is recording, resizes the buffer in-place without discarding surviving buffered audio.
+         */
+        fun switchRetentionMinutes(newBufferDurationMinutes: Int) {
+            switchSettings(newBufferDurationMinutes = newBufferDurationMinutes, newPreset = _qualityPresetFlow.value)
         }
 
         /**
