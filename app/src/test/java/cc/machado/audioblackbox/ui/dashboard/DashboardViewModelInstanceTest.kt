@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ExportState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -334,6 +336,101 @@ class DashboardViewModelInstanceTest {
         val afterCaptureChange = observed.last()
         assertEquals(CaptureStatus.Recording, afterCaptureChange.captureStatus)
         assertEquals(5 * 60_000L, afterCaptureChange.bufferedMillis)
+
+        job.cancel()
+    }
+
+    // ---- uiState.qualityPreset: wired through the real combine chain, not a hand-built fixture
+    // (issue #206, `@rev` finding on PR #207) ----
+
+    @Test
+    fun `uiState qualityPreset reflects emissions from the service's qualityPresetFlow`() = runTest(testDispatcher) {
+        val qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            bufferedDurationMillisProvider = { 0L },
+            capacityMinutesFlow = MutableStateFlow(30),
+            exportState = MutableStateFlow(ExportState.Idle),
+            qualityPresetFlow = qualityPresetFlow,
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        assertEquals(QualityPreset.VOICE, observed.last().qualityPreset)
+
+        qualityPresetFlow.value = QualityPreset.HIGH_FIDELITY
+        runCurrent()
+
+        assertEquals(
+            "uiState.qualityPreset must track qualityPresetFlow through the live combine chain",
+            QualityPreset.HIGH_FIDELITY,
+            observed.last().qualityPreset,
+        )
+
+        job.cancel()
+    }
+
+    // ---- The finding-1 regression test: the frozen error snapshot must not drift with an
+    // unrelated uiState tick while the error notice is showing (issue #206, `@rev` finding on
+    // PR #207 -- this test fails against the pre-fix code, where SaveUiState.Error carried no
+    // frozen fields and the screen re-derived "at failure" telemetry live from uiState on every
+    // recomposition). ----
+
+    @Test
+    fun `SaveUiState Error's frozen bufferedMillis and timestamp survive an unrelated uiState tick`() = runTest(testDispatcher) {
+        var bufferedMillis = 12 * 60_000L
+        val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            bufferedDurationMillisProvider = { bufferedMillis },
+            capacityMinutesFlow = MutableStateFlow(30),
+            exportState = exportState,
+            qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE),
+            tickMillis = 100L,
+            nowMillisProvider = { 1_755_000_000_000L },
+        )
+        val observed = mutableListOf<DashboardUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        // The failure happens with 12 minutes buffered.
+        exportState.value = ExportState.Error(ExportFailureReason.WRITE_FAILED, "disk full")
+        runCurrent()
+
+        val errorAtFailure = observed.last().saveState
+        assertTrue(errorAtFailure is SaveUiState.Error)
+        errorAtFailure as SaveUiState.Error
+        assertEquals(1_755_000_000_000L, errorAtFailure.timestampMillis)
+        assertEquals(12 * 60_000L, errorAtFailure.bufferedMillis)
+
+        // Capture keeps running after the failure (this PR's whole point): the buffer keeps
+        // filling, and bufferedMillisFlow's own periodic tick fires an unrelated uiState
+        // recomposition two minutes later, well after the error is already on screen.
+        bufferedMillis = 14 * 60_000L
+        advanceTimeBy(100L)
+        runCurrent()
+
+        val errorAfterUnrelatedTick = observed.last().saveState
+        assertTrue(errorAfterUnrelatedTick is SaveUiState.Error)
+        errorAfterUnrelatedTick as SaveUiState.Error
+        assertEquals(
+            "the buffered-audio figure in an already-shown error notice must stay frozen at the " +
+                "instant of failure, not drift to whatever is buffered now",
+            12 * 60_000L,
+            errorAfterUnrelatedTick.bufferedMillis,
+        )
+        assertEquals(
+            "the timestamp in an already-shown error notice must stay frozen at the instant of " +
+                "failure, not drift to \"now\"",
+            1_755_000_000_000L,
+            errorAfterUnrelatedTick.timestampMillis,
+        )
+
+        // Meanwhile the live telemetry elsewhere on the dashboard (uiState.bufferedMillis itself)
+        // is correctly still ticking -- this test is about the frozen snapshot inside the error
+        // notice, not about breaking the live buffer readout.
+        assertEquals(14 * 60_000L, observed.last().bufferedMillis)
 
         job.cancel()
     }
