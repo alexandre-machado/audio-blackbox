@@ -15,7 +15,7 @@ ui                 = "jetpack-compose"
 build              = "gradle-kts"
 min_sdk            = 29
 target_sdk         = 36
-design_system      = "material3-avionics"  # M3 components, avionics/cockpit brand theme is system of record; supersedes stock-M3-only #9 (see #220, PR #186, ui/theme/Color.kt)
+design_system      = "material3-avionics"  # M3 components, avionics/cockpit brand theme is system of record; spec is docs/design/model.html, ui/theme/Color.kt is its Compose implementation; supersedes stock-M3-only #9 (see #220, PR #186)
 design_min_version = "1.4.0"       # Material 3 stable only, no Material 3 Expressive for now (see #9)
 
 [validation]

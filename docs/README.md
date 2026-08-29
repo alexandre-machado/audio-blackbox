@@ -20,10 +20,13 @@ the S25 in the first place.
 
 ## Decisions
 
-- **Design system** — Material 3 (stable 1.4.0 line) themed with the avionics/cockpit
-  brand palette in `ui/theme/Color.kt`. Originally decided as stock-Material-3-only in
-  [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9); superseded by
+- **Design system** — Material 3 (stable 1.4.0 line) themed with the US
+  aviation/cockpit-avionics brand palette. Originally decided as stock-Material-3-only
+  in [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9); superseded by
   [#220](https://github.com/alexandre-machado/audio-blackbox/issues/220) once PR
   [#186](https://github.com/alexandre-machado/audio-blackbox/pull/186) shipped the
-  avionics theme and the owner ratified it as the system of record. `docs/design/model.html`
-  is the living prototype for this theme (read-only reference, not authoritative text).
+  avionics theme and the owner ratified it as the system of record.
+  [`docs/design/model.html`](design/model.html) is the **spec of record** for this
+  theme (its `:root` tokens are canonical); `ui/theme/Color.kt` is the Compose
+  implementation of that spec and currently diverges from it on several tokens — see
+  `AGENTS.md` §5 for the known gaps.
