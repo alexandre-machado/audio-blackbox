@@ -70,6 +70,7 @@
       --radius-md: 14px;
       --radius-lg: 14px;
       --radius-full: 4px;
+      --radius-pill: 9999px;
 
       --stencil: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     }
@@ -315,9 +316,8 @@
       width: 90px;
       height: 20px;
       background: #020617;
-      /* A camera cutout is a physical pill, not a panel corner: it does not follow
-         --radius-full, which this design deliberately squared off. */
-      border-radius: 9999px;
+      /* A camera cutout is a physical pill, not a panel corner: it uses --radius-pill. */
+      border-radius: var(--radius-pill);
       margin: 0 auto 16px;
     }
 
