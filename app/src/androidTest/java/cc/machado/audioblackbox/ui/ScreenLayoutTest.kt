@@ -449,11 +449,14 @@ class ScreenLayoutTest {
      * state renders the *start* button (it is [ForwardRecordingUiState.Idle]-adjacent, not
      * `Recording`), which is what this reads.
      *
-     * Oracle: fails if the pixel sampled from the centre of the forward-recording start button's
-     * container differs from the pixel sampled from the centre of the Save button's container --
-     * i.e. if the two card-level primary CTAs render in different colours. This is the exact
-     * defect: it must fail against pre-#221 `main` (dynamic colour vs. `FlightOrange`) and pass
-     * once both buttons share [cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors].
+     * Oracle: fails if the pixel sampled from each button's container differs -- i.e. if the two
+     * card-level primary CTAs render in different colours. This is the exact defect: it must fail
+     * against pre-#221 `main` (dynamic colour vs. `FlightOrange`) and pass once both buttons share
+     * [cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors]. The sample point is offset from
+     * dead centre towards the top of each button rather than exactly centred: a button's label is
+     * centred both ways, so the exact centre pixel can land on an anti-aliased text glyph (blended
+     * towards white) rather than the solid container colour underneath it, which is what this is
+     * actually about.
      */
     @Test
     fun forwardRecordingStartButtonMatchesSaveButtonsContainerColour() {
@@ -462,12 +465,12 @@ class ScreenLayoutTest {
         val saveButton = composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG)
         saveButton.performScrollTo()
         saveButton.assertIsDisplayed()
-        val saveColor = saveButton.centerPixelColor()
+        val saveColor = saveButton.containerPixelColor()
 
         val forwardStartButton = composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG)
         forwardStartButton.performScrollTo()
         forwardStartButton.assertIsDisplayed()
-        val forwardColor = forwardStartButton.centerPixelColor()
+        val forwardColor = forwardStartButton.containerPixelColor()
 
         assertTrue(
             "the forward-recording start button's container colour ($forwardColor) does not " +
@@ -480,41 +483,54 @@ class ScreenLayoutTest {
     /**
      * Regression test for issue #221, Finding B point 1: Gallery used to host its own `Scaffold`
      * nested inside the app's single outer `Scaffold` (`AppScaffold.kt`), applying its own
-     * `innerPadding` on top of the one `AppScaffold` already applied. That double application is
-     * exactly what this reads: the padded, single-`Scaffold` contract the other two screens already
-     * obey places their header's title flush against [SCREEN_GUTTER] from the content area's left
-     * edge, with nothing padding it a second time.
+     * `innerPadding` on top of the one `AppScaffold` already applied. Dashboard and Gallery now
+     * share the exact same header composable (`ScreenHeader`) and the exact same outer gutter
+     * (`SCREEN_GUTTER`), so their header titles must land at the same horizontal offset from the
+     * content area's left edge -- comparing the two directly, rather than asserting a hand-computed
+     * absolute offset, is what actually pins "no extra padding of Gallery's own stacked on top of
+     * AppScaffold's" without also having to hardcode the header badge's width and spacing here.
      *
-     * Oracle: fails if Gallery's header title sits further from the content area's left edge than
-     * [SCREEN_GUTTER] (an extra, un-budgeted inset -- e.g. a second `Scaffold`'s own default content
-     * padding stacked on top of `AppScaffold`'s), or closer to it (no gutter applied at all).
+     * Oracle: fails if Gallery's header title sits further right than Dashboard's (an extra,
+     * un-budgeted inset -- e.g. a second `Scaffold`'s own default content padding stacked on top of
+     * `AppScaffold`'s) or further left (no gutter applied at all).
      */
     @Test
-    fun galleryContentObeysTheSameOuterGutterAsOtherScreens() {
-        composeRule.setContent { HarnessApp(Destination.GALLERY) }
+    fun galleryHeaderAlignsWithDashboardHeaderUnderTheSharedGutter() {
+        composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
+        val dashboardTitleLeft = composeRule.onNodeWithText(string(R.string.app_name))
+            .getUnclippedBoundsInRoot().left
 
-        val contentAreaLeft = contentArea().getUnclippedBoundsInRoot().left
+        composeRule.setContent { HarnessApp(Destination.GALLERY) }
         val galleryTitle = composeRule.onNodeWithText(string(R.string.gallery_title))
         galleryTitle.assertIsDisplayed()
-        val titleLeft = galleryTitle.getUnclippedBoundsInRoot().left
+        val galleryTitleLeft = galleryTitle.getUnclippedBoundsInRoot().left
 
-        val expectedLeft = contentAreaLeft + SCREEN_GUTTER
         assertTrue(
-            "the gallery header title's left edge is at $titleLeft, expected at or near " +
-                "$expectedLeft (the content area's left edge at $contentAreaLeft plus the shared " +
-                "$SCREEN_GUTTER gutter every screen uses) -- Gallery must not apply any padding of " +
-                "its own on top of AppScaffold's.",
-            (titleLeft - expectedLeft).value.absoluteValue <= GAP_TOLERANCE_DP,
+            "the gallery header title's left edge is at $galleryTitleLeft, but the dashboard " +
+                "header title's (the same ScreenHeader pattern, under the same SCREEN_GUTTER) is " +
+                "at $dashboardTitleLeft -- Gallery must not apply any padding of its own on top of " +
+                "AppScaffold's.",
+            (galleryTitleLeft - dashboardTitleLeft).value.absoluteValue <= GAP_TOLERANCE_DP,
         )
     }
 
     // ---- helpers ----
 
-    /** Samples the pixel at the centre of this node's rendered bounds, for colour-equality
-     * assertions (issue #221) that a bounds/clipping check cannot express. */
-    private fun SemanticsNodeInteraction.centerPixelColor(): androidx.compose.ui.graphics.Color {
+    /**
+     * Samples a pixel from this node's rendered container colour, for colour-equality assertions
+     * (issue #221) that a bounds/clipping check cannot express. Horizontally centred (clear of the
+     * rounded corners on either side) but offset towards the top rather than vertically centred: a
+     * button's label is centred both ways, so the exact centre pixel risks landing on an
+     * anti-aliased text glyph -- blended towards white -- rather than the solid container colour
+     * this is actually about. A point 15% down from the top, at the horizontal centre, sits inside
+     * the flat top edge of the rounded rect (no corner curvature at the horizontal centre) and
+     * above a vertically-centred label.
+     */
+    private fun SemanticsNodeInteraction.containerPixelColor(): androidx.compose.ui.graphics.Color {
         val pixelMap = captureToImage().toPixelMap()
-        return pixelMap[pixelMap.width / 2, pixelMap.height / 2]
+        val x = pixelMap.width / 2
+        val y = (pixelMap.height * 0.15f).toInt().coerceIn(0, pixelMap.height - 1)
+        return pixelMap[x, y]
     }
 
     /** The bar's own [androidx.compose.material3.Surface], i.e. its visible rectangle. */
