@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.service
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
@@ -19,6 +20,14 @@ import org.junit.Test
  * `audioRecordFactory` seam specifically because it does call `start()`).
  */
 class RecorderServiceRetentionWindowTest {
+
+    @After
+    fun tearDown() {
+        RecorderService.rebuildEngineIfIdle(
+            newBufferDurationMinutes = cc.machado.audioblackbox.audio.AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+            newPreset = cc.machado.audioblackbox.audio.QualityPreset.DEFAULT,
+        )
+    }
 
     @Test
     fun `rebuildEngineIfIdle at a non-default capacity is reflected by every public mirror, not just one`() {
@@ -80,5 +89,22 @@ class RecorderServiceRetentionWindowTest {
 
         assertTrue("37 is not a multiple of AudioConfig.RETENTION_WINDOW_STEP_MINUTES", thrown)
         assertEquals(before, RecorderService.bufferDurationMinutes)
+    }
+
+    @Test
+    fun `rebuildEngineIfIdle with QualityPreset updates captureConfig and mirrors`() {
+        val engineBefore = RecorderService.engine
+        val applied = RecorderService.rebuildEngineIfIdle(
+            newBufferDurationMinutes = 20,
+            newPreset = cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY,
+        )
+
+        assertTrue(applied)
+        assertEquals(20, RecorderService.bufferDurationMinutes)
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, RecorderService.qualityPreset)
+        assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, RecorderService.qualityPresetFlow.value)
+        assertEquals(44100, RecorderService.captureConfig.sampleRateHz)
+        assertEquals(2, RecorderService.captureConfig.channelCount)
+        assertNotSame(engineBefore, RecorderService.engine)
     }
 }

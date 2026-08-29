@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
@@ -533,7 +534,9 @@ class RecorderService : Service() {
         // that class of doubt for the price of one keyword. Not unit-testable (JMM visibility is
         // not something a single-JVM test can observe either way), so no test is attached to this.
         @Volatile
-        private var _captureConfig = AudioConfig(bufferDurationMinutes = PreloadedRetentionWindow.minutes)
+        private var _captureConfig = PreloadedRetentionWindow.preset.config(
+            bufferDurationMinutes = PreloadedRetentionWindow.minutes,
+        )
         val captureConfig: AudioConfig get() = _captureConfig
 
         // Single engine instance for the process lifetime, deliberately not scoped to a Service
@@ -614,6 +617,9 @@ class RecorderService : Service() {
         private val _bufferDurationMinutesFlow = MutableStateFlow(_captureConfig.bufferDurationMinutes)
         val bufferDurationMinutesFlow: StateFlow<Int> = _bufferDurationMinutesFlow.asStateFlow()
 
+        private val _qualityPresetFlow = MutableStateFlow(PreloadedRetentionWindow.preset)
+        val qualityPresetFlow: StateFlow<QualityPreset> = _qualityPresetFlow.asStateFlow()
+
         private val _isServiceRunning = MutableStateFlow(false)
         val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
 
@@ -627,6 +633,8 @@ class RecorderService : Service() {
         // value right now" and do not want to collect a Flow for it (e.g. `saveIntent`'s default
         // parameter below).
         val bufferDurationMinutes: Int get() = _captureConfig.bufferDurationMinutes
+
+        val qualityPreset: QualityPreset get() = _qualityPresetFlow.value
 
         // Published mirror of the current Service instance's exportEngine.state (issue #40 item 2
         // -- see the onCreate() collector that forwards into this). Starts at Idle, same as a
@@ -663,8 +671,8 @@ class RecorderService : Service() {
             Intent(context, RecorderService::class.java).setAction(ACTION_SAVE)
 
         /**
-         * Rebuilds the process-lifetime engine at [newBufferDurationMinutes] (issue #45). Returns
-         * `false` and changes nothing if [captureState] is not currently [CaptureState.Idle] --
+         * Rebuilds the process-lifetime engine at [newBufferDurationMinutes] and [newPreset] (issue #45, #193).
+         * Returns `false` and changes nothing if [captureState] is not currently [CaptureState.Idle] --
          * this is the enforcement point for "never silently discard buffered audio because the
          * user opened a settings screen": [CaptureState.Recording]/[CaptureState.Paused] both mean
          * real audio is sitting in the ring buffer right now, and rebuilding would discard it with
@@ -677,18 +685,22 @@ class RecorderService : Service() {
          * `RingBuffer.clear`), so there is nothing left to lose at that point -- this only ever
          * discards a buffer that is already empty.
          */
-        fun rebuildEngineIfIdle(newBufferDurationMinutes: Int): Boolean {
+        fun rebuildEngineIfIdle(
+            newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
+            newPreset: QualityPreset = _qualityPresetFlow.value,
+        ): Boolean {
             require(isValidRetentionMinutes(newBufferDurationMinutes)) {
                 "newBufferDurationMinutes must be in " +
                     "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} " +
                     "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
             }
             if (_captureState.value !is CaptureState.Idle) return false
-            val newConfig = AudioConfig(bufferDurationMinutes = newBufferDurationMinutes)
+            val newConfig = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
             _captureConfig = newConfig
             _engine = AudioCaptureEngine(config = newConfig)
             attachEngineForwarding(_engine)
             _bufferDurationMinutesFlow.value = newBufferDurationMinutes
+            _qualityPresetFlow.value = newPreset
             return true
         }
     }

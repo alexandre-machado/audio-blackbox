@@ -73,6 +73,7 @@ internal fun HarnessApp(
                 )
                 Destination.SETTINGS -> SettingsScreen(
                     uiState = settingsFixture(),
+                    onSelectQualityPreset = {},
                     onDecrement = {},
                     onIncrement = {},
                     onApply = {},
@@ -146,7 +147,6 @@ internal fun emptyBufferDashboardFixture() = DashboardViewModel.mapUiState(
 internal fun settingsFixture() = SettingsViewModel.mapUiState(
     committedMinutes = 30,
     pendingMinutes = 45,
-    pendingConfirmationMinutes = null,
 )
 
 internal fun galleryFixture() = cc.machado.audioblackbox.ui.gallery.GalleryUiState(
@@ -197,7 +197,6 @@ private const val SHOWCASE_INPUT_LEVEL = 0.62f
 internal fun showcaseSettingsFixture() = SettingsViewModel.mapUiState(
     committedMinutes = 30,
     pendingMinutes = 30,
-    pendingConfirmationMinutes = null,
 )
 
 /**
@@ -279,6 +278,7 @@ internal fun ShowcaseApp(destination: Destination) {
                 )
                 Destination.SETTINGS -> SettingsScreen(
                     uiState = showcaseSettingsFixture(),
+                    onSelectQualityPreset = {},
                     onDecrement = {},
                     onIncrement = {},
                     onApply = {},
