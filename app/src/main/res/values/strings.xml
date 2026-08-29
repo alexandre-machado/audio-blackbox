@@ -149,6 +149,7 @@
 
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Saved recordings</string>
+    <string name="gallery_subtitle">Playback, share &amp; delete</string>
     <string name="gallery_loading">Loading recordings…</string>
     <string name="gallery_empty_title">No recordings yet</string>
     <string name="gallery_empty_body">When you save a recorded clip, it shows up here so you can listen to it and share it. Tap \"Save recent audio\" on the main dashboard to create your first recording.</string>

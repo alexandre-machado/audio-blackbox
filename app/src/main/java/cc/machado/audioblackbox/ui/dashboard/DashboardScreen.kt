@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -62,12 +61,17 @@ import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
+import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
+import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
+import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
 import cc.machado.audioblackbox.ui.theme.CautionAmber
 import cc.machado.audioblackbox.ui.theme.FlightOrange
-import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
+import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
+import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
 import cc.machado.audioblackbox.ui.theme.WarningRed
+import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -110,9 +114,9 @@ fun DashboardScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(DASHBOARD_PADDING),
+            .padding(SCREEN_GUTTER),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         AppHeader()
         EngineCard(
@@ -146,42 +150,11 @@ fun DashboardScreen(
 
 @Composable
 private fun AppHeader() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = FlightOrangeContainer,
-            border = BorderStroke(1.dp, FlightOrange.copy(alpha = 0.4f)),
-            modifier = Modifier.size(44.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_waveform_mic),
-                    contentDescription = null,
-                    tint = FlightOrange,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(R.string.dashboard_app_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    ScreenHeader(
+        icon = painterResource(R.drawable.ic_waveform_mic),
+        title = stringResource(R.string.app_name),
+        subtitle = stringResource(R.string.dashboard_app_subtitle),
+    )
 }
 
 @Composable
@@ -207,14 +180,14 @@ private fun EngineCard(
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         ),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Status Header + Sample Rate Pill
@@ -536,11 +509,11 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.padding(CARD_INNER_PADDING), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -562,14 +535,10 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
             Button(
                 onClick = onSaveRecent,
                 enabled = canSave,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FlightOrange,
-                    contentColor = Color.White,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                ),
+                colors = primaryCtaButtonColors(),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .testTag(SAVE_BUTTON_TEST_TAG)
                     .semantics { contentDescription = buttonCd },
             ) {
                 Text(
@@ -589,12 +558,12 @@ private fun ForwardRecordingSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -643,6 +612,7 @@ private fun ForwardRecordingSection(
 
                     Button(
                         onClick = onStop,
+                        colors = primaryCtaButtonColors(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag(FORWARD_STOP_BUTTON_TEST_TAG),
@@ -658,6 +628,7 @@ private fun ForwardRecordingSection(
                     )
                     Button(
                         onClick = onStart,
+                        colors = primaryCtaButtonColors(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag(FORWARD_START_BUTTON_TEST_TAG),
@@ -1102,11 +1073,11 @@ private fun DashboardScreenSaveErrorPreview() {
     }
 }
 
-/** Outer padding applied to the dashboard content column. */
-val DASHBOARD_PADDING = 24.dp
-
 /** Test tag for the continuous recording engine switch control. */
 const val ENGINE_SWITCH_TEST_TAG = "dashboard_engine_switch"
+
+/** Test tag for the "Save recent audio" primary CTA button. */
+const val SAVE_BUTTON_TEST_TAG = "dashboard_save_button"
 
 /** Test tag for the start continuous recording button. */
 const val FORWARD_START_BUTTON_TEST_TAG = "dashboard_forward_start_button"

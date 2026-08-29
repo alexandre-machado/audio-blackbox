@@ -134,6 +134,7 @@
 
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Gravações salvas</string>
+    <string name="gallery_subtitle">Reprodução, compartilhamento e exclusão</string>
     <string name="gallery_loading">Carregando gravações…</string>
     <string name="gallery_empty_title">Nenhuma gravação ainda</string>
     <string name="gallery_empty_body">Quando você salvar um trecho gravado, ele aparece aqui para você ouvir e compartilhar. Toque em \"Salvar o passado\" no painel principal para criar sua primeira gravação.</string>

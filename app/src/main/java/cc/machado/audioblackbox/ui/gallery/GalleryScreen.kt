@@ -4,8 +4,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
@@ -22,18 +21,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -53,8 +49,13 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
+import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
 import cc.machado.audioblackbox.ui.theme.FlightOrange
+import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
+import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
 
 /**
  * Hosts [GalleryViewModel] and renders [GalleryScreen] against its live state -- the same
@@ -103,7 +104,15 @@ private fun shareRecording(context: Context, recording: RecordingItem) {
     context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Does not host its own [androidx.compose.material3.Scaffold] (issue #221, closing a gap left open
+ * by #73/#78): like [cc.machado.audioblackbox.ui.dashboard.DashboardScreen] and
+ * [cc.machado.audioblackbox.ui.settings.SettingsScreen], this is one of the destinations switched
+ * by the floating bottom bar in [cc.machado.audioblackbox.ui.MainActivity]. That single outer
+ * `Scaffold`'s `innerPadding` is applied once, above this screen, by
+ * [cc.machado.audioblackbox.ui.AppScaffold] -- this screen does not take a `contentPadding`
+ * parameter for that, and does not apply it itself anywhere below.
+ */
 @Composable
 fun GalleryScreen(
     uiState: GalleryUiState,
@@ -116,45 +125,58 @@ fun GalleryScreen(
     onDeleteErrorDismissed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(
-        modifier = modifier,
-        topBar = { TopAppBar(title = { Text(text = stringResource(R.string.gallery_title)) }) },
-    ) { innerPadding ->
-        when {
-            uiState.isLoading -> LoadingState(innerPadding)
-            uiState.items.isEmpty() -> EmptyState(innerPadding)
-            else -> RecordingList(
-                items = uiState.items,
-                innerPadding = innerPadding,
-                onPlayPauseClicked = onPlayPauseClicked,
-                onSeek = onSeek,
-                onShareClicked = onShareClicked,
-                onDeleteRequested = onDeleteRequested,
-            )
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(SCREEN_GUTTER),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
+    ) {
+        GalleryHeader()
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            when {
+                uiState.isLoading -> LoadingState()
+                uiState.items.isEmpty() -> EmptyState()
+                else -> RecordingList(
+                    items = uiState.items,
+                    onPlayPauseClicked = onPlayPauseClicked,
+                    onSeek = onSeek,
+                    onShareClicked = onShareClicked,
+                    onDeleteRequested = onDeleteRequested,
+                )
+            }
         }
+    }
 
-        val pendingDelete = uiState.pendingDelete
-        if (pendingDelete != null) {
-            DeleteConfirmationDialog(
-                recording = pendingDelete,
-                onConfirm = onDeleteConfirmed,
-                onDismiss = onDeleteCancelled,
-            )
-        }
+    val pendingDelete = uiState.pendingDelete
+    if (pendingDelete != null) {
+        DeleteConfirmationDialog(
+            recording = pendingDelete,
+            onConfirm = onDeleteConfirmed,
+            onDismiss = onDeleteCancelled,
+        )
+    }
 
-        if (uiState.deleteError != null) {
-            DeleteErrorDialog(onDismiss = onDeleteErrorDismissed)
-        }
+    if (uiState.deleteError != null) {
+        DeleteErrorDialog(onDismiss = onDeleteErrorDismissed)
     }
 }
 
 @Composable
-private fun LoadingState(innerPadding: PaddingValues) {
+private fun GalleryHeader() {
+    ScreenHeader(
+        icon = painterResource(R.drawable.ic_gallery_folder),
+        title = stringResource(R.string.gallery_title),
+        subtitle = stringResource(R.string.gallery_subtitle),
+    )
+}
+
+@Composable
+private fun LoadingState() {
     val loadingLabel = stringResource(R.string.gallery_loading)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
             .semantics { contentDescription = loadingLabel },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -169,12 +191,9 @@ private fun LoadingState(innerPadding: PaddingValues) {
 }
 
 @Composable
-private fun EmptyState(innerPadding: PaddingValues) {
+private fun EmptyState() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -190,18 +209,14 @@ private fun EmptyState(innerPadding: PaddingValues) {
 @Composable
 private fun RecordingList(
     items: List<RecordingListItem>,
-    innerPadding: PaddingValues,
     onPlayPauseClicked: (RecordingItem) -> Unit,
     onSeek: (Long) -> Unit,
     onShareClicked: (RecordingItem) -> Unit,
     onDeleteRequested: (RecordingItem) -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         items(items, key = { it.recording.uri.toString() }) { item ->
             RecordingCard(
@@ -240,12 +255,12 @@ private fun RecordingCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
