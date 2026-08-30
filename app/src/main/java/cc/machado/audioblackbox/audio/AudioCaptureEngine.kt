@@ -230,9 +230,10 @@ class AudioCaptureEngine(
                 else -> Unit
             }
 
-            val capacityBytes = config.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+            val currentCfg = activeConfig
+            val capacityBytes = currentCfg.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
             val buffer = try {
-                RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = config.bytesPerSecond, clock = clock)
+                RingBuffer(capacityBytes = capacityBytes, initialConfig = currentCfg, clock = clock)
             } catch (oom: OutOfMemoryError) {
                 _state.value = CaptureState.Error(
                     CaptureErrorReason.BUFFER_ALLOCATION_FAILED,
@@ -241,9 +242,9 @@ class AudioCaptureEngine(
                 return
             }
 
-            val channelConfig = channelConfigFor(config.channelCount)
+            val channelConfig = channelConfigFor(currentCfg.channelCount)
             val minBufferSize = AudioRecord.getMinBufferSize(
-                config.sampleRateHz,
+                currentCfg.sampleRateHz,
                 channelConfig,
                 AudioFormat.ENCODING_PCM_16BIT,
             )

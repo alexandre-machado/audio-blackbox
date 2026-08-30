@@ -75,7 +75,7 @@ enum class ForwardRecordingFailureReason {
  *   tracked and injected into the stream as wall-clock silence frames to ensure timeline continuity.
  */
 class ForwardRecordingEngine(
-    private val config: AudioConfig,
+    private val config: AudioConfig = AudioConfig(),
     private val readSinceProvider: (cursor: Long, maxBytes: Int) -> ReadSinceResult?,
     private val writeCursorProvider: () -> Long?,
     private val oldestCursorProvider: () -> Long? = { null },
@@ -86,6 +86,7 @@ class ForwardRecordingEngine(
     },
     private val clock: () -> Long = System::currentTimeMillis,
     private val drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
+    private val configProvider: (() -> AudioConfig)? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -168,8 +169,9 @@ class ForwardRecordingEngine(
                 return err
             }
 
+            val currentConfig = configProvider?.invoke() ?: config
             val writer = try {
-                writerFactory(target, config)
+                writerFactory(target, currentConfig)
             } catch (e: Exception) {
                 target.close()
                 val err = ForwardRecordingState.Error(

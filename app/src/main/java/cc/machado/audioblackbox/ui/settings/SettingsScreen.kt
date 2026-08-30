@@ -50,6 +50,7 @@ import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
 import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
 import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
+import cc.machado.audioblackbox.ui.theme.CautionAmber
 import cc.machado.audioblackbox.ui.theme.FlightOrange
 import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
@@ -228,7 +229,7 @@ private fun RetentionStepperSection(
                 Text(
                     text = stringResource(R.string.settings_retention_pending_notice, stepper.committedMinutes),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = CautionAmber,
                 )
             }
 

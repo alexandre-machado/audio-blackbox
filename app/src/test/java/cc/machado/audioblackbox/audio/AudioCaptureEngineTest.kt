@@ -705,4 +705,26 @@ class AudioCaptureEngineTest {
 
             engine.stop()
         }
+
+    @Test
+    fun `start initializes ring buffer with multi-channel stereo config matching preset`() = withMinBufferSizeMocked {
+        val stereoConfig = QualityPreset.HIGH_FIDELITY.config(bufferDurationMinutes = 1)
+        val record = fakeAudioRecord()
+        val engine = AudioCaptureEngine(config = stereoConfig, audioRecordFactory = { _, _ -> record })
+
+        engine.start()
+        awaitState(engine, description = "Recording state") { it is CaptureState.Recording }
+
+        val format = engine.formatAt(0L)
+        assertTrue("format must be available", format != null)
+        assertEquals("Format channel count must match stereoConfig", 2, format!!.channelCount)
+        assertEquals("Format sample rate must match stereoConfig", 44_100, format.sampleRateHz)
+
+        val segments = engine.activeSegments(startCursor = 0L, endCursor = 100L)
+        assertTrue("activeSegments for range must be available", segments != null && segments.isNotEmpty())
+        assertEquals("Segment channel count must match stereoConfig", 2, segments!!.first().config.channelCount)
+        assertEquals("Segment sample rate must match stereoConfig", 44_100, segments.first().config.sampleRateHz)
+
+        engine.stop()
+    }
 }

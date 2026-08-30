@@ -113,7 +113,7 @@ class RecorderService : Service() {
 
     private val forwardRecordingEngine by lazy {
         ForwardRecordingEngine(
-            config = captureConfig,
+            configProvider = { captureConfig },
             readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
             writeCursorProvider = { engine.writeCursor() },
             oldestCursorProvider = { engine.oldestCursor() },
