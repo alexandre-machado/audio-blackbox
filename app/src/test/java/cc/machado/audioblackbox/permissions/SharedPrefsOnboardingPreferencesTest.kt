@@ -25,16 +25,28 @@ class SharedPrefsOnboardingPreferencesTest {
     }
 
     class FakeEditor(private val map: MutableMap<String, Any>) : SharedPreferences.Editor {
-        override fun putString(key: String, value: String?): SharedPreferences.Editor = apply { if (value == null) map.remove(key) else map[key] = value }
+        private val staged = mutableMapOf<String, Any?>()
+        private var clear = false
+
+        override fun putString(key: String, value: String?): SharedPreferences.Editor = apply { staged[key] = value }
         override fun putStringSet(key: String, values: MutableSet<String>?): SharedPreferences.Editor = this
-        override fun putInt(key: String, value: Int): SharedPreferences.Editor = apply { map[key] = value }
-        override fun putLong(key: String, value: Long): SharedPreferences.Editor = apply { map[key] = value }
-        override fun putFloat(key: String, value: Float): SharedPreferences.Editor = apply { map[key] = value }
-        override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor = apply { map[key] = value }
-        override fun remove(key: String): SharedPreferences.Editor = apply { map.remove(key) }
-        override fun clear(): SharedPreferences.Editor = apply { map.clear() }
-        override fun commit(): Boolean = true
-        override fun apply() {}
+        override fun putInt(key: String, value: Int): SharedPreferences.Editor = apply { staged[key] = value }
+        override fun putLong(key: String, value: Long): SharedPreferences.Editor = apply { staged[key] = value }
+        override fun putFloat(key: String, value: Float): SharedPreferences.Editor = apply { staged[key] = value }
+        override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor = apply { staged[key] = value }
+        override fun remove(key: String): SharedPreferences.Editor = apply { staged[key] = null }
+        override fun clear(): SharedPreferences.Editor = apply { clear = true }
+        
+        override fun commit(): Boolean {
+            if (clear) map.clear()
+            for ((k, v) in staged) {
+                if (v == null) map.remove(k) else map[k] = v
+            }
+            staged.clear()
+            clear = false
+            return true
+        }
+        override fun apply() { commit() }
     }
 
     @Test
