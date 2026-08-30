@@ -392,7 +392,7 @@ private fun BufferRamVisualizer(uiState: DashboardUiState) {
                 )
             }
             Text(
-                text = String.format(Locale.US, "%.1f min / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
+                text = String.format(Locale.US, "%.1f / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
                 style = MaterialTheme.typography.labelMedium,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
