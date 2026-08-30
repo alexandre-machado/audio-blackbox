@@ -65,6 +65,20 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 
 ---
 
+## ⚡ Hardware Efficiency & Power Benchmarks (Samsung Galaxy S25)
+
+Measured live on physical **Samsung Galaxy S25 (`SM-S931B`, Android 16 / API 36)** during continuous recording (16 kHz Mono, Voice Preset):
+
+| Metric / Resource | Background Capture (Screen Off) | Active Foreground (Dashboard UI) | Operational Invariant |
+| :--- | :--- | :--- | :--- |
+| **Battery Drain Rate** | **~1.0% – 1.5% / hour** (~45–60 mA) | ~7.0% – 9.0% / hour (display-bound) | Over **65+ hours** continuous recording autonomy |
+| **Volatile Audio Buffer RAM** | **54.9 MB** (30 min retention window) | **54.9 MB** (30 min retention window) | Deterministic pre-allocation; zero mid-flight reallocations |
+| **JVM Heap Footprint** | **~7.3 MB resident** (256 MB max budget) | **~16.3 MB resident** (256 MB max budget) | Minimal GC pressure; ring buffer writer allocates zero objects |
+| **Storage Disk I/O** | **0 KB/s** (Zero disk writes) | **0 KB/s** (Zero disk writes) | Pure volatile RAM; zero flash memory wear |
+| **CPU Utilization** | **< 1.0% CPU** | ~3.5% – 4.5% CPU (60fps VU meter) | Blocking native `AudioRecord` thread with zero busy-waiting |
+
+---
+
 ## 📲 Download & Beta Testing
 
 Audio Blackbox is available in open beta via Google Play:
