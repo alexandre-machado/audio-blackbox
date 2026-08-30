@@ -436,12 +436,16 @@ private fun SpecRow(label: String, value: String, isMonospace: Boolean = false) 
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(end = 12.dp),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
             fontFamily = if (isMonospace) FontFamily.Monospace else FontFamily.Default,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
         )
     }
 }
