@@ -200,6 +200,12 @@ class SharedPrefsOnboardingPreferences(context: Context) : OnboardingPreferences
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    init {
+        if (prefs.contains(KEY_SEEN_LEGAL_NOTICE_LEGACY_CLEANUP)) {
+            prefs.edit().remove(KEY_SEEN_LEGAL_NOTICE_LEGACY_CLEANUP).apply()
+        }
+    }
+
     override var hasRequestedRecordAudio: Boolean
         get() = prefs.getBoolean(KEY_REQUESTED_RECORD_AUDIO, false)
         set(value) = prefs.edit().putBoolean(KEY_REQUESTED_RECORD_AUDIO, value).apply()
@@ -225,14 +231,11 @@ class SharedPrefsOnboardingPreferences(context: Context) : OnboardingPreferences
         const val KEY_REQUESTED_RECORD_AUDIO = "requested_record_audio"
         const val KEY_REQUESTED_POST_NOTIFICATIONS = "requested_post_notifications"
 
-        // Issue #213: superseded by KEY_CONSENT_VERSION_ACCEPTED below. The old bare boolean
-        // carried no wording version, so it can't distinguish "accepted the old legal notice"
-        // from "accepted the new, fuller consent disclosure" -- reusing it would either skip
-        // re-consent a reworded disclosure legitimately needs, or (worse) silently accept a
-        // wording the user never saw. Deliberately left unread rather than repurposed; existing
-        // installs simply fall through to consentVersionAccepted's default of 0, i.e. "not yet
-        // accepted the current wording", which is the correct, honest state for them.
-        const val KEY_SEEN_LEGAL_NOTICE_LEGACY_UNUSED = "seen_legal_notice"
+        // Issue #217: orphaned legacy key for the pre-#213 legal notice consent.
+        // Replaced by KEY_CONSENT_VERSION_ACCEPTED below. The old key carried no wording version
+        // so it cannot prove a user saw the *current* version. Cleaned up automatically on first read
+        // rather than leaving orphaned data in preferences forever.
+        const val KEY_SEEN_LEGAL_NOTICE_LEGACY_CLEANUP = "seen_legal_notice"
         const val KEY_CONSENT_VERSION_ACCEPTED = "consent_version_accepted"
         const val KEY_CONSENT_ACCEPTED_AT_MILLIS = "consent_accepted_at_millis"
         const val KEY_SKIPPED_BATTERY_OPTIMIZATION = "skipped_battery_optimization"
