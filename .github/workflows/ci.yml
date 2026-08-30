@@ -86,9 +86,22 @@ jobs:
     # Security guard: never execute external fork PRs on self-hosted runner
     if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 30
+    # Scoped to this job only -- ci.yml:9-10 keeps contents: read at workflow level for every
+    # other job. Needed here, and only here, so the "commit refreshed screenshots" step below
+    # (issue #231) can push to the PR head branch. The fork guard above (job-level `if:`) already
+    # ensures this only ever runs against a branch in this repository, never an external fork's.
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # On a pull_request event the default ref is the ephemeral merge commit
+          # (refs/pull/N/merge), which is not a branch the screenshot-refresh step below could
+          # push back to. Check out the PR's actual head branch instead so `git push` has
+          # somewhere real to land; on a push event github.head_ref is empty and this falls back
+          # to the default (the pushed ref itself).
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
 
       # `@techlead` finding on PR #35: this job passed at 4c7a159 and failed with "No space left
       # on device" while preparing the system image at 6716346, with nothing in that diff
@@ -133,7 +146,7 @@ jobs:
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Grant execute permission for scripts
-        run: chmod +x gradlew scripts/ci/run-instrumented-tier.sh
+        run: chmod +x gradlew scripts/ci/run-instrumented-tier.sh scripts/ci/refresh-store-captures.sh
 
       - name: Load AVD definition
         id: avd
@@ -161,6 +174,81 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
           disable-animations: true
           script: ./scripts/ci/run-instrumented-tier.sh
+
+      # Issue #231: the committed Play Store listing images and hotsite screenshots have drifted
+      # silently from the UI twice (#228, #227) because nothing compared them against what
+      # ScreenshotCaptureTest actually renders. scripts/ci/refresh-store-captures.sh is the single
+      # source of truth for which capture goes where; this step runs it against this run's output
+      # and treats any resulting diff as drift.
+      #
+      # Exact byte comparison is deliberate, not naive: three separate CI runs of identical UI
+      # content (33279376700 @ 1b80936, 33279976014 @ 294eb46, 33295172792 @ 281a83e) produced
+      # byte-identical captures, because the AVD is pinned (scripts/ci/avd.env: API 30, google_apis,
+      # x86_64, pixel), runs on software rasterization (-gpu swiftshader_indirect, no physical GPU
+      # in the path), and ScreenshotCaptureTest advances composeRule.mainClock to a fixed point
+      # deterministically rather than sampling a running animation. Do not weaken this to a
+      # perceptual/tolerance diff -- if a future case turns out not to be reproducible, that is a
+      # STOP-and-report situation (see issue #231), not a reason to loosen the comparison quietly.
+      - name: Gate committed screenshots against this run's captures (issue #231)
+        if: success()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          ./scripts/ci/refresh-store-captures.sh
+
+          SCREENSHOT_PATHS=(
+            distribution/metadata/android/en-US/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/en-US/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/en-US/images/phoneScreenshots/3_settings.png
+            distribution/metadata/android/pt-BR/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/pt-BR/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/pt-BR/images/phoneScreenshots/3_settings.png
+            docs/assets/screenshot_dashboard.png
+            docs/assets/screenshot_gallery.png
+            docs/assets/screenshot_settings.png
+          )
+
+          if git diff --quiet --exit-code -- "${SCREENSHOT_PATHS[@]}"; then
+            echo "Committed screenshots already match this run's captures. No drift." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-only -- "${SCREENSHOT_PATHS[@]}")"
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            {
+              echo "### Screenshot drift detected and auto-corrected"
+              echo ""
+              echo "$CHANGED" | sed 's/^/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "${SCREENSHOT_PATHS[@]}"
+            git commit -m "chore(ci): refresh screenshots from capture run ${RUN_ID}"
+            # A push made with the default GITHUB_TOKEN does NOT trigger new workflow runs --
+            # this is GitHub's documented behavior, to stop workflow-triggered-workflow loops.
+            # Consequences: (1) there is no infinite-loop risk here that needs a guard, and (2)
+            # there will be no follow-up CI run re-verifying this push. So this step pushes and
+            # then passes, rather than waiting on or manufacturing a re-run. Do NOT "fix" this by
+            # adding a retrigger (e.g. a repository-dispatch or a PAT-based push) -- the pushed
+            # bytes are exactly what this run just captured and diffed against, so a
+            # re-verification run would be tautological.
+            git push origin "HEAD:${PR_HEAD_REF}"
+            echo "Pushed refreshed screenshots to ${PR_HEAD_REF}." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Screenshot drift detected on a push to main"
+              echo ""
+              echo "$CHANGED" | sed 's/^/- /'
+              echo ""
+              echo "This should be unreachable with the PR-side auto-commit gate in place: it means two PRs each changed the UI and merged such that the merge result matches neither PR's committed images (a semantic merge conflict). Failing loudly rather than letting the listing/hotsite drift further."
+            } >> "$GITHUB_STEP_SUMMARY"
+            git diff -- "${SCREENSHOT_PATHS[@]}" | head -c 4000
+            exit 1
+          fi
 
       # Issue #78: PNGs of both destinations, rendered on the emulator by ScreenshotCaptureTest and
       # pulled off it by the script above. The point is that a reviewer can *see* the screens from
