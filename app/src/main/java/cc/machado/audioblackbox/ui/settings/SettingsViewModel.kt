@@ -89,12 +89,17 @@ class SettingsViewModel(
         ),
     )
 
-    private fun maxRetentionForPreset(preset: QualityPreset): Int =
-        DeviceMemoryBudget.maxRetentionMinutes(
+    private fun maxRetentionForPreset(preset: QualityPreset): Int {
+        val committedMinutes = capacityMinutesFlow.value
+        val committedPreset = qualityPresetFlow.value
+        val currentBufferBytes = committedPreset.config(bufferDurationMinutes = committedMinutes).totalBufferBytes
+        val nonBufferUsedBytes = (usedMemoryBytesProvider() - currentBufferBytes).coerceAtLeast(0L)
+        return DeviceMemoryBudget.maxRetentionMinutes(
             config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
             maxHeapBytes = maxMemoryBytesProvider(),
-            usedHeapBytes = usedMemoryBytesProvider(),
+            usedHeapBytes = nonBufferUsedBytes,
         )
+    }
 
     private fun currentPendingMinutes(): Int = _pendingMinutes.value ?: capacityMinutesFlow.value
     private fun currentPendingPreset(): QualityPreset = _pendingPreset.value ?: qualityPresetFlow.value
@@ -190,11 +195,14 @@ class SettingsViewModel(
             usedMemoryBytes: Long = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
             batteryStatus: cc.machado.audioblackbox.telemetry.BatteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(),
         ): SettingsUiState {
+            val currentBufferBytes = committedPreset.config(bufferDurationMinutes = committedMinutes).totalBufferBytes
+            val nonBufferUsedBytes = (usedMemoryBytes - currentBufferBytes).coerceAtLeast(0L)
+
             val presetOptions = QualityPreset.entries.map { preset ->
                 val maxRetention = DeviceMemoryBudget.maxRetentionMinutes(
                     config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
                     maxHeapBytes = maxMemoryBytes,
-                    usedHeapBytes = usedMemoryBytes,
+                    usedHeapBytes = nonBufferUsedBytes,
                 )
                 QualityPresetOption(
                     preset = preset,

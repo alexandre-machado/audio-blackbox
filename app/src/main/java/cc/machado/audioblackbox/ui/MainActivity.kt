@@ -13,8 +13,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Text
@@ -23,11 +26,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -122,6 +127,16 @@ class MainActivity : ComponentActivity() {
                 // the content it insets to be siblings passed to it directly, not nested inside a
                 // Box the way the previous, buggy layout had it.
                 var selectedDestination by rememberSaveable { mutableStateOf(Destination.DASHBOARD) }
+                val destinations = remember { Destination.entries }
+                val pagerState = rememberPagerState(
+                    initialPage = selectedDestination.ordinal,
+                    pageCount = { destinations.size },
+                )
+                val coroutineScope = rememberCoroutineScope()
+
+                LaunchedEffect(pagerState.currentPage) {
+                    selectedDestination = destinations[pagerState.currentPage]
+                }
 
                 // The Scaffold + bottomBar shell lives in AppScaffold (issue #78) so an
                 // instrumented Compose UI test can assert its layout contract -- "content is never
@@ -134,7 +149,12 @@ class MainActivity : ComponentActivity() {
                 // harness tests that place (PR #87 review).
                 AppScaffold(
                     selectedDestination = selectedDestination,
-                    onSelectDestination = { selectedDestination = it },
+                    onSelectDestination = { dest ->
+                        selectedDestination = dest
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(dest.ordinal)
+                        }
+                    },
                     showBottomBar = stepState == OnboardingStep.DONE,
                 ) {
                     if (stepState == OnboardingStep.DONE) {
@@ -201,14 +221,19 @@ class MainActivity : ComponentActivity() {
                                 },
                             )
                         }
-                        when (selectedDestination) {
-                            Destination.DASHBOARD -> DashboardRoute(
-                                viewModel = viewModel(factory = dashboardViewModelFactory),
-                            )
-                            Destination.GALLERY -> GalleryRoute()
-                            Destination.SETTINGS -> SettingsRoute(
-                                viewModel = viewModel(factory = settingsViewModelFactory),
-                            )
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                        ) { page ->
+                            when (destinations[page]) {
+                                Destination.DASHBOARD -> DashboardRoute(
+                                    viewModel = viewModel(factory = dashboardViewModelFactory),
+                                )
+                                Destination.GALLERY -> GalleryRoute()
+                                Destination.SETTINGS -> SettingsRoute(
+                                    viewModel = viewModel(factory = settingsViewModelFactory),
+                                )
+                            }
                         }
                     } else {
                         // Issue #213: REQUEST_RECORD_AUDIO / REQUEST_NOTIFICATIONS /
