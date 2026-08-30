@@ -78,6 +78,7 @@
       background: rgba(17, 24, 39, 0.95);
       border-bottom: 1px solid var(--color-cockpit-border);
       backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       padding: 14px 24px;
       display: flex;
       justify-content: space-between;
@@ -85,6 +86,22 @@
       position: sticky;
       top: 0;
       z-index: 100;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .top-header {
+        padding: 12px 16px;
+      }
+      .top-nav-links {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .top-nav-links a {
+        font-size: 0.8rem;
+      }
     }
 
     .top-brand {
@@ -150,6 +167,7 @@
     @media (max-width: 1024px) {
       .workbench {
         grid-template-columns: 1fr;
+        padding: 0 16px 40px;
       }
     }
 
@@ -164,16 +182,43 @@
       align-items: center;
     }
 
+    @media (max-width: 1024px) {
+      .simulator-container {
+        position: static;
+        top: 0;
+      }
+    }
+
     .phone-device {
-      width: 390px;
+      width: 100%;
+      max-width: 390px;
       background: #080C14;
-      border: 10px solid #1E293B;
-      border-radius: 48px;
+      border: 8px solid #1E293B;
+      border-radius: 44px;
       box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 40px rgba(255, 87, 34, 0.15);
       overflow: hidden;
       display: flex;
       flex-direction: column;
       position: relative;
+    }
+
+    @media (max-width: 480px) {
+      .workbench {
+        padding: 0 10px 30px;
+        margin: 12px auto;
+      }
+      .phone-device {
+        border-width: 5px;
+        border-radius: 32px;
+      }
+      .phone-screen {
+        height: 600px;
+        padding: 10px 12px 18px;
+        gap: 12px;
+      }
+      .phone-bottom-nav {
+        padding: 8px 16px;
+      }
     }
 
     /* Status Bar */
@@ -210,6 +255,18 @@
       scrollbar-width: none;
     }
     .phone-screen::-webkit-scrollbar { display: none; }
+
+    .screen-view {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      animation: screenFadeIn 0.2s ease-out;
+    }
+
+    @keyframes screenFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
     /* App Header / Avionics Data Plate */
     .app-header-plate {
@@ -554,6 +611,28 @@
       transform: scale(1.08);
     }
 
+    /* Preset Option Selection */
+    .preset-option {
+      background: #090D15;
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .preset-option:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+      background: #0D131F;
+    }
+    .preset-option.active {
+      background: rgba(255, 87, 34, 0.12);
+      border-color: var(--color-flight-orange);
+      box-shadow: inset 0 0 0 1px var(--color-flight-orange);
+    }
+
     /* Bottom Nav Bar */
     .phone-bottom-nav {
       background: rgba(17, 24, 39, 0.95);
@@ -563,19 +642,28 @@
       justify-content: space-around;
       align-items: center;
       margin-top: auto;
+      z-index: 10;
     }
 
     .nav-tab-item {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
+      gap: 3px;
       color: var(--color-text-dim);
       font-size: 0.65rem;
       font-weight: 600;
       cursor: pointer;
       text-transform: uppercase;
       font-family: 'JetBrains Mono', monospace;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+
+    .nav-tab-item:hover {
+      color: var(--color-text-muted);
     }
 
     .nav-tab-item.active {
@@ -746,86 +834,288 @@
 
         <div class="phone-screen" id="phone-screen-root">
 
-          <!-- Header / Data Plate -->
-          <div class="app-header-plate">
-            <div class="plate-title-group">
-              <h2>Audio Blackbox</h2>
-              <div class="plate-subtitle">FLIGHT RECORDER // VOLATILE RAM</div>
-            </div>
-            <div style="font-size: 1.2rem;">🔒</div>
-          </div>
-
-          <!-- Annunciator / Status Card -->
-          <div class="avionics-card">
-            <div class="card-label-bar">
-              <span>SYS STATUS // ANNUNCIATOR</span>
-              <span id="annunciator-spec-tag">16.0 kHz PCM</span>
+          <!-- VIEW 1: COCKPIT (DASHBOARD) -->
+          <div class="screen-view" id="view-cockpit">
+            <!-- Header / Data Plate -->
+            <div class="app-header-plate">
+              <div class="plate-title-group">
+                <h2>Audio Blackbox</h2>
+                <div class="plate-subtitle">FLIGHT RECORDER // VOLATILE RAM</div>
+              </div>
+              <div style="font-size: 1.2rem;">🔒</div>
             </div>
 
-            <!-- Active Annunciator Mode -->
-            <div class="annunciator-box" id="annunciator-active-box">
-              <div class="annunciator-indicator">
-                <div class="led-bulb" id="annunciator-led"></div>
-                <div>
-                  <div class="annunciator-text-top" id="annunciator-title">RECORDER ARMED & RUNNING</div>
-                  <div class="annunciator-text-sub" id="annunciator-sub">CH-01 · 16-BIT · VOLATILE MEMORY</div>
+            <!-- Annunciator / Status Card -->
+            <div class="avionics-card">
+              <div class="card-label-bar">
+                <span>SYS STATUS // ANNUNCIATOR</span>
+                <span id="annunciator-spec-tag">16.0 kHz PCM</span>
+              </div>
+
+              <!-- Active Annunciator Mode -->
+              <div class="annunciator-box" id="annunciator-active-box">
+                <div class="annunciator-indicator">
+                  <div class="led-bulb" id="annunciator-led"></div>
+                  <div>
+                    <div class="annunciator-text-top" id="annunciator-title">RECORDER ARMED & RUNNING</div>
+                    <div class="annunciator-text-sub" id="annunciator-sub">CH-01 · 16-BIT · VOLATILE MEMORY</div>
+                  </div>
+                </div>
+                <div class="switch-toggle" id="engine-switch" onclick="toggleEngineState()">
+                  <div class="switch-knob" id="switch-knob"></div>
                 </div>
               </div>
-              <div class="switch-toggle" id="engine-switch" onclick="toggleEngineState()">
-                <div class="switch-knob" id="switch-knob"></div>
+
+              <!-- Remove Before Flight Standby Tag -->
+              <div class="rbf-tag" id="rbf-standby-tag">
+                <span>REMOVE BEFORE FLIGHT // RECORDER STANDBY</span>
+              </div>
+
+              <!-- VU Meter -->
+              <div class="vu-meter-rack">
+                <div class="vu-rack-header">
+                  <span>MIC INPUT LEVEL (VU)</span>
+                  <span id="vu-db-readout">-18 dBFS</span>
+                </div>
+                <div class="vu-rack-bars" id="vu-rack-bars">
+                  <!-- 20 segments generated via JS -->
+                </div>
+              </div>
+
+              <!-- Buffer RAM Flight Tape -->
+              <div class="tape-visualizer">
+                <div class="tape-header">
+                  <span>CIRCULAR BUFFER RETENTION</span>
+                  <span id="tape-time-readout" style="color:var(--color-flight-orange)">29:54 / 30:00 (54.8 MB)</span>
+                </div>
+                <div class="tape-ruler-track">
+                  <div class="tape-fill" id="tape-progress-fill"></div>
+                </div>
               </div>
             </div>
 
-            <!-- Remove Before Flight Standby Tag -->
-            <div class="rbf-tag" id="rbf-standby-tag">
-              <span>REMOVE BEFORE FLIGHT // RECORDER STANDBY</span>
-            </div>
+            <!-- Primary Lookback CTA -->
+            <button class="btn-lookback-cta" id="main-lookback-btn" onclick="triggerSnapshotSave()">
+              <span id="lookback-btn-text">💾 EXTRACT PAST 30 MIN (.M4A)</span>
+            </button>
 
-            <!-- VU Meter -->
-            <div class="vu-meter-rack">
-              <div class="vu-rack-header">
-                <span>MIC INPUT LEVEL (VU)</span>
-                <span id="vu-db-readout">-18 dBFS</span>
+            <!-- Recent Flight Recording (Gallery Row) -->
+            <div class="avionics-card" style="padding-top: 16px;">
+              <div class="card-label-bar">
+                <span>LATEST FLIGHT LOG // MEDIASTORE</span>
+                <span onclick="switchPhoneTab('gallery')" style="color:var(--color-flight-orange); cursor:pointer;">VIEW ALL →</span>
               </div>
-              <div class="vu-rack-bars" id="vu-rack-bars">
-                <!-- 20 segments generated via JS -->
-              </div>
-            </div>
 
-            <!-- Buffer RAM Flight Tape -->
-            <div class="tape-visualizer">
-              <div class="tape-header">
-                <span>CIRCULAR BUFFER RETENTION</span>
-                <span id="tape-time-readout" style="color:var(--color-flight-orange)">29:54 / 30:00 (54.8 MB)</span>
-              </div>
-              <div class="tape-ruler-track">
-                <div class="tape-fill" id="tape-progress-fill"></div>
+              <div class="gallery-preview-card">
+                <div class="gallery-row-header">
+                  <div class="gallery-meta">
+                    <h4>11:39 AM · Aug 28, 2026</h4>
+                    <span>05:00 · 2.4 MB · AAC M4A</span>
+                  </div>
+                  <div class="gallery-actions-rack">
+                    <button class="gallery-icon-btn play" onclick="togglePlayLog(1)" title="Play">▶</button>
+                    <button class="gallery-icon-btn" onclick="shareLog('11:39 AM · Aug 28, 2026')" title="Share">↗</button>
+                    <button class="gallery-icon-btn" onclick="deleteLog(1)" style="color:#F87171" title="Delete">🗑</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Primary Lookback CTA -->
-          <button class="btn-lookback-cta" onclick="alert('💾 Lookback Snapshot Triggered: Saved last 30 minutes to Recordings/Blackbox/ (AAC .m4a)')">
-            <span>💾 EXTRACT PAST 30 MIN (.M4A)</span>
-          </button>
-
-          <!-- Recent Flight Recording (Gallery Row) -->
-          <div class="avionics-card" style="padding-top: 16px;">
-            <div class="card-label-bar">
-              <span>LATEST FLIGHT LOG // MEDIASTORE</span>
-              <span>1 ITEM</span>
+          <!-- VIEW 2: RECORDINGS (GALLERY) -->
+          <div class="screen-view" id="view-gallery" style="display: none;">
+            <!-- Header Data Plate -->
+            <div class="app-header-plate">
+              <div class="plate-title-group">
+                <h2>Recordings</h2>
+                <div class="plate-subtitle">FLIGHT LOGS // MEDIASTORE</div>
+              </div>
+              <div class="top-tag" id="gallery-count-tag" style="font-size: 0.68rem;">3 LOGS · 24.0 MB</div>
             </div>
 
-            <div class="gallery-preview-card">
-              <div class="gallery-row-header">
-                <div class="gallery-meta">
-                  <h4>11:39 AM · Aug 28, 2026</h4>
-                  <span>05:00 · 2.4 MB · AAC M4A</span>
+            <!-- Search Bar -->
+            <div style="background: rgba(17, 24, 39, 0.85); border: 1px solid var(--color-cockpit-border-strong); border-radius: var(--radius-sm); padding: 8px 12px; display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--color-text-dim); font-size: 0.85rem;">🔍</span>
+              <input type="text" placeholder="Search saved audio logs..." style="background: transparent; border: none; outline: none; color: var(--color-text-stencil); font-size: 0.78rem; font-family: 'Inter'; flex: 1;" oninput="filterGallery(this.value)">
+            </div>
+
+            <!-- List of Recordings -->
+            <div id="gallery-items-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Item 1 -->
+              <div class="avionics-card gallery-item" id="log-item-1" style="padding: 12px 14px;">
+                <div class="gallery-row-header">
+                  <div class="gallery-meta">
+                    <h4>11:39 AM · Aug 28, 2026</h4>
+                    <span>05:00 · 2.4 MB · AAC M4A</span>
+                  </div>
+                  <div class="gallery-actions-rack">
+                    <button class="gallery-icon-btn play" onclick="togglePlayLog(1)" id="play-btn-1" title="Play">▶</button>
+                    <button class="gallery-icon-btn" onclick="shareLog('11:39 AM · Aug 28, 2026')" title="Share">↗</button>
+                    <button class="gallery-icon-btn" onclick="deleteLog(1)" style="color:#F87171" title="Delete">🗑</button>
+                  </div>
                 </div>
-                <div class="gallery-actions-rack">
-                  <button class="gallery-icon-btn play" title="Play">▶</button>
-                  <button class="gallery-icon-btn" title="Share">↗</button>
-                  <button class="gallery-icon-btn" title="Delete" style="color:#F87171">🗑</button>
+                <div class="mini-player-track" id="mini-player-1" style="display: none; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.65rem; font-family: 'JetBrains Mono'; color: var(--color-flight-orange); margin-bottom: 4px;">
+                    <span id="player-time-1">01:42</span>
+                    <span>05:00</span>
+                  </div>
+                  <div style="height: 4px; background: #1E293B; border-radius: 2px; overflow: hidden;">
+                    <div id="player-progress-1" style="width: 34%; height: 100%; background: var(--color-flight-orange); border-radius: 2px;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Item 2 -->
+              <div class="avionics-card gallery-item" id="log-item-2" style="padding: 12px 14px;">
+                <div class="gallery-row-header">
+                  <div class="gallery-meta">
+                    <h4>09:15 AM · Aug 28, 2026</h4>
+                    <span>15:00 · 7.2 MB · Lossless WAV</span>
+                  </div>
+                  <div class="gallery-actions-rack">
+                    <button class="gallery-icon-btn play" onclick="togglePlayLog(2)" id="play-btn-2" title="Play">▶</button>
+                    <button class="gallery-icon-btn" onclick="shareLog('09:15 AM · Aug 28, 2026')" title="Share">↗</button>
+                    <button class="gallery-icon-btn" onclick="deleteLog(2)" style="color:#F87171" title="Delete">🗑</button>
+                  </div>
+                </div>
+                <div class="mini-player-track" id="mini-player-2" style="display: none; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.65rem; font-family: 'JetBrains Mono'; color: var(--color-flight-orange); margin-bottom: 4px;">
+                    <span id="player-time-2">04:10</span>
+                    <span>15:00</span>
+                  </div>
+                  <div style="height: 4px; background: #1E293B; border-radius: 2px; overflow: hidden;">
+                    <div id="player-progress-2" style="width: 28%; height: 100%; background: var(--color-flight-orange); border-radius: 2px;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Item 3 -->
+              <div class="avionics-card gallery-item" id="log-item-3" style="padding: 12px 14px;">
+                <div class="gallery-row-header">
+                  <div class="gallery-meta">
+                    <h4>Yesterday · 04:30 PM</h4>
+                    <span>30:00 · 14.4 MB · AAC M4A</span>
+                  </div>
+                  <div class="gallery-actions-rack">
+                    <button class="gallery-icon-btn play" onclick="togglePlayLog(3)" id="play-btn-3" title="Play">▶</button>
+                    <button class="gallery-icon-btn" onclick="shareLog('Yesterday 04:30 PM')" title="Share">↗</button>
+                    <button class="gallery-icon-btn" onclick="deleteLog(3)" style="color:#F87171" title="Delete">🗑</button>
+                  </div>
+                </div>
+                <div class="mini-player-track" id="mini-player-3" style="display: none; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.65rem; font-family: 'JetBrains Mono'; color: var(--color-flight-orange); margin-bottom: 4px;">
+                    <span id="player-time-3">12:15</span>
+                    <span>30:00</span>
+                  </div>
+                  <div style="height: 4px; background: #1E293B; border-radius: 2px; overflow: hidden;">
+                    <div id="player-progress-3" style="width: 41%; height: 100%; background: var(--color-flight-orange); border-radius: 2px;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- VIEW 3: AVIONICS (SETTINGS) -->
+          <div class="screen-view" id="view-settings" style="display: none;">
+            <!-- Header Data Plate -->
+            <div class="app-header-plate">
+              <div class="plate-title-group">
+                <h2>Settings</h2>
+                <div class="plate-subtitle">SYSTEM CONFIG // AUDIO ENGINE</div>
+              </div>
+              <div style="font-size: 1.1rem;">⚙️</div>
+            </div>
+
+            <!-- Quality Preset Card -->
+            <div class="avionics-card">
+              <div class="card-label-bar">
+                <span>AUDIO QUALITY PRESET</span>
+                <span id="settings-spec-tag" style="color:var(--color-flight-orange)">16 kHz · MONO</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Voice Option -->
+                <div class="preset-option active" id="preset-opt-voice" onclick="selectPreset('voice', 16000, 1, '16.0 kHz PCM')">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#FFF;">Voice</span>
+                    <span class="top-tag" style="font-size:0.62rem;">DEFAULT</span>
+                  </div>
+                  <div style="font-size:0.72rem; color:var(--color-text-muted);">Optimized for speech with longest retention window.</div>
+                  <div style="font-family:'JetBrains Mono'; font-size:0.68rem; color:var(--color-flight-orange); margin-top:2px;">16 kHz · Mono · Max: 45 min</div>
+                </div>
+
+                <!-- Balanced Option -->
+                <div class="preset-option" id="preset-opt-balanced" onclick="selectPreset('balanced', 32000, 1, '32.0 kHz PCM')">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#FFF;">Balanced</span>
+                  </div>
+                  <div style="font-size:0.72rem; color:var(--color-text-muted);">Higher clarity with moderate memory usage.</div>
+                  <div style="font-family:'JetBrains Mono'; font-size:0.68rem; color:var(--color-text-dim); margin-top:2px;">32 kHz · Mono · Max: 45 min</div>
+                </div>
+
+                <!-- High Fidelity Option -->
+                <div class="preset-option" id="preset-opt-hifi" onclick="selectPreset('hifi', 44100, 2, '44.1 kHz Stereo')">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#FFF;">High fidelity</span>
+                  </div>
+                  <div style="font-size:0.72rem; color:var(--color-text-muted);">Studio quality engaging device microphone arrays.</div>
+                  <div style="font-family:'JetBrains Mono'; font-size:0.68rem; color:var(--color-text-dim); margin-top:2px;">44.1 kHz · Stereo · Max: 15 min</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Retention Window Stepper Card -->
+            <div class="avionics-card">
+              <div class="card-label-bar">
+                <span>RETENTION WINDOW</span>
+                <span id="settings-ram-tag">~54.9 MB</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; background:#090D15; border:1px solid var(--color-cockpit-border); border-radius:var(--radius-sm); padding:10px 14px;">
+                <button onclick="stepRetention(-5)" style="background:rgba(255,255,255,0.06); border:1px solid var(--color-cockpit-border); color:white; width:36px; height:36px; border-radius:4px; font-weight:800; font-size:1.1rem; cursor:pointer;">−</button>
+                <div style="text-align:center;">
+                  <div id="settings-window-text" style="font-weight:800; font-size:1.15rem; font-family:'JetBrains Mono'; color:#FFF;">30 min</div>
+                  <div style="font-size:0.65rem; color:var(--color-text-muted);">Circular Ring Buffer in RAM</div>
+                </div>
+                <button onclick="stepRetention(5)" style="background:rgba(255,255,255,0.06); border:1px solid var(--color-cockpit-border); color:white; width:36px; height:36px; border-radius:4px; font-weight:800; font-size:1.1rem; cursor:pointer;">+</button>
+              </div>
+            </div>
+
+            <!-- Power & Telemetry Card -->
+            <div class="avionics-card">
+              <div class="card-label-bar">
+                <span>⚡ POWER & SYSTEM TELEMETRY</span>
+                <span style="color:var(--color-nvis-green)">LIVE (S25)</span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-family:'JetBrains Mono'; font-size:0.72rem;">
+                <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
+                  <span>Background drain</span>
+                  <span style="color:var(--color-text-stencil)">~1.0% – 1.5% / h</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
+                  <span>Device battery status</span>
+                  <span style="color:var(--color-text-stencil)">100% (Nominal)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
+                  <span>Audio buffer memory</span>
+                  <span id="telemetry-buffer-ram" style="color:var(--color-flight-orange)">54.9 MB (Volatile)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
+                  <span>JVM heap resident</span>
+                  <span style="color:var(--color-telemetry-cyan)">7.3 MB / 256 MB max</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
+                  <span>Storage disk I/O</span>
+                  <span style="color:var(--color-nvis-green)">0 KB/s (Pure RAM)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Privacy Badge Card -->
+            <div class="avionics-card" style="background:rgba(6, 78, 59, 0.2); border-color:rgba(16, 185, 129, 0.3);">
+              <div style="display:flex; gap:10px; align-items:center;">
+                <span style="font-size:1.3rem;">🛡️</span>
+                <div style="font-size:0.72rem; color:var(--color-text-muted);">
+                  <strong style="color:var(--color-nvis-green);">Zero Network Permissions</strong><br>
+                  Microphone audio is kept in transient RAM only. Zero telemetry or remote connections.
                 </div>
               </div>
             </div>
@@ -835,15 +1125,15 @@
 
         <!-- Phone Bottom Nav -->
         <div class="phone-bottom-nav">
-          <div class="nav-tab-item active">
+          <div class="nav-tab-item active" id="tab-btn-cockpit" onclick="switchPhoneTab('cockpit')">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             <span>Cockpit</span>
           </div>
-          <div class="nav-tab-item">
+          <div class="nav-tab-item" id="tab-btn-gallery" onclick="switchPhoneTab('gallery')">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             <span>Recordings</span>
           </div>
-          <div class="nav-tab-item">
+          <div class="nav-tab-item" id="tab-btn-settings" onclick="switchPhoneTab('settings')">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
             <span>Avionics</span>
           </div>
@@ -1110,6 +1400,203 @@
         setSimState('RECORDING');
       }
     }
+
+    // Current Settings State
+    let currentPreset = 'voice';
+    let currentSampleRate = 16000;
+    let currentChannels = 1;
+    let currentRetentionMinutes = 30;
+
+    // Phone Tab Navigation
+    function switchPhoneTab(tabName) {
+      // Update Tab Buttons
+      document.querySelectorAll('.nav-tab-item').forEach(el => el.classList.remove('active'));
+      const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      // Update Views
+      const views = ['cockpit', 'gallery', 'settings'];
+      views.forEach(v => {
+        const viewEl = document.getElementById(`view-${v}`);
+        if (viewEl) {
+          viewEl.style.display = (v === tabName) ? 'flex' : 'none';
+        }
+      });
+
+      // Haptic feedback if supported on mobile
+      if (navigator.vibrate) {
+        navigator.vibrate(10);
+      }
+    }
+
+    // Preset Selector
+    function selectPreset(name, rate, channels, specTag) {
+      currentPreset = name;
+      currentSampleRate = rate;
+      currentChannels = channels;
+
+      // Update Preset Option UI
+      document.querySelectorAll('.preset-option').forEach(el => el.classList.remove('active'));
+      const activeOpt = document.getElementById(`preset-opt-${name}`);
+      if (activeOpt) activeOpt.classList.add('active');
+
+      // Max clamp if hifi
+      if (name === 'hifi' && currentRetentionMinutes > 15) {
+        currentRetentionMinutes = 15;
+      }
+
+      // Update labels
+      const specEl = document.getElementById('annunciator-spec-tag');
+      if (specEl) specEl.innerText = specTag;
+      const settingsSpecEl = document.getElementById('settings-spec-tag');
+      if (settingsSpecEl) settingsSpecEl.innerText = specTag;
+
+      updateMemoryCalculations();
+    }
+
+    // Retention Window Stepper
+    function stepRetention(delta) {
+      const maxLimit = (currentPreset === 'hifi') ? 15 : 45;
+      currentRetentionMinutes = Math.max(5, Math.min(maxLimit, currentRetentionMinutes + delta));
+      updateMemoryCalculations();
+    }
+
+    // Memory Calculations
+    function updateMemoryCalculations() {
+      const bytesPerSec = currentSampleRate * 2 * currentChannels;
+      const totalBytes = currentRetentionMinutes * 60 * bytesPerSec;
+      const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+
+      // Update Cockpit Tape Readout
+      const tapeTimeEl = document.getElementById('tape-time-readout');
+      if (tapeTimeEl) {
+        tapeTimeEl.innerText = `${currentRetentionMinutes - 1}:54 / ${currentRetentionMinutes}:00 (${totalMB} MB)`;
+      }
+
+      // Update Settings Window & Memory Tag
+      const winText = document.getElementById('settings-window-text');
+      if (winText) winText.innerText = `${currentRetentionMinutes} min`;
+
+      const ramTag = document.getElementById('settings-ram-tag');
+      if (ramTag) ramTag.innerText = `~${totalMB} MB`;
+
+      const telemetryRam = document.getElementById('telemetry-buffer-ram');
+      if (telemetryRam) telemetryRam.innerText = `${totalMB} MB (Volatile)`;
+
+      // Update Lookback Button
+      const lookbackBtnText = document.getElementById('lookback-btn-text');
+      if (lookbackBtnText) {
+        lookbackBtnText.innerText = `💾 EXTRACT PAST ${currentRetentionMinutes} MIN (.M4A)`;
+      }
+    }
+
+    // Snapshot Trigger
+    function triggerSnapshotSave() {
+      const btn = document.getElementById('main-lookback-btn');
+      if (btn) {
+        btn.style.background = 'linear-gradient(135deg, #10B981 0%, #065F46 100%)';
+        btn.innerHTML = `<span>✅ SNAPSHOT SAVED (${currentRetentionMinutes} MIN)</span>`;
+        setTimeout(() => {
+          btn.style.background = '';
+          btn.innerHTML = `<span id="lookback-btn-text">💾 EXTRACT PAST ${currentRetentionMinutes} MIN (.M4A)</span>`;
+        }, 2200);
+      }
+      if (navigator.vibrate) navigator.vibrate([20, 50, 20]);
+    }
+
+    // Gallery Player Simulation
+    let playingLogId = null;
+    let playInterval = null;
+
+    function togglePlayLog(id) {
+      const miniPlayer = document.getElementById(`mini-player-${id}`);
+      const playBtn = document.getElementById(`play-btn-${id}`);
+
+      if (playingLogId === id) {
+        // Pause
+        playingLogId = null;
+        clearInterval(playInterval);
+        if (miniPlayer) miniPlayer.style.display = 'none';
+        if (playBtn) playBtn.innerText = '▶';
+        return;
+      }
+
+      // Stop any previous
+      if (playingLogId !== null) {
+        const prevPlayer = document.getElementById(`mini-player-${playingLogId}`);
+        const prevBtn = document.getElementById(`play-btn-${playingLogId}`);
+        if (prevPlayer) prevPlayer.style.display = 'none';
+        if (prevBtn) prevBtn.innerText = '▶';
+        clearInterval(playInterval);
+      }
+
+      playingLogId = id;
+      if (miniPlayer) miniPlayer.style.display = 'block';
+      if (playBtn) playBtn.innerText = '❚❚';
+
+      let progress = 30;
+      const progressEl = document.getElementById(`player-progress-${id}`);
+      playInterval = setInterval(() => {
+        progress = (progress + 2) % 100;
+        if (progressEl) progressEl.style.width = `${progress}%`;
+      }, 200);
+    }
+
+    // Gallery Share
+    function shareLog(logName) {
+      if (navigator.share) {
+        navigator.share({
+          title: 'Audio Blackbox Flight Log',
+          text: `Audio Blackbox Recording: ${logName}`,
+          url: window.location.href
+        }).catch(() => {});
+      } else {
+        alert(`↗ Share Log: ${logName}\nReady to export via Android Sharesheet.`);
+      }
+    }
+
+    // Gallery Delete
+    function deleteLog(id) {
+      const itemEl = document.getElementById(`log-item-${id}`);
+      if (itemEl) {
+        itemEl.style.opacity = '0';
+        itemEl.style.transform = 'scale(0.95)';
+        itemEl.style.transition = 'all 0.25s ease';
+        setTimeout(() => {
+          itemEl.remove();
+          const count = document.querySelectorAll('.gallery-item').length;
+          const tag = document.getElementById('gallery-count-tag');
+          if (tag) tag.innerText = `${count} LOGS · ${(count * 7.5).toFixed(1)} MB`;
+        }, 260);
+      }
+    }
+
+    // Gallery Filter
+    function filterGallery(query) {
+      const q = query.toLowerCase();
+      document.querySelectorAll('.gallery-item').forEach(item => {
+        const text = item.innerText.toLowerCase();
+        item.style.display = text.includes(q) ? 'block' : 'none';
+      });
+    }
+  </script>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YKTG4D25Q6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-YKTG4D25Q6');
+  </script>
+  <!-- clarity.microsoft.com -->
+  <script type="text/javascript">
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments) };
+      t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
+      y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+    })(window, document, "clarity", "script", "e813l34u4t");
   </script>
 </body>
 </html>

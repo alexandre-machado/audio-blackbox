@@ -6,6 +6,15 @@ on:
       - main
     tags:
       - 'v*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/pull_request_template.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - '.agents/**'
+      - 'LICENSE'
   workflow_dispatch:
     inputs:
       track:
