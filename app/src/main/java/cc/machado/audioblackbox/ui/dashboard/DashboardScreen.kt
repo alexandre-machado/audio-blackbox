@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -133,6 +134,7 @@ fun DashboardScreen(
         if (uiState.saveState is SaveUiState.Success || uiState.saveState is SaveUiState.Error) {
             SaveOutcomeNotice(
                 saveState = uiState.saveState,
+                qualityPreset = uiState.qualityPreset,
                 onDismiss = onDismissSaveNotice,
                 onRetry = onSaveRecent,
             )
@@ -492,6 +494,7 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
 
 @Composable
 private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
+    var lastSaveClickTime by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     val isExporting = uiState.saveState is SaveUiState.Exporting
     val canSave = uiState.bufferedMillis > 0 && !isExporting
     val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
@@ -537,7 +540,13 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
             Text(text = explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Button(
-                onClick = onSaveRecent,
+                onClick = {
+                    val now = System.currentTimeMillis()
+                    if (now - lastSaveClickTime >= 500L) {
+                        lastSaveClickTime = now
+                        onSaveRecent()
+                    }
+                },
                 enabled = canSave,
                 colors = primaryCtaButtonColors(),
                 modifier = Modifier
@@ -665,6 +674,7 @@ private fun ForwardRecordingSection(
 @Composable
 private fun SaveOutcomeNotice(
     saveState: SaveUiState,
+    qualityPreset: QualityPreset = QualityPreset.DEFAULT,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -706,7 +716,70 @@ private fun SaveOutcomeNotice(
             Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(text = body, style = MaterialTheme.typography.bodyMedium)
 
-            if (saveState is SaveUiState.Error) {
+            if (saveState is SaveUiState.Success) {
+                val startTimestamp = remember(saveState.displayName) {
+                    parseTimestampFromFilename(saveState.displayName)
+                }
+                val dateFormat = remember {
+                    java.text.SimpleDateFormat.getDateTimeInstance(
+                        java.text.DateFormat.MEDIUM,
+                        java.text.DateFormat.MEDIUM,
+                    )
+                }
+                val createdDateLabel = if (startTimestamp != null) dateFormat.format(java.util.Date(startTimestamp)) else null
+                val savedDateLabel = dateFormat.format(java.util.Date())
+                val channelsText = if (qualityPreset.channelCount == 1) "Mono" else "Stereo"
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dashboard_save_details_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_save_details_file, saveState.displayName),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        if (createdDateLabel != null) {
+                            Text(
+                                text = stringResource(R.string.dashboard_save_details_created_at, createdDateLabel),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.dashboard_save_details_saved_at, savedDateLabel),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.dashboard_save_details_quality,
+                                qualityPreset.name,
+                                qualityPreset.sampleRateHz,
+                                channelsText,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_save_details_format),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+                }
+            } else if (saveState is SaveUiState.Error) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -1108,4 +1181,19 @@ const val FORWARD_STOP_BUTTON_TEST_TAG = "dashboard_forward_stop_button"
 
 /** Test tag for the forward recording elapsed clock display. */
 const val FORWARD_ELAPSED_TEST_TAG = "dashboard_forward_elapsed"
+
+/** Parses start timestamp from standard filename format: blackbox_yyyy-MM-dd_HH-mm-ss_... */
+fun parseTimestampFromFilename(filename: String): Long? {
+    return try {
+        val parts = filename.removePrefix("blackbox_").split("_")
+        if (parts.size >= 2) {
+            val datePart = parts[0]
+            val timePart = parts[1]
+            val format = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US)
+            format.parse("${datePart}_${timePart}")?.time
+        } else null
+    } catch (_: Exception) {
+        null
+    }
+}
 

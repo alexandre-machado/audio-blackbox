@@ -413,4 +413,29 @@ class ExportEngineTest {
         assertFalse("target must not be aborted", target.aborted)
         assertTrue("output must contain written data", target.buffer.size() > 0)
     }
+
+    @Test
+    fun `export respects minExportDurationMillis before completing`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val ring = ringWithBytes(1000)
+        val engine = ExportEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            estimateTimestampProvider = { ring.estimateTimestamp(it) },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            payloadEncoder = WavPayloadEncoder,
+            minExportDurationMillis = 50L,
+        )
+
+        val startTime = System.currentTimeMillis()
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
+        val elapsed = System.currentTimeMillis() - startTime
+
+        assertTrue(result is ExportState.Success)
+        assertTrue("Export duration should be at least minExportDurationMillis (50ms), took $elapsed ms", elapsed >= 40L)
+    }
 }

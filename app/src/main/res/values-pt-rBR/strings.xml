@@ -257,6 +257,9 @@
     <!-- Seção Sobre / Versão do app -->
     <string name="settings_about_title">Sobre</string>
     <string name="settings_version_label">Versão %1$s</string>
+    <string name="settings_version_with_date_label">Versão %1$s (%2$s)</string>
+    <string name="settings_website_label">Site do produto</string>
+    <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox</string>
 
     <!-- Diagnóstico de Incidentes / Telemetria de Erro (issue #206) -->
     <string name="dashboard_error_telemetry_title">Diagnóstico do Incidente</string>
@@ -268,4 +271,13 @@
     <string name="dashboard_error_action_share">Compartilhar log</string>
     <string name="dashboard_error_copied_toast">Relatório de incidente copiado</string>
     <string name="dashboard_error_share_chooser_title">Compartilhar Relatório de Incidente</string>
+
+    <!-- Detalhes do salvamento -->
+    <string name="dashboard_save_details_title">Especificações da gravação</string>
+    <string name="dashboard_save_details_file">Arquivo: %1$s</string>
+    <string name="dashboard_save_details_created_at">Início da captura: %1$s</string>
+    <string name="dashboard_save_details_saved_at">Salvo em: %1$s</string>
+    <string name="dashboard_save_details_quality">Qualidade: %1$s (%2$d Hz, %3$s)</string>
+    <string name="dashboard_save_details_format">Formato: AAC (.m4a)</string>
+    <string name="gallery_item_created_at">Captura: %1$s</string>
 </resources>

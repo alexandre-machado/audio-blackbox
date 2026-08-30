@@ -540,7 +540,11 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
 @Composable
 private fun PrivacySection(
     versionName: String = BuildConfig.VERSION_NAME,
+    buildDate: String = BuildConfig.BUILD_DATE,
 ) {
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val productUrl = stringResource(R.string.settings_website_url)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = CARD_SHAPE,
@@ -574,6 +578,26 @@ private fun PrivacySection(
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { uriHandler.openUri(productUrl) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_website_label),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "alexandre.machado.cc/audio-blackbox",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = FlightOrange,
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -584,7 +608,7 @@ private fun PrivacySection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = stringResource(R.string.settings_version_label, versionName),
+                    text = stringResource(R.string.settings_version_with_date_label, versionName, buildDate),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
