@@ -98,6 +98,7 @@
     <string name="settings_card_privacy_label">PRIVACY &amp; LOCAL PROCESSING</string>
     <string name="settings_tag_default">DEFAULT</string>
     <string name="settings_tag_live">LIVE (S25)</string>
+    <string name="settings_retention_buffer_type">Circular Ring Buffer in RAM</string>
     <string name="gallery_card_label">FLIGHT LOG // MEDIASTORE</string>
     <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
     <!-- Not "MUTED": nothing here detects a muted microphone. It means the peak sat at or

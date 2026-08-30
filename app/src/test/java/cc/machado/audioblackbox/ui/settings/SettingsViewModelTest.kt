@@ -394,6 +394,27 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `mapUiState excludes active buffer memory from used heap so max retention stays stable`() {
+        // 45 min buffer at 16kHz mono = 86,400,000 bytes (~82.4 MB)
+        // With an active buffer, used heap is 100 MB (82.4 MB buffer + 17.6 MB runtime).
+        // Without subtracting the buffer, remaining budget would be only (256*0.85 - 100) = 117.6 MB -> 9.6 min -> 5 min for HIFI.
+        // With active buffer excluded, remaining budget is (256*0.85 - 17.6) = 200 MB -> 16.4 min -> 15 min for HIFI.
+        val stateWithActiveBuffer = SettingsViewModel.mapUiState(
+            committedMinutes = 45,
+            pendingMinutes = 45,
+            committedPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE,
+            maxMemoryBytes = 256 * 1024 * 1024L,
+            usedMemoryBytes = 100 * 1024 * 1024L,
+        )
+        val hifiWithBuffer = stateWithActiveBuffer.qualityPresets.first { it.preset == cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY }
+        assertEquals(
+            "High Fidelity max retention must not be penalized by active buffer size",
+            15,
+            hifiWithBuffer.maxRetentionMinutes,
+        )
+    }
+
+    @Test
     fun `switching quality preset alone while Recording does not show discard dialog and switches immediately`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30, initialQualityPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
         val switchedPresets = mutableListOf<cc.machado.audioblackbox.audio.QualityPreset>()

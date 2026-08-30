@@ -512,22 +512,6 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
             AvionicsCardHeaderBar(
                 label = stringResource(R.string.dashboard_card_lookback_label),
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_bookmark_save),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = FlightOrange,
-                )
-                Text(
-                    text = stringResource(R.string.dashboard_save_card_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             Text(text = explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Button(
@@ -586,22 +570,6 @@ private fun ForwardRecordingSection(
             AvionicsCardHeaderBar(
                 label = stringResource(R.string.dashboard_card_forward_label),
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_continuous_record),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = FlightOrange,
-                )
-                Text(
-                    text = stringResource(R.string.dashboard_forward_card_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             when (forwardState) {
                 is ForwardRecordingUiState.Recording -> {
                     val elapsedFormatted = formatMillisAsClock(forwardState.elapsedMillis)

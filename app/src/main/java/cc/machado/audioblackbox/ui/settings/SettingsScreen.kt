@@ -58,6 +58,7 @@ import cc.machado.audioblackbox.ui.theme.CautionAmber
 import cc.machado.audioblackbox.ui.theme.CockpitBorder
 import cc.machado.audioblackbox.ui.theme.CockpitBorderStrong
 import cc.machado.audioblackbox.ui.theme.CockpitPanel
+import cc.machado.audioblackbox.ui.theme.CockpitPanelRaised
 import cc.machado.audioblackbox.ui.theme.CockpitSlate
 import cc.machado.audioblackbox.ui.theme.FlightOrange
 import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
@@ -189,22 +190,6 @@ private fun RetentionStepperSection(
                     AvionicsTag(text = "~${stepper.approxPendingRamMb} MB")
                 },
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_ram_memory),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = FlightOrange,
-                )
-                Text(
-                    text = stringResource(R.string.settings_retention_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             Text(
                 text = stringResource(R.string.settings_retention_explanation),
                 style = MaterialTheme.typography.bodySmall,
@@ -220,7 +205,7 @@ private fun RetentionStepperSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                         .semantics(mergeDescendants = true) {
                             liveRegion = LiveRegionMode.Polite
                             contentDescription = stateAnnouncement
@@ -228,55 +213,73 @@ private fun RetentionStepperSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val canDec = stepper.canDecrement && !locked
                     Surface(
                         shape = RoundedCornerShape(RADIUS_RIVET),
-                        color = CockpitPanel,
-                        border = BorderStroke(1.dp, CockpitBorder),
-                        modifier = Modifier.size(38.dp),
+                        color = if (canDec) CockpitPanelRaised else CockpitPanel,
+                        border = BorderStroke(1.dp, if (canDec) FlightOrange.copy(alpha = 0.5f) else CockpitBorder),
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clickable(
+                                enabled = canDec,
+                                onClick = onDecrement,
+                            )
+                            .semantics { contentDescription = decrementCd },
                     ) {
-                        IconButton(
-                            onClick = onDecrement,
-                            enabled = stepper.canDecrement && !locked,
-                            modifier = Modifier.semantics { contentDescription = decrementCd },
-                        ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "−",
                                 style = MaterialTheme.typography.titleLarge,
+                                fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
+                                color = if (canDec) FlightOrange else TextDim,
                             )
                         }
                     }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         Text(
                             text = "${stepper.pendingMinutes} min",
                             style = MaterialTheme.typography.headlineMedium,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
+                            color = Color.White,
                         )
                         Text(
-                            text = "Circular Ring Buffer in RAM",
+                            text = stringResource(R.string.settings_retention_buffer_type),
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
                             color = TextMuted,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                     }
 
+                    val canInc = stepper.canIncrement && !locked
                     Surface(
                         shape = RoundedCornerShape(RADIUS_RIVET),
-                        color = CockpitPanel,
-                        border = BorderStroke(1.dp, CockpitBorder),
-                        modifier = Modifier.size(38.dp),
+                        color = if (canInc) CockpitPanelRaised else CockpitPanel,
+                        border = BorderStroke(1.dp, if (canInc) FlightOrange.copy(alpha = 0.5f) else CockpitBorder),
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clickable(
+                                enabled = canInc,
+                                onClick = onIncrement,
+                            )
+                            .semantics { contentDescription = incrementCd },
                     ) {
-                        IconButton(
-                            onClick = onIncrement,
-                            enabled = stepper.canIncrement && !locked,
-                            modifier = Modifier.semantics { contentDescription = incrementCd },
-                        ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "+",
                                 style = MaterialTheme.typography.titleLarge,
+                                fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
+                                color = if (canInc) FlightOrange else TextDim,
                             )
                         }
                     }
@@ -334,22 +337,6 @@ private fun QualityPresetSection(
                     }
                 },
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_audio_specs),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = FlightOrange,
-                )
-                Text(
-                    text = stringResource(R.string.settings_quality_preset_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             Text(
                 text = stringResource(R.string.settings_quality_preset_explanation),
                 style = MaterialTheme.typography.bodySmall,
@@ -441,22 +428,6 @@ private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFA
             AvionicsCardHeaderBar(
                 label = stringResource(R.string.settings_card_specs_label),
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_audio_specs),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = FlightOrange,
-                )
-                Text(
-                    text = stringResource(R.string.settings_specs_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
 
             SpecRow(label = stringResource(R.string.settings_specs_format_label), value = stringResource(R.string.settings_specs_format_value), isMonospace = true)
             HorizontalDivider(color = CockpitBorder)
@@ -527,22 +498,6 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
                     )
                 },
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_battery_gauge),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = FlightOrange,
-                )
-                Text(
-                    text = stringResource(R.string.settings_consumption_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             Text(
                 text = stringResource(R.string.settings_consumption_explanation),
                 style = MaterialTheme.typography.bodySmall,
@@ -629,22 +584,6 @@ private fun PrivacySection(
             AvionicsCardHeaderBar(
                 label = stringResource(R.string.settings_card_privacy_label),
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_privacy_shield),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = AvionicsGreen,
-                )
-                Text(
-                    text = stringResource(R.string.settings_privacy_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
             Text(
                 text = stringResource(R.string.settings_privacy_explanation),
                 style = MaterialTheme.typography.bodySmall,
