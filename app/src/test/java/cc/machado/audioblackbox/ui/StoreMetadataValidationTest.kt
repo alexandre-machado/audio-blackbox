@@ -15,6 +15,9 @@ import javax.imageio.ImageIO
  * - Fails if whatsnew notes exceed 500 chars.
  * - Fails if icon.png is not 512x512 or featureGraphic.png is not 1024x500.
  * - Fails if en-US and pt-BR metadata files diverge.
+ * - Fails if phoneScreenshots for either locale is missing, doesn't contain exactly 3 PNGs, has a
+ *   PNG outside Google Play's documented 320-3840px phone-screenshot bounds, or has an en-US/pt-BR
+ *   pair at the same index that is byte-identical (the exact failure mode a bad locale sync produces).
  */
 class StoreMetadataValidationTest {
 
@@ -80,6 +83,49 @@ class StoreMetadataValidationTest {
             val fgImg = ImageIO.read(fgFile)
             assertEquals("featureGraphic.png in $lang must be 1024x500", 1024, fgImg.width)
             assertEquals("featureGraphic.png in $lang must be 1024x500", 500, fgImg.height)
+        }
+    }
+
+    @Test
+    fun phoneScreenshotsExistAreWithinBoundsAndDifferByLocale() {
+        val minSide = 320
+        val maxSide = 3840
+        val languages = listOf("en-US", "pt-BR")
+
+        val screenshotsByLang = languages.associateWith { lang ->
+            val dir = File(metadataBase, "$lang/images/phoneScreenshots")
+            assertTrue("phoneScreenshots directory for $lang must exist at ${dir.absolutePath}", dir.isDirectory)
+
+            val pngs = dir.listFiles { f -> f.extension.equals("png", ignoreCase = true) }
+                ?.sortedBy { it.name }
+                ?: emptyList()
+            assertEquals("phoneScreenshots for $lang must contain exactly 3 PNGs (found: ${pngs.map { it.name }})", 3, pngs.size)
+
+            for (png in pngs) {
+                val img = ImageIO.read(png)
+                assertTrue(
+                    "${png.name} in $lang must be between ${minSide}px and ${maxSide}px wide (actual: ${img.width})",
+                    img.width in minSide..maxSide
+                )
+                assertTrue(
+                    "${png.name} in $lang must be between ${minSide}px and ${maxSide}px tall (actual: ${img.height})",
+                    img.height in minSide..maxSide
+                )
+            }
+
+            pngs
+        }
+
+        val enFiles = screenshotsByLang.getValue("en-US")
+        val ptFiles = screenshotsByLang.getValue("pt-BR")
+        for (i in enFiles.indices) {
+            val enBytes = enFiles[i].readBytes()
+            val ptBytes = ptFiles[i].readBytes()
+            assertTrue(
+                "en-US/${enFiles[i].name} and pt-BR/${ptFiles[i].name} must not be byte-identical " +
+                    "(same-locale image likely landed in both slots)",
+                !enBytes.contentEquals(ptBytes)
+            )
         }
     }
 }
