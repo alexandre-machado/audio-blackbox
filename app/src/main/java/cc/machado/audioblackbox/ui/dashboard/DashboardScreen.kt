@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -129,7 +130,7 @@ fun DashboardScreen(
             onStart = onStartForwardRecording,
             onStop = onStopForwardRecording,
         )
-        if (uiState.saveState != SaveUiState.Idle) {
+        if (uiState.saveState is SaveUiState.Success || uiState.saveState is SaveUiState.Error) {
             SaveOutcomeNotice(
                 saveState = uiState.saveState,
                 onDismiss = onDismissSaveNotice,
@@ -491,17 +492,20 @@ private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -
 
 @Composable
 private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
-    val canSave = uiState.bufferedMillis > 0
+    val isExporting = uiState.saveState is SaveUiState.Exporting
+    val canSave = uiState.bufferedMillis > 0 && !isExporting
     val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
     val capacityMinutes = (uiState.capacityMillis / 60_000L).toInt()
 
     val explanation = when {
+        isExporting -> stringResource(R.string.dashboard_save_exporting_body)
         uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
         uiState.isBufferFull -> stringResource(R.string.dashboard_save_explanation_full, capacityMinutes)
         else -> stringResource(R.string.dashboard_save_explanation_partial, bufferedClock)
     }
 
     val buttonCd = when {
+        isExporting -> stringResource(R.string.dashboard_save_exporting_title)
         uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
         uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
         else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
@@ -541,10 +545,27 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
                     .testTag(SAVE_BUTTON_TEST_TAG)
                     .semantics { contentDescription = buttonCd },
             ) {
-                Text(
-                    text = stringResource(R.string.dashboard_save_button),
-                    fontWeight = FontWeight.Bold,
-                )
+                if (isExporting) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_save_exporting_title),
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.dashboard_save_button),
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
     }

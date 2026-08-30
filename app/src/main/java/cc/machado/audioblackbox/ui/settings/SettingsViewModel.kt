@@ -49,8 +49,8 @@ class SettingsViewModel(
     },
 ) : ViewModel() {
 
-    private val _pendingMinutes = MutableStateFlow(capacityMinutesFlow.value)
-    private val _pendingPreset = MutableStateFlow(qualityPresetFlow.value)
+    private val _pendingMinutes = MutableStateFlow<Int?>(null)
+    private val _pendingPreset = MutableStateFlow<QualityPreset?>(null)
 
     data class PendingCommit(val minutes: Int, val preset: QualityPreset)
     private val _pendingConfirmation = MutableStateFlow<PendingCommit?>(null)
@@ -60,11 +60,13 @@ class SettingsViewModel(
         combine(_pendingMinutes, _pendingPreset, ::Pair),
         combine(_pendingConfirmation, retentionWindowPreferences.clampNoticeFlow, ::Pair),
     ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (pendingConfirmation, clampNotice) ->
+        val effectivePendingMins = pendingMins ?: committedMins
+        val effectivePendingPreset = pendingPreset ?: committedPreset
         mapUiState(
             committedMinutes = committedMins,
-            pendingMinutes = pendingMins,
+            pendingMinutes = effectivePendingMins,
             committedPreset = committedPreset,
-            pendingPreset = pendingPreset,
+            pendingPreset = effectivePendingPreset,
             pendingConfirmation = pendingConfirmation,
             clampNotice = clampNotice,
             maxMemoryBytes = maxMemoryBytesProvider(),
@@ -76,9 +78,9 @@ class SettingsViewModel(
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
         initialValue = mapUiState(
             committedMinutes = capacityMinutesFlow.value,
-            pendingMinutes = _pendingMinutes.value,
+            pendingMinutes = _pendingMinutes.value ?: capacityMinutesFlow.value,
             committedPreset = qualityPresetFlow.value,
-            pendingPreset = _pendingPreset.value,
+            pendingPreset = _pendingPreset.value ?: qualityPresetFlow.value,
             pendingConfirmation = null,
             clampNotice = null,
             maxMemoryBytes = maxMemoryBytesProvider(),
@@ -94,31 +96,36 @@ class SettingsViewModel(
             usedHeapBytes = usedMemoryBytesProvider(),
         )
 
+    private fun currentPendingMinutes(): Int = _pendingMinutes.value ?: capacityMinutesFlow.value
+    private fun currentPendingPreset(): QualityPreset = _pendingPreset.value ?: qualityPresetFlow.value
+
     fun selectQualityPreset(preset: QualityPreset) {
         if (_pendingConfirmation.value != null) return
         _pendingPreset.value = preset
         val maxForPreset = maxRetentionForPreset(preset)
-        if (_pendingMinutes.value > maxForPreset) {
+        val mins = currentPendingMinutes()
+        if (mins > maxForPreset) {
             _pendingMinutes.value = maxForPreset
         }
     }
 
     fun incrementPending() {
         if (_pendingConfirmation.value != null) return
-        val maxForPreset = maxRetentionForPreset(_pendingPreset.value)
-        _pendingMinutes.value = (_pendingMinutes.value + AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
+        val currentPreset = currentPendingPreset()
+        val maxForPreset = maxRetentionForPreset(currentPreset)
+        _pendingMinutes.value = (currentPendingMinutes() + AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
             .coerceAtMost(maxForPreset)
     }
 
     fun decrementPending() {
         if (_pendingConfirmation.value != null) return
-        _pendingMinutes.value = (_pendingMinutes.value - AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
+        _pendingMinutes.value = (currentPendingMinutes() - AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
             .coerceAtLeast(AudioConfig.RETENTION_WINDOW_MIN_MINUTES)
     }
 
     fun commitPendingRetentionWindow() {
-        val minutes = _pendingMinutes.value
-        val preset = _pendingPreset.value
+        val minutes = currentPendingMinutes()
+        val preset = currentPendingPreset()
         val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
         if (!isDirty) return
         if (_pendingConfirmation.value != null) return
@@ -136,9 +143,17 @@ class SettingsViewModel(
 
     fun cancelRetentionWindowChange() {
         _pendingConfirmation.value = null
+        resetPending()
+    }
+
+    fun resetPending() {
+        _pendingMinutes.value = null
+        _pendingPreset.value = null
     }
 
     private fun applyChanges(minutes: Int, preset: QualityPreset) {
+        _pendingMinutes.value = null
+        _pendingPreset.value = null
         viewModelScope.launch {
             retentionWindowPreferences.setBufferDurationMinutes(minutes)
             retentionWindowPreferences.setQualityPreset(preset)
