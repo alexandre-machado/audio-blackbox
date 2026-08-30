@@ -138,7 +138,15 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
 
 ---
 
-## 9. Pre-Merge Gate: `@sec` and `@rev` Markers
+## 9. Committed Screenshots Are CI-Generated
+
+- **Never hand-edit or hand-update the Play Store listing images or hotsite screenshots** ([#228](https://github.com/alexandre-machado/audio-blackbox/issues/228), [#231](https://github.com/alexandre-machado/audio-blackbox/issues/231)):
+  - `distribution/metadata/android/{en-US,pt-BR}/images/phoneScreenshots/*.png` and `docs/assets/screenshot_*.png` are produced by `ScreenshotCaptureTest` on the CI emulator and copied onto their committed destinations by [`scripts/ci/refresh-store-captures.sh`](scripts/ci/refresh-store-captures.sh), not authored or retouched by hand.
+  - The `instrumented-tests` CI job runs that script every build, diffs the nine destinations byte-for-byte against this run's captures, and auto-commits any drift onto a pull request's own branch (failing instead on a direct push to `main`, where auto-committing has nowhere safe to land). Twice before ([#227](https://github.com/alexandre-machado/audio-blackbox/pull/227), [#228](https://github.com/alexandre-machado/audio-blackbox/issues/228)) these images silently fell out of sync with the UI they claim to show because nothing checked them; this gate is what closes that gap.
+
+---
+
+## 10. Pre-Merge Gate: `@sec` and `@rev` Markers
 
 Every pull request must pass a dual specialist review before merging:
 1. **Security Specialist (`@sec`)**: Verifies permissions, IPC surface, data exposure, and security boundaries.

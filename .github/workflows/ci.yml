@@ -86,9 +86,36 @@ jobs:
     # Security guard: never execute external fork PRs on self-hosted runner
     if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 30
+    # Scoped to this job only -- ci.yml:9-10 keeps contents: read at workflow level for every
+    # other job. Needed here, and only here, so the "commit refreshed screenshots" step below
+    # (issue #231) can push to the PR head branch. The fork guard above (job-level `if:`) already
+    # ensures this only ever runs against a branch in this repository, never an external fork's.
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Deliberately the default ref (PR #233 `@rev` finding #1, HIGH): an earlier version of
+          # this job checked out `github.event.pull_request.head.ref` instead, so it could push
+          # the auto-refresh commit straight back onto the PR branch it was already sitting on.
+          # That silently split this run: `build` (unchanged) still validates the merge result
+          # `R = merge(head, main)`, while this job validated the head commit alone. The captures
+          # below would then be `I(head)`, not `I(R)` -- and any second PR that merged a
+          # rendering-affecting change into `main` after this branch forked would make the
+          # push-to-main failure branch further down the *routine* outcome of ordinary concurrent
+          # development, not the "should be unreachable" case its own comment claims. Reverted:
+          # this job now tests the same commit `build` does, and the gate step below transplants
+          # the refreshed captures onto the real head branch in an isolated worktree instead of
+          # trying to push the checkout it's sitting in.
+          #
+          # persist-credentials: false (PR #233 `@sec` medium finding): the default `true` would
+          # write this job's write-scoped GITHUB_TOKEN into the workspace git config before the
+          # Gradle build and the emulator test suite -- both of which run untrusted/third-party
+          # code -- run, making the write token usable by anything in the job, not just the one
+          # push this job intends. Auth for that push is supplied explicitly, only in the gate
+          # step below, only for the git invocations that need it.
+          persist-credentials: false
 
       # `@techlead` finding on PR #35: this job passed at 4c7a159 and failed with "No space left
       # on device" while preparing the system image at 6716346, with nothing in that diff
@@ -133,7 +160,7 @@ jobs:
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Grant execute permission for scripts
-        run: chmod +x gradlew scripts/ci/run-instrumented-tier.sh
+        run: chmod +x gradlew scripts/ci/run-instrumented-tier.sh scripts/ci/refresh-store-captures.sh
 
       - name: Load AVD definition
         id: avd
@@ -161,6 +188,164 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
           disable-animations: true
           script: ./scripts/ci/run-instrumented-tier.sh
+
+      # Issue #231: the committed Play Store listing images and hotsite screenshots have drifted
+      # silently from the UI twice (#228, #227) because nothing compared them against what
+      # ScreenshotCaptureTest actually renders. scripts/ci/refresh-store-captures.sh is the single
+      # source of truth for which capture goes where; this step runs it against this run's output
+      # and treats any resulting diff as drift.
+      #
+      # Exact byte comparison is deliberate, not naive: three separate CI runs of identical UI
+      # content (33279376700 @ 1b80936, 33279976014 @ 294eb46, 33295172792 @ 281a83e) produced
+      # byte-identical captures, because the AVD is pinned (scripts/ci/avd.env: API 30, google_apis,
+      # x86_64, pixel), runs on software rasterization (-gpu swiftshader_indirect, no physical GPU
+      # in the path), and ScreenshotCaptureTest advances composeRule.mainClock to a fixed point
+      # deterministically rather than sampling a running animation. Do not weaken this to a
+      # perceptual/tolerance diff -- if a future case turns out not to be reproducible, that is a
+      # STOP-and-report situation (see issue #231), not a reason to loosen the comparison quietly.
+      - name: Gate committed screenshots against this run's captures (issue #231)
+        if: success()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          RUN_ID: ${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/ci/refresh-store-captures.sh
+
+          SCREENSHOT_PATHS=(
+            distribution/metadata/android/en-US/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/en-US/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/en-US/images/phoneScreenshots/3_settings.png
+            distribution/metadata/android/pt-BR/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/pt-BR/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/pt-BR/images/phoneScreenshots/3_settings.png
+            docs/assets/screenshot_dashboard.png
+            docs/assets/screenshot_gallery.png
+            docs/assets/screenshot_settings.png
+          )
+
+          if git diff --quiet --exit-code -- "${SCREENSHOT_PATHS[@]}"; then
+            echo "Committed screenshots already match this run's captures. No drift." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-only -- "${SCREENSHOT_PATHS[@]}")"
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            {
+              echo "### Screenshot drift detected and auto-corrected"
+              echo ""
+              echo "$CHANGED" | sed 's/^/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            # This checkout is on the merge ref (restored above per PR #233 `@rev` finding #1), so
+            # the refreshed bytes in SCREENSHOT_PATHS right now are I(R), R = merge(head, main) --
+            # the same commit `build` validates. R itself isn't a branch we can push to, so the
+            # nine refreshed files are transplanted onto the real PR head branch H below, in a
+            # second, isolated worktree, touching only those nine paths -- nothing else from this
+            # (merge) tree, in particular nothing from main that H doesn't already have, crosses
+            # over. That is the part most likely to go wrong, so it's enforced twice: the transplant
+            # loop below only ever writes to the nine SCREENSHOT_PATHS destinations, and the
+            # `git add` in the head worktree lists those same nine explicit paths (never `-A`/`.`),
+            # so even if some other file in that worktree were dirty, it could not ride along.
+            #
+            # Why this converges instead of flapping forever (PR #233 `@rev` finding #1): let H be
+            # this PR's head, main be the current default branch, R = merge(H, main). This step
+            # captures I(R) and commits it onto H, producing H'. Next run, merge(H', main) still
+            # equals R -- the two added commits are PNG bytes only, they cannot change what any
+            # Compose screen renders -- so the fresh captures are still I(R) and now match what's
+            # committed on H'. Clean, nothing to push. Only when main advances with a rendering-
+            # affecting change does R change; drift is then real and this step corrects it again,
+            # which is the gate working as designed, not a false positive. After merge, main
+            # literally is R, so its captures are I(R) -- exactly what's already committed -- which
+            # is what makes the push-to-main failure branch below genuinely unreachable rather than
+            # a routine outcome of ordinary concurrent development.
+            AUTH_HEADER="AUTHORIZATION: basic $(printf "x-access-token:%s" "$GH_TOKEN" | base64 | tr -d '\n')"
+            git_auth() {
+              git -c "http.extraheader=${AUTH_HEADER}" -c commit.gpgsign=false "$@"
+            }
+
+            git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
+
+            WORKDIR="$(mktemp -d)"
+            trap 'rm -rf "$WORKDIR"; git worktree prune >/dev/null 2>&1 || true' EXIT
+
+            attempt=1
+            max_attempts=2
+            pushed=0
+            while [[ "$attempt" -le "$max_attempts" ]]; do
+              # A fresh worktree dir *and* a fresh local branch name per attempt: `git worktree
+              # add -B` refuses to reuse a branch name still registered to a (removed) worktree
+              # path, which `rm -rf` alone doesn't unregister -- attempt-scoped naming sidesteps
+              # that instead of relying on `git worktree remove`/`prune` timing.
+              rm -rf "$WORKDIR/head"
+              git worktree add --force -B "ci-231-refresh-${RUN_ID}-${attempt}" "$WORKDIR/head" "origin/${PR_HEAD_REF}"
+
+              for path in "${SCREENSHOT_PATHS[@]}"; do
+                mkdir -p "$WORKDIR/head/$(dirname "$path")"
+                cp -f "$path" "$WORKDIR/head/$path"
+              done
+
+              nothing_to_commit=0
+              (
+                cd "$WORKDIR/head"
+                git config user.name "github-actions[bot]"
+                git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                git -c commit.gpgsign=false add -- "${SCREENSHOT_PATHS[@]}"
+                if git diff --cached --quiet --exit-code; then
+                  exit 12
+                fi
+                git -c commit.gpgsign=false commit -m "chore(ci): refresh screenshots from capture run ${RUN_ID}"
+              ) || { [[ $? -eq 12 ]] && nothing_to_commit=1 || exit 1; }
+
+              if [[ "$nothing_to_commit" -eq 1 ]]; then
+                # origin/${PR_HEAD_REF} already has these exact bytes -- most likely a concurrent
+                # run on the same branch pushed the same I(R) first. Nothing left for this run to
+                # do; that's success, not a failure to retry.
+                echo "${PR_HEAD_REF} already carries this run's captures (pushed by a concurrent run). Nothing to push." >> "$GITHUB_STEP_SUMMARY"
+                pushed=1
+                break
+              fi
+
+              # A push made with the default GITHUB_TOKEN does NOT trigger new workflow runs --
+              # this is GitHub's documented behavior, to stop workflow-triggered-workflow loops.
+              # Consequences: (1) there is no infinite-loop risk here that needs a guard, and (2)
+              # there will be no follow-up CI run re-verifying this push. So this step pushes and
+              # then passes, rather than waiting on or manufacturing a re-run. Do NOT "fix" this by
+              # adding a retrigger (e.g. a repository-dispatch or a PAT-based push) -- the pushed
+              # bytes are exactly what this run just captured and diffed against, so a
+              # re-verification run would be tautological.
+              if (cd "$WORKDIR/head" && git_auth push origin "HEAD:${PR_HEAD_REF}"); then
+                echo "Pushed refreshed screenshots to ${PR_HEAD_REF}." >> "$GITHUB_STEP_SUMMARY"
+                pushed=1
+                break
+              fi
+
+              echo "Push to ${PR_HEAD_REF} was rejected (branch moved during this run's ~4-8 minute emulator window); re-fetching and retrying once." >&2
+              git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
+              attempt=$((attempt + 1))
+            done
+
+            if [[ "$pushed" -ne 1 ]]; then
+              {
+                echo "### Failed to push refreshed screenshots to ${PR_HEAD_REF}"
+                echo ""
+                echo "Pushed twice (once, then once more after re-fetching) and both attempts were rejected as non-fast-forward: ${PR_HEAD_REF} moved again during this run. Not force-pushing. Re-run this job, or apply this run's 'screen-captures' artifact locally and push, then re-run."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          else
+            {
+              echo "### Screenshot drift detected on a push to main"
+              echo ""
+              echo "$CHANGED" | sed 's/^/- /'
+              echo ""
+              echo "This should be unreachable with the PR-side auto-commit gate in place: it means two PRs each changed the UI and merged such that the merge result matches neither PR's committed images (a semantic merge conflict). Failing loudly rather than letting the listing/hotsite drift further."
+            } >> "$GITHUB_STEP_SUMMARY"
+            git diff -- "${SCREENSHOT_PATHS[@]}" | head -c 4000
+            exit 1
+          fi
 
       # Issue #78: PNGs of both destinations, rendered on the emulator by ScreenshotCaptureTest and
       # pulled off it by the script above. The point is that a reviewer can *see* the screens from
