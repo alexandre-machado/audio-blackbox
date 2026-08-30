@@ -121,6 +121,7 @@ fun SettingsScreen(
         )
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement, onApply)
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
+        ConsumptionTelemetrySection(telemetry = uiState.telemetry)
         PrivacySection(versionName = versionName)
     }
     uiState.retentionStepper.pendingConfirmationMinutes?.let { pendingMinutes ->
@@ -442,6 +443,103 @@ private fun SpecRow(label: String, value: String, isMonospace: Boolean = false) 
             fontWeight = FontWeight.Medium,
             fontFamily = if (isMonospace) FontFamily.Monospace else FontFamily.Default,
         )
+    }
+}
+
+@Composable
+private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = CARD_SHAPE,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(CARD_INNER_PADDING),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_battery_gauge),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = FlightOrange,
+                )
+                Text(
+                    text = stringResource(R.string.settings_consumption_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_consumption_explanation),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            val batteryChargingText = if (telemetry.isCharging) {
+                stringResource(R.string.settings_consumption_battery_charging)
+            } else {
+                stringResource(R.string.settings_consumption_battery_discharging)
+            }
+            val batteryLevelValue = stringResource(
+                R.string.settings_consumption_battery_level_value,
+                telemetry.batteryPercent,
+                batteryChargingText,
+            )
+            val batteryOptValue = if (telemetry.isIgnoringBatteryOptimizations) {
+                stringResource(R.string.settings_consumption_battery_opt_unrestricted)
+            } else {
+                stringResource(R.string.settings_consumption_battery_opt_optimized)
+            }
+            val ramBufferValue = stringResource(
+                R.string.settings_consumption_ram_buffer_value,
+                telemetry.bufferMemoryMb,
+            )
+            val ramHeapValue = stringResource(
+                R.string.settings_consumption_ram_heap_value,
+                telemetry.usedHeapMb,
+                telemetry.maxHeapMb,
+            )
+
+            SpecRow(
+                label = stringResource(R.string.settings_consumption_battery_drain_label),
+                value = stringResource(R.string.settings_consumption_battery_drain_value),
+                isMonospace = true,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(
+                label = stringResource(R.string.settings_consumption_battery_level_label),
+                value = batteryLevelValue,
+                isMonospace = true,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(
+                label = stringResource(R.string.settings_consumption_battery_opt_label),
+                value = batteryOptValue,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(
+                label = stringResource(R.string.settings_consumption_ram_buffer_label),
+                value = ramBufferValue,
+                isMonospace = true,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(
+                label = stringResource(R.string.settings_consumption_ram_heap_label),
+                value = ramHeapValue,
+                isMonospace = true,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(
+                label = stringResource(R.string.settings_consumption_io_label),
+                value = stringResource(R.string.settings_consumption_io_value),
+                isMonospace = true,
+            )
+        }
     }
 }
 

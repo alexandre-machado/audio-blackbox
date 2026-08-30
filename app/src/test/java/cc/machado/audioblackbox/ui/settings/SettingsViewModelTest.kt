@@ -421,4 +421,64 @@ class SettingsViewModelTest {
 
         job.cancel()
     }
+
+    @Test
+    fun `mapUiState computes exact power and RAM telemetry metrics`() {
+        val state = SettingsViewModel.mapUiState(
+            committedMinutes = 30,
+            pendingMinutes = 30,
+            committedPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE,
+            maxMemoryBytes = 256 * 1024 * 1024L,
+            usedMemoryBytes = 32 * 1024 * 1024L,
+            batteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(
+                percent = 88,
+                isCharging = true,
+                isIgnoringOptimizations = true,
+            ),
+        )
+
+        val telemetry = state.telemetry
+        assertEquals(88, telemetry.batteryPercent)
+        assertTrue(telemetry.isCharging)
+        assertTrue(telemetry.isIgnoringBatteryOptimizations)
+        // 30 min at 16kHz mono (32,000 B/s) = 57,600,000 bytes = ~54.93 MB
+        assertTrue("bufferMemoryMb should be ~54.9 MB", telemetry.bufferMemoryMb in 54.0..56.0)
+        assertEquals(32.0, telemetry.usedHeapMb, 0.01)
+        assertEquals(256.0, telemetry.maxHeapMb, 0.01)
+        assertEquals("~1.0% – 1.5% / h", telemetry.estimatedDrainRate)
+    }
+
+    @Test
+    fun `SettingsViewModel surfaces live battery and power telemetry through uiState`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 15)
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(15),
+            qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
+            retentionWindowPreferences = preferences,
+            batteryStatusProvider = {
+                cc.machado.audioblackbox.telemetry.BatteryStatus(
+                    percent = 74,
+                    isCharging = false,
+                    isIgnoringOptimizations = false,
+                )
+            },
+            maxMemoryBytesProvider = { 192 * 1024 * 1024L },
+            usedMemoryBytesProvider = { 24 * 1024 * 1024L },
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        val lastState = observed.last()
+        assertEquals(74, lastState.telemetry.batteryPercent)
+        assertFalse(lastState.telemetry.isCharging)
+        assertFalse(lastState.telemetry.isIgnoringBatteryOptimizations)
+        // 15 min at 16kHz mono = 28,800,000 bytes = ~27.46 MB
+        assertTrue(lastState.telemetry.bufferMemoryMb in 27.0..28.0)
+        assertEquals(24.0, lastState.telemetry.usedHeapMb, 0.01)
+        assertEquals(192.0, lastState.telemetry.maxHeapMb, 0.01)
+
+        job.cancel()
+    }
 }

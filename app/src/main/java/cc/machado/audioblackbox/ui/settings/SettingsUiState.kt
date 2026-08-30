@@ -47,6 +47,19 @@ data class RetentionStepperUiState(
     val maxSelectableMinutes: Int = AudioConfig.RETENTION_WINDOW_MAX_MINUTES,
 )
 
+/**
+ * Real-time power, memory, and hardware telemetry metrics rendered on the settings screen.
+ */
+data class PowerTelemetryUiState(
+    val batteryPercent: Int = 100,
+    val isCharging: Boolean = false,
+    val isIgnoringBatteryOptimizations: Boolean = true,
+    val bufferMemoryMb: Double = 0.0,
+    val usedHeapMb: Double = 0.0,
+    val maxHeapMb: Double = 0.0,
+    val estimatedDrainRate: String = "~1.0% – 1.5% / h",
+)
+
 /** Everything [SettingsScreen] needs to render one frame. */
 data class SettingsUiState(
     val retentionStepper: RetentionStepperUiState,
@@ -57,4 +70,5 @@ data class SettingsUiState(
      * clamp. [SettingsScreen] renders this as a one-time dialog; dismissing it calls
      * [SettingsViewModel.acknowledgeClampNotice], after which this stays `null` for good. */
     val clampNotice: ClampNotice? = null,
+    val telemetry: PowerTelemetryUiState = PowerTelemetryUiState(),
 )
