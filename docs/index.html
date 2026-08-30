@@ -713,19 +713,141 @@
       color: var(--text-dim);
     }
 
+    /* Mobile Hamburger & Responsive Navigation */
+    .nav-hamburger {
+      display: none;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      cursor: pointer;
+      width: 42px;
+      height: 42px;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .nav-hamburger:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--primary);
+    }
+
+    .hamburger-line {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background-color: var(--text-main);
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+
+    .nav-hamburger.active .hamburger-line:nth-child(1) {
+      transform: translateY(8px) rotate(45deg);
+    }
+
+    .nav-hamburger.active .hamburger-line:nth-child(2) {
+      opacity: 0;
+    }
+
+    .nav-hamburger.active .hamburger-line:nth-child(3) {
+      transform: translateY(-8px) rotate(-45deg);
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
+      .nav-hamburger {
+        display: flex;
+      }
+
+      .nav-links {
+        position: fixed;
+        top: 73px;
+        left: 0;
+        right: 0;
+        background: rgba(10, 14, 23, 0.98);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color-strong);
+        flex-direction: column;
+        padding: 24px;
+        gap: 16px;
+        align-items: stretch;
+        transform: translateY(-130%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+      }
+
+      .nav-links.active {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .nav-links a {
+        font-size: 1.05rem;
+        padding: 10px 14px;
+        border-radius: var(--radius-sm);
+        display: block;
+      }
+
+      .nav-links a:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .nav-links .btn {
+        text-align: center;
+        justify-content: center;
+        width: 100%;
+      }
+
       .hero-grid, .calc-card, .footer-grid, .privacy-banner {
         grid-template-columns: 1fr;
       }
       .screenshots-row, .steps-grid {
         grid-template-columns: 1fr;
       }
+      .hero {
+        padding: 40px 0 40px;
+      }
       .hero h1 {
-        font-size: 2.4rem;
+        font-size: 2.2rem;
       }
       .phone-wrapper {
-        margin-top: 40px;
+        margin-top: 30px;
+      }
+      .calc-card {
+        padding: 24px 18px;
+        gap: 24px;
+      }
+      .privacy-banner {
+        padding: 28px 20px;
+        gap: 20px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 0 16px;
+      }
+      .hero h1 {
+        font-size: 1.85rem;
+      }
+      .hero p.lead {
+        font-size: 1.05rem;
+      }
+      .hero-actions {
+        flex-direction: column;
+      }
+      .hero-actions .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .feature-card {
+        padding: 24px 18px;
       }
     }
   </style>
@@ -739,7 +861,12 @@
         <img src="assets/icon.png" alt="Audio Blackbox Logo">
         <span>Audio Blackbox</span>
       </a>
-      <ul class="nav-links">
+      <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
         <li><a href="#features">Features</a></li>
         <li><a href="#specs">Specifications</a></li>
         <li><a href="#privacy">Privacy</a></li>
@@ -1112,6 +1239,54 @@
     function triggerSimulatedSave() {
       alert("✅ Snapshot Exported! Saved 45-minute .m4a AAC recording to Recordings/Blackbox/ (Mock Demo)");
     }
+
+    // Mobile Hamburger Navigation
+    const navHamburger = document.getElementById('nav-hamburger');
+    const navLinks = document.getElementById('nav-links');
+
+    if (navHamburger && navLinks) {
+      navHamburger.addEventListener('click', () => {
+        const isOpen = navLinks.classList.toggle('active');
+        navHamburger.classList.toggle('active');
+        navHamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+
+      // Close menu when clicking any nav link
+      navLinks.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          navLinks.classList.remove('active');
+          navHamburger.classList.remove('active');
+          navHamburger.setAttribute('aria-expanded', 'false');
+        });
+      });
+
+      // Close menu when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!navLinks.contains(e.target) && !navHamburger.contains(e.target) && navLinks.classList.contains('active')) {
+          navLinks.classList.remove('active');
+          navHamburger.classList.remove('active');
+          navHamburger.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+  </script>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YKTG4D25Q6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-YKTG4D25Q6');
+  </script>
+  <!-- clarity.microsoft.com -->
+  <script type="text/javascript">
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments) };
+      t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
+      y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+    })(window, document, "clarity", "script", "e813l34u4t");
   </script>
 </body>
 </html>
