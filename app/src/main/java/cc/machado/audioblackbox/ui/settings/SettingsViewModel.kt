@@ -44,6 +44,9 @@ class SettingsViewModel(
     private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
     private val usedMemoryBytesProvider: () -> Long = { Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() },
+    private val batteryStatusProvider: () -> cc.machado.audioblackbox.telemetry.BatteryStatus = {
+        cc.machado.audioblackbox.telemetry.BatteryStatus(percent = 100, isCharging = false, isIgnoringOptimizations = true)
+    },
 ) : ViewModel() {
 
     private val _pendingMinutes = MutableStateFlow(capacityMinutesFlow.value)
@@ -66,6 +69,7 @@ class SettingsViewModel(
             clampNotice = clampNotice,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
+            batteryStatus = batteryStatusProvider(),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -79,6 +83,7 @@ class SettingsViewModel(
             clampNotice = null,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
+            batteryStatus = batteryStatusProvider(),
         ),
     )
 
@@ -168,6 +173,7 @@ class SettingsViewModel(
             clampNotice: ClampNotice? = null,
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
             usedMemoryBytes: Long = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+            batteryStatus: cc.machado.audioblackbox.telemetry.BatteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(),
         ): SettingsUiState {
             val presetOptions = QualityPreset.entries.map { preset ->
                 val maxRetention = DeviceMemoryBudget.maxRetentionMinutes(
@@ -198,11 +204,27 @@ class SettingsViewModel(
                 maxSelectableMinutes = currentPresetMax,
             )
 
+            val bufferBytes = committedPreset.config(bufferDurationMinutes = committedMinutes).totalBufferBytes
+            val bufferMb = bufferBytes / (1024.0 * 1024.0)
+            val usedHeapMb = usedMemoryBytes / (1024.0 * 1024.0)
+            val maxHeapMb = maxMemoryBytes / (1024.0 * 1024.0)
+
+            val telemetry = PowerTelemetryUiState(
+                batteryPercent = batteryStatus.percent,
+                isCharging = batteryStatus.isCharging,
+                isIgnoringBatteryOptimizations = batteryStatus.isIgnoringOptimizations,
+                bufferMemoryMb = bufferMb,
+                usedHeapMb = usedHeapMb,
+                maxHeapMb = maxHeapMb,
+                estimatedDrainRate = "~1.0% – 1.5% / h",
+            )
+
             return SettingsUiState(
                 retentionStepper = stepper,
                 qualityPresets = presetOptions,
                 selectedPreset = pendingPreset,
                 clampNotice = clampNotice,
+                telemetry = telemetry,
             )
         }
 

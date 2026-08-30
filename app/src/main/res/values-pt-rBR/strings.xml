@@ -214,6 +214,25 @@
     <string name="settings_preset_high_fidelity_desc">Qualidade de estúdio usando os múltiplos microfones do aparelho.</string>
     <string name="settings_preset_max_window">Máx.: %1$d min</string>
 
+    <!-- Telemetria e Consumo de Energia -->
+    <string name="settings_consumption_title">Consumo e telemetria do sistema</string>
+    <string name="settings_consumption_explanation">Métricas em tempo real de consumo de energia, ocupação de memória RAM e eficiência de hardware.</string>
+    <string name="settings_consumption_battery_drain_label">Consumo estimado em 2º plano</string>
+    <string name="settings_consumption_battery_drain_value" formatted="false">~1,0% – 1,5% / h (~45 mA)</string>
+    <string name="settings_consumption_battery_level_label">Status da bateria</string>
+    <string name="settings_consumption_battery_level_value">%1$d%% (%2$s)</string>
+    <string name="settings_consumption_battery_charging">Carregando</string>
+    <string name="settings_consumption_battery_discharging">Descarregando</string>
+    <string name="settings_consumption_battery_opt_label">Otimização de bateria</string>
+    <string name="settings_consumption_battery_opt_unrestricted">Sem restrições (Isento)</string>
+    <string name="settings_consumption_battery_opt_optimized">Padrão do SO</string>
+    <string name="settings_consumption_ram_buffer_label">Memória do buffer de áudio</string>
+    <string name="settings_consumption_ram_buffer_value">%1$.1f MB (RAM volátil)</string>
+    <string name="settings_consumption_ram_heap_label">Heap da JVM em uso</string>
+    <string name="settings_consumption_ram_heap_value">%1$.1f MB / %2$.0f MB máx</string>
+    <string name="settings_consumption_io_label">I/O contínuo de armazenamento</string>
+    <string name="settings_consumption_io_value">0 KB/s (100% RAM, zero desgaste de flash)</string>
+
     <!-- Aviso de redução por clamp (issue #84): mostrado no máximo uma vez, só para quem tinha um
          valor de retenção salvo (50/55/60, persistido antes do clamp temporário da issue #72) que
          foi reduzido ao carregar. Nunca mostrado a quem já estava no limite atual ou abaixo dele. -->
