@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
@@ -65,14 +66,29 @@ import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.AvionicsCard
+import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
+import cc.machado.audioblackbox.ui.theme.AvionicsGreenGlow
+import cc.machado.audioblackbox.ui.theme.AvionicsTag
 import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
 import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
 import cc.machado.audioblackbox.ui.theme.CautionAmber
+import cc.machado.audioblackbox.ui.theme.CautionAmberGlow
+import cc.machado.audioblackbox.ui.theme.CockpitBorder
+import cc.machado.audioblackbox.ui.theme.CockpitBorderStrong
+import cc.machado.audioblackbox.ui.theme.CockpitPanel
+import cc.machado.audioblackbox.ui.theme.CockpitSlate
 import cc.machado.audioblackbox.ui.theme.FlightOrange
+import cc.machado.audioblackbox.ui.theme.FlightTapeRulerTrack
+import cc.machado.audioblackbox.ui.theme.RADIUS_SM
+import cc.machado.audioblackbox.ui.theme.RemoveBeforeFlightTag
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
+import cc.machado.audioblackbox.ui.theme.TextDim
+import cc.machado.audioblackbox.ui.theme.TextMuted
 import cc.machado.audioblackbox.ui.theme.WarningRed
+import cc.machado.audioblackbox.ui.theme.WarningRedGlow
 import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -165,6 +181,12 @@ private fun EngineCard(
     onToggleEngine: () -> Unit,
 ) {
     val status = uiState.captureStatus
+    val (annunciatorTitleRes, annunciatorSubRes) = when (status) {
+        is CaptureStatus.Idle -> R.string.dashboard_annunciator_standby to R.string.dashboard_annunciator_standby_sub
+        is CaptureStatus.Recording -> R.string.dashboard_annunciator_armed to R.string.dashboard_annunciator_armed_sub
+        is CaptureStatus.Paused -> R.string.dashboard_annunciator_paused to R.string.dashboard_annunciator_paused_sub
+        is CaptureStatus.Error -> R.string.dashboard_annunciator_error to R.string.dashboard_annunciator_error_sub
+    }
     val (labelRes, explanationRes) = when (status) {
         is CaptureStatus.Idle -> R.string.dashboard_status_idle to R.string.dashboard_idle_explanation
         is CaptureStatus.Recording -> R.string.dashboard_status_recording to R.string.dashboard_recording_explanation
@@ -175,111 +197,127 @@ private fun EngineCard(
     val explanation = stringResource(explanationRes)
     val announcement = stringResource(R.string.dashboard_status_announcement, label)
 
-    Card(
+    AvionicsCard(
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        ),
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Status Header + Sample Rate Pill
-            Row(
+            // Chassis Header / Data Plate Bar
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.dashboard_card_annunciator_label),
+                tag = {
+                    AvionicsTag(text = stringResource(R.string.dashboard_engine_sample_rate))
+                },
+            )
+
+            // Korry-Style Annunciator Switch Status
+            Surface(
+                shape = RoundedCornerShape(RADIUS_SM),
+                color = CockpitSlate,
+                border = BorderStroke(1.5.dp, CockpitBorderStrong),
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (status is CaptureStatus.Recording) {
-                        RecordingPulse()
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .background(statusColor(status), CircleShape),
-                        )
-                    }
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Text(
-                        text = stringResource(R.string.dashboard_engine_sample_rate),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
-
-            // Mic Input Level (VU Meter)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_waveform_mic),
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = FlightOrange,
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_mic_level_label),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
+                        if (status is CaptureStatus.Recording) {
+                            RecordingPulse()
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(statusColor(status), CircleShape),
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = stringResource(annunciatorTitleRes),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.05.sp,
+                                color = statusColor(status),
+                            )
+                            Text(
+                                text = stringResource(annunciatorSubRes),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = TextMuted,
+                            )
+                        }
                     }
-                    Text(
-                        // Keeps main's dBFS readout, now computed from the audio actually
-                        // captured. uiState.inputLevel is already forced to 0f unless Recording
-                        // (DashboardViewModel.mapUiState), so this needs no state check of its own.
-                        text = uiState.inputLevel.let { level ->
-                            if (level <= 0f) {
-                                stringResource(R.string.dashboard_mic_level_no_signal)
-                            } else {
-                                stringResource(R.string.dashboard_mic_level_dbfs, dbfsFor(level))
-                            }
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Switch(
+                        checked = uiState.engineSwitch.checked,
+                        onCheckedChange = { onToggleEngine() },
+                        enabled = uiState.engineSwitch.enabled,
+                        modifier = Modifier.testTag(ENGINE_SWITCH_TEST_TAG),
                     )
                 }
-                MicLevelMeter(level = uiState.inputLevel)
             }
 
-            // Circular Buffer (RAM only)
-            BufferRamVisualizer(uiState)
+            // Standby / "REMOVE BEFORE FLIGHT" Ribbon Tag
+            if (status is CaptureStatus.Idle || !uiState.engineSwitch.checked) {
+                RemoveBeforeFlightTag(text = stringResource(R.string.dashboard_rbf_tag))
+            }
 
-            // Switch / Toggle Engine
-            EngineToggle(uiState.engineSwitch, onToggleEngine)
+            // VU Meter Recessed Rack
+            Surface(
+                shape = RoundedCornerShape(RADIUS_SM),
+                color = CockpitSlate,
+                border = BorderStroke(1.dp, CockpitBorder),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dashboard_card_vu_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted,
+                        )
+                        Text(
+                            text = uiState.inputLevel.let { level ->
+                                if (level <= 0f) {
+                                    stringResource(R.string.dashboard_mic_level_no_signal)
+                                } else {
+                                    stringResource(R.string.dashboard_mic_level_dbfs, dbfsFor(level))
+                                }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    MicLevelMeter(level = uiState.inputLevel)
+                }
+            }
+
+            // FDR Flight Tape / Circular Buffer Visualizer
+            BufferRamVisualizer(uiState)
 
             if (explanation.isNotEmpty()) {
                 Text(
@@ -371,52 +409,47 @@ private fun BufferRamVisualizer(uiState: DashboardUiState) {
     val capacityLabel = formatMillisAsClock(uiState.capacityMillis)
     val progressCd = stringResource(R.string.dashboard_buffer_status_cd, bufferedLabel, capacityLabel)
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        shape = RoundedCornerShape(RADIUS_SM),
+        color = CockpitSlate,
+        border = BorderStroke(1.dp, CockpitBorder),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_ram_memory),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = FlightOrange,
+                Text(
+                    text = stringResource(R.string.dashboard_card_tape_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
                 )
                 Text(
-                    text = stringResource(R.string.dashboard_buffer_ram_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
+                    text = String.format(Locale.US, "%.1f / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = FlightOrange,
                 )
             }
+
+            Box(modifier = Modifier.semantics { contentDescription = progressCd }) {
+                FlightTapeRulerTrack(fraction = fraction)
+            }
+
             Text(
-                text = String.format(Locale.US, "%.1f / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
+                text = stringResource(R.string.dashboard_buffer_ram_explanation),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-
-        LinearProgressIndicator(
-            progress = { fraction },
-            color = FlightOrange,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .semantics { contentDescription = progressCd },
-        )
-
-        Text(
-            text = stringResource(R.string.dashboard_buffer_ram_explanation),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -434,7 +467,7 @@ private fun RecordingPulse() {
     )
     Box(
         modifier = Modifier
-            .size(12.dp)
+            .size(10.dp)
             .alpha(alpha)
             .background(AvionicsGreen, CircleShape)
             .clearAndSetSemantics {},
@@ -442,53 +475,10 @@ private fun RecordingPulse() {
 }
 
 private fun statusColor(status: CaptureStatus): Color = when (status) {
-    is CaptureStatus.Idle -> Color.Gray
+    is CaptureStatus.Idle -> Color(0xFF64748B) // TextDim
     is CaptureStatus.Paused -> CautionAmber
     is CaptureStatus.Error -> WarningRed
     is CaptureStatus.Recording -> AvionicsGreen
-}
-
-@Composable
-private fun EngineToggle(engineSwitch: EngineSwitchUiState, onToggleEngine: () -> Unit) {
-    val stateTextRes = when {
-        engineSwitch.pending && engineSwitch.checked -> R.string.dashboard_engine_switch_state_stopping
-        engineSwitch.pending && !engineSwitch.checked -> R.string.dashboard_engine_switch_state_starting
-        engineSwitch.error != null -> R.string.dashboard_engine_switch_state_error
-        engineSwitch.paused -> R.string.dashboard_engine_switch_state_paused
-        engineSwitch.checked -> R.string.dashboard_engine_switch_state_on
-        else -> R.string.dashboard_engine_switch_state_off
-    }
-    val label = stringResource(R.string.dashboard_engine_switch_label)
-    val stateText = stringResource(stateTextRes)
-    val announcement = stringResource(R.string.dashboard_engine_switch_announcement, stateText)
-    val stateColor = when {
-        engineSwitch.pending -> MaterialTheme.colorScheme.onSurfaceVariant
-        engineSwitch.error != null -> MaterialTheme.colorScheme.error
-        engineSwitch.paused -> CautionAmber
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
-                liveRegion = LiveRegionMode.Polite
-                contentDescription = announcement
-            },
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-            Text(text = stateText, style = MaterialTheme.typography.bodyMedium, color = stateColor)
-        }
-        Switch(
-            checked = engineSwitch.checked,
-            onCheckedChange = { onToggleEngine() },
-            enabled = engineSwitch.enabled,
-            modifier = Modifier.testTag(ENGINE_SWITCH_TEST_TAG),
-        )
-    }
 }
 
 @Composable
@@ -513,13 +503,15 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
         else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
     }
 
-    Card(
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
-        Column(modifier = Modifier.padding(CARD_INNER_PADDING), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.dashboard_card_lookback_label),
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -585,16 +577,15 @@ private fun ForwardRecordingSection(
     onStart: () -> Unit,
     onStop: () -> Unit,
 ) {
-    Card(
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.dashboard_card_forward_label),
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -628,12 +619,14 @@ private fun ForwardRecordingSection(
                         Text(
                             text = elapsedText,
                             style = MaterialTheme.typography.headlineMedium,
+                            fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag(FORWARD_ELAPSED_TEST_TAG),
                         )
                         Text(
                             text = forwardState.displayName,
                             style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
                         )
@@ -701,18 +694,33 @@ private fun SaveOutcomeNotice(
     val announcement = stringResource(R.string.dashboard_save_outcome_announcement, title, body)
     val context = LocalContext.current
 
-    Card(
+    AvionicsCard(
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
-        shape = RoundedCornerShape(16.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(text = body, style = MaterialTheme.typography.bodyMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.dashboard_card_save_outcome_label),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = when (saveState) {
+                    is SaveUiState.Success -> AvionicsGreen
+                    is SaveUiState.Error -> WarningRed
+                    else -> FlightOrange
+                },
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             if (saveState is SaveUiState.Success) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
@@ -721,8 +729,9 @@ private fun SaveOutcomeNotice(
             } else if (saveState is SaveUiState.Error) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(RADIUS_SM),
+                    color = CockpitSlate,
+                    border = BorderStroke(1.dp, CockpitBorder),
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
@@ -731,8 +740,9 @@ private fun SaveOutcomeNotice(
                         Text(
                             text = stringResource(R.string.dashboard_error_telemetry_title),
                             style = MaterialTheme.typography.labelMedium,
+                            fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = FlightOrange,
                         )
                         Text(
                             text = stringResource(R.string.dashboard_error_telemetry_code, saveState.reason.name),
@@ -834,24 +844,40 @@ private fun ForwardOutcomeNotice(
     val announcement = stringResource(R.string.dashboard_forward_outcome_announcement, title, body)
     val context = LocalContext.current
 
-    Card(
+    AvionicsCard(
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
                 liveRegion = LiveRegionMode.Polite
                 contentDescription = announcement
             },
-        shape = RoundedCornerShape(16.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(text = body, style = MaterialTheme.typography.bodyMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.dashboard_card_forward_outcome_label),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = when (forwardState) {
+                    is ForwardRecordingUiState.Success -> AvionicsGreen
+                    is ForwardRecordingUiState.Error -> WarningRed
+                    else -> FlightOrange
+                },
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             if (forwardState is ForwardRecordingUiState.Error) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(RADIUS_SM),
+                    color = CockpitSlate,
+                    border = BorderStroke(1.dp, CockpitBorder),
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
@@ -860,8 +886,9 @@ private fun ForwardOutcomeNotice(
                         Text(
                             text = stringResource(R.string.dashboard_error_telemetry_title),
                             style = MaterialTheme.typography.labelMedium,
+                            fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = FlightOrange,
                         )
                         Text(
                             text = stringResource(R.string.dashboard_error_telemetry_code, forwardState.reason.name),

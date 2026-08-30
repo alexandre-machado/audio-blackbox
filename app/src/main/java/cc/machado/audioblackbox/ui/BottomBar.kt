@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,8 +19,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.ui.theme.CockpitBorderStrong
+import cc.machado.audioblackbox.ui.theme.CockpitPanelRaised
+import cc.machado.audioblackbox.ui.theme.FlightOrange
+import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
+import cc.machado.audioblackbox.ui.theme.TextDim
 
 /** The app's screens, switched by [FloatingBottomBar]. Deliberately a hoisted
  * `enum` + `selected`/`onSelect` state, not `navigation-compose` -- three destinations do not justify
@@ -72,12 +81,21 @@ fun FloatingBottomBar(
     onSelect: (Destination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val navItemColors = NavigationBarItemDefaults.colors(
+        selectedIconColor = FlightOrange,
+        selectedTextColor = FlightOrange,
+        indicatorColor = FlightOrangeContainer,
+        unselectedIconColor = TextDim,
+        unselectedTextColor = TextDim,
+    )
+
     Surface(
         modifier = modifier.testTag(FLOATING_BOTTOM_BAR_TEST_TAG),
         shape = RoundedCornerShape(28.dp),
         tonalElevation = 3.dp,
         shadowElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = CockpitPanelRaised,
+        border = BorderStroke(1.dp, CockpitBorderStrong),
     ) {
         NavigationBar(
             containerColor = Color.Transparent,
@@ -88,22 +106,43 @@ fun FloatingBottomBar(
                 selected = selected == Destination.DASHBOARD,
                 onClick = { onSelect(Destination.DASHBOARD) },
                 icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = null) },
-                label = { Text(text = stringResource(R.string.nav_dashboard_label)) },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
+                label = {
+                    Text(
+                        text = stringResource(R.string.nav_dashboard_label).uppercase(),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                    )
+                },
+                colors = navItemColors,
             )
             NavigationBarItem(
                 selected = selected == Destination.GALLERY,
                 onClick = { onSelect(Destination.GALLERY) },
                 icon = { Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null) },
-                label = { Text(text = stringResource(R.string.nav_gallery_label)) },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
+                label = {
+                    Text(
+                        text = stringResource(R.string.nav_gallery_label).uppercase(),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                    )
+                },
+                colors = navItemColors,
             )
             NavigationBarItem(
                 selected = selected == Destination.SETTINGS,
                 onClick = { onSelect(Destination.SETTINGS) },
                 icon = { Icon(imageVector = Icons.Filled.Settings, contentDescription = null) },
-                label = { Text(text = stringResource(R.string.nav_settings_label)) },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.secondaryContainer),
+                label = {
+                    Text(
+                        text = stringResource(R.string.nav_settings_label).uppercase(),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                    )
+                },
+                colors = navItemColors,
             )
         }
     }

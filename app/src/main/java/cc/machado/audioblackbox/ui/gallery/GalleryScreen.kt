@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.ui.gallery
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -55,11 +57,24 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.AvionicsCard
+import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
+import cc.machado.audioblackbox.ui.theme.AvionicsTag
 import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
 import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
+import cc.machado.audioblackbox.ui.theme.CockpitBorder
+import cc.machado.audioblackbox.ui.theme.CockpitBorderStrong
+import cc.machado.audioblackbox.ui.theme.CockpitPanel
+import cc.machado.audioblackbox.ui.theme.CockpitSlate
+import cc.machado.audioblackbox.ui.theme.DashedDivider
 import cc.machado.audioblackbox.ui.theme.FlightOrange
+import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
+import cc.machado.audioblackbox.ui.theme.RADIUS_RIVET
+import cc.machado.audioblackbox.ui.theme.RADIUS_SM
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
+import cc.machado.audioblackbox.ui.theme.TextMuted
+import cc.machado.audioblackbox.ui.theme.WarningRed
 
 /**
  * Hosts [GalleryViewModel] and renders [GalleryScreen] against its live state -- the same
@@ -185,10 +200,15 @@ private fun LoadingState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CircularProgressIndicator(modifier = Modifier.clearAndSetSemantics {})
+        CircularProgressIndicator(
+            modifier = Modifier.clearAndSetSemantics {},
+            color = FlightOrange,
+        )
         Text(
             text = loadingLabel,
             style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+            color = TextMuted,
             modifier = Modifier.padding(top = 12.dp),
         )
     }
@@ -196,17 +216,46 @@ private fun LoadingState() {
 
 @Composable
 private fun EmptyState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    AvionicsCard(
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(text = stringResource(R.string.gallery_empty_title), style = MaterialTheme.typography.titleLarge)
-        Text(
-            text = stringResource(R.string.gallery_empty_body),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.gallery_empty_card_label),
+            )
+            Surface(
+                shape = RoundedCornerShape(RADIUS_SM),
+                color = FlightOrangeContainer,
+                border = BorderStroke(1.dp, FlightOrange.copy(alpha = 0.4f)),
+                modifier = Modifier.size(52.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_gallery_folder),
+                        contentDescription = null,
+                        tint = FlightOrange,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.gallery_empty_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+            Text(
+                text = stringResource(R.string.gallery_empty_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -266,17 +315,18 @@ private fun RecordingCard(
     val shareCd = stringResource(R.string.gallery_share_cd, recording.displayName)
     val deleteCd = stringResource(R.string.gallery_delete_cd, recording.displayName)
 
-    Card(
-        onClick = onToggleExpand,
-        modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+    AvionicsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggleExpand() },
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.gallery_card_label),
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -289,7 +339,7 @@ private fun RecordingCard(
                     Text(
                         text = recording.displayName,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
                     )
                     Text(
@@ -380,8 +430,9 @@ private fun RecordingCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    DashedDivider()
                     Slider(
                         value = positionMillis.toFloat().coerceIn(0f, sliderMax),
                         onValueChange = { onSeek(it.toLong()) },
@@ -402,7 +453,7 @@ private fun RecordingCard(
                             text = formatDurationClock(positionMillis),
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = FlightOrange,
                         )
                         Text(
                             text = formatDurationClock(durationMillis),
@@ -433,9 +484,9 @@ private fun RecordingSpecificationsCard(recording: RecordingItem) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(RADIUS_SM),
+        color = CockpitSlate,
+        border = BorderStroke(1.dp, CockpitBorder),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -444,6 +495,7 @@ private fun RecordingSpecificationsCard(recording: RecordingItem) {
             Text(
                 text = stringResource(R.string.gallery_details_title),
                 style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 color = FlightOrange,
             )
@@ -510,16 +562,39 @@ private fun DeleteConfirmationDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = stringResource(R.string.gallery_delete_confirm_title)) },
-        text = { Text(text = stringResource(R.string.gallery_delete_confirm_body)) },
+        shape = CARD_SHAPE,
+        containerColor = CockpitPanel,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                text = stringResource(R.string.gallery_delete_confirm_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(R.string.gallery_delete_confirm_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(text = stringResource(R.string.gallery_delete_confirm_action))
+                Text(
+                    text = stringResource(R.string.gallery_delete_confirm_action),
+                    fontWeight = FontWeight.Bold,
+                    color = WarningRed,
+                )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.gallery_delete_cancel_action))
+                Text(
+                    text = stringResource(R.string.gallery_delete_cancel_action),
+                    color = TextMuted,
+                )
             }
         },
     )
@@ -533,11 +608,31 @@ private fun DeleteConfirmationDialog(
 private fun DeleteErrorDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = stringResource(R.string.gallery_delete_error_title)) },
-        text = { Text(text = stringResource(R.string.gallery_delete_error_body)) },
+        shape = CARD_SHAPE,
+        containerColor = CockpitPanel,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                text = stringResource(R.string.gallery_delete_error_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = WarningRed,
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(R.string.gallery_delete_error_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.gallery_delete_error_dismiss))
+                Text(
+                    text = stringResource(R.string.gallery_delete_error_dismiss),
+                    fontWeight = FontWeight.Bold,
+                    color = FlightOrange,
+                )
             }
         },
     )
