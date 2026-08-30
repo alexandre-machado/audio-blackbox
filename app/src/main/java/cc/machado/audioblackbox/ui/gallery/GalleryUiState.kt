@@ -19,6 +19,7 @@ data class RecordingItem(
     val sizeBytes: Long,
     val durationMillis: Long,
     val capturedAtMillis: Long,
+    val savedAtMillis: Long = 0L,
 )
 
 /** Playback state of one [RecordingItem] as the list renders it -- derived, never stored

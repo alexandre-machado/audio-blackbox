@@ -134,7 +134,6 @@ fun DashboardScreen(
         if (uiState.saveState is SaveUiState.Success || uiState.saveState is SaveUiState.Error) {
             SaveOutcomeNotice(
                 saveState = uiState.saveState,
-                qualityPreset = uiState.qualityPreset,
                 onDismiss = onDismissSaveNotice,
                 onRetry = onSaveRecent,
             )
@@ -674,7 +673,6 @@ private fun ForwardRecordingSection(
 @Composable
 private fun SaveOutcomeNotice(
     saveState: SaveUiState,
-    qualityPreset: QualityPreset = QualityPreset.DEFAULT,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -717,65 +715,6 @@ private fun SaveOutcomeNotice(
             Text(text = body, style = MaterialTheme.typography.bodyMedium)
 
             if (saveState is SaveUiState.Success) {
-                val startTimestamp = remember(saveState.displayName) {
-                    parseTimestampFromFilename(saveState.displayName)
-                }
-                val dateFormat = remember {
-                    java.text.SimpleDateFormat.getDateTimeInstance(
-                        java.text.DateFormat.MEDIUM,
-                        java.text.DateFormat.MEDIUM,
-                    )
-                }
-                val createdDateLabel = if (startTimestamp != null) dateFormat.format(java.util.Date(startTimestamp)) else null
-                val savedDateLabel = dateFormat.format(java.util.Date())
-                val channelsText = if (qualityPreset.channelCount == 1) "Mono" else "Stereo"
-
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.dashboard_save_details_title),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_save_details_file, saveState.displayName),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        if (createdDateLabel != null) {
-                            Text(
-                                text = stringResource(R.string.dashboard_save_details_created_at, createdDateLabel),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Text(
-                            text = stringResource(R.string.dashboard_save_details_saved_at, savedDateLabel),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.dashboard_save_details_quality,
-                                qualityPreset.name,
-                                qualityPreset.sampleRateHz,
-                                channelsText,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_save_details_format),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
                 }
