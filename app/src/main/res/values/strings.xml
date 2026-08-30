@@ -77,7 +77,7 @@
          the mic. Naming a cause the app cannot observe is the habit this meter was
          rewritten to end. -->
     <string name="dashboard_mic_level_no_signal">NO SIGNAL</string>
-    <string name="dashboard_buffer_ram_label">Circular buffer (RAM only)</string>
+    <string name="dashboard_buffer_ram_label">Rolling buffer (RAM)</string>
     <string name="dashboard_buffer_ram_explanation">Holding audio in RAM. Once full, the oldest sound is overwritten continuously without writing to disk.</string>
     <string name="dashboard_save_card_title">Save recent audio (Lookback)</string>
     <string name="dashboard_forward_card_title">Continuous live recording</string>
@@ -232,21 +232,21 @@
     <!-- Telemetry & Power Consumption -->
     <string name="settings_consumption_title">Power &amp; system telemetry</string>
     <string name="settings_consumption_explanation">Live metrics on energy consumption, volatile RAM footprint, and hardware capture efficiency.</string>
-    <string name="settings_consumption_battery_drain_label">Estimated background drain</string>
-    <string name="settings_consumption_battery_drain_value" formatted="false">~1.0% – 1.5% / h (~45 mA)</string>
+    <string name="settings_consumption_battery_drain_label">Background drain</string>
+    <string name="settings_consumption_battery_drain_value" formatted="false">~1.0% – 1.5% / h</string>
     <string name="settings_consumption_battery_level_label">Device battery status</string>
     <string name="settings_consumption_battery_level_value">%1$d%% (%2$s)</string>
     <string name="settings_consumption_battery_charging">Charging</string>
     <string name="settings_consumption_battery_discharging">Discharging</string>
     <string name="settings_consumption_battery_opt_label">Battery optimization</string>
-    <string name="settings_consumption_battery_opt_unrestricted">Unrestricted (Exempted)</string>
+    <string name="settings_consumption_battery_opt_unrestricted">Exempted (Active)</string>
     <string name="settings_consumption_battery_opt_optimized">OS Optimized</string>
     <string name="settings_consumption_ram_buffer_label">Audio buffer memory</string>
-    <string name="settings_consumption_ram_buffer_value">%1$.1f MB (Volatile RAM)</string>
+    <string name="settings_consumption_ram_buffer_value">%1$.1f MB (Volatile)</string>
     <string name="settings_consumption_ram_heap_label">JVM heap resident</string>
     <string name="settings_consumption_ram_heap_value">%1$.1f MB / %2$.0f MB max</string>
-    <string name="settings_consumption_io_label">Continuous capture storage I/O</string>
-    <string name="settings_consumption_io_value">0 KB/s (Pure RAM, zero flash wear)</string>
+    <string name="settings_consumption_io_label">Storage disk I/O</string>
+    <string name="settings_consumption_io_value">0 KB/s (Pure RAM)</string>
 
     <!-- Clamp-down notice (issue #84): shown at most once, only to a user whose stored retention
          window (50/55/60, persisted before issue #72's interim clamp) was reduced on load. Never
