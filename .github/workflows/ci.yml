@@ -261,11 +261,12 @@ jobs:
             # literally is R, so its captures are I(R) -- exactly what's already committed -- which
             # is what makes the push-to-main failure branch below genuinely unreachable rather than
             # a routine outcome of ordinary concurrent development.
+            AUTH_HEADER="AUTHORIZATION: basic $(printf "x-access-token:%s" "$GH_TOKEN" | base64 | tr -d '\n')"
             git_auth() {
-              git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" "$@"
+              git -c "http.extraheader=${AUTH_HEADER}" -c commit.gpgsign=false "$@"
             }
 
-            git_auth fetch origin "$PR_HEAD_REF"
+            git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
 
             WORKDIR="$(mktemp -d)"
             trap 'rm -rf "$WORKDIR"; git worktree prune >/dev/null 2>&1 || true' EXIT
@@ -291,11 +292,11 @@ jobs:
                 cd "$WORKDIR/head"
                 git config user.name "github-actions[bot]"
                 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                git add -- "${SCREENSHOT_PATHS[@]}"
+                git -c commit.gpgsign=false add -- "${SCREENSHOT_PATHS[@]}"
                 if git diff --cached --quiet --exit-code; then
                   exit 12
                 fi
-                git commit -m "chore(ci): refresh screenshots from capture run ${RUN_ID}"
+                git -c commit.gpgsign=false commit -m "chore(ci): refresh screenshots from capture run ${RUN_ID}"
               ) || { [[ $? -eq 12 ]] && nothing_to_commit=1 || exit 1; }
 
               if [[ "$nothing_to_commit" -eq 1 ]]; then
@@ -315,14 +316,14 @@ jobs:
               # adding a retrigger (e.g. a repository-dispatch or a PAT-based push) -- the pushed
               # bytes are exactly what this run just captured and diffed against, so a
               # re-verification run would be tautological.
-              if (cd "$WORKDIR/head" && git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" push origin "HEAD:${PR_HEAD_REF}"); then
+              if (cd "$WORKDIR/head" && git_auth push origin "HEAD:${PR_HEAD_REF}"); then
                 echo "Pushed refreshed screenshots to ${PR_HEAD_REF}." >> "$GITHUB_STEP_SUMMARY"
                 pushed=1
                 break
               fi
 
               echo "Push to ${PR_HEAD_REF} was rejected (branch moved during this run's ~4-8 minute emulator window); re-fetching and retrying once." >&2
-              git_auth fetch origin "$PR_HEAD_REF"
+              git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
               attempt=$((attempt + 1))
             done
 
