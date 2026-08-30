@@ -58,8 +58,36 @@
 
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_app_subtitle">Gravador de Áudio Contínuo em Memória</string>
-    <string name="dashboard_engine_sample_rate">16.0 kHz</string>
+    <string name="dashboard_engine_sample_rate">16.0 kHz PCM</string>
     <string name="dashboard_mic_level_label">Nível do microfone</string>
+    <string name="dashboard_card_annunciator_label">STATUS DO SISTEMA // ANUNCIADOR</string>
+    <string name="dashboard_annunciator_armed">GRAVADOR ARMADO &amp; ATIVO</string>
+    <string name="dashboard_annunciator_armed_sub">CH-01 · 16-BIT · MEMÓRIA VOLÁTIL</string>
+    <string name="dashboard_annunciator_paused">PAUSADO // MIC EM USO</string>
+    <string name="dashboard_annunciator_paused_sub">INTERRUPÇÃO TELEFÔNICA // ESPERA</string>
+    <string name="dashboard_annunciator_standby">GRAVADOR EM ESPERA // DESARMADO</string>
+    <string name="dashboard_annunciator_standby_sub">CH-01 · PRONTO PARA ARMAR</string>
+    <string name="dashboard_annunciator_error">AVISO PRINCIPAL // ERRO</string>
+    <string name="dashboard_annunciator_error_sub">CH-01 · RECUPERAÇÃO DE HARDWARE NECESSÁRIA</string>
+    <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // GRAVADOR EM ESPERA</string>
+    <string name="dashboard_card_lookback_label">BUFFER LOOKBACK // PERSISTÊNCIA EM DISCO</string>
+    <string name="dashboard_card_forward_label">GRAVADOR DE VOO AO VIVO // CONTÍNUO</string>
+    <string name="dashboard_card_vu_label">NÍVEL DE ENTRADA DO MIC (VU)</string>
+    <string name="dashboard_card_tape_label">RETENÇÃO DO BUFFER CIRCULAR</string>
+
+    <string name="dashboard_card_save_outcome_label">STATUS DA EXPORTAÇÃO // MEDIASTORE</string>
+    <string name="dashboard_card_forward_outcome_label">STATUS DA GRAVAÇÃO // MEDIASTORE</string>
+    <string name="gallery_empty_card_label">REPOSITÓRIO DE VOOS // MEDIASTORE</string>
+    <string name="onboarding_card_consent_label">CONFIGURAÇÃO INICIAL DO SISTEMA // CONSENTIMENTO OBRIGATÓRIO</string>
+    <string name="onboarding_card_permissions_label">DECLARAÇÃO DE PERMISSÃO DO SISTEMA</string>
+    <string name="settings_card_preset_label">PREDEFINIÇÃO DE QUALIDADE</string>
+    <string name="settings_card_retention_label">JANELA DE RETENÇÃO</string>
+    <string name="settings_card_telemetry_label">⚡ TELEMETRIA DE ENERGIA E SISTEMA</string>
+    <string name="settings_card_specs_label">ESPECIFICAÇÕES DO MOTOR DE ÁUDIO</string>
+    <string name="settings_card_privacy_label">PRIVACIDADE E PROCESSAMENTO LOCAL</string>
+    <string name="settings_tag_default">PADRÃO</string>
+    <string name="settings_tag_live">AO VIVO (S25)</string>
+    <string name="gallery_card_label">REGISTRO DE VOO // MEDIASTORE</string>
     <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
     <!-- Not "MUTED": nothing here detects a muted microphone. It means the peak sat at or
          below AudioLevel.MIN_DBFS, which is silence, a covered mic, or another app holding

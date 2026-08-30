@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.ui.onboarding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -12,11 +13,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.permissions.OnboardingStep
+import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.AvionicsCard
+import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
+import cc.machado.audioblackbox.ui.theme.FlightOrange
+import cc.machado.audioblackbox.ui.theme.TextMuted
+import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
 
 /**
  * Renders the onboarding step handed to it by [PermissionResolver.resolveNextStep]. This
@@ -50,6 +60,7 @@ fun OnboardingScreen(
 
         OnboardingStep.AUDIO_RATIONALE -> OnboardingStepContent(
             modifier = modifier,
+            headerLabel = stringResource(R.string.onboarding_card_permissions_label),
             title = stringResource(R.string.onboarding_audio_title),
             body = stringResource(R.string.onboarding_audio_body),
             primaryLabel = stringResource(R.string.onboarding_audio_grant),
@@ -58,6 +69,7 @@ fun OnboardingScreen(
 
         OnboardingStep.AUDIO_PERMANENTLY_DENIED -> OnboardingStepContent(
             modifier = modifier,
+            headerLabel = stringResource(R.string.onboarding_card_permissions_label),
             title = stringResource(R.string.onboarding_audio_denied_title),
             body = stringResource(R.string.onboarding_audio_denied_body),
             primaryLabel = stringResource(R.string.onboarding_open_settings),
@@ -66,6 +78,7 @@ fun OnboardingScreen(
 
         OnboardingStep.NOTIFICATIONS_RATIONALE -> OnboardingStepContent(
             modifier = modifier,
+            headerLabel = stringResource(R.string.onboarding_card_permissions_label),
             title = stringResource(R.string.onboarding_notifications_title),
             body = stringResource(R.string.onboarding_notifications_body),
             primaryLabel = stringResource(R.string.onboarding_notifications_grant),
@@ -74,6 +87,7 @@ fun OnboardingScreen(
 
         OnboardingStep.NOTIFICATIONS_PERMANENTLY_DENIED -> OnboardingStepContent(
             modifier = modifier,
+            headerLabel = stringResource(R.string.onboarding_card_permissions_label),
             title = stringResource(R.string.onboarding_notifications_denied_title),
             body = stringResource(R.string.onboarding_notifications_denied_body),
             primaryLabel = stringResource(R.string.onboarding_open_settings),
@@ -108,24 +122,58 @@ private fun ConsentStepContent(
             .fillMaxSize()
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = stringResource(R.string.onboarding_consent_title), style = MaterialTheme.typography.headlineSmall)
-        Column(modifier = Modifier.padding(top = 16.dp)) {
-            Text(text = stringResource(R.string.onboarding_consent_body), style = MaterialTheme.typography.bodyLarge)
-        }
-        Column(modifier = Modifier.padding(top = 16.dp)) {
-            TextButton(onClick = onOpenPrivacyPolicy) {
-                Text(text = stringResource(R.string.onboarding_consent_privacy_link))
-            }
-        }
-        Column(modifier = Modifier.padding(top = 24.dp)) {
-            Button(onClick = onAccept) {
-                Text(text = stringResource(R.string.onboarding_consent_accept))
-            }
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                OutlinedButton(onClick = onDecline) {
-                    Text(text = stringResource(R.string.onboarding_consent_decline))
+        AvionicsCard(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                AvionicsCardHeaderBar(
+                    label = stringResource(R.string.onboarding_card_consent_label),
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_consent_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_consent_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMuted,
+                )
+                TextButton(
+                    onClick = onOpenPrivacyPolicy,
+                    modifier = Modifier.align(Alignment.Start),
+                ) {
+                    Text(
+                        text = stringResource(R.string.onboarding_consent_privacy_link),
+                        color = FlightOrange,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = onAccept,
+                        colors = primaryCtaButtonColors(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.onboarding_consent_accept),
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onDecline,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(text = stringResource(R.string.onboarding_consent_decline))
+                    }
                 }
             }
         }
@@ -134,6 +182,7 @@ private fun ConsentStepContent(
 
 @Composable
 private fun OnboardingStepContent(
+    headerLabel: String,
     title: String,
     body: String,
     primaryLabel: String,
@@ -147,20 +196,49 @@ private fun OnboardingStepContent(
             .fillMaxSize()
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = title, style = MaterialTheme.typography.headlineSmall)
-        Column(modifier = Modifier.padding(top = 16.dp)) {
-            Text(text = body, style = MaterialTheme.typography.bodyLarge)
-        }
-        Column(modifier = Modifier.padding(top = 24.dp)) {
-            Button(onClick = onPrimaryClick) {
-                Text(text = primaryLabel)
-            }
-            if (secondaryLabel != null) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    OutlinedButton(onClick = onSecondaryClick) {
-                        Text(text = secondaryLabel)
+        AvionicsCard(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                AvionicsCardHeaderBar(
+                    label = headerLabel,
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMuted,
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = onPrimaryClick,
+                        colors = primaryCtaButtonColors(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = primaryLabel,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    if (secondaryLabel != null) {
+                        OutlinedButton(
+                            onClick = onSecondaryClick,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(text = secondaryLabel)
+                        }
                     }
                 }
             }
@@ -171,7 +249,7 @@ private fun OnboardingStepContent(
 @Preview(showBackground = true)
 @Composable
 private fun OnboardingScreenConsentPreview() {
-    MaterialTheme {
+    AudioBlackboxTheme {
         OnboardingScreen(step = OnboardingStep.CONSENT)
     }
 }
@@ -179,7 +257,7 @@ private fun OnboardingScreenConsentPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun OnboardingScreenAudioRationalePreview() {
-    MaterialTheme {
+    AudioBlackboxTheme {
         OnboardingScreen(step = OnboardingStep.AUDIO_RATIONALE)
     }
 }
@@ -187,7 +265,7 @@ private fun OnboardingScreenAudioRationalePreview() {
 @Preview(showBackground = true)
 @Composable
 private fun OnboardingScreenAudioPermanentlyDeniedPreview() {
-    MaterialTheme {
+    AudioBlackboxTheme {
         OnboardingScreen(step = OnboardingStep.AUDIO_PERMANENTLY_DENIED)
     }
 }

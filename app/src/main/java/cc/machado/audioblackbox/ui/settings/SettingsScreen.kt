@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -47,19 +48,28 @@ import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
+import cc.machado.audioblackbox.ui.theme.AvionicsCard
+import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
+import cc.machado.audioblackbox.ui.theme.AvionicsTag
 import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
 import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
 import cc.machado.audioblackbox.ui.theme.CautionAmber
+import cc.machado.audioblackbox.ui.theme.CockpitBorder
+import cc.machado.audioblackbox.ui.theme.CockpitBorderStrong
+import cc.machado.audioblackbox.ui.theme.CockpitPanel
+import cc.machado.audioblackbox.ui.theme.CockpitSlate
 import cc.machado.audioblackbox.ui.theme.FlightOrange
 import cc.machado.audioblackbox.ui.theme.FlightOrangeContainer
+import cc.machado.audioblackbox.ui.theme.RADIUS_RIVET
+import cc.machado.audioblackbox.ui.theme.RADIUS_SM
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
+import cc.machado.audioblackbox.ui.theme.TextDim
+import cc.machado.audioblackbox.ui.theme.TextMuted
+import cc.machado.audioblackbox.ui.theme.WarningRed
 import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
-
 import androidx.compose.foundation.clickable
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import cc.machado.audioblackbox.audio.QualityPreset
 
 /**
@@ -169,13 +179,16 @@ private fun RetentionStepperSection(
         stringResource(R.string.settings_retention_value_active_cd, stepper.pendingMinutes, stepper.approxPendingRamMb)
     }
 
-    Card(
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
-        Column(modifier = Modifier.padding(CARD_INNER_PADDING), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.settings_card_retention_label),
+                tag = {
+                    AvionicsTag(text = "~${stepper.approxPendingRamMb} MB")
+                },
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -198,30 +211,75 @@ private fun RetentionStepperSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics(mergeDescendants = true) {
-                        liveRegion = LiveRegionMode.Polite
-                        contentDescription = stateAnnouncement
-                    },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Surface(
+                shape = RoundedCornerShape(RADIUS_SM),
+                color = CockpitSlate,
+                border = BorderStroke(1.dp, CockpitBorder),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                IconButton(
-                    onClick = onDecrement,
-                    enabled = stepper.canDecrement && !locked,
-                    modifier = Modifier.semantics { contentDescription = decrementCd },
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .semantics(mergeDescendants = true) {
+                            liveRegion = LiveRegionMode.Polite
+                            contentDescription = stateAnnouncement
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(text = "−", style = MaterialTheme.typography.headlineSmall)
-                }
-                Text(text = valueLabel, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                IconButton(
-                    onClick = onIncrement,
-                    enabled = stepper.canIncrement && !locked,
-                    modifier = Modifier.semantics { contentDescription = incrementCd },
-                ) {
-                    Text(text = "+", style = MaterialTheme.typography.headlineSmall)
+                    Surface(
+                        shape = RoundedCornerShape(RADIUS_RIVET),
+                        color = CockpitPanel,
+                        border = BorderStroke(1.dp, CockpitBorder),
+                        modifier = Modifier.size(38.dp),
+                    ) {
+                        IconButton(
+                            onClick = onDecrement,
+                            enabled = stepper.canDecrement && !locked,
+                            modifier = Modifier.semantics { contentDescription = decrementCd },
+                        ) {
+                            Text(
+                                text = "−",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${stepper.pendingMinutes} min",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Circular Ring Buffer in RAM",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextMuted,
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(RADIUS_RIVET),
+                        color = CockpitPanel,
+                        border = BorderStroke(1.dp, CockpitBorder),
+                        modifier = Modifier.size(38.dp),
+                    ) {
+                        IconButton(
+                            onClick = onIncrement,
+                            enabled = stepper.canIncrement && !locked,
+                            modifier = Modifier.semantics { contentDescription = incrementCd },
+                        ) {
+                            Text(
+                                text = "+",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -229,6 +287,7 @@ private fun RetentionStepperSection(
                 Text(
                     text = stringResource(R.string.settings_retention_pending_notice, stepper.committedMinutes),
                     style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
                     color = CautionAmber,
                 )
             }
@@ -253,16 +312,28 @@ private fun QualityPresetSection(
     presets: List<QualityPresetOption>,
     onSelectQualityPreset: (QualityPreset) -> Unit,
 ) {
-    Card(
+    val selectedOption = presets.firstOrNull { it.isSelected }
+    val selectedTag = when (selectedOption?.preset) {
+        QualityPreset.VOICE -> "16 kHz · MONO"
+        QualityPreset.BALANCED -> "32 kHz · MONO"
+        QualityPreset.HIGH_FIDELITY -> "44.1 kHz · STEREO"
+        null -> ""
+    }
+
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.settings_card_preset_label),
+                tag = {
+                    if (selectedTag.isNotEmpty()) {
+                        AvionicsTag(text = selectedTag)
+                    }
+                },
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -306,55 +377,52 @@ private fun QualityPresetSection(
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) FlightOrangeContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(RADIUS_SM),
+                    color = if (isSelected) FlightOrangeContainer.copy(alpha = 0.15f) else CockpitSlate,
                     border = BorderStroke(
                         1.dp,
-                        if (isSelected) FlightOrange else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        if (isSelected) FlightOrange else CockpitBorder,
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSelectQualityPreset(option.preset) },
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { onSelectQualityPreset(option.preset) },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = FlightOrange,
-                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
                                 text = stringResource(titleRes),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             )
-                            Text(
-                                text = stringResource(descRes),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = stringResource(specsRes),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) FlightOrange else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = stringResource(R.string.settings_preset_max_window, option.maxRetentionMinutes),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = if (isSelected) FlightOrange.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            )
+                            if (option.preset == QualityPreset.VOICE) {
+                                AvionicsTag(
+                                    text = stringResource(R.string.settings_tag_default),
+                                    color = FlightOrange,
+                                    containerColor = FlightOrangeContainer,
+                                )
+                            }
                         }
+                        Text(
+                            text = stringResource(descRes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                        )
+                        Text(
+                            text = "${stringResource(specsRes)} · ${stringResource(R.string.settings_preset_max_window, option.maxRetentionMinutes)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) FlightOrange else TextDim,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
                     }
                 }
             }
@@ -364,16 +432,15 @@ private fun QualityPresetSection(
 
 @Composable
 private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFAULT) {
-    Card(
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.settings_card_specs_label),
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -391,16 +458,16 @@ private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFA
                 )
             }
 
-            SpecRow(label = stringResource(R.string.settings_specs_format_label), value = stringResource(R.string.settings_specs_format_value))
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-            SpecRow(label = stringResource(R.string.settings_specs_export_label), value = stringResource(R.string.settings_specs_export_value))
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SpecRow(label = stringResource(R.string.settings_specs_format_label), value = stringResource(R.string.settings_specs_format_value), isMonospace = true)
+            HorizontalDivider(color = CockpitBorder)
+            SpecRow(label = stringResource(R.string.settings_specs_export_label), value = stringResource(R.string.settings_specs_export_value), isMonospace = true)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_specs_sample_rate_label),
                 value = "${selectedPreset.sampleRateHz} Hz",
                 isMonospace = true,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_specs_channels_label),
                 value = if (selectedPreset.channelCount == 1) {
@@ -408,9 +475,10 @@ private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFA
                 } else {
                     stringResource(R.string.settings_specs_channels_stereo_value)
                 },
+                isMonospace = true,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-            SpecRow(label = stringResource(R.string.settings_specs_persistence_label), value = stringResource(R.string.settings_specs_persistence_value))
+            HorizontalDivider(color = CockpitBorder)
+            SpecRow(label = stringResource(R.string.settings_specs_persistence_label), value = stringResource(R.string.settings_specs_persistence_value), isMonospace = true)
         }
     }
 }
@@ -442,16 +510,23 @@ private fun SpecRow(label: String, value: String, isMonospace: Boolean = false) 
 
 @Composable
 private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
-    Card(
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.settings_card_telemetry_label),
+                tag = {
+                    AvionicsTag(
+                        text = stringResource(R.string.settings_tag_live),
+                        color = AvionicsGreen,
+                        containerColor = AvionicsGreen.copy(alpha = 0.15f),
+                        borderColor = AvionicsGreen.copy(alpha = 0.4f),
+                    )
+                },
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -504,30 +579,30 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
                 value = stringResource(R.string.settings_consumption_battery_drain_value),
                 isMonospace = true,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_consumption_battery_level_label),
                 value = batteryLevelValue,
                 isMonospace = true,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_consumption_battery_opt_label),
                 value = batteryOptValue,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_consumption_ram_buffer_label),
                 value = ramBufferValue,
                 isMonospace = true,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_consumption_ram_heap_label),
                 value = ramHeapValue,
                 isMonospace = true,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_consumption_io_label),
                 value = stringResource(R.string.settings_consumption_io_value),
@@ -545,16 +620,15 @@ private fun PrivacySection(
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val productUrl = stringResource(R.string.settings_website_url)
 
-    Card(
+    AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = CARD_SHAPE,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
     ) {
         Column(
-            modifier = Modifier.padding(CARD_INNER_PADDING),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.settings_card_privacy_label),
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -576,7 +650,7 @@ private fun PrivacySection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -593,10 +667,11 @@ private fun PrivacySection(
                     text = "alexandre.machado.cc/audio-blackbox",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
                     color = FlightOrange,
                 )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = CockpitBorder)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -629,16 +704,39 @@ private fun PrivacySection(
 private fun RetentionDiscardDialog(pendingMinutes: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(text = stringResource(R.string.settings_retention_confirm_title)) },
-        text = { Text(text = stringResource(R.string.settings_retention_confirm_body, pendingMinutes)) },
+        shape = CARD_SHAPE,
+        containerColor = CockpitPanel,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                text = stringResource(R.string.settings_retention_confirm_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = CautionAmber,
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(R.string.settings_retention_confirm_body, pendingMinutes),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(text = stringResource(R.string.settings_retention_confirm_accept))
+                Text(
+                    text = stringResource(R.string.settings_retention_confirm_accept),
+                    fontWeight = FontWeight.Bold,
+                    color = WarningRed,
+                )
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text(text = stringResource(R.string.settings_retention_confirm_cancel))
+                Text(
+                    text = stringResource(R.string.settings_retention_confirm_cancel),
+                    color = TextMuted,
+                )
             }
         },
     )
@@ -649,7 +747,17 @@ private fun RetentionDiscardDialog(pendingMinutes: Int, onConfirm: () -> Unit, o
 private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
     AlertDialog(
         onDismissRequest = onAcknowledge,
-        title = { Text(text = stringResource(R.string.settings_retention_clamp_notice_title)) },
+        shape = CARD_SHAPE,
+        containerColor = CockpitPanel,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                text = stringResource(R.string.settings_retention_clamp_notice_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = CautionAmber,
+            )
+        },
         text = {
             Text(
                 text = stringResource(
@@ -657,11 +765,17 @@ private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
                     notice.previousMinutes,
                     notice.newMinutes,
                 ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
             )
         },
         confirmButton = {
             TextButton(onClick = onAcknowledge) {
-                Text(text = stringResource(R.string.settings_retention_clamp_notice_dismiss))
+                Text(
+                    text = stringResource(R.string.settings_retention_clamp_notice_dismiss),
+                    fontWeight = FontWeight.Bold,
+                    color = FlightOrange,
+                )
             }
         },
     )

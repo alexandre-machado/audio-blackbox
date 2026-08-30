@@ -69,8 +69,36 @@
 
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_app_subtitle">Continuous Memory Audio Recorder</string>
-    <string name="dashboard_engine_sample_rate">16.0 kHz</string>
+    <string name="dashboard_engine_sample_rate">16.0 kHz PCM</string>
     <string name="dashboard_mic_level_label">Mic input level</string>
+    <string name="dashboard_card_annunciator_label">SYS STATUS // ANNUNCIATOR</string>
+    <string name="dashboard_annunciator_armed">RECORDER ARMED &amp; RUNNING</string>
+    <string name="dashboard_annunciator_armed_sub">CH-01 · 16-BIT · VOLATILE MEMORY</string>
+    <string name="dashboard_annunciator_paused">PAUSED // MIC IN USE</string>
+    <string name="dashboard_annunciator_paused_sub">TELEPHONY INTERRUPTION // STANDBY</string>
+    <string name="dashboard_annunciator_standby">RECORDER STANDBY // DISARMED</string>
+    <string name="dashboard_annunciator_standby_sub">CH-01 · READY TO ARM</string>
+    <string name="dashboard_annunciator_error">MASTER WARNING // ERROR</string>
+    <string name="dashboard_annunciator_error_sub">CH-01 · HARDWARE RECOVERY REQUIRED</string>
+    <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // RECORDER STANDBY</string>
+    <string name="dashboard_card_lookback_label">LOOKBACK BUFFER // DISK PERSISTENCE</string>
+    <string name="dashboard_card_forward_label">LIVE FLIGHT RECORDER // CONTINUOUS</string>
+    <string name="dashboard_card_vu_label">MIC INPUT LEVEL (VU)</string>
+    <string name="dashboard_card_tape_label">CIRCULAR BUFFER RETENTION</string>
+
+    <string name="dashboard_card_save_outcome_label">EXPORT STATUS // MEDIASTORE</string>
+    <string name="dashboard_card_forward_outcome_label">RECORDING STATUS // MEDIASTORE</string>
+    <string name="gallery_empty_card_label">FLIGHT LOG REPOSITORY // MEDIASTORE</string>
+    <string name="onboarding_card_consent_label">INITIAL SYSTEM SETUP // MANDATORY CONSENT</string>
+    <string name="onboarding_card_permissions_label">SYSTEM PERMISSION DISCLOSURE</string>
+    <string name="settings_card_preset_label">AUDIO QUALITY PRESET</string>
+    <string name="settings_card_retention_label">RETENTION WINDOW</string>
+    <string name="settings_card_telemetry_label">⚡ POWER &amp; SYSTEM TELEMETRY</string>
+    <string name="settings_card_specs_label">AUDIO ENGINE SPECIFICATIONS</string>
+    <string name="settings_card_privacy_label">PRIVACY &amp; LOCAL PROCESSING</string>
+    <string name="settings_tag_default">DEFAULT</string>
+    <string name="settings_tag_live">LIVE (S25)</string>
+    <string name="gallery_card_label">FLIGHT LOG // MEDIASTORE</string>
     <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
     <!-- Not "MUTED": nothing here detects a muted microphone. It means the peak sat at or
          below AudioLevel.MIN_DBFS, which is silence, a covered mic, or another app holding
