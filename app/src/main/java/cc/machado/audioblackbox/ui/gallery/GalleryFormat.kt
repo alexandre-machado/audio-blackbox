@@ -34,4 +34,26 @@ fun formatCapturedAt(capturedAtMillis: Long): String {
     return formatter.format(Date(capturedAtMillis))
 }
 
+/** Formats a timestamp as `dd/MM/yyyy HH:mm:ss` for detailed file inspection. */
+fun formatFullDateTime(timestampMillis: Long): String {
+    if (timestampMillis <= 0L) return "—"
+    val formatter = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    return formatter.format(Date(timestampMillis))
+}
+
+/** Infers audio quality specifications (codec, bitrate) from recording metadata. */
+fun inferAudioQuality(recording: RecordingItem): String {
+    return if (recording.mimeType.contains("wav", ignoreCase = true) || recording.displayName.endsWith(".wav", ignoreCase = true)) {
+        "16-bit PCM Linear"
+    } else {
+        val durationSec = recording.durationMillis / 1000L
+        if (durationSec > 0L) {
+            val kbps = (recording.sizeBytes * 8L) / (durationSec * 1000L)
+            "AAC (~${kbps} kbps)"
+        } else {
+            "AAC (MPEG-4)"
+        }
+    }
+}
+
 private const val CAPTURED_AT_PATTERN = "dd/MM/yyyy HH:mm"

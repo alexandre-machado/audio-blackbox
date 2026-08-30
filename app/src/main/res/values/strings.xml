@@ -290,12 +290,14 @@
     <string name="dashboard_error_copied_toast">Incident report copied to clipboard</string>
     <string name="dashboard_error_share_chooser_title">Share Incident Report</string>
 
-    <!-- Save Outcome Details -->
-    <string name="dashboard_save_details_title">Recording specifications</string>
-    <string name="dashboard_save_details_file">File: %1$s</string>
-    <string name="dashboard_save_details_created_at">Capture started: %1$s</string>
-    <string name="dashboard_save_details_saved_at">Saved at: %1$s</string>
-    <string name="dashboard_save_details_quality">Quality: %1$s (%2$d Hz, %3$s)</string>
-    <string name="dashboard_save_details_format">Format: AAC (.m4a)</string>
-    <string name="gallery_item_created_at">Capture: %1$s</string>
+    <!-- Gallery File Specifications -->
+    <string name="gallery_details_title">Recording specifications</string>
+    <string name="gallery_details_created_at">Capture started</string>
+    <string name="gallery_details_saved_at">Saved at</string>
+    <string name="gallery_details_duration">Duration</string>
+    <string name="gallery_details_size">File size</string>
+    <string name="gallery_details_format">Format</string>
+    <string name="gallery_details_quality">Quality</string>
+    <string name="gallery_details_storage">Storage</string>
+    <string name="gallery_details_storage_value">Recordings / Blackbox</string>
 </resources>

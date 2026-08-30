@@ -272,12 +272,14 @@
     <string name="dashboard_error_copied_toast">Relatório de incidente copiado</string>
     <string name="dashboard_error_share_chooser_title">Compartilhar Relatório de Incidente</string>
 
-    <!-- Detalhes do salvamento -->
-    <string name="dashboard_save_details_title">Especificações da gravação</string>
-    <string name="dashboard_save_details_file">Arquivo: %1$s</string>
-    <string name="dashboard_save_details_created_at">Início da captura: %1$s</string>
-    <string name="dashboard_save_details_saved_at">Salvo em: %1$s</string>
-    <string name="dashboard_save_details_quality">Qualidade: %1$s (%2$d Hz, %3$s)</string>
-    <string name="dashboard_save_details_format">Formato: AAC (.m4a)</string>
-    <string name="gallery_item_created_at">Captura: %1$s</string>
+    <!-- Especificações do arquivo na Galeria -->
+    <string name="gallery_details_title">Especificações da gravação</string>
+    <string name="gallery_details_created_at">Início da captura</string>
+    <string name="gallery_details_saved_at">Salvo em</string>
+    <string name="gallery_details_duration">Duração</string>
+    <string name="gallery_details_size">Tamanho</string>
+    <string name="gallery_details_format">Formato</string>
+    <string name="gallery_details_quality">Qualidade</string>
+    <string name="gallery_details_storage">Armazenamento</string>
+    <string name="gallery_details_storage_value">Gravações / Blackbox</string>
 </resources>

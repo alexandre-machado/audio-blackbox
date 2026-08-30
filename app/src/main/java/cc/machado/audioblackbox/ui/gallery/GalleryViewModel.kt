@@ -200,6 +200,7 @@ class GalleryViewModel(
                     sizeBytes = row.sizeBytes,
                     durationMillis = row.durationMillis,
                     capturedAtMillis = parseCapturedAtMillis(row.displayName) ?: row.dateAddedMillis,
+                    savedAtMillis = row.dateAddedMillis,
                 )
             }.sortedByDescending { it.capturedAtMillis }
 

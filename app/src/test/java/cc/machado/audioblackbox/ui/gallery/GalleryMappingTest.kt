@@ -113,6 +113,40 @@ class GalleryMappingTest {
         // Each item's own mime type survives the mapping unchanged -- this is what the share
         // action later reads per-file, never a single hardcoded constant.
         assertTrue(items.all { it.mimeType == "audio/mp4" || it.mimeType == "audio/wav" })
+
+        // savedAtMillis is mapped from dateAddedMillis
+        assertEquals(1_755_776_347_000L, items[0].savedAtMillis)
+        assertEquals(1_741_593_600_000L, items[1].savedAtMillis)
+        assertEquals(1_735_000_000_000L, items[2].savedAtMillis)
+    }
+
+    @Test
+    fun `formatFullDateTime formats non-zero timestamp correctly`() {
+        val result = formatFullDateTime(1_755_780_000_000L)
+        assertTrue(result.isNotEmpty())
+        assertEquals("—", formatFullDateTime(0L))
+    }
+
+    @Test
+    fun `inferAudioQuality differentiates between PCM WAV and AAC`() {
+        val wavItem = RecordingItem(
+            uri = mock(),
+            displayName = "blackbox_test.wav",
+            mimeType = "audio/wav",
+            sizeBytes = 10_000_000L,
+            durationMillis = 60_000L,
+            capturedAtMillis = 0L,
+        )
+        val aacItem = RecordingItem(
+            uri = mock(),
+            displayName = "blackbox_test.m4a",
+            mimeType = "audio/mp4",
+            sizeBytes = 480_000L,
+            durationMillis = 60_000L,
+            capturedAtMillis = 0L,
+        )
+        assertEquals("16-bit PCM Linear", inferAudioQuality(wavItem))
+        assertTrue(inferAudioQuality(aacItem).startsWith("AAC"))
     }
 
     @Test

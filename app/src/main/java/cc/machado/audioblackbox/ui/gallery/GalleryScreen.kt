@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
@@ -28,11 +29,14 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -214,13 +218,21 @@ private fun RecordingList(
     onShareClicked: (RecordingItem) -> Unit,
     onDeleteRequested: (RecordingItem) -> Unit,
 ) {
+    var expandedUri by remember { mutableStateOf<String?>(null) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         items(items, key = { it.recording.uri.toString() }) { item ->
+            val uriStr = item.recording.uri.toString()
+            val isExpanded = expandedUri == uriStr
             RecordingCard(
                 item = item,
+                isExpanded = isExpanded,
+                onToggleExpand = {
+                    expandedUri = if (isExpanded) null else uriStr
+                },
                 onPlayPauseClicked = { onPlayPauseClicked(item.recording) },
                 onSeek = onSeek,
                 onShareClicked = { onShareClicked(item.recording) },
@@ -233,13 +245,14 @@ private fun RecordingList(
 @Composable
 private fun RecordingCard(
     item: RecordingListItem,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
     onPlayPauseClicked: () -> Unit,
     onSeek: (Long) -> Unit,
     onShareClicked: () -> Unit,
     onDeleteClicked: () -> Unit,
 ) {
     val recording = item.recording
-    val capturedAtLabel = formatCapturedAt(recording.capturedAtMillis)
     val durationSizeLabel = stringResource(
         R.string.gallery_item_duration_size,
         formatDurationClock(recording.durationMillis),
@@ -248,12 +261,13 @@ private fun RecordingCard(
     val isPlaying = item.playback is ItemPlaybackState.Playing
     val playPauseCd = stringResource(
         if (isPlaying) R.string.gallery_pause_cd else R.string.gallery_play_cd,
-        capturedAtLabel,
+        recording.displayName,
     )
-    val shareCd = stringResource(R.string.gallery_share_cd, capturedAtLabel)
-    val deleteCd = stringResource(R.string.gallery_delete_cd, capturedAtLabel)
+    val shareCd = stringResource(R.string.gallery_share_cd, recording.displayName)
+    val deleteCd = stringResource(R.string.gallery_delete_cd, recording.displayName)
 
     Card(
+        onClick = onToggleExpand,
         modifier = Modifier.fillMaxWidth(),
         shape = CARD_SHAPE,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -261,7 +275,7 @@ private fun RecordingCard(
     ) {
         Column(
             modifier = Modifier.padding(CARD_INNER_PADDING),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -270,34 +284,19 @@ private fun RecordingCard(
             ) {
                 Column(
                     modifier = Modifier.weight(1f, fill = false),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = capturedAtLabel,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = recording.displayName,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
                     )
-                    val startTimestamp = remember(recording.displayName) {
-                        cc.machado.audioblackbox.ui.dashboard.parseTimestampFromFilename(recording.displayName)
-                    }
-                    if (startTimestamp != null) {
-                        Text(
-                            text = stringResource(R.string.gallery_item_created_at, formatCapturedAt(startTimestamp)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                     Text(
                         text = durationSizeLabel,
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                         color = FlightOrange,
-                    )
-                    Text(
-                        text = recording.displayName,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
                 }
 
@@ -376,7 +375,7 @@ private fun RecordingCard(
                 )
                 val seekCd = stringResource(R.string.gallery_seek_cd, elapsedTotalLabel)
                 val sliderMax = durationMillis.coerceAtLeast(1L).toFloat()
-                
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -414,7 +413,92 @@ private fun RecordingCard(
                     }
                 }
             }
+
+            if (isExpanded) {
+                RecordingSpecificationsCard(recording = recording)
+            }
         }
+    }
+}
+
+@Composable
+private fun RecordingSpecificationsCard(recording: RecordingItem) {
+    val formatLabel = if (recording.mimeType.contains("wav", ignoreCase = true) || recording.displayName.endsWith(".wav", ignoreCase = true)) {
+        "WAV (.wav)"
+    } else {
+        "AAC (.m4a)"
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.gallery_details_title),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = FlightOrange,
+            )
+            DetailRow(
+                label = stringResource(R.string.gallery_details_created_at),
+                value = formatFullDateTime(recording.capturedAtMillis),
+            )
+            if (recording.savedAtMillis > 0L) {
+                DetailRow(
+                    label = stringResource(R.string.gallery_details_saved_at),
+                    value = formatFullDateTime(recording.savedAtMillis),
+                )
+            }
+            DetailRow(
+                label = stringResource(R.string.gallery_details_duration),
+                value = formatDurationClock(recording.durationMillis),
+            )
+            DetailRow(
+                label = stringResource(R.string.gallery_details_size),
+                value = formatFileSize(recording.sizeBytes),
+            )
+            DetailRow(
+                label = stringResource(R.string.gallery_details_format),
+                value = formatLabel,
+            )
+            DetailRow(
+                label = stringResource(R.string.gallery_details_quality),
+                value = inferAudioQuality(recording),
+            )
+            DetailRow(
+                label = stringResource(R.string.gallery_details_storage),
+                value = stringResource(R.string.gallery_details_storage_value),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace,
+        )
     }
 }
 
@@ -545,5 +629,22 @@ private fun GalleryScreenDeleteErrorPreview() {
             ),
             {}, {}, {}, {}, {}, {}, {},
         )
+    }
+}
+
+@Preview(showBackground = true, name = "With expanded specifications")
+@Composable
+private fun GalleryScreenExpandedPreview() {
+    val recording = RecordingItem(
+        uri = "content://media/external/audio/media/1".toUri(),
+        displayName = "blackbox_2026-08-30_14-30-00_10min.m4a",
+        mimeType = "audio/mp4",
+        sizeBytes = 4_800_000L,
+        durationMillis = 600_000L,
+        capturedAtMillis = 1_788_000_000_000L,
+        savedAtMillis = 1_788_000_600_000L,
+    )
+    AudioBlackboxTheme {
+        RecordingSpecificationsCard(recording = recording)
     }
 }
