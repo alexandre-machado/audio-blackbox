@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
 
 fun getGitCommitShortSha(): String {
@@ -82,6 +85,11 @@ fun computeDynamicVersionName(): String {
     }
 }
 
+fun computeBuildDate(): String {
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    return dateFormat.format(Date())
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -101,6 +109,7 @@ android {
         targetSdk = 36
         versionCode = computeDynamicVersionCode()
         versionName = computeDynamicVersionName()
+        buildConfigField("String", "BUILD_DATE", "\"${computeBuildDate()}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -108,6 +108,7 @@ class RecorderService : Service() {
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
             segmentsProvider = { engine.activeSegments() ?: emptyList() },
+            minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
         )
     }
 
@@ -467,6 +468,7 @@ class RecorderService : Service() {
     companion object {
         private const val TAG = "RecorderService"
         private const val MILLIS_PER_MINUTE = 60_000L
+        private const val MIN_EXPORT_ANIMATION_MILLIS = 500L
 
         // How long a Save outcome (Success/Error) stays reflected in the persistent notification
         // before exportEngine's state is reset to Idle -- see the onCreate() collector comment.

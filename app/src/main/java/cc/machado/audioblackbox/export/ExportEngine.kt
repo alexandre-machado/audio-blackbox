@@ -107,6 +107,8 @@ class ExportEngine(
     private val payloadEncoder: PayloadEncoder,
     private val drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
     private val segmentsProvider: (() -> List<FormatSegment>?)? = null,
+    private val minExportDurationMillis: Long = 0L,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -114,6 +116,7 @@ class ExportEngine(
         sink: ExportSink,
         payloadEncoder: PayloadEncoder,
         drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
+        minExportDurationMillis: Long = 0L,
     ) : this(
         config = config,
         readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
@@ -125,6 +128,7 @@ class ExportEngine(
         payloadEncoder = payloadEncoder,
         drainChunkSizeBytes = drainChunkSizeBytes,
         segmentsProvider = { engine.activeSegments() },
+        minExportDurationMillis = minExportDurationMillis,
     )
 
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
@@ -205,9 +209,18 @@ class ExportEngine(
             ExportFailureReason.UNEXPECTED_FAILURE,
             "export did not complete",
         )
+        val startTime = clock()
         try {
             result = runExport(durationMillis, minutesLabel, secondsLabel)
         } finally {
+            if (minExportDurationMillis > 0L) {
+                val elapsed = clock() - startTime
+                if (elapsed < minExportDurationMillis) {
+                    try {
+                        Thread.sleep(minExportDurationMillis - elapsed)
+                    } catch (_: InterruptedException) {}
+                }
+            }
             _state.value = result
         }
         return result
