@@ -566,7 +566,7 @@ class ScreenLayoutTest {
 
     /** Text that only the settings screen renders. */
     private fun settingsMarker() =
-        composeRule.onNodeWithText(string(R.string.settings_retention_title))
+        composeRule.onNodeWithText(string(R.string.settings_card_retention_label))
 
     private fun SemanticsNodeInteraction.assertClearOfBottomBar(what: String, note: String = "") {
         val barTop = bottomBarTop()
