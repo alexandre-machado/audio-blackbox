@@ -144,7 +144,12 @@ object BoundedExportPlanner {
                     if (takeBytes > 0) {
                         rawSegments += PlanSegment.Raw(rangeCursor, takeBytes, sr.config)
                         rangeCursor += takeBytes
-                        currentWallClock += millisFor(takeBytes, rangeBytesPerSecond)
+                        if (takeBytes == bytesUntilGap) {
+                            // We hit the gap exactly, avoid truncation leaving us just shy of it
+                            currentWallClock = nextGap.startTimestampMillis
+                        } else {
+                            currentWallClock += millisFor(takeBytes, rangeBytesPerSecond)
+                        }
                     } else if (bytesUntilGap <= 0) {
                         // Reached gap boundary
                         val silenceBytes = alignDown(
