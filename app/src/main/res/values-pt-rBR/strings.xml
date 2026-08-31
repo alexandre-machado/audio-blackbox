@@ -44,8 +44,8 @@
     <string name="recorder_notification_state_idle">Parado</string>
     <string name="recorder_notification_state_error">Erro na gravação</string>
     <string name="recorder_notification_buffered">Buffer: %1$s</string>
-    <string name="recorder_notification_action_save">Salvar últimos %1$d min</string>
-    <string name="recorder_notification_action_save_seconds">Salvar últimos %1$d s</string>
+    <string name="recorder_notification_action_save">Salvar (%1$d m)</string>
+    <string name="recorder_notification_action_save_seconds">Salvar (%1$d s)</string>
     <string name="recorder_notification_action_stop">Parar</string>
     <string name="recorder_notification_export_exporting">Salvando gravação…</string>
     <string name="recorder_notification_export_success">Gravação salva: %1$s</string>
@@ -53,7 +53,7 @@
     <string name="recorder_notification_forward_recording">Gravação ao vivo: %1$s</string>
     <string name="recorder_notification_forward_success">Gravação ao vivo salva: %1$s</string>
     <string name="recorder_notification_forward_error">Falha na gravação ao vivo</string>
-    <string name="recorder_notification_action_start_forward">Gravar tudo</string>
+    <string name="recorder_notification_action_start_forward">Ao vivo</string>
     <string name="recorder_notification_action_stop_forward">Parar ao vivo</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
