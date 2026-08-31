@@ -109,6 +109,7 @@ class RecorderService : Service() {
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
             segmentsProvider = { engine.activeSegments() ?: emptyList() },
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
+            errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
         )
     }
 
@@ -121,6 +122,7 @@ class RecorderService : Service() {
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             writerFactory = { target, cfg -> StreamingAacWriter(target, cfg) },
+            errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
         )
     }
 
