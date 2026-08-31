@@ -108,7 +108,7 @@ fun FloatingBottomBar(
                 icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = null) },
                 label = {
                     Text(
-                        text = stringResource(R.string.nav_dashboard_label).uppercase(),
+                        text = stringResource(R.string.nav_dashboard_label),
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp,
@@ -122,7 +122,7 @@ fun FloatingBottomBar(
                 icon = { Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null) },
                 label = {
                     Text(
-                        text = stringResource(R.string.nav_gallery_label).uppercase(),
+                        text = stringResource(R.string.nav_gallery_label),
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp,
@@ -136,7 +136,7 @@ fun FloatingBottomBar(
                 icon = { Icon(imageVector = Icons.Filled.Settings, contentDescription = null) },
                 label = {
                     Text(
-                        text = stringResource(R.string.nav_settings_label).uppercase(),
+                        text = stringResource(R.string.nav_settings_label),
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp,
