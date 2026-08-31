@@ -58,11 +58,7 @@ class ExportErrorLoggingTest {
         assertTrue(state is ExportState.Error)
         assertEquals(ExportFailureReason.SINK_OPEN_FAILED, (state as ExportState.Error).reason)
         
-        val deadline = System.currentTimeMillis() + 5000L
-        while (System.currentTimeMillis() < deadline) {
-            if (errorLogFile.exists() && errorLogFile.length() > 0) break
-            Thread.sleep(10) // wait for polling
-        }
+        flushErrorLogsForTest()
         assertTrue("Log file should be written", errorLogFile.exists() && errorLogFile.length() > 0)
         
         val logContent = errorLogFile.readText()
