@@ -323,10 +323,6 @@ private fun RecordingCard(
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AvionicsCardHeaderBar(
-                label = stringResource(R.string.gallery_card_label),
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

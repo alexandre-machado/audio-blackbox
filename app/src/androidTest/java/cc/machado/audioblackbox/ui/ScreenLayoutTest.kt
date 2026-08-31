@@ -387,6 +387,7 @@ class ScreenLayoutTest {
 
             val nodes = composeRule.onAllNodesWithContentDescription(prefix, substring = true)
             val node = nodes[0]
+            node.performScrollTo()
             node.assertIsDisplayed()
 
             val bounds = node.getUnclippedBoundsInRoot()
