@@ -79,6 +79,17 @@ Measured live on physical **Samsung Galaxy S25 (`SM-S931B`, Android 16 / API 36)
 
 ---
 
+
+## 📚 Engineering Studies: Deterministic Memory Limits
+
+The Audio Blackbox memory limit is governed by strict, pre-calculated bounds rather than reacting dynamically to Android's memory pressure APIs (`onTrimMemory`). This is a deliberate engineering decision:
+
+1. **Memory Warnings are Blind to Process Limits**: The OS broadcasts memory pressure warnings when the *entire system* is low on RAM. However, every Android application operates under a strict per-process limit (the Dalvik Heap Limit). If the app suddenly exceeds its own quota, the runtime immediately throws an `OutOfMemoryError` and crashes the app, without ever broadcasting an `onTrimMemory` warning.
+2. **The 2x Re-allocation Trap**: Dynamically expanding an array in Kotlin requires allocating a new, larger array before garbage-collecting the old one. If we tried to "stretch" a 100 MB audio buffer to 150 MB, the app would briefly need 250 MB of contiguous memory, causing an instant fatal crash on most devices.
+3. **The Safe 85% Ceiling**: Audio Blackbox queries the hard limit at startup (`Runtime.getRuntime().maxMemory()`), subtracts the live footprint, and caps the buffer safely at **85%** of the available headroom. We also reserve a **15%** overhead strictly for the export process.
+
+This guarantees a **zero-risk recording loop**: the app never reallocates memory on the fly, never triggers Garbage Collector pauses that drop audio frames, and prevents crashes at the exact moment the user presses "Save".
+
 ## 📲 Download & Beta Testing
 
 Audio Blackbox is available in open beta via Google Play:
