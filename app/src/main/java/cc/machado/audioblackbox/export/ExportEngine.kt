@@ -19,7 +19,7 @@ sealed interface ExportState {
     data object Idle : ExportState
     data object Exporting : ExportState
     data class Success(val displayName: String, val bytesWritten: Int) : ExportState
-    data class Error(val reason: ExportFailureReason, val message: String) : ExportState
+    data class Error(val reason: ExportFailureReason, val message: String, val exception: Throwable? = null) : ExportState
 }
 
 /** Why an export failed, so a caller can decide what to show/whether retrying makes sense. */
@@ -109,6 +109,7 @@ class ExportEngine(
     private val segmentsProvider: (() -> List<FormatSegment>?)? = null,
     private val minExportDurationMillis: Long = 0L,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val errorLogFile: java.io.File? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -117,6 +118,7 @@ class ExportEngine(
         payloadEncoder: PayloadEncoder,
         drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
         minExportDurationMillis: Long = 0L,
+        errorLogFile: java.io.File? = null,
     ) : this(
         config = config,
         readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
@@ -129,10 +131,20 @@ class ExportEngine(
         drainChunkSizeBytes = drainChunkSizeBytes,
         segmentsProvider = { engine.activeSegments() },
         minExportDurationMillis = minExportDurationMillis,
+        errorLogFile = errorLogFile,
     )
 
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
     val state: StateFlow<ExportState> = _state.asStateFlow()
+
+    private var stateValue: ExportState
+        get() = _state.value
+        set(value) {
+            if (value is ExportState.Error) {
+                logExportError(errorLogFile, clock, "ExportEngine", value.reason.name, value.message, value.exception)
+            }
+            _state.value = value
+        }
 
     @Volatile private var cancelRequested = false
 
@@ -170,9 +182,9 @@ class ExportEngine(
      * window before it calls this. */
     fun acknowledgeTerminalState() {
         synchronized(exportLock) {
-            val current = _state.value
+            val current = stateValue
             if (current is ExportState.Success || current is ExportState.Error) {
-                _state.value = ExportState.Idle
+                stateValue = ExportState.Idle
             }
         }
     }
@@ -203,7 +215,7 @@ class ExportEngine(
                 )
             }
             cancelRequested = false
-            _state.value = ExportState.Exporting
+            stateValue = ExportState.Exporting
         }
         var result: ExportState = ExportState.Error(
             ExportFailureReason.UNEXPECTED_FAILURE,
@@ -221,7 +233,7 @@ class ExportEngine(
                     } catch (_: InterruptedException) {}
                 }
             }
-            _state.value = result
+            stateValue = result
         }
         return result
     }
@@ -263,7 +275,7 @@ class ExportEngine(
             val target = try {
                 sink.open(displayName, payloadEncoder.mimeType)
             } catch (e: IOException) {
-                return ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, e.message ?: "sink open failed")
+                return ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, e.message ?: "sink open failed", e)
             }
 
             val reader = BoundedExportReader(plan, readSinceProvider, drainChunkSizeBytes)
@@ -274,7 +286,7 @@ class ExportEngine(
             // Anything unexpected (a future regression in BoundedExportPlanner, a throw from
             // gapsProvider()/one of the cursor providers, ...) must still leave export() free to
             // run again on the next call, not silently stranded -- see export()'s doc comment.
-            ExportState.Error(ExportFailureReason.UNEXPECTED_FAILURE, e.message ?: e.javaClass.simpleName)
+            ExportState.Error(ExportFailureReason.UNEXPECTED_FAILURE, e.message ?: e.javaClass.simpleName, e)
         }
     }
 
@@ -326,6 +338,7 @@ class ExportEngine(
                 ExportState.Error(
                     failureReason ?: ExportFailureReason.WRITE_FAILED,
                     writeFailure.message ?: writeFailure.javaClass.simpleName,
+                    writeFailure
                 )
             }
             cancelRequested -> {

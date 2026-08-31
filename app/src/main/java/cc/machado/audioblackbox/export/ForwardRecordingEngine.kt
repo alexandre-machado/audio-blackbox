@@ -20,7 +20,7 @@ sealed interface ForwardRecordingState {
     data object Idle : ForwardRecordingState
     data class Recording(val displayName: String, val bytesWritten: Long) : ForwardRecordingState
     data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingState
-    data class Error(val reason: ForwardRecordingFailureReason, val message: String) : ForwardRecordingState
+    data class Error(val reason: ForwardRecordingFailureReason, val message: String, val exception: Throwable? = null) : ForwardRecordingState
 }
 
 /** Why a forward recording session failed. */
@@ -87,6 +87,7 @@ class ForwardRecordingEngine(
     private val clock: () -> Long = System::currentTimeMillis,
     private val drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
     private val configProvider: (() -> AudioConfig)? = null,
+    private val errorLogFile: java.io.File? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -105,10 +106,20 @@ class ForwardRecordingEngine(
         sink = sink,
         writerFactory = writerFactory,
         clock = clock,
+        errorLogFile = null,
     )
 
     private val _state = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
     val state: StateFlow<ForwardRecordingState> = _state.asStateFlow()
+
+    private var stateValue: ForwardRecordingState
+        get() = _state.value
+        set(value) {
+            if (value is ForwardRecordingState.Error) {
+                logExportError(errorLogFile, clock, "ForwardRecordingEngine", value.reason.name, value.message, value.exception)
+            }
+            _state.value = value
+        }
 
     private val lock = Any()
     private var activeDrainThread: Thread? = null
@@ -120,9 +131,9 @@ class ForwardRecordingEngine(
 
     fun acknowledgeTerminalState() {
         synchronized(lock) {
-            val current = _state.value
+            val current = stateValue
             if (current is ForwardRecordingState.Success || current is ForwardRecordingState.Error) {
-                _state.value = ForwardRecordingState.Idle
+                stateValue = ForwardRecordingState.Idle
             }
         }
     }
@@ -153,7 +164,7 @@ class ForwardRecordingEngine(
                     ForwardRecordingFailureReason.CAPTURE_NOT_ACTIVE,
                     "Audio capture is not running",
                 )
-                _state.value = err
+                stateValue = err
                 return err
             }
 
@@ -165,7 +176,7 @@ class ForwardRecordingEngine(
                     ForwardRecordingFailureReason.SINK_OPEN_FAILED,
                     "Failed to open streaming sink: ${e.message}",
                 )
-                _state.value = err
+                stateValue = err
                 return err
             }
 
@@ -178,7 +189,7 @@ class ForwardRecordingEngine(
                     ForwardRecordingFailureReason.SINK_OPEN_FAILED,
                     "Failed to create streaming writer: ${e.message}",
                 )
-                _state.value = err
+                stateValue = err
                 return err
             }
 
@@ -191,7 +202,7 @@ class ForwardRecordingEngine(
             val sessionStartMillis = clock()
             val initialGaps = gapsProvider()
 
-            _state.value = ForwardRecordingState.Recording(displayName, 0L)
+            stateValue = ForwardRecordingState.Recording(displayName, 0L)
 
             val drainThread = Thread({
                 drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps)
@@ -277,7 +288,7 @@ class ForwardRecordingEngine(
                     null -> {
                         // Capture engine stopped unexpectedly
                         synchronized(lock) {
-                            _state.value = ForwardRecordingState.Error(
+                            stateValue = ForwardRecordingState.Error(
                                 ForwardRecordingFailureReason.CAPTURE_NOT_ACTIVE,
                                 "Capture stopped unexpectedly during forward recording",
                             )
@@ -293,7 +304,7 @@ class ForwardRecordingEngine(
                             continue
                         }
                         synchronized(lock) {
-                            _state.value = ForwardRecordingState.Error(
+                            stateValue = ForwardRecordingState.Error(
                                 ForwardRecordingFailureReason.CURSOR_LAPPED,
                                 "Forward writer fell behind: ${result.lostBytes} bytes lost",
                             )
@@ -302,7 +313,7 @@ class ForwardRecordingEngine(
                     }
                     is ReadSinceResult.StreamReset -> {
                         synchronized(lock) {
-                            _state.value = ForwardRecordingState.Error(
+                            stateValue = ForwardRecordingState.Error(
                                 ForwardRecordingFailureReason.STREAM_RESET,
                                 "Capture stream was reset under cursor $cursor",
                             )
@@ -316,7 +327,7 @@ class ForwardRecordingEngine(
                             totalBytesDrained += result.bytes.size
                             synchronized(lock) {
                                 if (_state.value is ForwardRecordingState.Recording) {
-                                    _state.value = ForwardRecordingState.Recording(displayName, totalBytesDrained)
+                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained)
                                 }
                             }
                         }
@@ -345,7 +356,7 @@ class ForwardRecordingEngine(
 
             if (cancelRequested.get()) {
                 synchronized(lock) {
-                    _state.value = ForwardRecordingState.Error(
+                    stateValue = ForwardRecordingState.Error(
                         ForwardRecordingFailureReason.CANCELLED,
                         "Forward recording cancelled",
                     )
@@ -384,13 +395,14 @@ class ForwardRecordingEngine(
             target.finish()
 
             synchronized(lock) {
-                _state.value = ForwardRecordingState.Success(displayName, totalBytesDrained)
+                stateValue = ForwardRecordingState.Success(displayName, totalBytesDrained)
             }
         } catch (t: Throwable) {
             synchronized(lock) {
-                _state.value = ForwardRecordingState.Error(
+                stateValue = ForwardRecordingState.Error(
                     ForwardRecordingFailureReason.WRITE_FAILED,
                     "Forward recording write failed: ${t.message}",
+                    t
                 )
             }
         } finally {
