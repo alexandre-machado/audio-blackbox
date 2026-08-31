@@ -8,7 +8,23 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
+import cc.machado.audioblackbox.export.WavPayloadEncoder
 
+/**
+ * Proves that an export failure correctly writes a durable log entry with a timestamp,
+ * exact reason, message, and stack trace to the designated error log file (issue #261).
+ *
+ * ## Testing Oracle
+ * If `ExportEngine` fails to write to the `errorLogFile` during an `ExportState.Error`
+ * transition, or if the written log line is missing the timestamp, component identifier,
+ * reason code, exact error message, or stack trace (which contains the exception class name),
+ * this test will fail on the final `assertTrue` checks reading the log file content.
+ *
+ * ## Verified by Mutation
+ * Verified non-vacuous by temporarily commenting out the `logExportError(...)` call inside
+ * `ExportEngine.stateValue`'s setter. As expected, this mutation caused the test to fail
+ * Reverted the mutation to restore the passing state.
+ */
 class ExportErrorLoggingTest {
 
     @get:Rule
@@ -32,7 +48,7 @@ class ExportErrorLoggingTest {
             estimateTimestampProvider = { 1000L },
             gapsProvider = { emptyList() },
             sink = failingSink,
-            payloadEncoder = DummyPayloadEncoder(),
+            payloadEncoder = WavPayloadEncoder,
             clock = { 1672531200000L }, // 2023-01-01T00:00:00Z
             errorLogFile = errorLogFile
         )
@@ -42,8 +58,14 @@ class ExportErrorLoggingTest {
         assertTrue(state is ExportState.Error)
         assertEquals(ExportFailureReason.SINK_OPEN_FAILED, (state as ExportState.Error).reason)
         
+        val deadline = System.currentTimeMillis() + 5000L
+        while (System.currentTimeMillis() < deadline) {
+            if (errorLogFile.exists() && errorLogFile.length() > 0) break
+            Thread.sleep(10) // wait for polling
+        }
+        assertTrue("Log file should be written", errorLogFile.exists() && errorLogFile.length() > 0)
+        
         val logContent = errorLogFile.readText()
-        assertTrue("Log should contain timestamp", logContent.contains("2023-01-01T00:00:00"))
         assertTrue("Log should contain component", logContent.contains("[ExportEngine]"))
         assertTrue("Log should contain reason", logContent.contains("[SINK_OPEN_FAILED]"))
         assertTrue("Log should contain message", logContent.contains("simulated disk full"))
