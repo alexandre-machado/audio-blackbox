@@ -28,6 +28,7 @@ class AccessibilityStringsTest {
         val map = mutableMapOf<String, String>()
         for (i in 0 until stringNodes.length) {
             val node = stringNodes.item(i) as Element
+            if (node.getAttribute("translatable") == "false") continue
             val name = node.getAttribute("name")
             val text = node.textContent
             map[name] = text
