@@ -26,7 +26,6 @@ object RecorderNotification {
 
     private const val REQUEST_CODE_CONTENT = 100
     private const val REQUEST_CODE_SAVE = 101
-    private const val REQUEST_CODE_STOP = 102
     private const val REQUEST_CODE_STOP_FORWARD = 103
     private const val REQUEST_CODE_START_FORWARD = 104
 
@@ -73,7 +72,6 @@ object RecorderNotification {
         )
 
         val saveIntent = actionPendingIntent(context, RecorderService.ACTION_SAVE, REQUEST_CODE_SAVE)
-        val stopIntent = actionPendingIntent(context, RecorderService.ACTION_STOP, REQUEST_CODE_STOP)
         val startForwardIntent = actionPendingIntent(context, RecorderService.ACTION_START_FORWARD, REQUEST_CODE_START_FORWARD)
         val stopForwardIntent = actionPendingIntent(context, RecorderService.ACTION_STOP_FORWARD, REQUEST_CODE_STOP_FORWARD)
 
@@ -150,7 +148,6 @@ object RecorderNotification {
             )
         }
 
-        builder.addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
         return builder.build()
     }
 
