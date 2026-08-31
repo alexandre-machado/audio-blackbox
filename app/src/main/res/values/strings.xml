@@ -50,8 +50,8 @@
     <string name="recorder_notification_state_idle">Stopped</string>
     <string name="recorder_notification_state_error">Recording error</string>
     <string name="recorder_notification_buffered">Buffer: %1$s</string>
-    <string name="recorder_notification_action_save">Save last %1$d min</string>
-    <string name="recorder_notification_action_save_seconds">Save last %1$d s</string>
+    <string name="recorder_notification_action_save">Save (%1$d m)</string>
+    <string name="recorder_notification_action_save_seconds">Save (%1$d s)</string>
     <string name="recorder_notification_action_stop">Stop</string>
     <string name="recorder_notification_export_exporting">Saving recording…</string>
     <string name="recorder_notification_export_success">Recording saved: %1$s</string>
@@ -64,7 +64,7 @@
          once both start with "Save"/"Salvar", risking a wrong tap that either loses the moment
          or starts an hours long recording (issue #55). Kept a distinct verb, "Record" instead of
          "Save", short enough to stay legible at the slot's real width. -->
-    <string name="recorder_notification_action_start_forward">Record everything</string>
+    <string name="recorder_notification_action_start_forward">Live</string>
     <string name="recorder_notification_action_stop_forward">Stop live</string>
 
     <!-- Dashboard (Module 4, issue #6) -->
