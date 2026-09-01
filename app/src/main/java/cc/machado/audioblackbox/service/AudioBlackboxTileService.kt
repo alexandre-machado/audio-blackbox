@@ -65,18 +65,26 @@ class AudioBlackboxTileService : TileService() {
             return
         }
 
-        val scope = tileScope ?: activeServiceScope ?: CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val currentState = captureStateFlowProvider().value
         val preferences = recordingPreferencesFactory(context)
         when (currentState) {
             is CaptureState.Recording, is CaptureState.Paused -> {
-                scope.launch {
+                // Issue #267: this write must survive onStopListening() collapsing the tile's
+                // binding (a click on a QS tile collapses the shade immediately, which unbinds
+                // the tile before this suspend function has a chance to commit). It is launched
+                // on preferencesScope -- an application-scoped coroutine scope whose lifetime is
+                // the process, not the tile binding -- specifically so onStopListening() cannot
+                // cancel it out from under the click that started it.
+                preferencesScope.launch {
                     preferences.setRecordingDesired(false)
                 }
                 serviceStarter(context, intentFactory(context, RecorderService.ACTION_STOP))
             }
             is CaptureState.Idle, is CaptureState.Error -> {
-                scope.launch {
+                // Same reasoning as the stop branch above, kept symmetric even though the bug is
+                // invisible here today (recordingDesired and the observed outcome happen to
+                // agree on the start path) -- see issue #267.
+                preferencesScope.launch {
                     preferences.setRecordingDesired(true)
                 }
                 serviceStarter(context, intentFactory(context, RecorderService.ACTION_START))
@@ -124,6 +132,11 @@ class AudioBlackboxTileService : TileService() {
             }
         }
 
+        // Application-scoped: intentionally never bound to a tile instance's or a tile
+        // binding's lifetime, so onStopListening() unbinding the tile can never cancel a write
+        // launched from onClick() (issue #267). Overridable in tests for deterministic control.
+        var preferencesScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
         // Injectable seams for unit testing
         var tileScope: CoroutineScope? = null
         var captureStateFlowProvider: () -> StateFlow<CaptureState> = { RecorderService.captureState }
@@ -145,6 +158,7 @@ class AudioBlackboxTileService : TileService() {
         var activityLauncher: (TileService, Intent) -> Unit = ::defaultActivityLauncher
 
         fun resetTestOverrides() {
+            preferencesScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             tileScope = null
             captureStateFlowProvider = { RecorderService.captureState }
             permissionChecker = { ctx, perm ->

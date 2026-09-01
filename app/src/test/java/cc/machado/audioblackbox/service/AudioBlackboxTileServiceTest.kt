@@ -6,12 +6,18 @@ import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.settings.InMemoryRecordingPreferences
+import cc.machado.audioblackbox.settings.RecordingPreferences
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,6 +52,7 @@ class AudioBlackboxTileServiceTest {
         preferences = InMemoryRecordingPreferences(initialDesired = false)
 
         AudioBlackboxTileService.tileScope = testScope
+        AudioBlackboxTileService.preferencesScope = testScope
         AudioBlackboxTileService.captureStateFlowProvider = { captureStateFlow }
         AudioBlackboxTileService.permissionChecker = { _, _ -> permissionGranted }
         AudioBlackboxTileService.recordingPreferencesFactory = { preferences }
@@ -165,5 +172,147 @@ class AudioBlackboxTileServiceTest {
         assertEquals(RecorderService.ACTION_STOP, startedIntentAction)
         assertFalse(activityLaunched)
         assertFalse("Desired state must be persisted as false", preferences.isRecordingDesired())
+    }
+
+    /**
+     * Wraps a real [RecordingPreferences] and suspends every [setRecordingDesired] call on a
+     * caller-controlled gate until the test explicitly releases it. This lets a test hold a
+     * DataStore-style suspending write open across a lifecycle event (like [TileService
+     * .onStopListening]) instead of racing it, per AGENTS.md's "no sleeps, use explicit
+     * synchronization primitives" rule.
+     */
+    private class GatedRecordingPreferences(
+        private val delegate: RecordingPreferences,
+        private val gate: CompletableDeferred<Unit>,
+    ) : RecordingPreferences {
+        override val isRecordingDesired: Flow<Boolean> = delegate.isRecordingDesired
+        override suspend fun isRecordingDesired(): Boolean = delegate.isRecordingDesired()
+        override suspend fun setRecordingDesired(desired: Boolean) {
+            gate.await()
+            delegate.setRecordingDesired(desired)
+        }
+    }
+
+    /**
+     * Regression test for issue #267. Oracle: on today's (pre-fix) production code, `onClick()`
+     * launches the `setRecordingDesired(false)` write on `activeServiceScope` (since `tileScope`
+     * is unset here, exactly matching the real production wiring), and `onStopListening()`
+     * unconditionally cancels that same scope. Simulating the real sequence a QS tile tap
+     * produces -- `onStartListening()` -> `onClick()` while `Recording` -> `onStopListening()`
+     * (the shade-collapse that follows every tile tap) -- while holding the write open on a gate
+     * proves whether the write survives the unbind. It must: a passing test here requires the
+     * write to actually land in the backing preferences store after the tile has been unbound,
+     * not merely that a stub lambda was invoked.
+     */
+    @Test
+    fun `onClick write to recordingDesired survives onStopListening unbinding the tile`() = testScope.runTest {
+        Dispatchers.setMain(StandardTestDispatcher())
+        try {
+            AudioBlackboxTileService.tileScope = null
+            AudioBlackboxTileService.preferencesScope = testScope
+            val gate = CompletableDeferred<Unit>()
+            val gated = GatedRecordingPreferences(InMemoryRecordingPreferences(initialDesired = true), gate)
+            AudioBlackboxTileService.recordingPreferencesFactory = { gated }
+            captureStateFlow.value = CaptureState.Recording
+            permissionGranted = true
+            val tileService = AudioBlackboxTileService()
+
+            tileService.onStartListening()
+            tileService.onClick()
+            advanceUntilIdle() // runs onClick's write up to gate.await(), where it suspends
+
+            assertEquals(RecorderService.ACTION_STOP, startedIntentAction)
+            assertTrue(
+                "Sanity check: write must still be pending (gate closed) before unbind",
+                gated.isRecordingDesired(),
+            )
+
+            tileService.onStopListening() // the shade-collapse callback every tile tap triggers
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertFalse(
+                "recordingDesired must be durably persisted false even though the tile was " +
+                    "unbound (onStopListening) while the write was still in flight",
+                gated.isRecordingDesired(),
+            )
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    /** Symmetric coverage for the START branch: the same latent cancellation bug exists there,
+     * it is just invisible on unpatched code because the desired flag and ACTION_START happen to
+     * agree either way. This must hold just as strongly as the STOP case above.
+     */
+    @Test
+    fun `onClick write to recordingDesired survives onStopListening unbinding the tile on start branch`() =
+        testScope.runTest {
+            Dispatchers.setMain(StandardTestDispatcher())
+            try {
+                AudioBlackboxTileService.tileScope = null
+                AudioBlackboxTileService.preferencesScope = testScope
+                val gate = CompletableDeferred<Unit>()
+                val gated = GatedRecordingPreferences(InMemoryRecordingPreferences(initialDesired = false), gate)
+                AudioBlackboxTileService.recordingPreferencesFactory = { gated }
+                captureStateFlow.value = CaptureState.Idle
+                permissionGranted = true
+                val tileService = AudioBlackboxTileService()
+
+                tileService.onStartListening()
+                tileService.onClick()
+                advanceUntilIdle()
+
+                assertEquals(RecorderService.ACTION_START, startedIntentAction)
+
+                tileService.onStopListening()
+
+                gate.complete(Unit)
+                advanceUntilIdle()
+
+                assertTrue(
+                    "recordingDesired must be durably persisted true even though the tile was " +
+                        "unbound while the write was still in flight",
+                    gated.isRecordingDesired(),
+                )
+            } finally {
+                Dispatchers.resetMain()
+            }
+        }
+
+    /**
+     * Full on -> off -> on cycle. Oracle: each tap reads the *current* capture state (driven
+     * here by flipping [captureStateFlow], the same signal production reads via
+     * `RecorderService.captureState`) and must alternate the dispatched action and the desired
+     * flag correctly across three consecutive taps, proving the tile is a real toggle rather
+     * than a one-way switch.
+     */
+    @Test
+    fun `tile on-off-on cycle alternates action and desired flag each tap`() = testScope.runTest {
+        val tileService = AudioBlackboxTileService()
+
+        // Tap 1: idle -> start.
+        captureStateFlow.value = CaptureState.Idle
+        tileService.onClick()
+        advanceUntilIdle()
+        assertEquals(RecorderService.ACTION_START, startedIntentAction)
+        assertTrue(preferences.isRecordingDesired())
+
+        // Tap 2: recording -> stop.
+        captureStateFlow.value = CaptureState.Recording
+        startedIntentAction = null
+        tileService.onClick()
+        advanceUntilIdle()
+        assertEquals(RecorderService.ACTION_STOP, startedIntentAction)
+        assertFalse(preferences.isRecordingDesired())
+
+        // Tap 3: idle again -> start again.
+        captureStateFlow.value = CaptureState.Idle
+        startedIntentAction = null
+        tileService.onClick()
+        advanceUntilIdle()
+        assertEquals(RecorderService.ACTION_START, startedIntentAction)
+        assertTrue(preferences.isRecordingDesired())
     }
 }
