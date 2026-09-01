@@ -1,24 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Quick Settings tile brand mark (issue #268).
-  Derived from ic_launcher_monochrome.xml's isometric "black box" silhouette,
-  re-fit to the 24dp QS tile viewport (the launcher drawable is authored on a
-  108dp adaptive-icon canvas with its own safe-zone inset and cannot be
-  pointed at directly for a tile).
 
-  Simplified to the two dominant, highest-area subpaths of the source mark:
-  the outer isometric hexagon silhouette and its primary top-face facet
-  split (the two largest contours by bounding-box area in the source path,
-  2474px^2 and 736px^2 respectively). The remaining seven subpaths in the
-  source — the memory-cylinder rivet detail, the connector-pin facets, and
-  hairline seam strokes (19px^2-279px^2 each) — are dropped: at a 24dp
-  render size those already sub-pixel details would smear into noise rather
-  than read as recognizable geometry, whereas the outer hexagon plus the
-  top-face split still reads clearly as a 3D box silhouette.
+  Direction change (2026-09-01, recorded in AGENTS.md #5 and issue #268): tracing
+  ic_launcher_monochrome.xml's isometric illustration down to a 24dp silhouette was
+  tried first and rejected on real-device evidence (unrecognizable, off-centre,
+  read as amateur next to stock tiles). The app logo is a detailed illustration
+  whose recognisability lives in colour/lettering/internal detail that a
+  single-colour 24dp silhouette cannot carry; reducing by largest-area subpath
+  kept the wrong information.
+
+  This is a purpose-built 24dp pictogram instead, drawn from scratch under the
+  owner's scoped iconography exception (AGENTS.md #5, origin #268): a
+  crash-survivable-recorder canister, reduced to clean, symmetric, centred
+  geometry —
+    - a tall rounded-rect body (the recorder canister),
+    - a thin evenOdd-style cutout band near the top (the lid/cap seam,
+      same "negative-space seam" convention ic_launcher_monochrome.xml uses),
+    - a small rounded tab at the base (the connector).
+  Body and tab are wound clockwise and unioned under the default nonzero fill
+  rule (so the tab reads as seamlessly attached, not a separate floating
+  shape); the seam rectangle is wound counter-clockwise and is fully contained
+  inside the body's silhouette, so it subtracts a clean gap without ever
+  spilling fill outside the body's outline.
+
+  Bounding box by construction: x 6.5-17.5 (width 11, centred on 12), y
+  3.5-20.5 (height 17, centred on 12) — 6.5dp side margins and 3.5dp
+  top/bottom margins, i.e. geometrically centred and symmetric left-right,
+  not just eyeballed.
 
   Single fill, no background layer, tintable via android:fillColor overrides
-  (kept as white here per the QS tile contract: the system tints this icon,
-  so no brand color is hardcoded).
+  (kept white here per the QS tile contract: the system tints this icon, no
+  brand colour is hardcoded).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -27,6 +40,6 @@
     android:viewportHeight="24">
     <path
         android:fillColor="@android:color/white"
-        android:fillType="evenOdd"
-        android:pathData="M 10.76 21.14 10.08 21.08 9.38 20.83 4.31 17.47 4.10 17.04 4.06 16.60 3.85 16.39 3.54 16.22 3.44 16.03 3.32 15.52 3.35 15.36 3.30 15.31 3.33 15.12 3.16 14.95 2.96 15.01 2.55 14.88 2.40 14.79 2.25 14.48 2.22 13.99 2.18 13.95 2.21 13.81 2.17 13.78 2.19 13.62 2.15 13.58 2.18 13.40 2.14 13.36 2.17 13.15 2.12 13.10 2.15 13.05 2.15 12.78 2.00 12.61 2.14 12.47 2.14 12.35 2.05 12.25 2.15 12.15 2.13 11.90 2.17 11.87 2.21 11.34 2.38 10.88 2.50 10.74 2.70 10.63 3.79 10.28 3.98 10.10 4.15 9.53 4.49 8.98 4.74 8.73 5.17 8.46 5.58 8.31 10.55 6.98 10.74 6.79 10.71 5.24 10.88 4.68 11.19 4.21 11.47 4.02 11.91 3.84 15.46 2.94 15.89 2.86 16.30 2.86 16.95 3.00 20.66 4.04 21.22 4.30 21.56 4.65 21.81 5.24 21.85 5.47 21.83 6.88 22.00 7.05 22.00 7.33 21.82 7.51 21.82 8.69 21.98 8.86 21.98 9.09 21.81 9.26 21.81 10.49 21.97 10.66 21.97 10.79 21.79 10.97 21.79 12.08 21.92 12.21 21.78 12.35 21.77 12.61 21.55 13.12 21.75 13.47 21.86 13.79 21.85 13.90 21.90 13.95 21.86 13.99 21.87 15.01 21.69 15.55 21.43 15.80 11.93 20.75 11.39 20.99 10.76 21.14 Z M 10.67 19.71 11.07 19.65 11.47 19.51 21.43 14.52 21.82 14.14 21.81 13.80 21.68 13.48 21.47 13.27 21.22 13.49 20.81 13.70 17.87 15.11 17.45 15.23 17.07 15.26 16.52 15.18 14.77 14.42 14.50 14.61 14.11 14.81 9.01 16.78 8.48 16.95 7.95 17.05 7.13 17.03 6.96 17.21 7.04 17.30 5.54 16.37 5.15 16.50 4.96 16.68 5.15 16.87 9.30 19.47 9.89 19.67 10.16 19.71 10.67 19.71 Z" />
+        android:fillType="nonZero"
+        android:pathData="M 8.7 3.5 L 15.3 3.5 A 2.2 2.2 0 0 1 17.5 5.7 L 17.5 16.3 A 2.2 2.2 0 0 1 15.3 18.5 L 8.7 18.5 A 2.2 2.2 0 0 1 6.5 16.3 L 6.5 5.7 A 2.2 2.2 0 0 1 8.7 3.5 Z M 10.6 18 L 13.4 18 A 0.6 0.6 0 0 1 14 18.6 L 14 19.9 A 0.6 0.6 0 0 1 13.4 20.5 L 10.6 20.5 A 0.6 0.6 0 0 1 10 19.9 L 10 18.6 A 0.6 0.6 0 0 1 10.6 18 Z M 6.7 7.3 L 6.7 8.5 L 17.3 8.5 L 17.3 7.3 Z" />
 </vector>
