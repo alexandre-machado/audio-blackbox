@@ -206,7 +206,14 @@ class AudioBlackboxTileServiceTest {
      */
     @Test
     fun `onClick write to recordingDesired survives onStopListening unbinding the tile`() = testScope.runTest {
-        Dispatchers.setMain(StandardTestDispatcher())
+        // Shares testScope's own scheduler (rather than an unlinked StandardTestDispatcher())
+        // specifically so that advanceUntilIdle() below also drives activeServiceScope's
+        // Dispatchers.Main.immediate work -- otherwise the pre-fix write coroutine would never
+        // even be dispatched before onStopListening() cancels it, and this test would exercise
+        // cancellation racing *dispatch* rather than the mid-suspend cancellation (racing a write
+        // parked at gate.await()) the assertions below are written against (issue #271, `@rev`
+        // MEDIUM finding).
+        Dispatchers.setMain(StandardTestDispatcher(testScope.testScheduler))
         try {
             AudioBlackboxTileService.tileScope = null
             AudioBlackboxTileService.preferencesScope = testScope
@@ -249,7 +256,14 @@ class AudioBlackboxTileServiceTest {
     @Test
     fun `onClick write to recordingDesired survives onStopListening unbinding the tile on start branch`() =
         testScope.runTest {
-            Dispatchers.setMain(StandardTestDispatcher())
+            // Shares testScope's own scheduler (rather than an unlinked StandardTestDispatcher())
+        // specifically so that advanceUntilIdle() below also drives activeServiceScope's
+        // Dispatchers.Main.immediate work -- otherwise the pre-fix write coroutine would never
+        // even be dispatched before onStopListening() cancels it, and this test would exercise
+        // cancellation racing *dispatch* rather than the mid-suspend cancellation (racing a write
+        // parked at gate.await()) the assertions below are written against (issue #271, `@rev`
+        // MEDIUM finding).
+        Dispatchers.setMain(StandardTestDispatcher(testScope.testScheduler))
             try {
                 AudioBlackboxTileService.tileScope = null
                 AudioBlackboxTileService.preferencesScope = testScope
