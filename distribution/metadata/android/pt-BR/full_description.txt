@@ -8,5 +8,4 @@ PRINCIPAIS RECURSOS:
 • Gravação Contínua para Frente: Continue gravando sem perder o contexto dos momentos que antecederam o início.
 • Pausa Inteligente em Chamadas: Pausa e retoma automaticamente durante ligações telefônicas sem corromper a linha do tempo.
 • Galeria Offline Integrada: Ouça, avance, compartilhe e gerencie todas as suas gravações salvas em um player nativo.
-• Botão de Configurações Rápidas (Quick Settings Tile): Ative e desative a gravação direto da barra de notificações do Android.
 • 100% Privado e Seguro: Zero envio de áudios para nuvem, sem transcrição remota, sem anúncios e com código aberto auditável.

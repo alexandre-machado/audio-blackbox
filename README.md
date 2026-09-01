@@ -48,7 +48,6 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 - ⚡ **Seamless Interruption Handling**: Pauses gracefully during phone calls or third-party audio focus grabs, preserving silence gaps to ensure exported timestamps remain perfectly synced.
 - 🔋 **Robust Background Survival**: Dedicated foreground capture service with persistent notifications and guided manufacturer battery-killer bypass.
 - 🎵 **Integrated Audio Player**: Playback, seek, manage, and share your recordings directly inside the app with native Android sharesheets.
-- 🔘 **Quick Settings Tile**: Start and stop capture with a single tap from Android's Quick Settings panel.
 
 ---
 

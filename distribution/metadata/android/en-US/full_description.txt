@@ -8,5 +8,4 @@ KEY FEATURES:
 • Continuous Forward Recording: Keep recording seamlessly while preserving the historical moments leading up to it.
 • Smart Interruption Handling: Automatically pauses and resumes during phone calls while preserving timeline alignment.
 • Integrated Offline Gallery: Listen, seek, share, and manage your saved recordings with an embedded native player.
-• Quick Settings Tile: Toggle continuous capture straight from your Android notification shade.
 • 100% Private & Secure: Zero cloud uploads, zero remote transcription, zero ads, and fully auditable open source architecture.
