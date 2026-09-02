@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.widget
 import android.content.Context
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.service.RecorderService
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,14 +35,22 @@ object RecordingWidgetStateObserver {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
 
+    /**
+     * @param dispatcher where the collector runs. Injectable purely so [RecordingWidgetStateObserverTest]
+     *   can drive it with a `TestDispatcher` and assert on the re-entrancy guard deterministically,
+     *   instead of sleeping real milliseconds to "prove" a second collector did not attach --
+     *   `AGENTS.md` §3 forbids that kind of wall-clock escape hatch (PR #278 review, `@rev`).
+     *   Production always uses the default.
+     */
     fun start(
         context: Context,
         captureState: StateFlow<CaptureState> = RecorderService.captureState,
         onCaptureState: (Context) -> Unit = RecordingWidgetUpdater::refreshAll,
+        dispatcher: CoroutineDispatcher = Dispatchers.Default,
     ) {
         if (job?.isActive == true) return
         val appContext = context.applicationContext
-        job = scope.launch {
+        job = scope.launch(dispatcher) {
             captureState.collect {
                 onCaptureState(appContext)
             }
