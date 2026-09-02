@@ -268,13 +268,6 @@
     <string name="settings_retention_clamp_notice_title">Janela de retenção reduzida</string>
     <string name="settings_retention_clamp_notice_body">Sua janela de retenção foi reduzida de %1$d para %2$d minutos como medida temporária de segurança de memória, enquanto uma correção definitiva está em andamento.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendi</string>
-    <!-- Quick Settings tile (issue #79) -->
-    <string name="tile_label">Audio Blackbox</string>
-    <string name="tile_state_recording">Gravando</string>
-    <string name="tile_state_paused">Pausado</string>
-    <string name="tile_state_idle">Desligado</string>
-    <string name="tile_state_error">Erro</string>
-
     <!-- Resume recording after reboot notification (issue #79) -->
     <string name="notification_resume_channel_name">Aviso de retomada de gravação</string>
     <string name="notification_resume_channel_description">Avisa para retomar a gravação contínua após reiniciar o aparelho.</string>

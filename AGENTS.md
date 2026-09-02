@@ -153,3 +153,15 @@ Every pull request must pass a dual specialist review before merging:
 2. **Code Review Specialist (`@rev`)**: Verifies correctness, concurrency invariants, non-vacuous testing, and performance contracts.
 
 Both specialists must post explicit, grep-verifiable approval markers in PR review comments prior to merge.
+
+---
+
+## 11. Foreground Service Start Eligibility Is Not the Same Gate as Background-Start Exemption
+
+- **A `TileService` tap cannot start a `microphone`-type foreground service on Android 14+ (targetSdk 34+), and a Quick Settings tile was removed for exactly this reason ([#267](https://github.com/alexandre-machado/audio-blackbox/issues/267), [#273](https://github.com/alexandre-machado/audio-blackbox/issues/273) · 2026-09-01)**:
+  - Android enforces **two distinct gates**, and a `TileService.onClick()` only clears the first:
+    1. The Android 12+ *background FGS-start exemption* list includes generic UI-element interaction, so `startForegroundService()` called from `TileService.onClick()` succeeds at the call site.
+    2. The separate, narrower *while-in-use permission eligibility* list (targetSdk 34+, required for a `microphone`-typed FGS's `startForeground()` call) covers only: system-component start, app-widget interaction, notification interaction, a `PendingIntent` from another visible app, device-policy-controller, `VoiceInteractionService`, and `START_ACTIVITIES_FROM_BACKGROUND`. **`TileService` is absent from this second list.**
+  - The result: the tile's `startForegroundService()` call succeeds, then the service's own `startForeground(..., FOREGROUND_SERVICE_TYPE_MICROPHONE)` a moment later throws `SecurityException` — confirmed 14 times in production crash data. Because the crash happened before the process-static capture state could transition away from `Idle`, every subsequent tap re-entered the same start branch and crashed again; the tile's stop path was never reachable.
+  - **[#79](https://github.com/alexandre-machado/audio-blackbox/issues/79) recorded the analogous lesson for the boot-completed path** (a `BroadcastReceiver`-initiated restart cannot reopen the mic from the background either) but that lesson was never generalized to the tile, and the tile shipped with the same defect. Treat this as one rule with two instances: **any caller that starts a `microphone`-typed foreground service on Android 14+ must be on the while-in-use eligibility list above, not merely on the broader background-start exemption list.** Before wiring a new trigger (tile, app widget, broadcast receiver, `PendingIntent`) to start recording, check it against the eligibility list first, not just "does `startForegroundService()` not throw."
+  - The Quick Settings tile (`AudioBlackboxTileService`) was removed rather than repaired: its stop path was unreachable and it delivered zero working function, so nothing was lost. An app widget is a valid replacement trigger (app-widget interaction *is* on the eligibility list) and is tracked separately.
