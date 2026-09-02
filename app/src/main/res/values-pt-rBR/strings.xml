@@ -133,6 +133,7 @@
     <string name="capture_error_read_bad_value">O gravador de áudio recebeu parâmetros inválidos. Desligue e ligue a gravação novamente para tentar de novo.</string>
     <string name="capture_error_read_dead_object">O serviço de áudio do sistema parou de responder. Desligue e ligue a gravação novamente ou reinicie o aparelho.</string>
     <string name="capture_error_read_unknown_error">Ocorreu um erro inesperado na gravação de áudio. Desligue e ligue a gravação novamente para tentar de novo.</string>
+    <string name="capture_error_foreground_service_promotion_refused">O Android recusou iniciar a gravação agora. Abra o aplicativo e tente novamente.</string>
 
     <string name="dashboard_status_announcement">Estado da gravação: %1$s</string>
 

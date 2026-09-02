@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.audio.SwitchConfigResult
@@ -54,8 +55,14 @@ import kotlinx.coroutines.withContext
  * value -- see issue #3 PR description).
  *
  * ## onStartCommand contract
- * [startForeground] is called *first*, unconditionally, before this method looks at the
- * Intent's action at all -- see the comment on [onStartCommand] for why.
+ * [startForeground] is called *first*, before this method looks at the Intent's action at all --
+ * see the comment on [onStartCommand] for why. That call is wrapped in a `try`/`catch`: the OS
+ * can refuse the promotion (a `SecurityException`, e.g. a while-in-use eligibility gate this
+ * start attempt did not satisfy -- see issue #267/#275), and an uncaught throw there kills the
+ * whole process before anything can react. A caught refusal is reported through
+ * [AudioCaptureEngine.reportForegroundPromotionRefused] (so [CaptureState.Error] becomes visible
+ * to every observer -- the widget, the dashboard) and this service instance then stops itself,
+ * since it was never actually promoted to foreground and has nothing else useful to do.
  */
 class RecorderService : Service() {
 
@@ -239,11 +246,45 @@ class RecorderService : Service() {
         // Context.startForegroundService()/startService() and this service calling
         // startForeground() -- miss it and the OS kills the process and raises an ANR. That
         // deadline runs from process start, not from whenever we get around to it, so this is
-        // called first, synchronously, before looking at the Intent's action or touching the
-        // engine at all. It also covers the two cases with no useful action to inspect: intent ==
-        // null (an OS-initiated restart, see below) and an unrecognized action -- both still need
-        // an up-to-date notification posted promptly.
-        startForeground(RecorderNotification.NOTIFICATION_ID, currentNotification())
+        // called first, before looking at the Intent's action or touching the engine at all. It
+        // also covers the two cases with no useful action to inspect: intent == null (an
+        // OS-initiated restart, see below) and an unrecognized action -- both still need an
+        // up-to-date notification posted promptly.
+        //
+        // Wrapped in try/catch (issue #267/#275; PR #278 review, `@rev` finding 1): the OS can
+        // refuse this promotion with an uncaught SecurityException -- a while-in-use eligibility
+        // gate this specific start attempt did not satisfy (revoked permission, a Doze/App
+        // Standby edge case, an OEM restriction, or any other state the eligibility check
+        // enforces). Before this fix that exception was never caught, so it killed the whole
+        // process before engine.start() ever ran and before CaptureState could become Error --
+        // the exact crash that hit the removed Quick Settings tile 14/14 times. Catching it here
+        // and reporting through the engine, instead, makes the refusal a real, visible
+        // CaptureState.Error for every observer (the widget, the dashboard) rather than a dead
+        // process the user has to notice on their own.
+        try {
+            startForeground(RecorderNotification.NOTIFICATION_ID, currentNotification())
+        } catch (refusal: SecurityException) {
+            Log.w(TAG, "onStartCommand(): startForeground refused: ${refusal.message}")
+            engine.reportForegroundPromotionRefused(
+                CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
+                "startForeground() refused: ${refusal.message}",
+            )
+            // This service instance was never actually promoted to foreground -- it has no
+            // notification and nothing useful left to do, so it stops itself rather than linger
+            // as a plain background service (which the OS would eventually reap anyway, and
+            // which risks the same ANR the try/catch above is meant to avoid). `engine.state`
+            // lives in the companion object (process lifetime), so the Error set above survives
+            // this instance being torn down; the next genuine ACTION_START/ACTION_STOP against a
+            // fresh Service instance clears it exactly the way any other CaptureState.Error does
+            // today (engine.start()'s no-op guard treats Error like Idle; engine.stop() resets
+            // Error to Idle). `isGracefullyStopping = true` here specifically stops onDestroy()'s
+            // defensive cleanup thread from immediately overwriting this Error back to Idle --
+            // that path exists for a session that was genuinely mid-capture, which this never
+            // was: nothing was ever opened.
+            isGracefullyStopping = true
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         when (intent?.action) {
             ACTION_START -> {

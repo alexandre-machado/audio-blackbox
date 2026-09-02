@@ -147,6 +147,7 @@
     <string name="capture_error_read_bad_value">The audio recorder received invalid parameters. Turn recording off and on again to retry.</string>
     <string name="capture_error_read_dead_object">The system audio service stopped responding. Turn recording off and on again, or restart your device.</string>
     <string name="capture_error_read_unknown_error">An unexpected audio recording error occurred. Turn recording off and on again to retry.</string>
+    <string name="capture_error_foreground_service_promotion_refused">Android refused to start recording right now. Open the app and try again.</string>
 
     <string name="dashboard_status_announcement">Recording state: %1$s</string>
 

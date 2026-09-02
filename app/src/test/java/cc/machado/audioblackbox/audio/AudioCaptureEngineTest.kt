@@ -727,4 +727,58 @@ class AudioCaptureEngineTest {
 
         engine.stop()
     }
+
+    // ---- reportForegroundPromotionRefused (issue #267/#275; PR #278 review, `@rev` finding 1) ----
+    //
+    // RecorderService.onStartCommand calls the real Service.startForeground(), which throws a
+    // real SecurityException when the OS refuses the promotion -- neither is constructible in a
+    // plain JVM test (this repo has no Robolectric). AudioCaptureEngine.reportForegroundPromotionRefused
+    // is the seam RecorderService's catch block calls into: it is the piece that actually converts
+    // "the OS refused" into a real, observable CaptureState.Error instead of letting the exception
+    // escape and kill the process. The oracle below is exactly that conversion; the try/catch
+    // wiring itself (whether RecorderService really catches the framework's SecurityException) is
+    // not JVM-testable and is not claimed to be -- see AGENTS.md §6.
+
+    @Test
+    fun `reportForegroundPromotionRefused surfaces as Error, never an escaping throwable`() {
+        val engine = AudioCaptureEngine(config = fastConfig)
+
+        engine.reportForegroundPromotionRefused(
+            CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
+            "startForeground() refused: test",
+        )
+
+        val state = engine.state.value
+        assertTrue("expected Error, got $state", state is CaptureState.Error)
+        assertEquals(
+            CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
+            (state as CaptureState.Error).reason,
+        )
+        assertEquals("startForeground() refused: test", state.message)
+    }
+
+    @Test
+    fun `reportForegroundPromotionRefused does not clobber a genuinely running session`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            val engine = AudioCaptureEngine(config = fastConfig, audioRecordFactory = { _, _ -> record })
+            engine.start()
+            awaitState(engine, description = "Recording state") { it is CaptureState.Recording }
+
+            // The spike behind this feature verified a background-context STOP against an
+            // already-running foreground service is not re-checked against the eligibility gate,
+            // so this should never actually happen in production -- this guard is defense in
+            // depth (mirroring start()'s own no-op guard), not a fix for an observed collision.
+            engine.reportForegroundPromotionRefused(
+                CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
+                "should never apply while Recording",
+            )
+
+            assertEquals(
+                "a start-refusal report must never overwrite a genuinely running session",
+                CaptureState.Recording,
+                engine.state.value,
+            )
+            engine.stop()
+        }
 }

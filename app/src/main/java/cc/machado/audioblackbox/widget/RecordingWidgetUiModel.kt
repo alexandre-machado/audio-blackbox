@@ -78,13 +78,16 @@ object RecordingWidgetStateMapper {
             actionIsStop = true,
         )
 
-        // A refused/crashed start can never actually reach this branch today -- see this file's
-        // class doc and the PR description for why (RecorderService.onStartCommand calls
-        // startForeground() before engine.start() ever runs, so a while-in-use refusal kills the
-        // process before CaptureState.Error is ever set). This branch exists, and is tested, for
-        // every *other* way capture can fail (AudioRecord init failure, unsupported config,
-        // issue #272's OOM refusal path) -- covering it here is what "never a silent crash and
-        // never a stale on" means for the failure modes this widget's own code can actually see.
+        // Also reached by an OS-refused foreground-service promotion (issue #267/#275; PR #278
+        // review, `@rev` finding 1): RecorderService.onStartCommand now catches the
+        // SecurityException startForeground() can throw and reports it through
+        // AudioCaptureEngine.reportForegroundPromotionRefused before the process could ever die
+        // from it, so this branch is exactly what a refused start (a while-in-use eligibility
+        // gate, a revoked permission, a Doze edge case) renders instead of a silent crash --
+        // alongside every other way capture can fail (AudioRecord init failure, unsupported
+        // config, issue #272's OOM refusal path). "Never a silent crash and never a stale on"
+        // (issue #275's acceptance criterion) now covers the OS-refusal case too, not just the
+        // failure modes this widget's own code path could already see.
         is CaptureState.Error -> RecordingWidgetUiModel(
             statusTextRes = R.string.widget_status_error,
             annunciator = WidgetAnnunciator.WARNING_RED,

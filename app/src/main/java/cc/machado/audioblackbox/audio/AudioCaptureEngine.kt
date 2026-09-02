@@ -69,6 +69,13 @@ enum class CaptureErrorReason {
 
     /** Pre-allocating the ring buffer's backing array threw `OutOfMemoryError`. */
     BUFFER_ALLOCATION_FAILED,
+
+    /** The OS refused to promote the hosting service to a foreground service (a
+     * `SecurityException` from `Service.startForeground`, e.g. a while-in-use eligibility gate
+     * this start attempt did not satisfy -- see issue #267/#275) *before* [AudioCaptureEngine.start]
+     * ever ran. Reported via [AudioCaptureEngine.reportForegroundPromotionRefused], not raised
+     * from inside this class. */
+    FOREGROUND_SERVICE_PROMOTION_REFUSED,
 }
 
 /**
@@ -334,6 +341,33 @@ class AudioCaptureEngine(
             thread.isDaemon = true
             captureThread = thread
             thread.start()
+        }
+    }
+
+    /**
+     * Forces [state] into [CaptureState.Error] for a failure that happened entirely outside this
+     * engine and before [start] could ever run -- specifically, [RecorderService.onStartCommand]
+     * catching the OS refusing to promote the hosting service to a foreground service. This is
+     * the seam that lets that refusal become a real, observable [CaptureState.Error] instead of
+     * an uncaught `SecurityException` killing the process (issue #267/#275; PR #278 review,
+     * `@rev` finding 1).
+     *
+     * No-ops if a session is already [CaptureState.Recording] or [CaptureState.Paused]: an
+     * external caller reporting a *start* refusal must never stomp on capture already known to be
+     * genuinely running. (The spike behind this feature verified that re-promoting an
+     * already-running foreground service is not re-checked against the eligibility gate, so a
+     * refusal should never actually reach this method while a session is live -- this guard is
+     * defense in depth, mirroring [start]'s own no-op guard, not a fix for an observed collision.)
+     *
+     * Deliberately does not touch `ringBuffer`/`audioRecord`/`captureThread`: nothing was ever
+     * opened, since this always fires before [start] runs, so there is nothing to release.
+     */
+    fun reportForegroundPromotionRefused(reason: CaptureErrorReason, message: String) {
+        synchronized(lock) {
+            when (_state.value) {
+                is CaptureState.Recording, is CaptureState.Paused -> return
+                else -> _state.value = CaptureState.Error(reason, message)
+            }
         }
     }
 

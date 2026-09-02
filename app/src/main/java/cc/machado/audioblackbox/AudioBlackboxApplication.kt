@@ -31,9 +31,12 @@ class AudioBlackboxApplication : Application() {
         PreloadedRetentionWindow.minutes = runBlocking { preferences.currentBufferDurationMinutes() }
         PreloadedRetentionWindow.preset = runBlocking { preferences.currentQualityPreset() }
 
-        // Issue #275: reconciles any placed home-screen widget with real capture state within
-        // this process's first collection, closing the process-death staleness gap that broke the
-        // removed Quick Settings tile -- see RecordingWidgetUpdater's doc for the full mechanism.
+        // Issue #275: reconciles any placed home-screen widget with real capture state on this
+        // process's first collection -- closing the staleness gap that broke the removed Quick
+        // Settings tile, but only once a new process actually starts. That window is bounded by
+        // `updatePeriodMillis` (currently 30 min, longer under Doze) or the next process start,
+        // whichever comes first -- not immediate on its own; see RecordingWidgetUpdater's doc for
+        // the full mechanism (`@rev` review on PR #278, finding 2).
         RecordingWidgetStateObserver.start(this)
     }
 }
