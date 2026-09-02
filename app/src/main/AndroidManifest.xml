@@ -74,6 +74,36 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          Home-screen widget (issue #275), replacing the Quick Settings tile removed in #273/#274.
+          App-widget interaction is on Android 14+'s while-in-use permission eligibility list
+          for a microphone-typed foreground service, TileService is not (AGENTS.md §11), and a
+          spike proved a genuine widget tap starts the mic FGS cleanly on the owner's hardware
+          (issue #267). android:exported="true" is required for the launcher's AppWidgetHost to
+          bind and deliver clicks; the spike learned that copying the tile's exported="false"
+          pattern breaks widget binding. The intent-filter below only matches the platform's own
+          APPWIDGET_UPDATE broadcast (a protected broadcast no third-party app can send), and
+          RecordingWidgetProvider overrides only onUpdate(), answering it with nothing but a
+          re-render of already-real capture state and accepting no externally-controlled data.
+          AppWidgetProvider's base onReceive() also recognizes a handful of other lifecycle
+          actions (ACTION_APPWIDGET_DELETED/ENABLED/DISABLED/OPTIONS_CHANGED/RESTORED) that are
+          reachable in principle, likewise protected broadcasts, and all no-ops here since none
+          of them is overridden. So this export carries no start/stop control surface (contrast
+          with the spike's throwaway, deliberately-not-shipped TEST_START/TEST_STOP broadcast
+          hooks); see the `@sec` review on PR #278 for the verification of this.
+        -->
+        <receiver
+            android:name=".widget.RecordingWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recording_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

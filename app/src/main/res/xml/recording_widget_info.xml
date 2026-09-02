@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275/#278: single-row cell footprint, per the owner's request that the widget be one
+  line with a round button (see widget_recording.xml's doc). minWidth stays wide enough for the
+  PT-BR status text (AGENTS.md §4's 20-50% expansion) to show a meaningful prefix before it
+  ellipsizes next to the 48dp circular button, at a height that fits one row plus padding on a
+  typical 4-5 column launcher grid (roughly one grid cell tall instead of the previous two).
+  targetCellWidth/targetCellHeight (API 31+) tell One UI / Android 12+ launchers to place the
+  widget at this single-row size by default, instead of the launcher guessing from minWidth/
+  minHeight alone and defaulting to a taller multi-row cell.
+  resizeMode is horizontal-only: a vertical resize on a genuinely single-row layout only adds
+  empty vertical padding above/below the row (there is no second row of content to reveal), which
+  would misrepresent the widget as resizable in a dimension where resizing does nothing useful.
+  Horizontal resize remains meaningful because it changes how much of the status text is visible
+  before ellipsis.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="64dp"
+    android:minResizeWidth="140dp"
+    android:minResizeHeight="64dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_recording"
+    android:previewImage="@mipmap/ic_launcher"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />

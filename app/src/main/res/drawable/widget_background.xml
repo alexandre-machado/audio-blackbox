@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fully opaque solid fill (issue #275), deliberately not translucent. The widget sits on the
+  user's own launcher wallpaper, an arbitrary background the app's in-app surfaces never have to
+  contend with (they render on the fixed model.html cockpit ground, issue #225). An opaque panel
+  fully occludes whatever wallpaper is behind it, so the same text/icon-on-panel contrast already
+  proven for the in-app cockpit surfaces (TextStencil on CockpitPanel) transfers here unchanged;
+  contrast never has to be re-proven per-wallpaper because the wallpaper never shows through.
+  Radius matches model.html's radius-lg token (14px, AGENTS.md §5).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_panel_background" />
+    <corners android:radius="14dp" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/widget_panel_border" />
+</shape>

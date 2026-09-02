@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.audio.SwitchConfigResult
@@ -54,8 +55,14 @@ import kotlinx.coroutines.withContext
  * value -- see issue #3 PR description).
  *
  * ## onStartCommand contract
- * [startForeground] is called *first*, unconditionally, before this method looks at the
- * Intent's action at all -- see the comment on [onStartCommand] for why.
+ * [startForeground] is called *first*, before this method looks at the Intent's action at all --
+ * see the comment on [onStartCommand] for why. That call is wrapped in a `try`/`catch`: the OS
+ * can refuse the promotion (a `SecurityException`, e.g. a while-in-use eligibility gate this
+ * start attempt did not satisfy -- see issue #267/#275), and an uncaught throw there kills the
+ * whole process before anything can react. A caught refusal is reported through
+ * [AudioCaptureEngine.reportForegroundPromotionRefused] (so [CaptureState.Error] becomes visible
+ * to every observer -- the widget, the dashboard) and this service instance then stops itself,
+ * since it was never actually promoted to foreground and has nothing else useful to do.
  */
 class RecorderService : Service() {
 
@@ -239,11 +246,28 @@ class RecorderService : Service() {
         // Context.startForegroundService()/startService() and this service calling
         // startForeground() -- miss it and the OS kills the process and raises an ANR. That
         // deadline runs from process start, not from whenever we get around to it, so this is
-        // called first, synchronously, before looking at the Intent's action or touching the
-        // engine at all. It also covers the two cases with no useful action to inspect: intent ==
-        // null (an OS-initiated restart, see below) and an unrecognized action -- both still need
-        // an up-to-date notification posted promptly.
-        startForeground(RecorderNotification.NOTIFICATION_ID, currentNotification())
+        // called first, before looking at the Intent's action or touching the engine at all. It
+        // also covers the two cases with no useful action to inspect: intent == null (an
+        // OS-initiated restart, see below) and an unrecognized action -- both still need an
+        // up-to-date notification posted promptly.
+        //
+        // Wrapped in try/catch (issue #267/#275; PR #278 review, `@rev` finding 1): the OS can
+        // refuse this promotion with an uncaught SecurityException -- a while-in-use eligibility
+        // gate this specific start attempt did not satisfy (revoked permission, a Doze/App
+        // Standby edge case, an OEM restriction, or any other state the eligibility check
+        // enforces). Before this fix that exception was never caught, so it killed the whole
+        // process before engine.start() ever ran and before CaptureState could become Error --
+        // the exact crash that hit the removed Quick Settings tile 14/14 times. Catching it here
+        // and reporting through the engine, instead, makes the refusal a real, visible
+        // CaptureState.Error for every observer (the widget, the dashboard) rather than a dead
+        // process the user has to notice on their own.
+        try {
+            startForeground(RecorderNotification.NOTIFICATION_ID, currentNotification())
+        } catch (refusal: SecurityException) {
+            val refusalMessage = "startForeground() refused: ${refusal.message}"
+            Log.w(TAG, "onStartCommand(): $refusalMessage")
+            return handleForegroundPromotionRefused(intent?.action, refusalMessage)
+        }
 
         when (intent?.action) {
             ACTION_START -> {
@@ -345,11 +369,71 @@ class RecorderService : Service() {
      * service only once capture has actually finished -- never before, so the persistent
      * notification (and the service itself) never disappear while the mic might still be open.
      */
-    private fun stopServiceCompletely() {
+    /**
+     * Decides what a caught `startForeground()` refusal actually means for *this* delivery, and
+     * always returns the value [onStartCommand] should return.
+     *
+     * The refusal is caught before the Intent's action has been dispatched, so the naive response
+     * -- report an error and `stopSelf()` -- is wrong in two cases that both leave the microphone
+     * open with nothing on screen showing it and no reachable path left to close it (PR #278
+     * review: `@sec` and `@rev` independently blocked on this):
+     *
+     *  - **The delivery was a teardown request.** [ACTION_STOP], or the null Intent of an
+     *    OS-initiated restart, means "tear this down". Neither needs a foreground promotion to
+     *    succeed, and short-circuiting past the `when` in [onStartCommand] would silently drop
+     *    the user's own Stop tap. Honour it, and report nothing: capture really did stop, exactly
+     *    as asked, so there is no error to surface.
+     *  - **Capture was genuinely live.** This instance holds no foreground notification, so the
+     *    capture thread and `AudioRecord` cannot be left running behind it. Tear down for real and
+     *    report the reason, so the stop the user did not ask for is not also unexplained.
+     *
+     * Only when neither holds -- a refused *start*, with nothing running -- is the original
+     * response correct: nothing was ever opened, so there is nothing to release, and the Error
+     * recorded on the process-lifetime `engine.state` outlives this instance for the widget and
+     * the dashboard to render.
+     */
+    private fun handleForegroundPromotionRefused(action: String?, refusalMessage: String): Int {
+        val captureWasLive = engine.state.value.let {
+            it is CaptureState.Recording || it is CaptureState.Paused
+        }
+        when {
+            action == ACTION_STOP || action == null -> stopServiceCompletely()
+            captureWasLive -> stopServiceCompletely(reportRefusalAfterStop = refusalMessage)
+            else -> {
+                engine.reportForegroundPromotionRefused(
+                    CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
+                    refusalMessage,
+                )
+                // `isGracefullyStopping = true` stops onDestroy()'s defensive cleanup thread from
+                // immediately overwriting this Error back to Idle -- that path exists for a
+                // session that was genuinely mid-capture, which this branch never was.
+                isGracefullyStopping = true
+                stopSelf()
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    /**
+     * @param reportRefusalAfterStop when non-null, a `startForeground()` refusal message to record
+     *   as [CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED] *after* [AudioCaptureEngine.stop]
+     *   has run. The ordering is load-bearing, not incidental: the engine deliberately refuses to
+     *   overwrite a live `Recording`/`Paused` session with an Error, so reporting before the stop
+     *   completes would be silently swallowed. Sequencing both inside this one coroutine is what
+     *   makes the ordering guaranteed -- two separate `serviceScope.launch` calls on
+     *   [Dispatchers.Default] would not be ordered with respect to each other.
+     */
+    private fun stopServiceCompletely(reportRefusalAfterStop: String? = null) {
         isGracefullyStopping = true
         serviceScope.launch(Dispatchers.Default) {
             forwardRecordingEngine.stop()
             engine.stop()
+            if (reportRefusalAfterStop != null) {
+                engine.reportForegroundPromotionRefused(
+                    CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
+                    reportRefusalAfterStop,
+                )
+            }
             withContext(Dispatchers.Main.immediate) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()

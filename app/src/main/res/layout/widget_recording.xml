@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275/#278. RemoteViews layout; only the framework's supported RemoteViews view classes are
+  used here (LinearLayout, ImageView, TextView, ImageButton); this is not a Compose surface
+  (Compose composables cannot be reused inside an AppWidgetProvider's RemoteViews).
+
+  Single-row layout per the owner's explicit request (issue #275: "acho que o widget deve ter só
+  uma linha, com o botão na direita ou esquerda, redondo, como o widget do recorder da samsung").
+  Button placed on the right (owner's decision, not open for relitigation): in LTR reading order
+  the state (annunciator + status text) reads first and the round action button closes the line.
+
+  All text content, the annunciator color, and the action icon/description are set at render time
+  by RecordingWidgetRenderer from real capture state; nothing here is hardcoded to a specific
+  state. PT-BR string lengths (AGENTS.md §4, 20-50% longer than English) are handled with
+  maxLines="1"/ellipsize on the status text  -  there is no second line to wrap onto in a
+  single-row layout, so overflow degrades to a truncated, ellipsized status line rather than
+  clipping or pushing the circular button off the widget.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <ImageView
+        android:id="@+id/widget_annunciator"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="@null"
+        android:src="@drawable/widget_annunciator_dot" />
+
+    <TextView
+        android:id="@+id/widget_status_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginEnd="8dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/widget_text_stencil"
+        android:textSize="13sp"
+        android:text="@string/widget_status_idle" />
+
+    <ImageButton
+        android:id="@+id/widget_action_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:padding="0dp"
+        android:background="@drawable/widget_action_button_background"
+        android:scaleType="center"
+        android:src="@drawable/ic_widget_record" />
+
+</LinearLayout>
