@@ -44,3 +44,38 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+      # Post-deploy, best-effort ping to IndexNow (Bing/Yandex share the index) so a
+      # docs/** push is actively submitted instead of waiting to be crawled. Only runs
+      # on a real push to main, right after a successful deploy -- a bare
+      # workflow_dispatch has no guaranteed fresh deploy behind it, so it's excluded
+      # to avoid submitting a possibly-stale URL set. The IndexNow key is a public,
+      # non-secret random string by design (see docs/<key>.txt) -- it authorizes
+      # submissions, it does not protect anything, so it is committed in the repo
+      # rather than stored in GitHub Secrets. Plain curl is used so no third-party
+      # action needs pinning. A non-2xx here only logs a warning: search-engine
+      # notification is not a release gate and must never fail this job (#287).
+      - name: Submit URLs to IndexNow
+        if: success() && github.event_name == 'push'
+        run: |
+          set +e
+          key_file="6e548543f5dfe595b4046686467f6f97.txt"
+          key="$(cat "docs/${key_file}")"
+          key_location="https://alexandre.machado.cc/audio-blackbox/${key_file}"
+          urls="$(sed -n 's:.*<loc>\(.*\)</loc>.*:\1:p' docs/sitemap.xml | sed 's/.*/"&"/' | paste -sd, -)"
+          if [ -z "$urls" ]; then
+            echo "::warning::IndexNow: no <loc> entries found in docs/sitemap.xml, skipping submission"
+            exit 0
+          fi
+          payload="$(printf '{"host":"alexandre.machado.cc","key":"%s","keyLocation":"%s","urlList":[%s]}' "$key" "$key_location" "$urls")"
+          http_code="$(curl -sS -o /tmp/indexnow-response.txt -w '%{http_code}' \
+            -X POST 'https://api.indexnow.org/indexnow' \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            -d "$payload")"
+          echo "IndexNow response code: ${http_code}"
+          cat /tmp/indexnow-response.txt 2>/dev/null || true
+          case "$http_code" in
+            2??) echo "IndexNow submission accepted." ;;
+            *) echo "::warning::IndexNow submission returned HTTP ${http_code} (non-fatal)" ;;
+          esac
+          exit 0
