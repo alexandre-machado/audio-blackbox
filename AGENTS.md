@@ -136,6 +136,20 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
   - Fresh git worktrees do not inherit `local.properties`. A `local.properties` file with `sdk.dir=<path-to-sdk>` must be present locally for Gradle builds (gitignored, never committed).
 - **Tool Discipline**:
   - Maintainer environments filter file dump commands (`cat`, `head`, `sed`). Inspect file contents using structured read/view/grep tools; execute shell commands only for build, testing, and git operations.
+- **Closing Keywords Are Checked Across Every Commit Body, Not Just the PR Body**:
+  - This repository squash-merges, and the squash commit body **concatenates the body of every
+    commit on the branch**. A `Fixes #NNN` left in an early commit therefore closes that issue on
+    merge even when the PR body was deliberately repointed elsewhere.
+  - Before merging, grep the whole branch, not the PR description:
+    `git log origin/main..HEAD --format='%B' | grep -inE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b[[:space:]]*#[0-9]+'`
+  - The regex is a **heuristic, not an exhaustive gate**: it misses colon-separated forms
+    (`Closes: #123`) and cross-repo references (`Resolves org/repo#12`). Read the branch's commit
+    list too; a clean grep is not proof.
+  - When repointing a PR at a different issue, rewrite the offending **commit messages** too;
+    editing the PR body alone is not enough. Verify issue states immediately after any merge.
+  - Origin: [#270](https://github.com/alexandre-machado/audio-blackbox/pull/270) closed the
+    still-live [#267](https://github.com/alexandre-machado/audio-blackbox/issues/267) this way
+    on 2026-09-01, after a reviewer had correctly verified the PR body and nothing else.
 
 ---
 
@@ -154,6 +168,55 @@ Every pull request must pass a dual specialist review before merging:
 2. **Code Review Specialist (`@rev`)**: Verifies correctness, concurrency invariants, non-vacuous testing, and performance contracts.
 
 Both specialists must post explicit, grep-verifiable approval markers in PR review comments prior to merge.
+
+### The marker comment is the deliverable, not the returned text
+
+A review that was performed but not posted has not passed the gate. Findings returned to
+whoever dispatched the reviewer are a convenience; the PR comment beginning with the fixed
+string `## @sec review` / `## @rev review` is the artifact. Whoever merges verifies it exists
+with `gh pr view <N> --json comments`, never by trusting a reviewer's own report that it was
+posted.
+
+The reverse failure is worse and has happened here:
+[#207](https://github.com/alexandre-machado/audio-blackbox/pull/207) merged at `14:26:35Z`
+with **neither marker posted yet** — `@sec`'s landed 13 seconds later, `@rev`'s two minutes
+later, and `@rev`'s was an explicit **BLOCK**. The gate did not fail to produce artifacts; the
+merge simply did not wait for them. **Absence of a marker is not a pass, and it is not a
+signal to proceed — it means the gate has not run.**
+
+### Every marker names the SHA it reviewed, and the CI conclusion for that SHA
+
+- **Name the SHA.** A verdict is about one commit. When a PR is updated after a review, the
+  existing markers no longer cover it and the gate must run again at the new HEAD.
+- **State the CI conclusion for that same SHA, checked directly (`gh pr checks`), not assumed.**
+  On [#278](https://github.com/alexandre-machado/audio-blackbox/pull/278) (2026-09-02) both
+  specialists issued PASS at a SHA whose `instrumented-tests` job was failing; neither had
+  looked. That failure turned out to be environmental, but nothing in the process would have
+  distinguished it from a real regression, and two PASS verdicts stood in front of it. A green
+  suite is not sufficient for a PASS, but a red one forbids issuing one silently.
+- **A stated CI conclusion is a snapshot, not a live guarantee — cite the run ID.** Checks can be
+  rerun on the same SHA, and `gh pr checks` shows only the latest attempt. That is not
+  hypothetical: the #278 failure above was attempt 1 of run `33637986231`; attempt 2 went green,
+  so today the very command this rule prescribes shows nothing wrong with the SHA two reviewers
+  passed blind. Name the run ID you checked, and re-check immediately before merging rather than
+  trusting an older marker's snapshot.
+- **If CI has not completed, do not issue a verdict on it.** Wait, or post the marker saying
+  explicitly which jobs were still running and that the verdict is withheld pending them. A
+  verdict may rest on a pending pipeline only when it says so; never on an unexamined one.
+
+### Verify the artifact, not the report
+
+The recurring failure mode behind the four incidents cited in this section is the same shape:
+someone verified a true thing that was not the thing that mattered. A correct PR body while
+a stale commit body carried the closing keyword; a reviewer's accurate summary of a comment
+it never posted; a skill's empty output read as an all-clear; a thorough review issued blind
+to a red pipeline. Before relying on any claim that an action was *performed*, check the
+artifact it would have produced — the comment, the run, the commit, the issue state.
+
+A related trap is asserting **absence**. "I did not see X" is not "X is not there": a `Read` of
+this very file once returned 156 of its 168 lines with no error and no truncation notice, and the
+agent reported an existing section as missing. Cross-check length (`wc -l`) before reporting
+anything absent — see §8's Tool Discipline for the general habit.
 
 ---
 
