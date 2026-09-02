@@ -1,13 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Issue #275: the widget's single action button is always FlightOrange, regardless of state.
+  Issue #275/#278: the widget's single action button is always FlightOrange, regardless of state.
   AGENTS.md §5's annunciator rule reserves green/amber/red for signalling recording/paused/error
   state (rendered separately by the annunciator dot, see widget_annunciator_dot.xml), and orange
-  for the card-level primary call-to-action. This button is that CTA; only its label text
-  ("Start"/"Stop") and its PendingIntent action change with state, never its color.
+  for the card-level primary call-to-action. This button is that CTA; only its icon
+  (ic_widget_record/ic_widget_stop) and contentDescription and its PendingIntent action change
+  with state, never its color.
+
+  Round per the owner's request (issue #275: "redondo, como o widget do recorder da samsung")  - 
+  an oval shape, not model.html's radius-lg rectangle token, matches  - radius-pill
+  (AGENTS.md §5: the dedicated token for true capsule/circular hardware cutouts, as opposed to
+   - radius-lg's deliberately-squared card corners). A <selector> pressed state uses
+  widget_action_button_pressed (FlightOrangeDark-equivalent darken) since RemoteViews buttons get
+  no ripple by default.
 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/widget_action_button" />
-    <corners android:radius="14dp" />
-</shape>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="@color/widget_action_button_pressed" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/widget_action_button" />
+        </shape>
+    </item>
+</selector>

@@ -41,7 +41,18 @@ object RecordingWidgetRenderer {
             ContextCompat.getColor(context, annunciatorColorRes(model.annunciator)),
         )
 
-        views.setTextViewText(R.id.widget_action_button, context.getString(model.actionButtonLabelRes))
+        // Issue #275/#278: single-row layout replaces the old full-width text Button with a
+        // round icon-only ImageButton (a circle has no room for a text label at a real 48dp
+        // touch target). The icon itself is derived from model.actionIsStop, already the single
+        // source of truth for which action the button's PendingIntent fires -- there is no
+        // separate icon field on RecordingWidgetUiModel to drift out of sync with it. The label
+        // string (model.actionButtonLabelRes) is intentionally unused for on-screen text now, but
+        // the contentDescription below is unchanged and becomes the *only* affordance a TalkBack
+        // user has for this button, since there is no visible text left to read.
+        views.setImageViewResource(
+            R.id.widget_action_button,
+            if (model.actionIsStop) R.drawable.ic_widget_stop else R.drawable.ic_widget_record,
+        )
         views.setContentDescription(
             R.id.widget_action_button,
             context.getString(model.actionButtonDescriptionRes),

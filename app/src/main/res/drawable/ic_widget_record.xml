@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275/#278: filled circle "record" pictogram for the widget's action button, plain
+  Material glyph shape (AGENTS.md §5's iconography rule) rather than a reduced/simplified
+  app-brand mark  -  the earlier attempt to shrink the flight-recorder logo to a 24dp monochrome
+  glyph read as an unrecognisable mass on device; a conventional record/stop pictogram needs no
+  such reduction because it is already legible at icon size. Solid white fill, tinted by the
+  button's own contrast (widget_text_on_action) rather than a state color  -  AGENTS.md §5 reserves
+  green/amber/red for the annunciator dot only, never the CTA button.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="@color/widget_text_on_action"
+      android:pathData="M12,12m-7,0a7,7 0 1,0 14,0a7,7 0 1,0 -14,0"/>
+</vector>

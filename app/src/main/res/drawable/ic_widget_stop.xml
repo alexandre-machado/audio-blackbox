@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275/#278: filled square "stop" pictogram, the conventional pairing for
+  ic_widget_record.xml  -  see that file's doc for why a plain Material glyph shape, not a reduced
+  brand mark, is the right call here.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="@color/widget_text_on_action"
+      android:pathData="M5,5h14v14h-14z"/>
+</vector>

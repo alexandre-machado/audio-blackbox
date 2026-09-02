@@ -24,8 +24,10 @@
       handled). widget_annunciator_*: AvionicsGreen/CautionAmber/WarningRed/TextDim, the documented
       annunciator rule (recording/paused/error/idle-dim). widget_action_button: FlightOrange, the
       brand primary-CTA color, per AGENTS.md §5's rule that state colors are never used for a plain
-      CTA button. widget_text_stencil: TextStencil, the same text-on-panel pairing already proven
-      legible across the in-app cockpit screens.
+      CTA button. widget_action_button_pressed: FlightOrangeDark, the button's own pressed-state
+      darken (Color.kt's FlightOrangeDark, #FFBF360C), still never a state color. widget_text_stencil:
+      TextStencil, the same text-on-panel pairing already proven legible across the in-app cockpit
+      screens.
     -->
     <color name="widget_panel_background">#FF111827</color>
     <color name="widget_panel_border">#29FFFFFF</color>
@@ -34,6 +36,7 @@
     <color name="widget_annunciator_error">#FFEF4444</color>
     <color name="widget_annunciator_idle">#FF64748B</color>
     <color name="widget_action_button">#FFFF5722</color>
+    <color name="widget_action_button_pressed">#FFBF360C</color>
     <color name="widget_text_stencil">#FFF8FAFC</color>
     <color name="widget_text_on_action">#FFFFFFFF</color>
 </resources>
