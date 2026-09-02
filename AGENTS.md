@@ -142,6 +142,9 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
     merge even when the PR body was deliberately repointed elsewhere.
   - Before merging, grep the whole branch, not the PR description:
     `git log origin/main..HEAD --format='%B' | grep -inE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b[[:space:]]*#[0-9]+'`
+  - The regex is a **heuristic, not an exhaustive gate**: it misses colon-separated forms
+    (`Closes: #123`) and cross-repo references (`Resolves org/repo#12`). Read the branch's commit
+    list too; a clean grep is not proof.
   - When repointing a PR at a different issue, rewrite the offending **commit messages** too;
     editing the PR body alone is not enough. Verify issue states immediately after any merge.
   - Origin: [#270](https://github.com/alexandre-machado/audio-blackbox/pull/270) closed the
@@ -172,8 +175,14 @@ A review that was performed but not posted has not passed the gate. Findings ret
 whoever dispatched the reviewer are a convenience; the PR comment beginning with the fixed
 string `## @sec review` / `## @rev review` is the artifact. Whoever merges verifies it exists
 with `gh pr view <N> --json comments`, never by trusting a reviewer's own report that it was
-posted ([#207](https://github.com/alexandre-machado/audio-blackbox/pull/207) · 2026-08-29:
-both reviewers finished, reported full findings, and posted nothing).
+posted.
+
+The reverse failure is worse and has happened here:
+[#207](https://github.com/alexandre-machado/audio-blackbox/pull/207) merged at `14:26:35Z`
+with **neither marker posted yet** — `@sec`'s landed 13 seconds later, `@rev`'s two minutes
+later, and `@rev`'s was an explicit **BLOCK**. The gate did not fail to produce artifacts; the
+merge simply did not wait for them. **Absence of a marker is not a pass, and it is not a
+signal to proceed — it means the gate has not run.**
 
 ### Every marker names the SHA it reviewed, and the CI conclusion for that SHA
 
@@ -185,6 +194,15 @@ both reviewers finished, reported full findings, and posted nothing).
   looked. That failure turned out to be environmental, but nothing in the process would have
   distinguished it from a real regression, and two PASS verdicts stood in front of it. A green
   suite is not sufficient for a PASS, but a red one forbids issuing one silently.
+- **A stated CI conclusion is a snapshot, not a live guarantee — cite the run ID.** Checks can be
+  rerun on the same SHA, and `gh pr checks` shows only the latest attempt. That is not
+  hypothetical: the #278 failure above was attempt 1 of run `33637986231`; attempt 2 went green,
+  so today the very command this rule prescribes shows nothing wrong with the SHA two reviewers
+  passed blind. Name the run ID you checked, and re-check immediately before merging rather than
+  trusting an older marker's snapshot.
+- **If CI has not completed, do not issue a verdict on it.** Wait, or post the marker saying
+  explicitly which jobs were still running and that the verdict is withheld pending them. A
+  verdict may rest on a pending pipeline only when it says so; never on an unexamined one.
 
 ### Verify the artifact, not the report
 
@@ -195,10 +213,10 @@ it never posted; a skill's empty output read as an all-clear; a thorough review 
 to a red pipeline. Before relying on any claim that an action was *performed*, check the
 artifact it would have produced — the comment, the run, the commit, the issue state.
 
-A related trap is asserting **absence**. "I did not see X" is not "X is not there": on 2026-09-02
-a `Read` of this very file returned 156 of its 168 lines with no error and no truncation notice,
-and the agent concluded a section that does exist was missing. Cross-check length (`wc -l`)
-before reporting something absent.
+A related trap is asserting **absence**. "I did not see X" is not "X is not there": a `Read` of
+this very file once returned 156 of its 168 lines with no error and no truncation notice, and the
+agent reported an existing section as missing. Cross-check length (`wc -l`) before reporting
+anything absent — see §8's Tool Discipline for the general habit.
 
 ---
 
