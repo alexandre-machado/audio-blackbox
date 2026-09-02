@@ -102,6 +102,7 @@ fun SettingsRoute(
         onConfirmRetentionWindowChange = viewModel::confirmRetentionWindowChange,
         onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
         onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
+        onDismissResizeError = viewModel::dismissResizeError,
         modifier = modifier,
     )
 }
@@ -116,6 +117,7 @@ fun SettingsScreen(
     onConfirmRetentionWindowChange: () -> Unit,
     onCancelRetentionWindowChange: () -> Unit,
     onAcknowledgeClampNotice: () -> Unit,
+    onDismissResizeError: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
 ) {
@@ -146,6 +148,9 @@ fun SettingsScreen(
     }
     uiState.clampNotice?.let { notice ->
         ClampNoticeDialog(notice = notice, onAcknowledge = onAcknowledgeClampNotice)
+    }
+    uiState.resizeError?.let { message ->
+        ResizeErrorDialog(message = message, onAcknowledge = onDismissResizeError)
     }
 }
 
@@ -712,6 +717,53 @@ private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
             TextButton(onClick = onAcknowledge) {
                 Text(
                     text = stringResource(R.string.settings_retention_clamp_notice_dismiss),
+                    fontWeight = FontWeight.Bold,
+                    color = FlightOrange,
+                )
+            }
+        },
+    )
+}
+
+/**
+ * Shown when a live settings change was refused because the ring buffer resize it required could
+ * not fit given the device's current heap state (issue #272). [message] is the real, specific
+ * outcome computed by [SettingsViewModel.describeRefusal] -- never a generic failure toast, per
+ * AGENTS.md §5 "never fake a signal in the UI". The previously-active setting is still in force;
+ * this dialog only informs, it does not offer a retry, since the underlying condition (transient
+ * heap pressure) may not have changed.
+ *
+ * TODO(follow-up, coordinate with the strings.xml owner of the day): this message is built as a
+ * plain Kotlin string in [SettingsViewModel.describeRefusal] rather than through `strings.xml`,
+ * so it does not yet get a pt-BR translation -- deliberately, to avoid touching the shared
+ * `strings.xml` file while another change is concurrently editing it for an unrelated feature.
+ */
+@Composable
+private fun ResizeErrorDialog(message: String, onAcknowledge: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onAcknowledge,
+        shape = CARD_SHAPE,
+        containerColor = CockpitPanel,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                text = "Setting not applied",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = WarningRed,
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onAcknowledge) {
+                Text(
+                    text = "OK",
                     fontWeight = FontWeight.Bold,
                     color = FlightOrange,
                 )

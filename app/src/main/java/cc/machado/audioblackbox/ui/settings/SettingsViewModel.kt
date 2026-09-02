@@ -9,6 +9,7 @@ import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.DeviceMemoryBudget
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.audio.SwitchConfigResult
 import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
@@ -55,11 +56,18 @@ class SettingsViewModel(
     data class PendingCommit(val minutes: Int, val preset: QualityPreset)
     private val _pendingConfirmation = MutableStateFlow<PendingCommit?>(null)
 
+    // Non-null exactly while there is an unacknowledged "your settings change could not be
+    // applied" refusal (issue #272) -- a real, user-visible signal for a resize the engine
+    // refused rather than crashed on, per AGENTS.md §5 "never fake a signal in the UI". Cleared by
+    // [dismissResizeError] and also whenever a new commit is attempted.
+    private val _resizeError = MutableStateFlow<String?>(null)
+
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(capacityMinutesFlow, qualityPresetFlow, ::Pair),
         combine(_pendingMinutes, _pendingPreset, ::Pair),
         combine(_pendingConfirmation, retentionWindowPreferences.clampNoticeFlow, ::Pair),
-    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (pendingConfirmation, clampNotice) ->
+        _resizeError,
+    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (pendingConfirmation, clampNotice), resizeError ->
         val effectivePendingMins = pendingMins ?: committedMins
         val effectivePendingPreset = pendingPreset ?: committedPreset
         mapUiState(
@@ -69,6 +77,7 @@ class SettingsViewModel(
             pendingPreset = effectivePendingPreset,
             pendingConfirmation = pendingConfirmation,
             clampNotice = clampNotice,
+            resizeError = resizeError,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
             batteryStatus = batteryStatusProvider(),
@@ -83,6 +92,7 @@ class SettingsViewModel(
             pendingPreset = _pendingPreset.value ?: qualityPresetFlow.value,
             pendingConfirmation = null,
             clampNotice = null,
+            resizeError = null,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
             batteryStatus = batteryStatusProvider(),
@@ -159,17 +169,36 @@ class SettingsViewModel(
     private fun applyChanges(minutes: Int, preset: QualityPreset) {
         _pendingMinutes.value = null
         _pendingPreset.value = null
+        _resizeError.value = null
         viewModelScope.launch {
-            retentionWindowPreferences.setBufferDurationMinutes(minutes)
-            retentionWindowPreferences.setQualityPreset(preset)
             if (onSwitchSettings != null) {
+                retentionWindowPreferences.setBufferDurationMinutes(minutes)
+                retentionWindowPreferences.setQualityPreset(preset)
                 onSwitchSettings.invoke(minutes, preset)
             } else {
-                RecorderService.switchSettings(minutes, preset)
-                onRebuildEngine(minutes, preset)
-                onSwitchQualityPreset(preset)
+                // issue #272: only commit the new setting -- persisted preference and the
+                // committed StateFlows switchSettings updates on success -- if the live buffer's
+                // resize actually applied. Persisting unconditionally (the old behavior) would
+                // leave the stored preference and the engine's actual capacity out of sync
+                // whenever a resize was refused, and would silently hide the refusal from the
+                // user on top of that.
+                val applied = RecorderService.switchSettings(minutes, preset)
+                if (applied) {
+                    retentionWindowPreferences.setBufferDurationMinutes(minutes)
+                    retentionWindowPreferences.setQualityPreset(preset)
+                    onRebuildEngine(minutes, preset)
+                    onSwitchQualityPreset(preset)
+                } else {
+                    val refusal = RecorderService.resizeRefusalFlow.value
+                    RecorderService.acknowledgeResizeRefusal()
+                    _resizeError.value = describeRefusal(refusal, minutes)
+                }
             }
         }
+    }
+
+    fun dismissResizeError() {
+        _resizeError.value = null
     }
 
     fun acknowledgeClampNotice() {
@@ -182,6 +211,19 @@ class SettingsViewModel(
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
 
+        /** Real, specific wording for a refused resize (issue #272) -- states the actual numbers
+         * involved rather than a generic "something went wrong", per AGENTS.md §5. */
+        fun describeRefusal(refusal: SwitchConfigResult.BufferResizeRefused?, requestedMinutes: Int): String {
+            val outcome = refusal?.outcome
+            return if (outcome == null) {
+                "Couldn't change the recording length to $requestedMinutes min: not enough memory available on this device right now."
+            } else {
+                val requestedMb = outcome.requestedCapacityBytes / BYTES_PER_MB
+                "Couldn't change the recording length to $requestedMinutes min ($requestedMb MB): not enough memory " +
+                    "available on this device right now. The current setting is still active."
+            }
+        }
+
         /** The single state-mapping oracle for this screen: committed capacity + local pending
          * value + pending-confirmation flag -> the exact [SettingsUiState] the screen renders. */
         fun mapUiState(
@@ -191,6 +233,7 @@ class SettingsViewModel(
             pendingPreset: QualityPreset = committedPreset,
             pendingConfirmation: PendingCommit? = null,
             clampNotice: ClampNotice? = null,
+            resizeError: String? = null,
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
             usedMemoryBytes: Long = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
             batteryStatus: cc.machado.audioblackbox.telemetry.BatteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(),
@@ -248,6 +291,7 @@ class SettingsViewModel(
                 selectedPreset = pendingPreset,
                 clampNotice = clampNotice,
                 telemetry = telemetry,
+                resizeError = resizeError,
             )
         }
 

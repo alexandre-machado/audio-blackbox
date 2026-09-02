@@ -71,4 +71,11 @@ data class SettingsUiState(
      * [SettingsViewModel.acknowledgeClampNotice], after which this stays `null` for good. */
     val clampNotice: ClampNotice? = null,
     val telemetry: PowerTelemetryUiState = PowerTelemetryUiState(),
+    /** Issue #272: non-null exactly while there is an unacknowledged "your settings change could
+     * not be applied" message -- surfaced when a live buffer resize was refused because it could
+     * not fit given the device's current heap state. [SettingsScreen] renders this as a real,
+     * specific error (not a generic failure toast); dismissing it calls
+     * [SettingsViewModel.dismissResizeError]. The previous, still-active setting stays in force --
+     * this is a refusal, never a crash and never a silent no-op. */
+    val resizeError: String? = null,
 )
