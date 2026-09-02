@@ -60,6 +60,18 @@ data class PowerTelemetryUiState(
     val estimatedDrainRate: String = "~1.0% – 1.5% / h",
 )
 
+/**
+ * Issue #272: the real, specific numbers behind a refused live buffer resize -- carried as data
+ * rather than a pre-formatted [String] so [SettingsScreen] can render the message through
+ * `strings.xml` (and get a real pt-BR translation) instead of a hardcoded Kotlin literal.
+ * [requestedMb] is `null` only when the refusal's outcome details were unavailable (see
+ * [SettingsViewModel.describeRefusal]); the message still names [requestedMinutes] either way.
+ */
+data class ResizeErrorInfo(
+    val requestedMinutes: Int,
+    val requestedMb: Int?,
+)
+
 /** Everything [SettingsScreen] needs to render one frame. */
 data class SettingsUiState(
     val retentionStepper: RetentionStepperUiState,
@@ -72,10 +84,10 @@ data class SettingsUiState(
     val clampNotice: ClampNotice? = null,
     val telemetry: PowerTelemetryUiState = PowerTelemetryUiState(),
     /** Issue #272: non-null exactly while there is an unacknowledged "your settings change could
-     * not be applied" message -- surfaced when a live buffer resize was refused because it could
+     * not be applied" refusal -- surfaced when a live buffer resize was refused because it could
      * not fit given the device's current heap state. [SettingsScreen] renders this as a real,
      * specific error (not a generic failure toast); dismissing it calls
      * [SettingsViewModel.dismissResizeError]. The previous, still-active setting stays in force --
      * this is a refusal, never a crash and never a silent no-op. */
-    val resizeError: String? = null,
+    val resizeError: ResizeErrorInfo? = null,
 )

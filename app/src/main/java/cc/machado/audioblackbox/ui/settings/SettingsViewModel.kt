@@ -60,7 +60,7 @@ class SettingsViewModel(
     // applied" refusal (issue #272) -- a real, user-visible signal for a resize the engine
     // refused rather than crashed on, per AGENTS.md §5 "never fake a signal in the UI". Cleared by
     // [dismissResizeError] and also whenever a new commit is attempted.
-    private val _resizeError = MutableStateFlow<String?>(null)
+    private val _resizeError = MutableStateFlow<ResizeErrorInfo?>(null)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(capacityMinutesFlow, qualityPresetFlow, ::Pair),
@@ -211,17 +211,15 @@ class SettingsViewModel(
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
 
-        /** Real, specific wording for a refused resize (issue #272) -- states the actual numbers
-         * involved rather than a generic "something went wrong", per AGENTS.md §5. */
-        fun describeRefusal(refusal: SwitchConfigResult.BufferResizeRefused?, requestedMinutes: Int): String {
+        /** Real, specific data for a refused resize (issue #272) -- states the actual numbers
+         * involved rather than a generic "something went wrong", per AGENTS.md §5. Returns data,
+         * not a formatted message: [SettingsScreen] renders the actual wording through
+         * `strings.xml` (`R.string.settings_resize_error_body`/`_no_mb`) so it gets a real pt-BR
+         * translation instead of a hardcoded Kotlin literal. */
+        fun describeRefusal(refusal: SwitchConfigResult.BufferResizeRefused?, requestedMinutes: Int): ResizeErrorInfo {
             val outcome = refusal?.outcome
-            return if (outcome == null) {
-                "Couldn't change the recording length to $requestedMinutes min: not enough memory available on this device right now."
-            } else {
-                val requestedMb = outcome.requestedCapacityBytes / BYTES_PER_MB
-                "Couldn't change the recording length to $requestedMinutes min ($requestedMb MB): not enough memory " +
-                    "available on this device right now. The current setting is still active."
-            }
+            val requestedMb = outcome?.let { (it.requestedCapacityBytes / BYTES_PER_MB).toInt() }
+            return ResizeErrorInfo(requestedMinutes = requestedMinutes, requestedMb = requestedMb)
         }
 
         /** The single state-mapping oracle for this screen: committed capacity + local pending
@@ -233,7 +231,7 @@ class SettingsViewModel(
             pendingPreset: QualityPreset = committedPreset,
             pendingConfirmation: PendingCommit? = null,
             clampNotice: ClampNotice? = null,
-            resizeError: String? = null,
+            resizeError: ResizeErrorInfo? = null,
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
             usedMemoryBytes: Long = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
             batteryStatus: cc.machado.audioblackbox.telemetry.BatteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(),

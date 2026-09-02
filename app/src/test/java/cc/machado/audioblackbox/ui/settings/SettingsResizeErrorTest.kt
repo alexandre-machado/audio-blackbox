@@ -5,17 +5,19 @@ import cc.machado.audioblackbox.audio.ResizeOutcome
 import cc.machado.audioblackbox.audio.SwitchConfigResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Unit tests for the settings-screen surface of a refused resize (issue #272).
  *
  * ## The oracle
- * [SettingsViewModel.describeRefusal] must produce a message that states the actual requested
- * size, never a generic "something went wrong" (AGENTS.md §5), and [SettingsViewModel.mapUiState]
- * must pass whatever `resizeError` it is given straight through to [SettingsUiState.resizeError]
- * unmodified -- the one place [SettingsScreen] reads it to decide whether to show the dialog.
+ * [SettingsViewModel.describeRefusal] must produce data that states the actual requested size,
+ * never a generic "something went wrong" (AGENTS.md §5) -- it returns a [ResizeErrorInfo] rather
+ * than a formatted message because [SettingsScreen] renders the actual wording through
+ * `strings.xml` (`R.string.settings_resize_error_body`/`_no_mb`), which needs the raw numbers, not
+ * a pre-baked English sentence. [SettingsViewModel.mapUiState] must pass whatever `resizeError` it
+ * is given straight through to [SettingsUiState.resizeError] unmodified -- the one place
+ * [SettingsScreen] reads it to decide whether to show the dialog.
  */
 class SettingsResizeErrorTest {
 
@@ -29,28 +31,29 @@ class SettingsResizeErrorTest {
             ),
         )
 
-        val message = SettingsViewModel.describeRefusal(refusal, requestedMinutes = 90)
+        val info = SettingsViewModel.describeRefusal(refusal, requestedMinutes = 90)
 
-        assertTrue("must mention the requested minutes: $message", message.contains("90"))
-        assertTrue("must mention the actual requested size in MB, not a placeholder: $message", message.contains("101"))
+        assertEquals(90, info.requestedMinutes)
+        assertEquals(101, info.requestedMb)
     }
 
     @Test
-    fun `describeRefusal still produces a real message when the outcome details are unavailable`() {
-        val message = SettingsViewModel.describeRefusal(refusal = null, requestedMinutes = 60)
-        assertTrue(message.contains("60"))
-        assertTrue(message.isNotBlank())
+    fun `describeRefusal still produces real data when the outcome details are unavailable`() {
+        val info = SettingsViewModel.describeRefusal(refusal = null, requestedMinutes = 60)
+        assertEquals(60, info.requestedMinutes)
+        assertNull(info.requestedMb)
     }
 
     @Test
     fun `mapUiState passes resizeError straight through as the load-bearing screen signal`() {
+        val errorInfo = ResizeErrorInfo(requestedMinutes = 90, requestedMb = 101)
         val withError = SettingsViewModel.mapUiState(
             committedMinutes = 30,
             pendingMinutes = 30,
             committedPreset = QualityPreset.DEFAULT,
-            resizeError = "Couldn't change the recording length to 90 min (101 MB): not enough memory.",
+            resizeError = errorInfo,
         )
-        assertEquals("Couldn't change the recording length to 90 min (101 MB): not enough memory.", withError.resizeError)
+        assertEquals(errorInfo, withError.resizeError)
 
         val withoutError = SettingsViewModel.mapUiState(
             committedMinutes = 30,
