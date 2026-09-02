@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275: the widget's single action button is always FlightOrange, regardless of state.
+  AGENTS.md §5's annunciator rule reserves green/amber/red for signalling recording/paused/error
+  state (rendered separately by the annunciator dot, see widget_annunciator_dot.xml), and orange
+  for the card-level primary call-to-action. This button is that CTA; only its label text
+  ("Start"/"Stop") and its PendingIntent action change with state, never its color.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_action_button" />
+    <corners android:radius="14dp" />
+</shape>

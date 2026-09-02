@@ -56,6 +56,22 @@
     <string name="recorder_notification_action_start_forward">Ao vivo</string>
     <string name="recorder_notification_action_stop_forward">Parar ao vivo</string>
 
+    <!-- Widget de tela inicial (issue #275) -->
+    <string name="widget_label">Audio Blackbox</string>
+    <string name="widget_description">Alternador de gravação de um toque para a tela inicial.</string>
+    <string name="widget_status_recording">Gravando</string>
+    <string name="widget_status_paused">Pausado</string>
+    <string name="widget_status_error">Erro</string>
+    <string name="widget_status_idle">Parado</string>
+    <string name="widget_action_start">Iniciar</string>
+    <string name="widget_action_stop">Parar</string>
+    <string name="widget_action_start_description">Iniciar gravação</string>
+    <string name="widget_action_stop_description">Parar gravação</string>
+    <string name="widget_content_description_recording">Audio Blackbox: gravando</string>
+    <string name="widget_content_description_paused">Audio Blackbox: pausado, microfone em uso</string>
+    <string name="widget_content_description_error">Audio Blackbox: erro na gravação</string>
+    <string name="widget_content_description_idle">Audio Blackbox: não está gravando</string>
+
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_app_subtitle">Gravador de Áudio Contínuo em Memória</string>
     <string name="dashboard_engine_sample_rate">16.0 kHz PCM</string>

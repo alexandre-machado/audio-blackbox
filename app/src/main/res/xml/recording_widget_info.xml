@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275. minWidth/minHeight target roughly a 3x2 cell footprint on a typical 4-5 column
+  launcher grid, wide enough for the PT-BR action labels (AGENTS.md §4's 20-50% expansion) without
+  clipping; resizeMode allows the user to shrink/grow it, with minResizeWidth/Height as the floor
+  the layout was verified against.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="140dp"
+    android:minResizeHeight="90dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_recording"
+    android:previewImage="@mipmap/ic_launcher"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />

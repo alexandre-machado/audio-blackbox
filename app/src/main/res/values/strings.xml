@@ -67,6 +67,25 @@
     <string name="recorder_notification_action_start_forward">Live</string>
     <string name="recorder_notification_action_stop_forward">Stop live</string>
 
+    <!-- Home-screen widget (issue #275). Status text stays short (unlike the fuller
+         recorder_notification_state_* strings) since the widget's cells are narrow and PT-BR runs
+         20-50% longer (AGENTS.md §4); the fuller detail lives in the content-description strings
+         below instead, for screen readers. -->
+    <string name="widget_label">Audio Blackbox</string>
+    <string name="widget_description">One-tap recording toggle for the home screen.</string>
+    <string name="widget_status_recording">Recording</string>
+    <string name="widget_status_paused">Paused</string>
+    <string name="widget_status_error">Error</string>
+    <string name="widget_status_idle">Stopped</string>
+    <string name="widget_action_start">Start</string>
+    <string name="widget_action_stop">Stop</string>
+    <string name="widget_action_start_description">Start recording</string>
+    <string name="widget_action_stop_description">Stop recording</string>
+    <string name="widget_content_description_recording">Audio Blackbox: recording</string>
+    <string name="widget_content_description_paused">Audio Blackbox: paused, microphone in use</string>
+    <string name="widget_content_description_error">Audio Blackbox: recording error</string>
+    <string name="widget_content_description_idle">Audio Blackbox: not recording</string>
+
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_app_subtitle">Continuous Memory Audio Recorder</string>
     <string name="dashboard_engine_sample_rate">16.0 kHz PCM</string>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #275. RemoteViews layout; only the framework's supported RemoteViews view classes are
+  used here (LinearLayout, ImageView, TextView, Button); this is not a Compose surface (Compose
+  composables cannot be reused inside an AppWidgetProvider's RemoteViews).
+
+  All text content and the annunciator color are set at render time by RecordingWidgetRenderer
+  from real capture state; nothing here is hardcoded to a specific state. PT-BR string lengths
+  (AGENTS.md §4, 20-50% longer than English) are handled with maxLines/ellipsize on the status
+  text and wrap_content (never a fixed height) on the action button, so expansion degrades to a
+  truncated status line rather than clipping the actionable button or pushing it off the widget.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/widget_annunciator"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="@null"
+            android:src="@drawable/widget_annunciator_dot" />
+
+        <TextView
+            android:id="@+id/widget_status_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textColor="@color/widget_text_stencil"
+            android:textSize="13sp"
+            android:text="@string/widget_status_idle" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/widget_action_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_action_button_background"
+        android:gravity="center"
+        android:minHeight="0dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:textAllCaps="false"
+        android:textColor="@color/widget_text_on_action"
+        android:textSize="14sp"
+        android:text="@string/widget_action_start" />
+
+</LinearLayout>

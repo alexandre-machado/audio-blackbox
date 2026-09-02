@@ -74,6 +74,31 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          Home-screen widget (issue #275), replacing the Quick Settings tile removed in #273/#274.
+          App-widget interaction is on Android 14+'s while-in-use permission eligibility list
+          for a microphone-typed foreground service, TileService is not (AGENTS.md §11), and a
+          spike proved a genuine widget tap starts the mic FGS cleanly on the owner's hardware
+          (issue #267). android:exported="true" is required for the launcher's AppWidgetHost to
+          bind and deliver clicks; the spike learned that copying the tile's exported="false"
+          pattern breaks widget binding. The only externally reachable action is the platform's own
+          APPWIDGET_UPDATE broadcast; RecordingWidgetProvider answers it with nothing but a
+          re-render of already-real capture state and accepts no externally-controlled data, so
+          this export carries no start/stop control surface (contrast with the spike's throwaway,
+          deliberately-not-shipped TEST_START/TEST_STOP broadcast hooks).
+        -->
+        <receiver
+            android:name=".widget.RecordingWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recording_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

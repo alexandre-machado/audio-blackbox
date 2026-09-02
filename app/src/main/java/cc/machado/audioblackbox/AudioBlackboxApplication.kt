@@ -4,6 +4,7 @@ import android.app.Application
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
+import cc.machado.audioblackbox.widget.RecordingWidgetStateObserver
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -29,6 +30,11 @@ class AudioBlackboxApplication : Application() {
         val preferences: RetentionWindowPreferences = DataStoreRetentionWindowPreferences(this)
         PreloadedRetentionWindow.minutes = runBlocking { preferences.currentBufferDurationMinutes() }
         PreloadedRetentionWindow.preset = runBlocking { preferences.currentQualityPreset() }
+
+        // Issue #275: reconciles any placed home-screen widget with real capture state within
+        // this process's first collection, closing the process-death staleness gap that broke the
+        // removed Quick Settings tile -- see RecordingWidgetUpdater's doc for the full mechanism.
+        RecordingWidgetStateObserver.start(this)
     }
 }
 
