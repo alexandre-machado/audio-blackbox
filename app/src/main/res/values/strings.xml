@@ -286,6 +286,17 @@
          (45), so neither is ever 1. -->
     <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your retention window was reduced from %1$d to %2$d minutes as an interim memory-safety measure while a permanent fix is in progress.</string>
     <string name="settings_retention_clamp_notice_dismiss">Got it</string>
+
+    <!-- Resize-refused notice (issue #272): shown when a live settings change was refused because
+         resizing the audio buffer while capture is running would not fit in this device's current
+         heap. The previous, still-active setting stays in force, a refusal, never a crash and
+         never a silent no-op. Not a plural: the stepper only ever lands on multiples of 5 in
+         [5, 45] (see settings_retention_value_active_cd above), so %1$d is never 1; %2$d is a
+         computed byte count that also never lands on exactly 1 MB. -->
+    <string name="settings_resize_error_title">Setting not applied</string>
+    <string name="settings_resize_error_body" tools:ignore="PluralsCandidate">Couldn\'t change the recording length to %1$d min (%2$d MB): not enough memory available on this device right now. The current setting is still active. Try a shorter retention window, or free up memory on this device and try again.</string>
+    <string name="settings_resize_error_body_no_mb" tools:ignore="PluralsCandidate">Couldn\'t change the recording length to %1$d min: not enough memory available on this device right now. The current setting is still active. Try a shorter retention window, or free up memory on this device and try again.</string>
+    <string name="settings_resize_error_dismiss">OK</string>
     <!-- Resume recording after reboot notification (issue #79) -->
     <string name="notification_resume_channel_name">Resume recording prompt</string>
     <string name="notification_resume_channel_description">Prompts to resume continuous recording after device restart.</string>

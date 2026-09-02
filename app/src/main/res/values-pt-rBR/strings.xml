@@ -268,6 +268,15 @@
     <string name="settings_retention_clamp_notice_title">Janela de retenção reduzida</string>
     <string name="settings_retention_clamp_notice_body">Sua janela de retenção foi reduzida de %1$d para %2$d minutos como medida temporária de segurança de memória, enquanto uma correção definitiva está em andamento.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendi</string>
+
+    <!-- Aviso de redimensionamento recusado (issue #272): mostrado quando uma alteração de
+         configuração foi recusada porque redimensionar o buffer de áudio com a gravação em
+         andamento não caberia na memória atual do aparelho. A configuração anterior continua
+         ativa: é uma recusa, nunca uma falha e nunca um silêncio sem aviso. -->
+    <string name="settings_resize_error_title">Configuração não aplicada</string>
+    <string name="settings_resize_error_body" tools:ignore="PluralsCandidate">Não foi possível mudar a duração da gravação para %1$d min (%2$d MB): não há memória suficiente disponível neste aparelho agora. A configuração anterior continua ativa. Tente uma janela de retenção mais curta ou libere memória no aparelho e tente de novo.</string>
+    <string name="settings_resize_error_body_no_mb" tools:ignore="PluralsCandidate">Não foi possível mudar a duração da gravação para %1$d min: não há memória suficiente disponível neste aparelho agora. A configuração anterior continua ativa. Tente uma janela de retenção mais curta ou libere memória no aparelho e tente de novo.</string>
+    <string name="settings_resize_error_dismiss">OK</string>
     <!-- Resume recording after reboot notification (issue #79) -->
     <string name="notification_resume_channel_name">Aviso de retomada de gravação</string>
     <string name="notification_resume_channel_description">Avisa para retomar a gravação contínua após reiniciar o aparelho.</string>

@@ -38,6 +38,15 @@ data class PauseGap(val startTimestampMillis: Long, val endTimestampMillis: Long
     val durationMillis: Long get() = endTimestampMillis - startTimestampMillis
 }
 
+/** Outcome of [AudioCaptureEngine.switchConfig] (issue #272). */
+sealed interface SwitchConfigResult {
+    /** The new config took effect: `activeConfig` updated, and the live buffer resized (if any). */
+    data object Applied : SwitchConfigResult
+
+    /** Refused before touching anything -- see [AudioCaptureEngine.switchConfig]'s doc. */
+    data class BufferResizeRefused(val outcome: ResizeOutcome.Refused) : SwitchConfigResult
+}
+
 /** Why [CaptureState.Error] happened, so callers can decide whether retrying makes sense. */
 enum class CaptureErrorReason {
     /** `AudioRecord.getMinBufferSize` returned an error for this [AudioConfig]. */
@@ -183,15 +192,40 @@ class AudioCaptureEngine(
      * Switches the capture configuration dynamically (issues #194, #223). If recording,
      * resizes the ring buffer in-place (preserving buffered audio) and switches AudioRecord
      * seamlessly on the capture thread if the audio format changed.
+     *
+     * ## Refusal is all-or-nothing (issue #272)
+     * If a live ring buffer's [RingBuffer.resize] refuses (would not fit given the current heap),
+     * nothing about this call takes effect: [activeConfig] is left exactly as it was and no
+     * config switch is queued for the capture thread. The caller gets that back as
+     * [SwitchConfigResult.BufferResizeRefused] instead of a crash, and must surface it -- a
+     * refused resize is not silent, per "never fake a signal in the UI" (AGENTS.md §5). Recording
+     * (or paused) capture keeps running unaffected at its previous capacity; no buffered audio is
+     * discarded either way.
      */
-    fun switchConfig(newConfig: AudioConfig) {
+    fun switchConfig(newConfig: AudioConfig, memoryBudget: MemoryBudget = MemoryBudget.REAL): SwitchConfigResult {
         synchronized(lock) {
-            activeConfig = newConfig
             val newCapacityBytes = newConfig.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-            ringBuffer?.resize(newCapacityBytes)
+            val buffer = ringBuffer
+            if (buffer != null) {
+                val outcome = try {
+                    buffer.resize(newCapacityBytes, memoryBudget)
+                } catch (oom: OutOfMemoryError) {
+                    // Defense in depth: the pre-flight check above should make this unreachable in
+                    // practice, but a resize must never be allowed to crash the process even if the
+                    // budget estimate turns out to be wrong on some device.
+                    return SwitchConfigResult.BufferResizeRefused(
+                        ResizeOutcome.Refused(newCapacityBytes, Long.MAX_VALUE, Long.MAX_VALUE),
+                    )
+                }
+                if (outcome is ResizeOutcome.Refused) {
+                    return SwitchConfigResult.BufferResizeRefused(outcome)
+                }
+            }
+            activeConfig = newConfig
             if (_state.value is CaptureState.Recording || _state.value is CaptureState.Paused) {
                 pendingConfigSwitch.set(newConfig)
             }
+            return SwitchConfigResult.Applied
         }
     }
 

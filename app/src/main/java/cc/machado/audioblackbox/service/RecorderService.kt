@@ -15,6 +15,7 @@ import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.audio.SwitchConfigResult
 import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
@@ -549,13 +550,15 @@ class RecorderService : Service() {
         // recents-swipe) -- only losing the whole process kills it, which is unavoidable for a
         // RAM-only buffer regardless of where the reference lives.
         //
-        // `var`, not `val` (issue #45): a retention-window change cannot resize the ring buffer in
-        // place (see AudioConfig's class doc -- it is pre-allocated once and never grows), so
-        // changing it means constructing a brand new AudioCaptureEngine and replacing this
-        // reference wholesale. See `rebuildEngineIfIdle` for the one place that is allowed to
-        // happen, and `attachEngineForwarding`/`captureState` for how every other reader of this
-        // engine's state stays correct across that replacement instead of latching onto a
-        // reference that is about to go stale.
+        // `var`, not `val` (issue #45): while the engine is Idle there is no live ring buffer to
+        // resize in place, so a retention-window change reaching an Idle engine means constructing
+        // a brand new AudioCaptureEngine and replacing this reference wholesale -- see
+        // `rebuildEngineIfIdle`. (The Recording/Paused case is different and does not go through
+        // this path at all: `switchSettings` resizes the *live* buffer in place via
+        // `RingBuffer.resize`, issue #223, subject to the memory-budget refusal added by issue
+        // #272 -- see that method's own doc.) `attachEngineForwarding`/`captureState` handle every
+        // other reader of this engine's state staying correct across an `rebuildEngineIfIdle`
+        // replacement instead of latching onto a reference that is about to go stale.
         //
         // `@Volatile` -- same reasoning as `_captureConfig` above (`@techlead` adjudication on
         // PR #57, item 2): `engine` is read from multiple threads, and only the writer
@@ -675,42 +678,68 @@ class RecorderService : Service() {
         fun saveIntent(context: Context): Intent =
             Intent(context, RecorderService::class.java).setAction(ACTION_SAVE)
 
+        // Non-null exactly while there is an unacknowledged, real "your settings change could not
+        // be applied" refusal (issue #272) -- the visible-error counterpart to `clampNoticeFlow`
+        // for the case a resize is refused *at commit time*, which can differ from what the
+        // settings screen's own advisory ceiling predicted (that ceiling is calculated when the
+        // screen loads; the live heap footprint can grow in between -- reopening the app and
+        // committing again 11 seconds later is exactly the sequence that reproduced this).
+        private val _resizeRefusal = MutableStateFlow<SwitchConfigResult.BufferResizeRefused?>(null)
+        val resizeRefusalFlow: StateFlow<SwitchConfigResult.BufferResizeRefused?> = _resizeRefusal.asStateFlow()
+
+        fun acknowledgeResizeRefusal() {
+            _resizeRefusal.value = null
+        }
+
         /**
          * Switches retention duration and/or quality preset dynamically (issues #194, #223).
          * If the engine is recording or paused, dynamically resizes the buffer and/or switches
          * the capture format seamlessly without discarding surviving buffered audio.
+         *
+         * Returns `false`, and leaves every committed field ([captureConfig],
+         * [bufferDurationMinutesFlow], [qualityPresetFlow]) completely unchanged, if the live
+         * buffer's resize is refused (issue #272) -- committing these fields unconditionally,
+         * the way this used to, would desync them from what the ring buffer is actually running
+         * at the moment a resize cannot fit. [resizeRefusalFlow] carries the refusal for the UI
+         * to surface; capture keeps running unaffected at its previous configuration either way.
          */
         fun switchSettings(
             newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
             newPreset: QualityPreset = _qualityPresetFlow.value,
-        ) {
+        ): Boolean {
             require(isValidRetentionMinutes(newBufferDurationMinutes)) {
                 "newBufferDurationMinutes must be in " +
                     "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} " +
                     "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
             }
             val newConfig = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
-            _captureConfig = newConfig
-            _bufferDurationMinutesFlow.value = newBufferDurationMinutes
-            _qualityPresetFlow.value = newPreset
-            _engine.switchConfig(newConfig)
+            return when (val result = _engine.switchConfig(newConfig)) {
+                is SwitchConfigResult.Applied -> {
+                    _captureConfig = newConfig
+                    _bufferDurationMinutesFlow.value = newBufferDurationMinutes
+                    _qualityPresetFlow.value = newPreset
+                    true
+                }
+                is SwitchConfigResult.BufferResizeRefused -> {
+                    _resizeRefusal.value = result
+                    false
+                }
+            }
         }
 
         /**
          * Switches the active quality preset dynamically (issue #194).
          * If the engine is recording, switches the capture format seamlessly without discarding buffered audio.
          */
-        fun switchQualityPreset(newPreset: QualityPreset) {
+        fun switchQualityPreset(newPreset: QualityPreset): Boolean =
             switchSettings(newBufferDurationMinutes = _captureConfig.bufferDurationMinutes, newPreset = newPreset)
-        }
 
         /**
          * Switches the retention window duration dynamically (issue #223).
          * If the engine is recording, resizes the buffer in-place without discarding surviving buffered audio.
          */
-        fun switchRetentionMinutes(newBufferDurationMinutes: Int) {
+        fun switchRetentionMinutes(newBufferDurationMinutes: Int): Boolean =
             switchSettings(newBufferDurationMinutes = newBufferDurationMinutes, newPreset = _qualityPresetFlow.value)
-        }
 
         /**
          * Rebuilds the process-lifetime engine at [newBufferDurationMinutes] and [newPreset] (issue #45, #193).

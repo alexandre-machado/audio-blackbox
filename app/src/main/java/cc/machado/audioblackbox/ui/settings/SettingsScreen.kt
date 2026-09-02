@@ -102,6 +102,7 @@ fun SettingsRoute(
         onConfirmRetentionWindowChange = viewModel::confirmRetentionWindowChange,
         onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
         onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
+        onDismissResizeError = viewModel::dismissResizeError,
         modifier = modifier,
     )
 }
@@ -116,6 +117,7 @@ fun SettingsScreen(
     onConfirmRetentionWindowChange: () -> Unit,
     onCancelRetentionWindowChange: () -> Unit,
     onAcknowledgeClampNotice: () -> Unit,
+    onDismissResizeError: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
 ) {
@@ -146,6 +148,9 @@ fun SettingsScreen(
     }
     uiState.clampNotice?.let { notice ->
         ClampNoticeDialog(notice = notice, onAcknowledge = onAcknowledgeClampNotice)
+    }
+    uiState.resizeError?.let { errorInfo ->
+        ResizeErrorDialog(errorInfo = errorInfo, onAcknowledge = onDismissResizeError)
     }
 }
 
@@ -712,6 +717,52 @@ private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
             TextButton(onClick = onAcknowledge) {
                 Text(
                     text = stringResource(R.string.settings_retention_clamp_notice_dismiss),
+                    fontWeight = FontWeight.Bold,
+                    color = FlightOrange,
+                )
+            }
+        },
+    )
+}
+
+/**
+ * Shown when a live settings change was refused because the ring buffer resize it required could
+ * not fit given the device's current heap state (issue #272). [errorInfo] carries the real,
+ * specific numbers computed by [SettingsViewModel.describeRefusal]; the wording itself comes from
+ * `strings.xml` (`R.string.settings_resize_error_body`/`_no_mb`), never a generic failure toast,
+ * per AGENTS.md §5 "never fake a signal in the UI". The previously-active setting is still in
+ * force; this dialog only informs, it does not offer a retry, since the underlying condition
+ * (transient heap pressure) may not have changed.
+ */
+@Composable
+private fun ResizeErrorDialog(errorInfo: ResizeErrorInfo, onAcknowledge: () -> Unit) {
+    val message = errorInfo.requestedMb?.let { requestedMb ->
+        stringResource(R.string.settings_resize_error_body, errorInfo.requestedMinutes, requestedMb)
+    } ?: stringResource(R.string.settings_resize_error_body_no_mb, errorInfo.requestedMinutes)
+    AlertDialog(
+        onDismissRequest = onAcknowledge,
+        shape = CARD_SHAPE,
+        containerColor = CockpitPanel,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                text = stringResource(R.string.settings_resize_error_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = WarningRed,
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onAcknowledge) {
+                Text(
+                    text = stringResource(R.string.settings_resize_error_dismiss),
                     fontWeight = FontWeight.Bold,
                     color = FlightOrange,
                 )

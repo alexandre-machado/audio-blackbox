@@ -110,6 +110,54 @@ data class FormatSegment(
 )
 
 /**
+ * Test seam + production source for the heap numbers [RingBuffer.resize] checks before
+ * allocating (issue #272). Deliberately plain `java.lang.Runtime` calls, not an Android API, so
+ * this stays a pure-JVM concern: [REAL] is what production uses, and a test injects a fake that
+ * reports fixed numbers instead, which is what makes the refusal *logic* below deterministically
+ * testable on the JVM tier even though the real 256 MB Dalvik growth limit it is verified against
+ * on-device is not (AGENTS.md §6) -- see `RingBufferResizeBudgetTest`.
+ *
+ * [maxHeapBytes] mirrors the crash log's `growth limit`; [usedHeapBytes] mirrors its
+ * `target footprint`. Both are sampled together so they describe the same instant.
+ */
+fun interface MemoryBudget {
+    fun sample(): MemorySample
+
+    companion object {
+        val REAL: MemoryBudget = MemoryBudget {
+            val rt = Runtime.getRuntime()
+            MemorySample(maxHeapBytes = rt.maxMemory(), usedHeapBytes = rt.totalMemory() - rt.freeMemory())
+        }
+    }
+}
+
+data class MemorySample(val maxHeapBytes: Long, val usedHeapBytes: Long)
+
+/**
+ * Outcome of [RingBuffer.resize] (issue #272): a resize either applies, or is refused *before*
+ * any allocation happens because the owner's on-device evidence showed it cannot fit given the
+ * heap's current footprint -- not just given the requested size in isolation (one confirmed
+ * crash failed to allocate only ~101 MB against a heap already at ~205 MB of a 256 MB ceiling).
+ */
+sealed interface ResizeOutcome {
+    /** The resize was applied; the buffer now has the requested capacity. */
+    data object Applied : ResizeOutcome
+
+    /**
+     * Refused before allocating anything: the buffer's capacity and all buffered audio are
+     * completely unchanged, exactly as if [RingBuffer.resize] had never been called.
+     * [projectedPeakBytes] is what heap usage would have reached had the new backing array been
+     * allocated while the current one was still live (they must coexist during the copy);
+     * [maxHeapBytes] is the ceiling it was checked against.
+     */
+    data class Refused(
+        val requestedCapacityBytes: Int,
+        val projectedPeakBytes: Long,
+        val maxHeapBytes: Long,
+    ) : ResizeOutcome
+}
+
+/**
  * Fixed-size, pre-allocated circular buffer of PCM bytes. The single source of truth every
  * other module reads from: [AudioCaptureEngine] is the only writer, exporters and UI are
  * readers.
@@ -119,8 +167,9 @@ data class FormatSegment(
  *
  * ## Allocation & Resizing
  * The backing array is allocated at construction to [capacityBytes] and can be dynamically
- * resized in-place via [resize] (issue #223) without discarding buffered audio. [write] never
- * allocates on its hot path: it only does bounds arithmetic and `System.arraycopy` into the
+ * resized in-place via [resize] (issue #223) without discarding buffered audio, *if* it can fit
+ * (issue #272 -- see [resize]'s own doc for the memory budget check that guards this). [write]
+ * never allocates on its hot path: it only does bounds arithmetic and `System.arraycopy` into the
  * pre-allocated array plus pre-allocated marker arrays (see below). When full, [write] silently
  * overwrites the oldest bytes; it never throws on overflow.
  *
@@ -213,11 +262,37 @@ class RingBuffer(
      *
      * Monotonic stream coordinates ([totalWritten]) remain continuous, ensuring readers
      * ([readSince], [snapshot]) continue seamlessly without gap or stream reset.
+     *
+     * ## Memory budget check (issue #272)
+     * The copy below needs the old and new backing arrays to coexist -- the old one is the copy
+     * source until the loop finishes, so this allocates a **second** full-size array on top of
+     * whatever is already resident, not a replacement for it. Three Play Store crashes showed
+     * this coexistence peak exceeding the device's 256 MB Dalvik heap growth limit, fatally, on
+     * an ordinary settings change. Before allocating anything, [memoryBudget] is sampled and the
+     * resize is refused ([ResizeOutcome.Refused]) if the projected peak would not fit inside
+     * [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the reported ceiling -- reusing that constant
+     * rather than inventing a second safety margin, since it is the one already calibrated
+     * against an on-device measurement in this codebase. A refusal leaves capacity and all
+     * buffered audio completely untouched.
      */
-    fun resize(newCapacityBytes: Int) {
+    fun resize(newCapacityBytes: Int, memoryBudget: MemoryBudget = MemoryBudget.REAL): ResizeOutcome {
         require(newCapacityBytes > 0) { "newCapacityBytes must be positive, was $newCapacityBytes" }
         synchronized(lock) {
-            if (newCapacityBytes == _capacityBytes) return
+            if (newCapacityBytes == _capacityBytes) return ResizeOutcome.Applied
+
+            val sample = memoryBudget.sample()
+            // The old backing array is already live and reachable through `data`, so it is
+            // already counted inside `sample.usedHeapBytes`; the peak this resize would drive
+            // heap usage to is that existing usage plus the *new* array alone.
+            val projectedPeakBytes = sample.usedHeapBytes + newCapacityBytes.toLong()
+            val safeHeapBytes = (sample.maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
+            if (projectedPeakBytes > safeHeapBytes) {
+                return ResizeOutcome.Refused(
+                    requestedCapacityBytes = newCapacityBytes,
+                    projectedPeakBytes = projectedPeakBytes,
+                    maxHeapBytes = sample.maxHeapBytes,
+                )
+            }
 
             val oldCapacity = _capacityBytes
             val oldData = data
@@ -247,6 +322,7 @@ class RingBuffer(
             _capacityBytes = newCapacityBytes
             baseStreamOffset = startOffset
             pruneExpiredSegmentsLocked()
+            return ResizeOutcome.Applied
         }
     }
 
