@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -69,7 +68,6 @@ import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
 import cc.machado.audioblackbox.ui.theme.TextDim
 import cc.machado.audioblackbox.ui.theme.TextMuted
 import cc.machado.audioblackbox.ui.theme.WarningRed
-import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
 import androidx.compose.foundation.clickable
 import cc.machado.audioblackbox.audio.QualityPreset
 
@@ -98,9 +96,6 @@ fun SettingsRoute(
         onSelectQualityPreset = viewModel::selectQualityPreset,
         onDecrement = viewModel::decrementPending,
         onIncrement = viewModel::incrementPending,
-        onApply = viewModel::commitPendingRetentionWindow,
-        onConfirmRetentionWindowChange = viewModel::confirmRetentionWindowChange,
-        onCancelRetentionWindowChange = viewModel::cancelRetentionWindowChange,
         onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
         onDismissResizeError = viewModel::dismissResizeError,
         modifier = modifier,
@@ -113,9 +108,6 @@ fun SettingsScreen(
     onSelectQualityPreset: (QualityPreset) -> Unit,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
-    onApply: () -> Unit,
-    onConfirmRetentionWindowChange: () -> Unit,
-    onCancelRetentionWindowChange: () -> Unit,
     onAcknowledgeClampNotice: () -> Unit,
     onDismissResizeError: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -134,17 +126,10 @@ fun SettingsScreen(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,
         )
-        RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement, onApply)
+        RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
         PrivacySection(versionName = versionName)
-    }
-    uiState.retentionStepper.pendingConfirmationMinutes?.let { pendingMinutes ->
-        RetentionDiscardDialog(
-            pendingMinutes = pendingMinutes,
-            onConfirm = onConfirmRetentionWindowChange,
-            onCancel = onCancelRetentionWindowChange,
-        )
     }
     uiState.clampNotice?.let { notice ->
         ClampNoticeDialog(notice = notice, onAcknowledge = onAcknowledgeClampNotice)
@@ -166,16 +151,14 @@ private fun SettingsHeader() {
 /** The retention-window stepper (issue #73) -- how many minutes of audio the ring buffer is
  * *configured* to hold. Superseded the dashboard's fixed-chip selector (#45/#57): a `-`/`+` pair
  * in [AudioConfig.RETENTION_WINDOW_STEP_MINUTES][cc.machado.audioblackbox.audio.AudioConfig.RETENTION_WINDOW_STEP_MINUTES]
- * increments adjusts a *pending* value locally (see [SettingsViewModel]'s class doc for why), and
- * an explicit Apply button is the only thing that ever persists or rebuilds anything. */
+ * increments adjusts a *pending* value locally, which [SettingsViewModel] persists and applies on
+ * its own, debounced 500 ms after the last tap (issue #299) -- there is no Apply button any more. */
 @Composable
 private fun RetentionStepperSection(
     stepper: RetentionStepperUiState,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
-    onApply: () -> Unit,
 ) {
-    val locked = stepper.pendingConfirmationMinutes != null
     val valueLabel = stringResource(R.string.settings_retention_value, stepper.pendingMinutes, stepper.approxPendingRamMb)
     val decrementCd = stringResource(R.string.settings_retention_decrement_cd)
     val incrementCd = stringResource(R.string.settings_retention_increment_cd)
@@ -218,7 +201,7 @@ private fun RetentionStepperSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val canDec = stepper.canDecrement && !locked
+                    val canDec = stepper.canDecrement
                     Surface(
                         shape = RoundedCornerShape(RADIUS_RIVET),
                         color = if (canDec) CockpitPanelRaised else CockpitPanel,
@@ -265,7 +248,7 @@ private fun RetentionStepperSection(
                         )
                     }
 
-                    val canInc = stepper.canIncrement && !locked
+                    val canInc = stepper.canIncrement
                     Surface(
                         shape = RoundedCornerShape(RADIUS_RIVET),
                         color = if (canInc) CockpitPanelRaised else CockpitPanel,
@@ -291,26 +274,6 @@ private fun RetentionStepperSection(
                 }
             }
 
-            if (stepper.isDirty) {
-                Text(
-                    text = stringResource(R.string.settings_retention_pending_notice, stepper.committedMinutes),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = CautionAmber,
-                )
-            }
-
-            Button(
-                onClick = onApply,
-                enabled = stepper.isDirty && !locked,
-                colors = primaryCtaButtonColors(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_retention_apply_button),
-                    fontWeight = FontWeight.Bold,
-                )
-            }
         }
     }
 }
@@ -637,55 +600,6 @@ private fun PrivacySection(
     }
 }
 
-/** Blocks a retention-window change from ever applying silently (issue #45's core safety
- * requirement, carried into #73's stepper): shown whenever
- * [RetentionStepperUiState.pendingConfirmationMinutes] is non-null, i.e. the user tapped Apply
- * while the engine was still Recording/Paused with real audio buffered. Fires exactly once per
- * commit -- not per stepper tap, see [SettingsViewModel]'s class doc. Dismissing (tapping outside,
- * or the back gesture) is treated the same as [onCancel] -- there is no safe default other than
- * "nothing changes". */
-@Composable
-private fun RetentionDiscardDialog(pendingMinutes: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        shape = CARD_SHAPE,
-        containerColor = CockpitPanel,
-        tonalElevation = 6.dp,
-        title = {
-            Text(
-                text = stringResource(R.string.settings_retention_confirm_title),
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                color = CautionAmber,
-            )
-        },
-        text = {
-            Text(
-                text = stringResource(R.string.settings_retention_confirm_body, pendingMinutes),
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    text = stringResource(R.string.settings_retention_confirm_accept),
-                    fontWeight = FontWeight.Bold,
-                    color = WarningRed,
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) {
-                Text(
-                    text = stringResource(R.string.settings_retention_confirm_cancel),
-                    color = TextMuted,
-                )
-            }
-        },
-    )
-}
-
 /** Shown when the user's stored retention window was clamped down on load (issue #84). */
 @Composable
 private fun ClampNoticeDialog(notice: ClampNotice, onAcknowledge: () -> Unit) {
@@ -778,7 +692,6 @@ private fun previewStepperState(
     pendingMinutes: Int = 30,
     canDecrement: Boolean = true,
     canIncrement: Boolean = true,
-    pendingConfirmation: Int? = null,
     selectedPreset: QualityPreset = QualityPreset.VOICE,
 ): SettingsUiState = SettingsUiState(
     retentionStepper = RetentionStepperUiState(
@@ -788,7 +701,6 @@ private fun previewStepperState(
         isDirty = committedMinutes != pendingMinutes,
         canDecrement = canDecrement,
         canIncrement = canIncrement,
-        pendingConfirmationMinutes = pendingConfirmation,
     ),
     // Illustrative per-preset ceilings for a hypothetical device (issue #298: there is no
     // AudioConfig constant these could reference any more -- DeviceMemoryBudget computes a real
@@ -806,7 +718,7 @@ private fun previewStepperState(
 @Composable
 private fun SettingsScreenCleanPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(), {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(), {}, {}, {}, {})
     }
 }
 
@@ -814,7 +726,7 @@ private fun SettingsScreenCleanPreview() {
 @Composable
 private fun SettingsScreenDirtyPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(pendingMinutes = 45), {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(pendingMinutes = 45), {}, {}, {}, {})
     }
 }
 
@@ -822,7 +734,7 @@ private fun SettingsScreenDirtyPreview() {
 @Composable
 private fun SettingsScreenAtMinPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(committedMinutes = 5, pendingMinutes = 5, canDecrement = false), {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(committedMinutes = 5, pendingMinutes = 5, canDecrement = false), {}, {}, {}, {})
     }
 }
 
@@ -830,6 +742,6 @@ private fun SettingsScreenAtMinPreview() {
 @Composable
 private fun SettingsScreenAtMaxPreview() {
     AudioBlackboxTheme {
-        SettingsScreen(previewStepperState(committedMinutes = 45, pendingMinutes = 45, canIncrement = false), {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(previewStepperState(committedMinutes = 45, pendingMinutes = 45, canIncrement = false), {}, {}, {}, {})
     }
 }

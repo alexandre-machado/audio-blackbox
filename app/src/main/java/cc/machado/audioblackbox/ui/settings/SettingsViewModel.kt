@@ -14,25 +14,58 @@ import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
  * Owns the settings screen state: retention-window stepper (issue #73) and quality preset selector (issue #193).
  *
- * ## Why a pending value, not "apply on every tap"
- * Changing the retention window or preset rebuilds [RecorderService]'s engine, which discards whatever audio
- * is currently buffered (see [RecorderService.rebuildEngineIfIdle]'s doc).
+ * ## Why every tap persists on its own, debounced (issue #299)
+ * There used to be an Apply button here, justified by a claim that changing the retention window or
+ * preset discards whatever audio is currently buffered. That stopped being true: in-place buffer
+ * resizing (issue #223) and quality-preset switching (issue #194) both preserve buffered audio
+ * across the boundary without stopping capture -- see [commitPending]'s doc, and
+ * [RecorderService.switchSettings]'s. The Apply button, and the discard-confirmation dialog it
+ * guarded, survived only as dead code justified by a doc comment nothing in the running code any
+ * longer backed.
  *
- * The fix: [incrementPending]/[decrementPending]/[selectQualityPreset] only ever move local pending
- * state nothing downstream observes yet. Nothing is persisted, rebuilt, or discarded until
- * [commitPendingRetentionWindow] -- an explicit, separate action -- is called, and even then the
- * discard-confirmation dialog fires at most once per commit, only when [captureState] is not already [CaptureState.Idle].
+ * [incrementPending]/[decrementPending]/[selectQualityPreset] still only ever move a local pending
+ * value directly -- that is what keeps the stepper tracking taps at tap speed -- but each call also
+ * (re)schedules a single, shared, trailing-edge debounce timer ([scheduleDebouncedCommit]).
+ * [commitPending] is what actually persists and switches the live engine, exactly once per settled
+ * burst of taps: a fresh tap cancels and restarts the same timer rather than starting a second one,
+ * so a preset tap immediately followed by a run of stepper taps collapses into one commit, one
+ * resize, not one per tap (each is a real reallocation of up to hundreds of MB). Because [commitPending]
+ * always reads the *current* pending value at the moment it actually runs -- never a value captured
+ * when the timer was scheduled -- a tap that arrives before the timer fires is naturally the one
+ * that ends up committed, with no separate "torn state" handling required.
+ *
+ * If the engine refuses the resulting resize (issue #272), the previous, still-running setting stays
+ * in force: [_resizeError] surfaces the real numbers, and the pending value is reset back to the
+ * committed one so the stepper's displayed value matches what is actually running. With no Apply
+ * button left, that reversion plus [_resizeError] is the *only* feedback channel a refused change
+ * has -- see [commitPending].
+ *
+ * ## Navigating away inside the debounce window (`@rev` finding on PR #304)
+ * [onCleared] flushes any still-dirty pending edit immediately, on [commitFlushScope] -- a
+ * companion-owned scope that outlives this instance, not [viewModelScope] (which
+ * `androidx.lifecycle.ViewModel.clear()` cancels before/around `onCleared()` -- launching the flush
+ * on the dying scope would just get the flush itself cancelled, silently dropping the exact edit
+ * this exists to save). Without this, a tap followed by navigating off the Settings screen before
+ * [DEBOUNCE_MILLIS] elapses would cancel [commitJob] mid-flight and lose an edit the UI had already
+ * shown as pending -- precisely the "silently-ignored tap" failure mode this whole redesign exists
+ * to rule out, just triggered by navigation instead of a second tap. A flush that is then refused
+ * (issue #272) is surfaced the next time a [SettingsViewModel] is constructed rather than lost --
+ * see [onCleared]'s own doc.
  */
 class SettingsViewModel(
     private val captureState: StateFlow<CaptureState> = RecorderService.captureState,
@@ -40,7 +73,12 @@ class SettingsViewModel(
     private val qualityPresetFlow: StateFlow<QualityPreset> = RecorderService.qualityPresetFlow,
     private val onStopEngine: () -> Unit = {},
     private val retentionWindowPreferences: RetentionWindowPreferences = InMemoryRetentionWindowPreferences(),
-    private val onSwitchSettings: ((minutes: Int, preset: QualityPreset) -> Unit)? = null,
+    // Issue #299: the single injectable seam behind commitPending's actual switch attempt --
+    // defaults to the real RecorderService.switchSettings (issue #272's refusal-aware
+    // dynamic-switch entry point) in production, and is what a test substitutes a deterministic
+    // fake for to drive the refusal-reverts-the-displayed-value path without needing to force a
+    // real JVM heap over its actual ceiling.
+    private val onSwitchSettings: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.switchSettings(m, p) },
     private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.rebuildEngineIfIdle(m, p) },
     private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
@@ -58,21 +96,31 @@ class SettingsViewModel(
     private val _pendingMinutes = MutableStateFlow<Int?>(null)
     private val _pendingPreset = MutableStateFlow<QualityPreset?>(null)
 
-    data class PendingCommit(val minutes: Int, val preset: QualityPreset)
-    private val _pendingConfirmation = MutableStateFlow<PendingCommit?>(null)
-
     // Non-null exactly while there is an unacknowledged "your settings change could not be
     // applied" refusal (issue #272) -- a real, user-visible signal for a resize the engine
     // refused rather than crashed on, per AGENTS.md §5 "never fake a signal in the UI". Cleared by
-    // [dismissResizeError] and also whenever a new commit is attempted.
-    private val _resizeError = MutableStateFlow<ResizeErrorInfo?>(null)
+    // [dismissResizeError] and also whenever a new commit is attempted. With no Apply button
+    // (issue #299) this is the only feedback channel a refused change has -- see [commitPending].
+    // Seeded from _persistedResizeError, not always null (`@rev` finding on PR #304, round 2): a
+    // refusal flushed by a *previous* instance's onCleared() after its screen was already gone
+    // (nobody around to see it then) surfaces here instead, the moment a fresh SettingsViewModel is
+    // constructed -- consumed exactly once, so a later instance doesn't see the same notice again.
+    private val _resizeError = MutableStateFlow(
+        _persistedResizeError.value?.also { _persistedResizeError.value = null },
+    )
+
+    // The single, shared trailing-edge debounce timer behind every pending edit (issue #299): a
+    // fresh tap on either control cancels whatever is currently scheduled and starts one new
+    // DEBOUNCE_MILLIS timer, so a preset tap immediately followed by a run of stepper taps
+    // collapses into exactly one [commitPending] call, not one per tap. See [scheduleDebouncedCommit].
+    private var commitJob: Job? = null
 
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(capacityMinutesFlow, qualityPresetFlow, ::Pair),
         combine(_pendingMinutes, _pendingPreset, ::Pair),
-        combine(_pendingConfirmation, retentionWindowPreferences.clampNoticeFlow, ::Pair),
+        retentionWindowPreferences.clampNoticeFlow,
         _resizeError,
-    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (pendingConfirmation, clampNotice), resizeError ->
+    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), clampNotice, resizeError ->
         val effectivePendingMins = pendingMins ?: committedMins
         val effectivePendingPreset = pendingPreset ?: committedPreset
         mapUiState(
@@ -80,7 +128,6 @@ class SettingsViewModel(
             pendingMinutes = effectivePendingMins,
             committedPreset = committedPreset,
             pendingPreset = effectivePendingPreset,
-            pendingConfirmation = pendingConfirmation,
             clampNotice = clampNotice,
             resizeError = resizeError,
             maxMemoryBytes = maxMemoryBytesProvider(),
@@ -96,9 +143,16 @@ class SettingsViewModel(
             pendingMinutes = _pendingMinutes.value ?: capacityMinutesFlow.value,
             committedPreset = qualityPresetFlow.value,
             pendingPreset = _pendingPreset.value ?: qualityPresetFlow.value,
-            pendingConfirmation = null,
             clampNotice = null,
-            resizeError = null,
+            // `@rev` finding on PR #304, round 2: was hardcoded `null` -- harmless while `_resizeError`
+            // could only ever start `null` too, but that stopped being true once construction can
+            // seed it from `_persistedResizeError` (see above). `stateIn`'s `initialValue` is a
+            // one-time snapshot read *before* `uiState` has any subscriber to drive the `combine`
+            // flow past it (`WhileSubscribed` keeps that flow cold until one exists), so a caller
+            // reading `uiState.value` synchronously right after construction -- exactly what a
+            // reopened Settings screen's very first frame does -- would otherwise see this
+            // hardcoded `null` instead of the just-seeded refusal.
+            resizeError = _resizeError.value,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
@@ -123,50 +177,27 @@ class SettingsViewModel(
     private fun currentPendingPreset(): QualityPreset = _pendingPreset.value ?: qualityPresetFlow.value
 
     fun selectQualityPreset(preset: QualityPreset) {
-        if (_pendingConfirmation.value != null) return
         _pendingPreset.value = preset
         val maxForPreset = maxRetentionForPreset(preset)
         val mins = currentPendingMinutes()
         if (mins > maxForPreset) {
             _pendingMinutes.value = maxForPreset
         }
+        scheduleDebouncedCommit()
     }
 
     fun incrementPending() {
-        if (_pendingConfirmation.value != null) return
         val currentPreset = currentPendingPreset()
         val maxForPreset = maxRetentionForPreset(currentPreset)
         _pendingMinutes.value = (currentPendingMinutes() + AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
             .coerceAtMost(maxForPreset)
+        scheduleDebouncedCommit()
     }
 
     fun decrementPending() {
-        if (_pendingConfirmation.value != null) return
         _pendingMinutes.value = (currentPendingMinutes() - AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
             .coerceAtLeast(AudioConfig.RETENTION_WINDOW_MIN_MINUTES)
-    }
-
-    fun commitPendingRetentionWindow() {
-        val minutes = currentPendingMinutes()
-        val preset = currentPendingPreset()
-        val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
-        if (!isDirty) return
-        if (_pendingConfirmation.value != null) return
-
-        // In-place buffer resizing (issue #223) and quality preset switch (issue #194)
-        // seamlessly preserve buffered audio across the boundary without stopping capture or discarding audio.
-        applyChanges(minutes, preset)
-    }
-
-    fun confirmRetentionWindowChange() {
-        val change = _pendingConfirmation.value ?: return
-        _pendingConfirmation.value = null
-        applyChanges(change.minutes, change.preset)
-    }
-
-    fun cancelRetentionWindowChange() {
-        _pendingConfirmation.value = null
-        resetPending()
+        scheduleDebouncedCommit()
     }
 
     fun resetPending() {
@@ -174,34 +205,116 @@ class SettingsViewModel(
         _pendingPreset.value = null
     }
 
-    private fun applyChanges(minutes: Int, preset: QualityPreset) {
-        _pendingMinutes.value = null
-        _pendingPreset.value = null
+    /** `@rev` finding on PR #304: navigating away from Settings inside the [DEBOUNCE_MILLIS] window
+     * used to lose the pending edit outright -- `viewModelScope` (and [commitJob] with it) is
+     * cancelled here, before the debounced [commitPending] ever got to run, with zero feedback: no
+     * `resizeError`, no reverted display, because nothing is mounted to show either. That is exactly
+     * the failure mode issue #299 was written to design against, just reached via navigation rather
+     * than a tap race.
+     *
+     * The fix: flush a still-dirty pending edit synchronously on [commitFlushScope] -- a scope that
+     * outlives this instance -- rather than on the [viewModelScope] that is dying right now. The
+     * flushed commit still goes through the exact same [commitPending] (same success/refusal
+     * handling, same "never persist a value the engine actually refused" invariant from issue #272)
+     * as a normal, in-session commit.
+     *
+     * ## The one case this does not fully close in-session: a refusal after the screen is already gone
+     * If the flushed commit is refused, [commitPending] still sets [_resizeError] (nobody is
+     * mounted to read it any more) but *also* stashes it on [_persistedResizeError] -- the
+     * companion-owned marker the next [SettingsViewModel] instance's `init` seeds its own
+     * [_resizeError] from, so reopening Settings is what actually surfaces a refusal that landed
+     * after the screen was gone (`@rev` finding on PR #304, round 2: the seam already exists to make
+     * this genuinely testable via the `onSwitchSettings` fake, so it is implemented rather than left
+     * as an unverifiable claim). The property issue #272 actually protects -- the persisted
+     * preference and the live engine's real capacity can never diverge -- held even before this,
+     * since [commitPending] only ever writes the preference on success either way; this closes the
+     * remaining *notification* gap on top of that.
+     *
+     * `override`, not `public override`: `androidx.lifecycle.ViewModelStore.clear()` is the real, public
+     * `androidx.lifecycle` entry point that invokes this without needing any visibility widening --
+     * `SettingsViewModelTest` drives teardown through a real `ViewModelStore` (see
+     * `clearingTheViewModelThroughViewModelStore` there) precisely so the test exercises the actual
+     * "`viewModelScope` is cancelled before `onCleared()` runs" ordering this fix depends on, the
+     * same reason a direct `vm.onCleared()` call could not have caught the original defect (`@rev`
+     * verified: reverting [commitFlushScope] back to [viewModelScope] here made that direct-call test
+     * keep passing, because a direct call never actually cancels `viewModelScope`). Leaving this
+     * `protected` (`@sec` finding) also closes off any caller other than the framework cancelling a
+     * live debounce or forcing a premature commit out of sequence. */
+    override fun onCleared() {
+        commitJob?.cancel()
+        val minutes = currentPendingMinutes()
+        val preset = currentPendingPreset()
+        if (minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value) {
+            commitFlushScope.launch { commitPending(afterClear = true) }
+        }
+    }
+
+    /** The single shared trailing-edge debounce timer (issue #299): cancels whatever commit is
+     * currently scheduled -- including one still waiting out its [DEBOUNCE_MILLIS] delay -- and
+     * starts a fresh one. A tap that lands before the previous timer fired therefore never lets a
+     * stale commit run; only the *last* call in a burst ever gets far enough to actually delay and
+     * fire, which is exactly what makes a preset tap followed by a run of stepper taps collapse
+     * into the single [commitPending] call at the bottom of the burst, not one per tap. */
+    private fun scheduleDebouncedCommit() {
+        commitJob?.cancel()
+        commitJob = viewModelScope.launch {
+            delay(DEBOUNCE_MILLIS)
+            commitPending()
+        }
+    }
+
+    /** Persists and switches the live engine to whatever [_pendingMinutes]/[_pendingPreset]
+     * currently hold -- always the *current* value at the moment this actually runs, never a value
+     * captured back when the debounce timer was scheduled, so the last tap in a burst is always the
+     * one that ends up committed.
+     *
+     * In-place buffer resizing (issue #223) and quality preset switching (issue #194) both preserve
+     * buffered audio across this boundary without stopping capture -- this is why issue #299 could
+     * remove the Apply button and its discard-confirmation dialog: neither one guards anything real
+     * any more.
+     *
+     * Issue #272: only commits the new setting -- persisted preference and the committed
+     * StateFlows [RecorderService.switchSettings] updates on success -- if the live buffer's resize
+     * actually applied. Persisting unconditionally would leave the stored preference and the
+     * engine's actual capacity out of sync whenever a resize was refused, and would silently hide
+     * the refusal from the user on top of that. On a refusal, [resetPending] reverts the displayed
+     * (pending) value back to the still-active committed one -- with no Apply button, this revert
+     * plus [_resizeError] is the *only* signal the user gets that their tap did not take effect. */
+    private suspend fun commitPending(afterClear: Boolean = false) {
+        val minutes = currentPendingMinutes()
+        val preset = currentPendingPreset()
+        val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
+        if (!isDirty) {
+            resetPending()
+            return
+        }
         _resizeError.value = null
-        viewModelScope.launch {
-            if (onSwitchSettings != null) {
-                retentionWindowPreferences.setBufferDurationMinutes(minutes)
-                retentionWindowPreferences.setQualityPreset(preset)
-                onSwitchSettings.invoke(minutes, preset)
-            } else {
-                // issue #272: only commit the new setting -- persisted preference and the
-                // committed StateFlows switchSettings updates on success -- if the live buffer's
-                // resize actually applied. Persisting unconditionally (the old behavior) would
-                // leave the stored preference and the engine's actual capacity out of sync
-                // whenever a resize was refused, and would silently hide the refusal from the
-                // user on top of that.
-                val applied = RecorderService.switchSettings(minutes, preset)
-                if (applied) {
-                    retentionWindowPreferences.setBufferDurationMinutes(minutes)
-                    retentionWindowPreferences.setQualityPreset(preset)
-                    onRebuildEngine(minutes, preset)
-                    onSwitchQualityPreset(preset)
-                } else {
-                    val refusal = RecorderService.resizeRefusalFlow.value
-                    RecorderService.acknowledgeResizeRefusal()
-                    _resizeError.value = describeRefusal(refusal, minutes)
-                }
+        val applied = onSwitchSettings(minutes, preset)
+        if (applied) {
+            retentionWindowPreferences.setBufferDurationMinutes(minutes)
+            retentionWindowPreferences.setQualityPreset(preset)
+            onRebuildEngine(minutes, preset)
+            onSwitchQualityPreset(preset)
+            resetPending()
+        } else {
+            val refusal = RecorderService.resizeRefusalFlow.value
+            RecorderService.acknowledgeResizeRefusal()
+            val info = describeRefusal(refusal, minutes)
+            _resizeError.value = info
+            if (afterClear) {
+                // `@rev` finding on PR #304 (round 2): nobody is mounted to read `_resizeError`
+                // above -- this instance is already dying/dead. Record it on the companion-owned
+                // marker instead, so the *next* `SettingsViewModel` (the user reopening Settings)
+                // surfaces it -- see the constructor's `init` seeding below. Only stashed on the
+                // flushed-after-clear path: an in-session refusal is already shown right here via
+                // `_resizeError`, and does not need (or want) to resurface again on the next
+                // instance after the user dismisses it.
+                _persistedResizeError.value = info
             }
+            // Revert the displayed value to what is actually running (issue #299 requirement:
+            // with no Apply button, this is the only way the stepper does not keep showing a
+            // value that never took).
+            resetPending()
         }
     }
 
@@ -219,6 +332,56 @@ class SettingsViewModel(
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
 
+        /** `@rev` finding on PR #304 (round 2): a companion-owned scope, deliberately *not* parented
+         * to any one [SettingsViewModel] instance's [viewModelScope] -- it must survive exactly the
+         * event ([onCleared]) that cancels that scope. Mirrors the existing pattern one level down in
+         * this same codebase, [RecorderService]'s own companion-owned `forwardingScope`/`serviceScope`
+         * (process-lifetime, outliving any one Service/ViewModel instance for the same structural
+         * reason). Does not leak: every use here ([onCleared]) launches at most one short-lived,
+         * already-bounded coroutine (a single [commitPending] call, no loop, no retry) per cleared
+         * instance that had a genuinely dirty pending edit -- nothing keeps this scope's own
+         * [SupervisorJob] artificially alive, and a completed child coroutine is not retained.
+         *
+         * `by lazy`, not a plain eager property: a companion object has exactly one combined static
+         * initializer for *all* its members, so an eager `CoroutineScope(... + Dispatchers.Main.immediate)`
+         * here ran the moment *anything* on this companion was first touched -- including
+         * `describeRefusal`/`mapUiState`/`DEBOUNCE_MILLIS`, called by tests (`SettingsResizeErrorTest`)
+         * that never call `Dispatchers.setMain()`. `Dispatchers.Main.immediate` throws with no
+         * platform Main dispatcher installed and no test dispatcher set, which failed this
+         * companion's `<clinit>` -- and per JVM semantics a class that fails static init is
+         * permanently poisoned for the rest of that classloader/test JVM, so *every* later reference
+         * to `SettingsViewModel` in the same run failed with `NoClassDefFoundError`, including every
+         * test in `SettingsViewModelTest` itself, regardless of its own `setMain()` call (confirmed:
+         * this is exactly what broke CI run `33781119163`, 25/469 tests, all traced to this one
+         * line). `by lazy` defers resolving `Dispatchers.Main.immediate` until [commitFlushScope] is
+         * actually read -- only from [onCleared]'s flush branch -- by which point every real caller
+         * (production: Android's real Main looper; tests: `SettingsViewModelTest`'s own `@Before`)
+         * has already installed one. */
+        private val commitFlushScope: CoroutineScope by lazy(LazyThreadSafetyMode.NONE) {
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        }
+
+        // `@rev` finding on PR #304 (round 2): a refusal flushed by `onCleared` after the screen is
+        // already gone has nobody to show `_resizeError` to -- this is the companion-owned,
+        // process-lifetime marker that lets the *next* `SettingsViewModel` instance (the user
+        // reopening Settings) surface it instead of it being lost for good. Set by `commitPending`'s
+        // refusal branch unconditionally (in-session or flushed, the same as `_resizeError` itself);
+        // consumed exactly once, by whichever instance's `init` reads it next -- see [SettingsViewModel]'s
+        // constructor.
+        private val _persistedResizeError = MutableStateFlow<ResizeErrorInfo?>(null)
+
+        /** Test-only reset for [_persistedResizeError], so one test's refusal cannot leak into the
+         * next -- this is a companion-level (process-lifetime, by design) field, the same reason
+         * [cc.machado.audioblackbox.service.RecorderService]'s own companion state needs an explicit
+         * reset in test `tearDown()`. */
+        fun resetPersistedResizeErrorForTest() {
+            _persistedResizeError.value = null
+        }
+
+        /** Issue #299: the shared trailing-edge debounce window behind every pending edit -- see
+         * [scheduleDebouncedCommit]. */
+        const val DEBOUNCE_MILLIS = 500L
+
         /** Real, specific data for a refused resize (issue #272) -- states the actual numbers
          * involved rather than a generic "something went wrong", per AGENTS.md §5. Returns data,
          * not a formatted message: [SettingsScreen] renders the actual wording through
@@ -231,13 +394,12 @@ class SettingsViewModel(
         }
 
         /** The single state-mapping oracle for this screen: committed capacity + local pending
-         * value + pending-confirmation flag -> the exact [SettingsUiState] the screen renders. */
+         * value -> the exact [SettingsUiState] the screen renders. */
         fun mapUiState(
             committedMinutes: Int,
             pendingMinutes: Int,
             committedPreset: QualityPreset = QualityPreset.DEFAULT,
             pendingPreset: QualityPreset = committedPreset,
-            pendingConfirmation: PendingCommit? = null,
             clampNotice: ClampNotice? = null,
             resizeError: ResizeErrorInfo? = null,
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
@@ -277,7 +439,6 @@ class SettingsViewModel(
                 canDecrement = clampedPendingMinutes > AudioConfig.RETENTION_WINDOW_MIN_MINUTES,
                 canIncrement = clampedPendingMinutes < currentPresetMax,
                 isDirty = clampedPendingMinutes != committedMinutes || pendingPreset != committedPreset,
-                pendingConfirmationMinutes = pendingConfirmation?.minutes,
                 maxSelectableMinutes = currentPresetMax,
             )
 

@@ -155,10 +155,12 @@ class ScreenLayoutTest {
 
         settingsTab().performClick()
 
-        val settingsLastItem = composeRule.onNodeWithText(string(R.string.settings_retention_apply_button))
+        // Issue #299 removed the Apply button (the screen's previous last item) along with it --
+        // the Privacy card's "About" row is now the last item the screen renders.
+        val settingsLastItem = composeRule.onNodeWithText(string(R.string.settings_about_title))
         settingsLastItem.performScrollTo()
         settingsLastItem.assertIsDisplayed()
-        settingsLastItem.assertClearOfBottomBar("the settings screen's last item (Apply)", note = CAME_TO_REST)
+        settingsLastItem.assertClearOfBottomBar("the settings screen's last item (About)", note = CAME_TO_REST)
     }
 
     /**
@@ -446,7 +448,8 @@ class ScreenLayoutTest {
      * Regression test for issue #221, Finding A: the forward-recording start/stop buttons carried
      * no `colors = ...` override at all, so they fell through to `MaterialTheme.colorScheme.primary`
      * -- the wallpaper-derived dynamic colour on API 31+ -- while every sibling card-level primary
-     * CTA (Save, Settings Apply) overrode to `FlightOrange`. `dashboardFixture()`'s default forward
+     * CTA (Save; the Settings screen's own Apply button existed at the time but was removed by
+     * issue #299) overrode to `FlightOrange`. `dashboardFixture()`'s default forward
      * state renders the *start* button (it is [ForwardRecordingUiState.Idle]-adjacent, not
      * `Recording`), which is what this reads.
      *
