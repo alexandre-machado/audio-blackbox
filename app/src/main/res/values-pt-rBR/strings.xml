@@ -227,7 +227,7 @@
     <string name="settings_privacy_title">Privacidade e processamento local</string>
     <string name="settings_privacy_explanation">O Audio Blackbox opera puramente local no seu aparelho. O áudio do microfone é mantido em memória RAM temporária e sobrescrito automaticamente. Zero telemetria, relatórios de falha ou fluxos de áudio são enviados para servidores remotos.</string>
     <string name="settings_retention_title">Janela de retenção do buffer</string>
-    <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. Use os botões abaixo para escolher um valor e depois toque em Aplicar.</string>
+    <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. As mudanças são aplicadas automaticamente pouco depois de você parar de ajustar.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES limitam o
          controle a múltiplos de 5 no intervalo [5, 45] (clamp temporário da issue #72, antes era
@@ -236,15 +236,11 @@
          de intervalo com passo: todo valor alcançável, inclusive os novos como 35/40, ainda é
          múltiplo de 5. Revisado novamente para a issue #73, e de novo para o clamp da issue #72. -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutos, aproximadamente %2$d megabytes, ativo no momento</string>
+    <!-- Issue #299: "ainda não aplicado" continua correto. Há uma breve janela de debounce entre
+         o toque e a aplicação automática, não mais uma etapa de Aplicar esperando o usuário. -->
     <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutos, aproximadamente %2$d megabytes, ainda não aplicado</string>
     <string name="settings_retention_decrement_cd">Diminuir a retenção em 5 minutos</string>
     <string name="settings_retention_increment_cd">Aumentar a retenção em 5 minutos</string>
-    <string name="settings_retention_pending_notice">%1$d min continua ativo até você aplicar essa mudança</string>
-    <string name="settings_retention_apply_button">Aplicar</string>
-    <string name="settings_retention_confirm_title">Trocar a retenção agora?</string>
-    <string name="settings_retention_confirm_body">Trocar para %1$d min exige parar a gravação, o que descarta todo o áudio em memória agora. Essa gravação não pode ser recuperada depois.</string>
-    <string name="settings_retention_confirm_accept">Parar e trocar</string>
-    <string name="settings_retention_confirm_cancel">Cancelar</string>
 
     <!-- Seletor de qualidade de áudio (issue #193) -->
     <string name="settings_quality_preset_title">Predefinição de qualidade</string>

@@ -14,25 +14,43 @@ import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
  * Owns the settings screen state: retention-window stepper (issue #73) and quality preset selector (issue #193).
  *
- * ## Why a pending value, not "apply on every tap"
- * Changing the retention window or preset rebuilds [RecorderService]'s engine, which discards whatever audio
- * is currently buffered (see [RecorderService.rebuildEngineIfIdle]'s doc).
+ * ## Why every tap persists on its own, debounced (issue #299)
+ * There used to be an Apply button here, justified by a claim that changing the retention window or
+ * preset discards whatever audio is currently buffered. That stopped being true: in-place buffer
+ * resizing (issue #223) and quality-preset switching (issue #194) both preserve buffered audio
+ * across the boundary without stopping capture -- see [commitPending]'s doc, and
+ * [RecorderService.switchSettings]'s. The Apply button, and the discard-confirmation dialog it
+ * guarded, survived only as dead code justified by a doc comment nothing in the running code any
+ * longer backed.
  *
- * The fix: [incrementPending]/[decrementPending]/[selectQualityPreset] only ever move local pending
- * state nothing downstream observes yet. Nothing is persisted, rebuilt, or discarded until
- * [commitPendingRetentionWindow] -- an explicit, separate action -- is called, and even then the
- * discard-confirmation dialog fires at most once per commit, only when [captureState] is not already [CaptureState.Idle].
+ * [incrementPending]/[decrementPending]/[selectQualityPreset] still only ever move a local pending
+ * value directly -- that is what keeps the stepper tracking taps at tap speed -- but each call also
+ * (re)schedules a single, shared, trailing-edge debounce timer ([scheduleDebouncedCommit]).
+ * [commitPending] is what actually persists and switches the live engine, exactly once per settled
+ * burst of taps: a fresh tap cancels and restarts the same timer rather than starting a second one,
+ * so a preset tap immediately followed by a run of stepper taps collapses into one commit, one
+ * resize, not one per tap (each is a real reallocation of up to hundreds of MB). Because [commitPending]
+ * always reads the *current* pending value at the moment it actually runs -- never a value captured
+ * when the timer was scheduled -- a tap that arrives before the timer fires is naturally the one
+ * that ends up committed, with no separate "torn state" handling required.
+ *
+ * If the engine refuses the resulting resize (issue #272), the previous, still-running setting stays
+ * in force: [_resizeError] surfaces the real numbers, and the pending value is reset back to the
+ * committed one so the stepper's displayed value matches what is actually running. With no Apply
+ * button left, that reversion plus [_resizeError] is the *only* feedback channel a refused change
+ * has -- see [commitPending].
  */
 class SettingsViewModel(
     private val captureState: StateFlow<CaptureState> = RecorderService.captureState,
@@ -40,7 +58,12 @@ class SettingsViewModel(
     private val qualityPresetFlow: StateFlow<QualityPreset> = RecorderService.qualityPresetFlow,
     private val onStopEngine: () -> Unit = {},
     private val retentionWindowPreferences: RetentionWindowPreferences = InMemoryRetentionWindowPreferences(),
-    private val onSwitchSettings: ((minutes: Int, preset: QualityPreset) -> Unit)? = null,
+    // Issue #299: the single injectable seam behind commitPending's actual switch attempt --
+    // defaults to the real RecorderService.switchSettings (issue #272's refusal-aware
+    // dynamic-switch entry point) in production, and is what a test substitutes a deterministic
+    // fake for to drive the refusal-reverts-the-displayed-value path without needing to force a
+    // real JVM heap over its actual ceiling.
+    private val onSwitchSettings: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.switchSettings(m, p) },
     private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.rebuildEngineIfIdle(m, p) },
     private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
@@ -58,21 +81,25 @@ class SettingsViewModel(
     private val _pendingMinutes = MutableStateFlow<Int?>(null)
     private val _pendingPreset = MutableStateFlow<QualityPreset?>(null)
 
-    data class PendingCommit(val minutes: Int, val preset: QualityPreset)
-    private val _pendingConfirmation = MutableStateFlow<PendingCommit?>(null)
-
     // Non-null exactly while there is an unacknowledged "your settings change could not be
     // applied" refusal (issue #272) -- a real, user-visible signal for a resize the engine
     // refused rather than crashed on, per AGENTS.md §5 "never fake a signal in the UI". Cleared by
-    // [dismissResizeError] and also whenever a new commit is attempted.
+    // [dismissResizeError] and also whenever a new commit is attempted. With no Apply button
+    // (issue #299) this is the only feedback channel a refused change has -- see [commitPending].
     private val _resizeError = MutableStateFlow<ResizeErrorInfo?>(null)
+
+    // The single, shared trailing-edge debounce timer behind every pending edit (issue #299): a
+    // fresh tap on either control cancels whatever is currently scheduled and starts one new
+    // DEBOUNCE_MILLIS timer, so a preset tap immediately followed by a run of stepper taps
+    // collapses into exactly one [commitPending] call, not one per tap. See [scheduleDebouncedCommit].
+    private var commitJob: Job? = null
 
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(capacityMinutesFlow, qualityPresetFlow, ::Pair),
         combine(_pendingMinutes, _pendingPreset, ::Pair),
-        combine(_pendingConfirmation, retentionWindowPreferences.clampNoticeFlow, ::Pair),
+        retentionWindowPreferences.clampNoticeFlow,
         _resizeError,
-    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (pendingConfirmation, clampNotice), resizeError ->
+    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), clampNotice, resizeError ->
         val effectivePendingMins = pendingMins ?: committedMins
         val effectivePendingPreset = pendingPreset ?: committedPreset
         mapUiState(
@@ -80,7 +107,6 @@ class SettingsViewModel(
             pendingMinutes = effectivePendingMins,
             committedPreset = committedPreset,
             pendingPreset = effectivePendingPreset,
-            pendingConfirmation = pendingConfirmation,
             clampNotice = clampNotice,
             resizeError = resizeError,
             maxMemoryBytes = maxMemoryBytesProvider(),
@@ -96,7 +122,6 @@ class SettingsViewModel(
             pendingMinutes = _pendingMinutes.value ?: capacityMinutesFlow.value,
             committedPreset = qualityPresetFlow.value,
             pendingPreset = _pendingPreset.value ?: qualityPresetFlow.value,
-            pendingConfirmation = null,
             clampNotice = null,
             resizeError = null,
             maxMemoryBytes = maxMemoryBytesProvider(),
@@ -123,50 +148,27 @@ class SettingsViewModel(
     private fun currentPendingPreset(): QualityPreset = _pendingPreset.value ?: qualityPresetFlow.value
 
     fun selectQualityPreset(preset: QualityPreset) {
-        if (_pendingConfirmation.value != null) return
         _pendingPreset.value = preset
         val maxForPreset = maxRetentionForPreset(preset)
         val mins = currentPendingMinutes()
         if (mins > maxForPreset) {
             _pendingMinutes.value = maxForPreset
         }
+        scheduleDebouncedCommit()
     }
 
     fun incrementPending() {
-        if (_pendingConfirmation.value != null) return
         val currentPreset = currentPendingPreset()
         val maxForPreset = maxRetentionForPreset(currentPreset)
         _pendingMinutes.value = (currentPendingMinutes() + AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
             .coerceAtMost(maxForPreset)
+        scheduleDebouncedCommit()
     }
 
     fun decrementPending() {
-        if (_pendingConfirmation.value != null) return
         _pendingMinutes.value = (currentPendingMinutes() - AudioConfig.RETENTION_WINDOW_STEP_MINUTES)
             .coerceAtLeast(AudioConfig.RETENTION_WINDOW_MIN_MINUTES)
-    }
-
-    fun commitPendingRetentionWindow() {
-        val minutes = currentPendingMinutes()
-        val preset = currentPendingPreset()
-        val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
-        if (!isDirty) return
-        if (_pendingConfirmation.value != null) return
-
-        // In-place buffer resizing (issue #223) and quality preset switch (issue #194)
-        // seamlessly preserve buffered audio across the boundary without stopping capture or discarding audio.
-        applyChanges(minutes, preset)
-    }
-
-    fun confirmRetentionWindowChange() {
-        val change = _pendingConfirmation.value ?: return
-        _pendingConfirmation.value = null
-        applyChanges(change.minutes, change.preset)
-    }
-
-    fun cancelRetentionWindowChange() {
-        _pendingConfirmation.value = null
-        resetPending()
+        scheduleDebouncedCommit()
     }
 
     fun resetPending() {
@@ -174,34 +176,61 @@ class SettingsViewModel(
         _pendingPreset.value = null
     }
 
-    private fun applyChanges(minutes: Int, preset: QualityPreset) {
-        _pendingMinutes.value = null
-        _pendingPreset.value = null
+    /** The single shared trailing-edge debounce timer (issue #299): cancels whatever commit is
+     * currently scheduled -- including one still waiting out its [DEBOUNCE_MILLIS] delay -- and
+     * starts a fresh one. A tap that lands before the previous timer fired therefore never lets a
+     * stale commit run; only the *last* call in a burst ever gets far enough to actually delay and
+     * fire, which is exactly what makes a preset tap followed by a run of stepper taps collapse
+     * into the single [commitPending] call at the bottom of the burst, not one per tap. */
+    private fun scheduleDebouncedCommit() {
+        commitJob?.cancel()
+        commitJob = viewModelScope.launch {
+            delay(DEBOUNCE_MILLIS)
+            commitPending()
+        }
+    }
+
+    /** Persists and switches the live engine to whatever [_pendingMinutes]/[_pendingPreset]
+     * currently hold -- always the *current* value at the moment this actually runs, never a value
+     * captured back when the debounce timer was scheduled, so the last tap in a burst is always the
+     * one that ends up committed.
+     *
+     * In-place buffer resizing (issue #223) and quality preset switching (issue #194) both preserve
+     * buffered audio across this boundary without stopping capture -- this is why issue #299 could
+     * remove the Apply button and its discard-confirmation dialog: neither one guards anything real
+     * any more.
+     *
+     * Issue #272: only commits the new setting -- persisted preference and the committed
+     * StateFlows [RecorderService.switchSettings] updates on success -- if the live buffer's resize
+     * actually applied. Persisting unconditionally would leave the stored preference and the
+     * engine's actual capacity out of sync whenever a resize was refused, and would silently hide
+     * the refusal from the user on top of that. On a refusal, [resetPending] reverts the displayed
+     * (pending) value back to the still-active committed one -- with no Apply button, this revert
+     * plus [_resizeError] is the *only* signal the user gets that their tap did not take effect. */
+    private suspend fun commitPending() {
+        val minutes = currentPendingMinutes()
+        val preset = currentPendingPreset()
+        val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
+        if (!isDirty) {
+            resetPending()
+            return
+        }
         _resizeError.value = null
-        viewModelScope.launch {
-            if (onSwitchSettings != null) {
-                retentionWindowPreferences.setBufferDurationMinutes(minutes)
-                retentionWindowPreferences.setQualityPreset(preset)
-                onSwitchSettings.invoke(minutes, preset)
-            } else {
-                // issue #272: only commit the new setting -- persisted preference and the
-                // committed StateFlows switchSettings updates on success -- if the live buffer's
-                // resize actually applied. Persisting unconditionally (the old behavior) would
-                // leave the stored preference and the engine's actual capacity out of sync
-                // whenever a resize was refused, and would silently hide the refusal from the
-                // user on top of that.
-                val applied = RecorderService.switchSettings(minutes, preset)
-                if (applied) {
-                    retentionWindowPreferences.setBufferDurationMinutes(minutes)
-                    retentionWindowPreferences.setQualityPreset(preset)
-                    onRebuildEngine(minutes, preset)
-                    onSwitchQualityPreset(preset)
-                } else {
-                    val refusal = RecorderService.resizeRefusalFlow.value
-                    RecorderService.acknowledgeResizeRefusal()
-                    _resizeError.value = describeRefusal(refusal, minutes)
-                }
-            }
+        val applied = onSwitchSettings(minutes, preset)
+        if (applied) {
+            retentionWindowPreferences.setBufferDurationMinutes(minutes)
+            retentionWindowPreferences.setQualityPreset(preset)
+            onRebuildEngine(minutes, preset)
+            onSwitchQualityPreset(preset)
+            resetPending()
+        } else {
+            val refusal = RecorderService.resizeRefusalFlow.value
+            RecorderService.acknowledgeResizeRefusal()
+            _resizeError.value = describeRefusal(refusal, minutes)
+            // Revert the displayed value to what is actually running (issue #299 requirement:
+            // with no Apply button, this is the only way the stepper does not keep showing a
+            // value that never took).
+            resetPending()
         }
     }
 
@@ -219,6 +248,10 @@ class SettingsViewModel(
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
 
+        /** Issue #299: the shared trailing-edge debounce window behind every pending edit -- see
+         * [scheduleDebouncedCommit]. */
+        const val DEBOUNCE_MILLIS = 500L
+
         /** Real, specific data for a refused resize (issue #272) -- states the actual numbers
          * involved rather than a generic "something went wrong", per AGENTS.md §5. Returns data,
          * not a formatted message: [SettingsScreen] renders the actual wording through
@@ -231,13 +264,12 @@ class SettingsViewModel(
         }
 
         /** The single state-mapping oracle for this screen: committed capacity + local pending
-         * value + pending-confirmation flag -> the exact [SettingsUiState] the screen renders. */
+         * value -> the exact [SettingsUiState] the screen renders. */
         fun mapUiState(
             committedMinutes: Int,
             pendingMinutes: Int,
             committedPreset: QualityPreset = QualityPreset.DEFAULT,
             pendingPreset: QualityPreset = committedPreset,
-            pendingConfirmation: PendingCommit? = null,
             clampNotice: ClampNotice? = null,
             resizeError: ResizeErrorInfo? = null,
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
@@ -277,7 +309,6 @@ class SettingsViewModel(
                 canDecrement = clampedPendingMinutes > AudioConfig.RETENTION_WINDOW_MIN_MINUTES,
                 canIncrement = clampedPendingMinutes < currentPresetMax,
                 isDirty = clampedPendingMinutes != committedMinutes || pendingPreset != committedPreset,
-                pendingConfirmationMinutes = pendingConfirmation?.minutes,
                 maxSelectableMinutes = currentPresetMax,
             )
 

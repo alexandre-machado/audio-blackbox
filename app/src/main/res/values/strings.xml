@@ -245,7 +245,7 @@
     <string name="settings_privacy_title">Privacy &amp; local processing</string>
     <string name="settings_privacy_explanation">Audio Blackbox operates purely locally on your device. Microphone audio is kept in transient RAM and overwritten automatically. Zero telemetry, crash reports, or audio streams are ever sent to remote servers.</string>
     <string name="settings_retention_title">Rolling buffer retention window</string>
-    <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Use the buttons below to choose a value, then tap Apply.</string>
+    <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Changes apply automatically a moment after you stop adjusting.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/STEP_MINUTES bound the stepper to
          multiples of 5, at least 5 (issue #298 removed the fixed upper MAX_MINUTES in favor of a
@@ -255,15 +255,11 @@
          #73's range+step, issue #72's interim clamp, issue #298's dynamic ceiling) has kept every
          reachable value a multiple of 5. -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutes, approximately %2$d megabytes, currently active</string>
+    <!-- Issue #299: "not yet applied" still holds. There is a brief debounce window between a tap
+         and the auto-commit, not an Apply step waiting on the user. -->
     <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutes, approximately %2$d megabytes, not yet applied</string>
     <string name="settings_retention_decrement_cd">Decrease retention by 5 minutes</string>
     <string name="settings_retention_increment_cd">Increase retention by 5 minutes</string>
-    <string name="settings_retention_pending_notice">%1$d min is still active until you apply this change</string>
-    <string name="settings_retention_apply_button">Apply</string>
-    <string name="settings_retention_confirm_title">Switch retention now?</string>
-    <string name="settings_retention_confirm_body">Switching to %1$d min requires stopping the recording, which discards all audio currently in memory. That recording can\'t be recovered afterward.</string>
-    <string name="settings_retention_confirm_accept">Stop and switch</string>
-    <string name="settings_retention_confirm_cancel">Cancel</string>
 
     <!-- Quality preset selector (issue #193) -->
     <string name="settings_quality_preset_title">Audio quality preset</string>

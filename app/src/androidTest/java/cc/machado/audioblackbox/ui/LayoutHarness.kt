@@ -76,9 +76,6 @@ internal fun HarnessApp(
                     onSelectQualityPreset = {},
                     onDecrement = {},
                     onIncrement = {},
-                    onApply = {},
-                    onConfirmRetentionWindowChange = {},
-                    onCancelRetentionWindowChange = {},
                     onAcknowledgeClampNotice = {},
                 )
             }
@@ -141,9 +138,10 @@ internal fun emptyBufferDashboardFixture() = DashboardViewModel.mapUiState(
     saveState = SaveUiState.Idle,
 )
 
-/** A pending (not yet applied) retention change: shows the dirty notice and an enabled Apply
- * button, which is the screen's last item. No dialog -- a dialog would sit in its own window and
- * cover the bar, which is not what these tests are about. */
+/** A pending (not yet applied) retention change: pendingMinutes differs from committedMinutes, as
+ * it would during the brief debounce window between a tap and SettingsViewModel's auto-commit
+ * (issue #299 removed the Apply button and its discard dialog, so there is no dialog state to
+ * fixture here any more). */
 internal fun settingsFixture() = SettingsViewModel.mapUiState(
     committedMinutes = 30,
     pendingMinutes = 45,
@@ -281,9 +279,6 @@ internal fun ShowcaseApp(destination: Destination) {
                     onSelectQualityPreset = {},
                     onDecrement = {},
                     onIncrement = {},
-                    onApply = {},
-                    onConfirmRetentionWindowChange = {},
-                    onCancelRetentionWindowChange = {},
                     onAcknowledgeClampNotice = {},
                 )
             }

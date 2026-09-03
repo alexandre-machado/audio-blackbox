@@ -17,10 +17,11 @@ data class QualityPresetOption(
  * One frame of the retention stepper (issue #73, superseding the dashboard's fixed-chip selector
  * from #45/#57). [pendingMinutes] is what the stepper currently displays and what the -/+ controls
  * adjust; [committedMinutes] is what [cc.machado.audioblackbox.service.RecorderService]'s engine is
- * *actually* running at right now. They differ ([isDirty]) whenever the user has moved the stepper
- * or changed quality preset but not yet tapped Apply -- deliberately: adjusting settings must never itself discard buffered
- * audio (see [SettingsViewModel]'s class doc for why that gap exists and why closing it needs an
- * explicit action rather than applying on every tap).
+ * *actually* running at right now. They differ ([isDirty]) for the brief window between a tap and
+ * [SettingsViewModel]'s debounced auto-commit (issue #299) catching up -- there is no Apply step any
+ * more: in-place buffer resizing (issue #223) and quality-preset switching (issue #194) both
+ * preserve buffered audio across that boundary without stopping capture, so nothing needs guarding
+ * by requiring an explicit action first (see [SettingsViewModel]'s class doc).
  */
 data class RetentionStepperUiState(
     val pendingMinutes: Int,
@@ -40,10 +41,6 @@ data class RetentionStepperUiState(
     /** `true` while pending configuration differs from committed -- the pending-vs-active
      * distinction issue #73 requires stay visible on screen, not just internally tracked. */
     val isDirty: Boolean,
-    /** Non-null only while [SettingsViewModel.commitPendingRetentionWindow] is waiting on the
-     * user's explicit discard confirmation -- the same enforcement point issue #45's dialog
-     * existed for, now fired exactly once per commit rather than once per stepper tap. */
-    val pendingConfirmationMinutes: Int?,
     // No AudioConfig constant to default to any more (issue #298) -- the real ceiling is
     // per-device and per-preset (see DeviceMemoryBudget.maxRetentionMinutes). This default only
     // matters for a caller that builds this state without going through
