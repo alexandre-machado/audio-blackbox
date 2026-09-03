@@ -442,18 +442,33 @@ class RingBuffer(
      * exception propagates and masks the original `failure`, the patch loop stops partway (some
      * indices are still dangling [EMPTY_CHUNK]), and [baseStreamOffset] -- assigned after the patch
      * loop -- is never advanced at all, reintroducing the zero-length-chunk hazard this whole
-     * recovery path exists to close. **This is a real, currently-open gap, not a hypothetical one:**
-     * this method's incremental-drop design (see "No more coexisting old+new backing stores" above)
-     * means the up-front [retireUntouchedOldChunksLocked] pass can, in the `bytesToKeep == 0` case,
-     * drop *every* old chunk before a single new chunk has been allocated -- at that instant there is
-     * no spare, already-allocated memory anywhere in this method that recovery could reuse instead of
-     * allocating fresh. Making recovery allocation-free would therefore mean holding the very memory
-     * this rewrite (#277) exists to release, defeating its purpose; deliberately not done. The
-     * residual hazard is a second, independent allocation failure landing inside the few-hundred-byte
-     * window of the recovery patch loop itself -- narrower than the primary failure this method
-     * guards against, but real on a device already at the heap ceiling this whole feature exists to
-     * respect. Not hardened here (issue #296); tracked as a known, documented limit rather than an
-     * unstated one.
+     * recovery path exists to close. **This is a real, currently-open gap, not a hypothetical one.**
+     * Not hardened here (issue #296); tracked as a known, documented limit rather than an unstated
+     * one.
+     *
+     * **Why it isn't hardened, and this is NOT uniform across every failure site (`@rev` PR #312
+     * review, MEDIUM finding) -- the "no spare memory" argument only holds for one of the two
+     * failure phases this recovery path has to cover:**
+     * - **A failure during the copy loop, or during [retireUntouchedOldChunksLocked]'s up-front
+     *   pass:** genuinely nothing to reuse. In the worst case (`bytesToKeep == 0`, a resize before
+     *   any bytes have ever been retained) the up-front pass drops *every* old chunk before a single
+     *   new chunk has been allocated -- at that instant there is no already-allocated spare memory
+     *   anywhere in this method. Making recovery allocation-free for this phase would mean holding
+     *   the very memory this rewrite (#277) exists to release, defeating its purpose.
+     * - **A failure during the trailing backfill loop** (the scenario `RingBufferAllocationFailureTest`'s
+     *   backfill-loop case exercises): this is a narrower situation. By this point some `newChunks[i]`
+     *   entries are already allocated and about to be discarded when the exception unwinds -- real,
+     *   unused, already-resident memory. Since every chunk except the last one of a given capacity is
+     *   exactly [chunkSizeBytes] regardless of which capacity it belongs to (see
+     *   [chunkSizeForIndexLocked]), a subset of those already-allocated `newChunks` entries genuinely
+     *   *could* be repurposed by the patch loop instead of calling `ByteArray(...)` again, narrowing
+     *   (not eliminating -- the last, differently-sized chunk and any index the backfill loop hadn't
+     *   reached yet still need a fresh allocation) the residual hazard for this one phase. **Not done
+     *   here:** it would only narrow this specific sub-case, not close the gap for the other phase
+     *   above, so it buys a partial mitigation at the cost of a size-matching reuse path threaded
+     *   through the exception handler -- a real complexity/benefit trade worth its own scoped
+     *   decision, not something to fold into this KDoc fix. Left as a candidate for a future,
+     *   narrowly-scoped follow-up rather than implemented speculatively here.
      */
     fun resize(
         newCapacityBytes: Int,
