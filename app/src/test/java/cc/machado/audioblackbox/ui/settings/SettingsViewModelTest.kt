@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.settings
 
+import androidx.lifecycle.ViewModelStore
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.settings.ClampNotice
@@ -54,6 +55,9 @@ class SettingsViewModelTest {
             newBufferDurationMinutes = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
             newPreset = cc.machado.audioblackbox.audio.QualityPreset.DEFAULT,
         )
+        // Companion-level, process-lifetime (like RecorderService's own state above) -- must not
+        // leak a refusal from one test into the next instance-construction test reads.
+        SettingsViewModel.resetPersistedResizeErrorForTest()
     }
 
     // ---- Stepper: bounds and step arithmetic (unaffected by issue #299 -- these only ever touch
@@ -345,6 +349,13 @@ class SettingsViewModelTest {
 
     // ---- `@rev` finding on PR #304: navigating away inside the debounce window must not drop the edit ----
 
+    // `@rev` finding on PR #304, round 2: a direct `vm.onCleared()` call never actually cancels
+    // `viewModelScope` the way real `androidx.lifecycle.ViewModel.clear()` does, so a test calling it
+    // directly cannot tell "flushed on a scope that outlives the instance" apart from "flushed on
+    // viewModelScope, which just happens to still be alive because nothing cancelled it in this
+    // test". Routing teardown through a real `ViewModelStore` (pure JVM, no Robolectric/Android
+    // framework needed) exercises the actual ordering the fix depends on: `ViewModelStore.clear()`
+    // cancels `viewModelScope` *before* invoking `onCleared()`.
     @Test
     fun `clearing the ViewModel mid-debounce still flushes the pending commit`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
@@ -356,16 +367,18 @@ class SettingsViewModelTest {
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
             onRebuildEngine = { _, _ -> true },
         )
+        val store = ViewModelStore()
+        store.put("settings", vm)
 
         // A tap lands, then -- well before the 500ms debounce elapses -- the user navigates away
         // (e.g. `NavHost` disposes the Settings destination), which is exactly what tears down this
-        // ViewModel via `clear()`/`onCleared()`.
+        // ViewModel via a real `ViewModelStore.clear()`.
         vm.incrementPending()
         runCurrent()
         advanceTimeBy(SettingsViewModel.DEBOUNCE_MILLIS / 2)
         runCurrent()
 
-        vm.onCleared()
+        store.clear()
         runCurrent()
 
         assertEquals(
@@ -387,13 +400,64 @@ class SettingsViewModelTest {
             retentionWindowPreferences = preferences,
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
         )
+        val store = ViewModelStore()
+        store.put("settings", vm)
         runCurrent()
 
-        vm.onCleared()
+        store.clear()
         runCurrent()
 
         assertTrue("nothing pending means nothing to flush", switchCalls.isEmpty())
         assertEquals(30, preferences.currentBufferDurationMinutes())
+    }
+
+    @Test
+    fun `a refusal flushed after the ViewModel is cleared surfaces on the next SettingsViewModel instead of being lost`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            retentionWindowPreferences = preferences,
+            onSwitchSettings = { _, _ -> false },
+        )
+        val store = ViewModelStore()
+        store.put("settings", vm)
+
+        vm.incrementPending()
+        runCurrent()
+        advanceTimeBy(SettingsViewModel.DEBOUNCE_MILLIS / 2)
+        runCurrent()
+
+        // Navigate away mid-debounce (as above), but this time the flushed commit is refused --
+        // there is nobody left to show `resizeError` to on `vm` itself.
+        store.clear()
+        runCurrent()
+
+        assertEquals(30, preferences.currentBufferDurationMinutes())
+
+        // The user reopens Settings: a fresh instance must surface the refusal the dead one
+        // couldn't -- the entire point of stashing it on the companion-owned marker.
+        val reopened = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            retentionWindowPreferences = preferences,
+        )
+        assertEquals(
+            "a refusal that landed after the screen was gone must surface on the next instance",
+            35,
+            reopened.uiState.value.resizeError?.requestedMinutes,
+        )
+
+        // And it must not resurface a third time -- it was consumed by `reopened` above.
+        val reopenedAgain = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            retentionWindowPreferences = preferences,
+        )
+        assertNull(
+            "the same refusal must not surface a second time once a fresh instance already consumed it",
+            reopenedAgain.uiState.value.resizeError,
+        )
     }
 
     // ---- Issue #272 refusal path (surfaced through issue #299's only remaining feedback channel) ----

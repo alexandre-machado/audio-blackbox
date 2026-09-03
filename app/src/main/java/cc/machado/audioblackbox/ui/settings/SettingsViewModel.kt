@@ -63,8 +63,9 @@ import kotlinx.coroutines.launch
  * this exists to save). Without this, a tap followed by navigating off the Settings screen before
  * [DEBOUNCE_MILLIS] elapses would cancel [commitJob] mid-flight and lose an edit the UI had already
  * shown as pending -- precisely the "silently-ignored tap" failure mode this whole redesign exists
- * to rule out, just triggered by navigation instead of a second tap. See [onCleared]'s own doc for
- * the one case this still cannot fully close: a flush that is refused after the screen is gone.
+ * to rule out, just triggered by navigation instead of a second tap. A flush that is then refused
+ * (issue #272) is surfaced the next time a [SettingsViewModel] is constructed rather than lost --
+ * see [onCleared]'s own doc.
  */
 class SettingsViewModel(
     private val captureState: StateFlow<CaptureState> = RecorderService.captureState,
@@ -100,7 +101,13 @@ class SettingsViewModel(
     // refused rather than crashed on, per AGENTS.md §5 "never fake a signal in the UI". Cleared by
     // [dismissResizeError] and also whenever a new commit is attempted. With no Apply button
     // (issue #299) this is the only feedback channel a refused change has -- see [commitPending].
-    private val _resizeError = MutableStateFlow<ResizeErrorInfo?>(null)
+    // Seeded from _persistedResizeError, not always null (`@rev` finding on PR #304, round 2): a
+    // refusal flushed by a *previous* instance's onCleared() after its screen was already gone
+    // (nobody around to see it then) surfaces here instead, the moment a fresh SettingsViewModel is
+    // constructed -- consumed exactly once, so a later instance doesn't see the same notice again.
+    private val _resizeError = MutableStateFlow(
+        _persistedResizeError.value?.also { _persistedResizeError.value = null },
+    )
 
     // The single, shared trailing-edge debounce timer behind every pending edit (issue #299): a
     // fresh tap on either control cancels whatever is currently scheduled and starts one new
@@ -137,7 +144,15 @@ class SettingsViewModel(
             committedPreset = qualityPresetFlow.value,
             pendingPreset = _pendingPreset.value ?: qualityPresetFlow.value,
             clampNotice = null,
-            resizeError = null,
+            // `@rev` finding on PR #304, round 2: was hardcoded `null` -- harmless while `_resizeError`
+            // could only ever start `null` too, but that stopped being true once construction can
+            // seed it from `_persistedResizeError` (see above). `stateIn`'s `initialValue` is a
+            // one-time snapshot read *before* `uiState` has any subscriber to drive the `combine`
+            // flow past it (`WhileSubscribed` keeps that flow cold until one exists), so a caller
+            // reading `uiState.value` synchronously right after construction -- exactly what a
+            // reopened Settings screen's very first frame does -- would otherwise see this
+            // hardcoded `null` instead of the just-seeded refusal.
+            resizeError = _resizeError.value,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
@@ -203,33 +218,34 @@ class SettingsViewModel(
      * handling, same "never persist a value the engine actually refused" invariant from issue #272)
      * as a normal, in-session commit.
      *
-     * ## The one case this does not fully close: a refusal after the screen is already gone
-     * If the flushed commit is refused, [commitPending] still sets [_resizeError] and calls
-     * [RecorderService.acknowledgeResizeRefusal] exactly as it would in-session -- but by
-     * construction there is no longer any [SettingsScreen] mounted to read either, so the user gets
-     * no notification of the refusal this time. This is a deliberate, stated limitation, not a
-     * silent gap: the property issue #272 actually protects -- the persisted preference and the
-     * live engine's real capacity can never diverge -- still holds, because [commitPending] only
-     * ever writes the preference on success, in this path exactly as in every other. What is lost is
-     * purely the *notification*, in the narrow double-fault of "navigated away mid-debounce" AND
-     * "this exact device is currently too memory-constrained to grant the request" landing in the
-     * same commit. A real fix (e.g. surfacing the still-unacknowledged refusal the next time
-     * Settings is reopened) is not implemented here because it is not verifiable at this repo's Tier
-     * 0: [RecorderService.switchSettings] only ever refuses through the real ring buffer's real
-     * `MemoryBudget` check, which requires a live, `AudioRecord`-backed buffer -- unreachable from a
-     * JVM test (see `AGENTS.md`'s Tier 0 blind spots) -- so a fix here could not be given real
-     * regression coverage, only the appearance of it. */
-    // `public`, widened from the base `protected` (Kotlin permits widening on override): this is
-    // the seam `SettingsViewModelTest` calls directly to simulate `ViewModel.clear()` -- `clear()`
-    // itself is `internal` to `androidx.lifecycle`, unreachable from this module's own tests, and
-    // `onCleared()` is what `clear()` actually invokes, so calling it directly is the real thing,
-    // not a proxy for it.
-    public override fun onCleared() {
+     * ## The one case this does not fully close in-session: a refusal after the screen is already gone
+     * If the flushed commit is refused, [commitPending] still sets [_resizeError] (nobody is
+     * mounted to read it any more) but *also* stashes it on [_persistedResizeError] -- the
+     * companion-owned marker the next [SettingsViewModel] instance's `init` seeds its own
+     * [_resizeError] from, so reopening Settings is what actually surfaces a refusal that landed
+     * after the screen was gone (`@rev` finding on PR #304, round 2: the seam already exists to make
+     * this genuinely testable via the `onSwitchSettings` fake, so it is implemented rather than left
+     * as an unverifiable claim). The property issue #272 actually protects -- the persisted
+     * preference and the live engine's real capacity can never diverge -- held even before this,
+     * since [commitPending] only ever writes the preference on success either way; this closes the
+     * remaining *notification* gap on top of that.
+     *
+     * `override`, not `public override`: `androidx.lifecycle.ViewModelStore.clear()` is the real, public
+     * `androidx.lifecycle` entry point that invokes this without needing any visibility widening --
+     * `SettingsViewModelTest` drives teardown through a real `ViewModelStore` (see
+     * `clearingTheViewModelThroughViewModelStore` there) precisely so the test exercises the actual
+     * "`viewModelScope` is cancelled before `onCleared()` runs" ordering this fix depends on, the
+     * same reason a direct `vm.onCleared()` call could not have caught the original defect (`@rev`
+     * verified: reverting [commitFlushScope] back to [viewModelScope] here made that direct-call test
+     * keep passing, because a direct call never actually cancels `viewModelScope`). Leaving this
+     * `protected` (`@sec` finding) also closes off any caller other than the framework cancelling a
+     * live debounce or forcing a premature commit out of sequence. */
+    override fun onCleared() {
         commitJob?.cancel()
         val minutes = currentPendingMinutes()
         val preset = currentPendingPreset()
         if (minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value) {
-            commitFlushScope.launch { commitPending() }
+            commitFlushScope.launch { commitPending(afterClear = true) }
         }
     }
 
@@ -264,7 +280,7 @@ class SettingsViewModel(
      * the refusal from the user on top of that. On a refusal, [resetPending] reverts the displayed
      * (pending) value back to the still-active committed one -- with no Apply button, this revert
      * plus [_resizeError] is the *only* signal the user gets that their tap did not take effect. */
-    private suspend fun commitPending() {
+    private suspend fun commitPending(afterClear: Boolean = false) {
         val minutes = currentPendingMinutes()
         val preset = currentPendingPreset()
         val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
@@ -283,7 +299,18 @@ class SettingsViewModel(
         } else {
             val refusal = RecorderService.resizeRefusalFlow.value
             RecorderService.acknowledgeResizeRefusal()
-            _resizeError.value = describeRefusal(refusal, minutes)
+            val info = describeRefusal(refusal, minutes)
+            _resizeError.value = info
+            if (afterClear) {
+                // `@rev` finding on PR #304 (round 2): nobody is mounted to read `_resizeError`
+                // above -- this instance is already dying/dead. Record it on the companion-owned
+                // marker instead, so the *next* `SettingsViewModel` (the user reopening Settings)
+                // surfaces it -- see the constructor's `init` seeding below. Only stashed on the
+                // flushed-after-clear path: an in-session refusal is already shown right here via
+                // `_resizeError`, and does not need (or want) to resurface again on the next
+                // instance after the user dismisses it.
+                _persistedResizeError.value = info
+            }
             // Revert the displayed value to what is actually running (issue #299 requirement:
             // with no Apply button, this is the only way the stepper does not keep showing a
             // value that never took).
@@ -305,16 +332,51 @@ class SettingsViewModel(
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
 
-        /** `@rev` finding on PR #304: a companion-owned scope, deliberately *not* parented to any
-         * one [SettingsViewModel] instance's [viewModelScope] -- it must survive exactly the event
-         * ([onCleared]) that cancels that scope. Mirrors the existing pattern one level down in this
-         * same codebase, [RecorderService]'s own companion-owned `forwardingScope`/`serviceScope`
+        /** `@rev` finding on PR #304 (round 2): a companion-owned scope, deliberately *not* parented
+         * to any one [SettingsViewModel] instance's [viewModelScope] -- it must survive exactly the
+         * event ([onCleared]) that cancels that scope. Mirrors the existing pattern one level down in
+         * this same codebase, [RecorderService]'s own companion-owned `forwardingScope`/`serviceScope`
          * (process-lifetime, outliving any one Service/ViewModel instance for the same structural
          * reason). Does not leak: every use here ([onCleared]) launches at most one short-lived,
          * already-bounded coroutine (a single [commitPending] call, no loop, no retry) per cleared
          * instance that had a genuinely dirty pending edit -- nothing keeps this scope's own
-         * [SupervisorJob] artificially alive, and a completed child coroutine is not retained. */
-        private val commitFlushScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+         * [SupervisorJob] artificially alive, and a completed child coroutine is not retained.
+         *
+         * `by lazy`, not a plain eager property: a companion object has exactly one combined static
+         * initializer for *all* its members, so an eager `CoroutineScope(... + Dispatchers.Main.immediate)`
+         * here ran the moment *anything* on this companion was first touched -- including
+         * `describeRefusal`/`mapUiState`/`DEBOUNCE_MILLIS`, called by tests (`SettingsResizeErrorTest`)
+         * that never call `Dispatchers.setMain()`. `Dispatchers.Main.immediate` throws with no
+         * platform Main dispatcher installed and no test dispatcher set, which failed this
+         * companion's `<clinit>` -- and per JVM semantics a class that fails static init is
+         * permanently poisoned for the rest of that classloader/test JVM, so *every* later reference
+         * to `SettingsViewModel` in the same run failed with `NoClassDefFoundError`, including every
+         * test in `SettingsViewModelTest` itself, regardless of its own `setMain()` call (confirmed:
+         * this is exactly what broke CI run `33781119163`, 25/469 tests, all traced to this one
+         * line). `by lazy` defers resolving `Dispatchers.Main.immediate` until [commitFlushScope] is
+         * actually read -- only from [onCleared]'s flush branch -- by which point every real caller
+         * (production: Android's real Main looper; tests: `SettingsViewModelTest`'s own `@Before`)
+         * has already installed one. */
+        private val commitFlushScope: CoroutineScope by lazy(LazyThreadSafetyMode.NONE) {
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        }
+
+        // `@rev` finding on PR #304 (round 2): a refusal flushed by `onCleared` after the screen is
+        // already gone has nobody to show `_resizeError` to -- this is the companion-owned,
+        // process-lifetime marker that lets the *next* `SettingsViewModel` instance (the user
+        // reopening Settings) surface it instead of it being lost for good. Set by `commitPending`'s
+        // refusal branch unconditionally (in-session or flushed, the same as `_resizeError` itself);
+        // consumed exactly once, by whichever instance's `init` reads it next -- see [SettingsViewModel]'s
+        // constructor.
+        private val _persistedResizeError = MutableStateFlow<ResizeErrorInfo?>(null)
+
+        /** Test-only reset for [_persistedResizeError], so one test's refusal cannot leak into the
+         * next -- this is a companion-level (process-lifetime, by design) field, the same reason
+         * [cc.machado.audioblackbox.service.RecorderService]'s own companion state needs an explicit
+         * reset in test `tearDown()`. */
+        fun resetPersistedResizeErrorForTest() {
+            _persistedResizeError.value = null
+        }
 
         /** Issue #299: the shared trailing-edge debounce window behind every pending edit -- see
          * [scheduleDebouncedCommit]. */
