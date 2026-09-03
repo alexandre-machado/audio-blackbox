@@ -51,6 +51,17 @@ class SettingsViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        // Issue #317: restore the real, live-heap-derived provider -- a test that overrides this
+        // companion-level `var` (see the real-switchSettings-path test below) must not leak a fixed
+        // ceiling into whichever test runs next.
+        cc.machado.audioblackbox.service.RecorderService.maxRetentionMinutesProvider = { preset ->
+            cc.machado.audioblackbox.audio.DeviceMemoryBudget.maxRetentionMinutes(
+                config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+                maxHeapBytes = Runtime.getRuntime().maxMemory(),
+                usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+            )
+        }
+        cc.machado.audioblackbox.service.RecorderService.acknowledgeResizeRefusal()
         cc.machado.audioblackbox.service.RecorderService.rebuildEngineIfIdle(
             newBufferDurationMinutes = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
             newPreset = cc.machado.audioblackbox.audio.QualityPreset.DEFAULT,
@@ -498,6 +509,74 @@ class SettingsViewModelTest {
         assertEquals(
             "the refusal must surface the real requested minutes -- the only feedback channel left",
             35,
+            observed.last().resizeError?.requestedMinutes,
+        )
+
+        job.cancel()
+    }
+
+    // ---- Issue #317: a live ceiling that shrinks between the offer and the commit must never crash ----
+
+    // The exact production shape (issue #317's root cause): the stepper's own bound
+    // (`maxRetentionForPreset`, driven by this ViewModel's own maxMemoryBytesProvider/
+    // usedMemoryBytesProvider) and `RecorderService.switchSettings`'s live check
+    // (`RecorderService.maxRetentionMinutesProvider`) are two *independent* samples of the same
+    // non-stationary memory budget. This test does not fake `onSwitchSettings` at all -- it drives
+    // the real, default-wired `RecorderService.switchSettings` companion function, through the real
+    // `commitPending` debounce path, with a `RecorderService.maxRetentionMinutesProvider` that
+    // genuinely disagrees with what the stepper's own (much larger) ceiling let the user reach. A
+    // fixture hard-coding one stable ceiling everywhere cannot reproduce this -- see issue #317.
+    @Test
+    fun `a live ceiling that has shrunk by commit time never crashes -- the real switchSettings path refuses (issue 317)`() = runTest(testDispatcher) {
+        cc.machado.audioblackbox.service.RecorderService.rebuildEngineIfIdle(
+            newBufferDurationMinutes = 90,
+            newPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE,
+        )
+        // The live ceiling RecorderService.switchSettings will actually sample when the debounced
+        // commit runs -- lower than the 90 already committed, and far lower than this ViewModel's
+        // own (deliberately huge) offer-time ceiling below.
+        cc.machado.audioblackbox.service.RecorderService.maxRetentionMinutesProvider = { 95 }
+
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 90, maxRetentionMinutesProvider = { 95 })
+        val vm = SettingsViewModel(
+            captureState = cc.machado.audioblackbox.service.RecorderService.captureState,
+            capacityMinutesFlow = cc.machado.audioblackbox.service.RecorderService.bufferDurationMinutesFlow,
+            qualityPresetFlow = cc.machado.audioblackbox.service.RecorderService.qualityPresetFlow,
+            retentionWindowPreferences = preferences,
+            onRebuildEngine = { m, p -> cc.machado.audioblackbox.service.RecorderService.rebuildEngineIfIdle(m, p) },
+            // Deliberately far above RecorderService's live 95 -- this is what lets the stepper
+            // offer 100 in the first place, exactly like the captured "was 100" production crashes.
+            maxMemoryBytesProvider = { Long.MAX_VALUE / 4 },
+            usedMemoryBytesProvider = { 0L },
+        )
+        val observed = mutableListOf<SettingsUiState>()
+        val job = launch { vm.uiState.collect { observed += it } }
+        runCurrent()
+
+        vm.incrementPending() // 90 -> 95
+        vm.incrementPending() // 95 -> 100 -- stepper's own huge ceiling lets this through
+        runCurrent()
+        assertEquals(100, observed.last().retentionStepper.pendingMinutes)
+
+        // The debounced commit calls the real RecorderService.switchSettings(100, VOICE), which
+        // samples its own live ceiling (95) -- lower than the offered 100. Before issue #317 this
+        // `require()`d and crashed the process; it must now refuse gracefully instead.
+        advanceTimeBy(SettingsViewModel.DEBOUNCE_MILLIS)
+        runCurrent()
+
+        assertEquals(
+            "the previous, still-running 90 min setting must stay in force, never crash",
+            90,
+            preferences.currentBufferDurationMinutes(),
+        )
+        assertEquals(
+            "with no Apply button, the pending display must revert to what is actually running",
+            90,
+            observed.last().retentionStepper.pendingMinutes,
+        )
+        assertEquals(
+            "the refusal must surface the real requested minutes -- the only feedback channel left",
+            100,
             observed.last().resizeError?.requestedMinutes,
         )
 

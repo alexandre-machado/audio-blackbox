@@ -76,18 +76,18 @@ class RecorderServiceRetentionWindowTest {
     }
 
     @Test
-    fun `rebuildEngineIfIdle rejects a capacity outside the bounded range and changes nothing`() {
+    fun `rebuildEngineIfIdle no-ops on a capacity above the ceiling instead of throwing (issue 317)`() {
+        // Pre-#317 this threw IllegalArgumentException: a value above the live-sampled ceiling is
+        // a runtime condition (the ceiling can legitimately shrink between an offer and this call
+        // running -- see RecorderService.switchSettings's issue #317 doc), not a caller bug, so it
+        // must never reach a `require()`. rebuildEngineIfIdle has no refusal channel of its own
+        // (unlike switchSettings), so this is a plain no-op, exactly like the existing not-Idle case.
         RecorderService.rebuildEngineIfIdle(30)
         val before = RecorderService.bufferDurationMinutes
 
-        var thrown = false
-        try {
-            RecorderService.rebuildEngineIfIdle(65)
-        } catch (e: IllegalArgumentException) {
-            thrown = true
-        }
+        val applied = RecorderService.rebuildEngineIfIdle(65)
 
-        assertTrue("65 is above this test's fixed 45-minute maxRetentionMinutesProvider ceiling", thrown)
+        assertTrue("65 is above this test's fixed 45-minute ceiling, must no-op rather than throw", !applied)
         assertEquals(before, RecorderService.bufferDurationMinutes)
     }
 
@@ -162,5 +162,71 @@ class RecorderServiceRetentionWindowTest {
 
         assertTrue("30 already fits a 60 min ceiling, nothing to reconcile", !changed)
         assertEquals(30, RecorderService.bufferDurationMinutes)
+    }
+
+    // ---- Issue #317: switchSettings must never crash on an over-ceiling value ----
+
+    @Test
+    fun `switchSettings never throws for an over-ceiling value -- it refuses through resizeRefusalFlow (issue 317)`() {
+        // Reproduces the production crash directly: a value that was on-step and within bounds
+        // when offered, sampled against a live ceiling that has since shrunk. Before issue #317
+        // this `require`d and crashed with "newBufferDurationMinutes must be in 5..95 ... was 100" --
+        // exactly the second/third of the four captured production crashes.
+        RecorderService.maxRetentionMinutesProvider = { 95 }
+        val before = RecorderService.bufferDurationMinutes
+
+        val applied = RecorderService.switchSettings(newBufferDurationMinutes = 100, newPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+
+        assertTrue("an over-ceiling commit must be refused, not applied", !applied)
+        val refusal = RecorderService.resizeRefusalFlow.value
+        assertTrue("the existing refusal channel must carry the refusal, not a swallowed failure", refusal != null)
+        assertEquals("a refused commit must leave the committed value untouched", before, RecorderService.bufferDurationMinutes)
+        RecorderService.acknowledgeResizeRefusal()
+    }
+
+    @Test
+    fun `switchSettings leaves the previously-committed setting completely unchanged on an over-ceiling refusal`() {
+        RecorderService.maxRetentionMinutesProvider = { 90 }
+        RecorderService.rebuildEngineIfIdle(newBufferDurationMinutes = 60, newPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        val engineBefore = RecorderService.engine
+
+        RecorderService.maxRetentionMinutesProvider = { 55 } // ceiling shrinks below the still-committed 60 by commit time
+        val applied = RecorderService.switchSettings(newBufferDurationMinutes = 90, newPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+
+        assertTrue(!applied)
+        assertEquals("the previous, still-running setting must stay in force", 60, RecorderService.bufferDurationMinutes)
+        assertEquals(60, RecorderService.captureConfig.bufferDurationMinutes)
+        assertEquals(60, RecorderService.bufferDurationMinutesFlow.value)
+        assertTrue("capture must keep running unaffected at its previous configuration", engineBefore === RecorderService.engine)
+        RecorderService.acknowledgeResizeRefusal()
+    }
+
+    // The real production shape (issue #317's root cause): the stepper's own offer and
+    // switchSettings' own live check independently sample the same non-stationary
+    // maxRetentionMinutesProvider seconds apart. A stateful provider whose return value genuinely
+    // changes between calls -- not one hard-coded constant -- is what actually reproduces the bug;
+    // see issue #317's regression-test requirement.
+    @Test
+    fun `a ceiling sampled lower on the commit call than it was on the offer never crashes switchSettings (issue 317)`() {
+        var sampleCount = 0
+        RecorderService.maxRetentionMinutesProvider = {
+            sampleCount++
+            if (sampleCount == 1) 100 else 5
+        }
+        // First sample models the stepper computing its offered maximum (100).
+        val offeredMax = RecorderService.maxRetentionMinutesProvider(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY)
+        assertEquals(100, offeredMax)
+
+        // Second sample -- inside switchSettings itself -- has shrunk to 5, exactly the shape of
+        // the fourth captured production crash ("must be in 5..5, was 10"): the ceiling collapses
+        // to the floor under memory pressure.
+        val applied = RecorderService.switchSettings(
+            newBufferDurationMinutes = offeredMax,
+            newPreset = cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY,
+        )
+
+        assertTrue("must refuse, not crash, when the live ceiling has collapsed below the offered value", !applied)
+        assertTrue(RecorderService.resizeRefusalFlow.value != null)
+        RecorderService.acknowledgeResizeRefusal()
     }
 }
