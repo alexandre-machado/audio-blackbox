@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.settings
 
+import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -105,9 +106,11 @@ class SettingsViewModel(
     // refusal flushed by a *previous* instance's onCleared() after its screen was already gone
     // (nobody around to see it then) surfaces here instead, the moment a fresh SettingsViewModel is
     // constructed -- consumed exactly once, so a later instance doesn't see the same notice again.
-    private val _resizeError = MutableStateFlow(
-        _persistedResizeError.value?.also { _persistedResizeError.value = null },
-    )
+    // Issue #306: the read+clear below is a compound, non-atomic operation over a
+    // *companion-owned* (process-lifetime) value that is safe only because construction always
+    // happens on the main thread -- see [consumePersistedResizeError]'s doc for why that
+    // requirement is now explicit rather than merely assumed.
+    private val _resizeError = MutableStateFlow(consumePersistedResizeError())
 
     // The single, shared trailing-edge debounce timer behind every pending edit (issue #299): a
     // fresh tap on either control cancels whatever is currently scheduled and starts one new
@@ -309,7 +312,9 @@ class SettingsViewModel(
                 // flushed-after-clear path: an in-session refusal is already shown right here via
                 // `_resizeError`, and does not need (or want) to resurface again on the next
                 // instance after the user dismisses it.
-                _persistedResizeError.value = info
+                // Issue #306: this write and [consumePersistedResizeError]'s read+clear are the two
+                // ends of the same unenforced main-thread invariant -- see that function's doc.
+                stashPersistedResizeError(info)
             }
             // Revert the displayed value to what is actually running (issue #299 requirement:
             // with no Apply button, this is the only way the stepper does not keep showing a
@@ -356,8 +361,23 @@ class SettingsViewModel(
          * line). `by lazy` defers resolving `Dispatchers.Main.immediate` until [commitFlushScope] is
          * actually read -- only from [onCleared]'s flush branch -- by which point every real caller
          * (production: Android's real Main looper; tests: `SettingsViewModelTest`'s own `@Before`)
-         * has already installed one. */
-        private val commitFlushScope: CoroutineScope by lazy(LazyThreadSafetyMode.NONE) {
+         * has already installed one.
+         *
+         * Default (`SYNCHRONIZED`) mode, not `LazyThreadSafetyMode.NONE` (issue #306, filed by
+         * `@sec` off PR #304): this property is companion-owned -- one instance shared by every
+         * `SettingsViewModel` across the process, not per-instance state -- and its only actual
+         * caller today ([onCleared]) is guaranteed main-thread by the `androidx.lifecycle`
+         * contract, but nothing in the *type* enforced that; `NONE` explicitly opts out of the
+         * synchronisation `by lazy` would otherwise give for free. A double-checked-locking-style
+         * initialization race on first access (e.g. a future caller added off the main thread)
+         * under `NONE` can publish a torn view of the backing `CoroutineScope` or run the
+         * initializer block twice, leaking a `SupervisorJob`. The default `SYNCHRONIZED` mode
+         * closes that off unconditionally rather than merely documenting the assumption: the
+         * access pattern here is once per cleared instance, not a hot loop, so a monitor on this
+         * path costs nothing that matters, and it makes correctness independent of which thread
+         * ever ends up calling [onCleared] -- the same "make the divergence impossible" standard
+         * PR #300 set for `reconcileRetentionCeiling`/`rebuildEngineIfIdle`. */
+        private val commitFlushScope: CoroutineScope by lazy {
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         }
 
@@ -368,7 +388,60 @@ class SettingsViewModel(
         // refusal branch unconditionally (in-session or flushed, the same as `_resizeError` itself);
         // consumed exactly once, by whichever instance's `init` reads it next -- see [SettingsViewModel]'s
         // constructor.
+        //
+        // Issue #306: both ends of this write/consume pair are only safe because they happen to run
+        // on the main thread today ([stashPersistedResizeError] from `commitPending`, itself always
+        // launched on a `Dispatchers.Main.immediate`-confined scope; [consumePersistedResizeError]
+        // from a `SettingsViewModel` constructor, which `androidx.lifecycle`/`ViewModelProvider`
+        // guarantees runs on main) -- nothing in the type of a raw `MutableStateFlow<T>.value`
+        // enforces that. Unlike [commitFlushScope] above, there is no `by lazy` thread-safety mode
+        // to flip here: the hazard is not a torn *value* (`StateFlow.value` is already a plain
+        // atomic/volatile read-modify), it is the read-then-clear pair being treated as a single
+        // hand-off. A `SYNCHRONIZED` wrapper would not fix that -- it would only serialize two
+        // instances racing to "consume first", not restore the ordering the hand-off actually
+        // depends on. `@MainThread`-annotated accessor functions make the requirement explicit --
+        // an unambiguous, machine-readable contract on [stashPersistedResizeError] and
+        // [consumePersistedResizeError] instead of an implicit assumption baked into a bare field
+        // read -- and give IDE-level signalling (Android Studio's editor inspection flags a call
+        // from a method it can prove runs on a different thread). It is deliberately *not* framed
+        // as a `lintDebug`-enforced guarantee: Android Lint's `WrongThread` detector (the check
+        // behind `@MainThread`) only fires when the *calling* method itself carries a conflicting
+        // thread annotation, or is a lint-recognized framework callback with a known thread
+        // context -- it does not perform whole-program dataflow to infer an arbitrary caller's
+        // actual execution thread. Both real callers here are unannotated (`commitPending`, a
+        // private `suspend fun`; the `SettingsViewModel` constructor), so `lintDebug` does not
+        // fire on either call site today, and -- this is the part that matters -- would *not*
+        // catch a future caller that genuinely violated the annotation (e.g. someone dispatching
+        // [stashPersistedResizeError] from `Dispatchers.IO` without annotating the calling
+        // function `@WorkerThread`) either. (`@rev` finding on PR #311.) A real runtime assertion
+        // (`Looper.getMainLooper()`) was considered and rejected instead: this repo's Tier 0 JVM
+        // unit tests (`testDebugUnitTest`, see AGENTS.md §6) run on a bare `android.jar` stub with
+        // no Robolectric and no real Looper -- every `SettingsViewModelTest`/`SettingsResizeErrorTest`
+        // case that constructs a `SettingsViewModel` or drives a refusal would throw "not mocked"
+        // immediately, and adding Robolectric is outside this issue's affected surface.
         private val _persistedResizeError = MutableStateFlow<ResizeErrorInfo?>(null)
+
+        /** Issue #306: the write half of the [_persistedResizeError] hand-off -- see that field's
+         * doc for what `@MainThread` does and does not buy here (an explicit, machine-readable
+         * contract and IDE signalling, *not* a `lintDebug`-enforced check at this call site or
+         * against a future unannotated violator). Called only from [commitPending]'s refusal
+         * branch, itself always running on a `Dispatchers.Main.immediate`-confined scope
+         * ([viewModelScope] or [commitFlushScope]). */
+        @MainThread
+        private fun stashPersistedResizeError(info: ResizeErrorInfo) {
+            _persistedResizeError.value = info
+        }
+
+        /** Issue #306: the read+clear half of the [_persistedResizeError] hand-off -- see that
+         * field's doc for what `@MainThread` does and does not buy here (an explicit, machine-
+         * readable contract and IDE signalling, *not* a `lintDebug`-enforced check at this call
+         * site or against a future unannotated violator). Called only from a [SettingsViewModel]
+         * constructor, which `androidx.lifecycle.ViewModelProvider` guarantees runs on the main
+         * thread. Consumes the stashed refusal at most once: the second caller to run this after a
+         * stash sees `null`, exactly like the field read it replaces. */
+        @MainThread
+        private fun consumePersistedResizeError(): ResizeErrorInfo? =
+            _persistedResizeError.value?.also { _persistedResizeError.value = null }
 
         /** Test-only reset for [_persistedResizeError], so one test's refusal cannot leak into the
          * next -- this is a companion-level (process-lifetime, by design) field, the same reason
