@@ -74,11 +74,14 @@ interface RetentionWindowPreferences {
      * the correct tool there. */
     suspend fun currentBufferDurationMinutes(): Int
 
-    /** Persists [minutes]. Throws [IllegalArgumentException] if [minutes] fails
-     * [isValidRetentionMinutes] against this device's *current* ceiling for the stored preset --
-     * callers (the settings screen's retention stepper) only ever offer bounded, on-step values
-     * that already respect that ceiling, so this rejects anything else as a programming error
-     * rather than silently clamping it. */
+    /** Persists [minutes]. Throws [IllegalArgumentException] only if [minutes] fails
+     * [isOnStepAndAtLeastMinimum] -- off-step or below the product floor, which no released build
+     * of this app ever legitimately offers, so that shape really is a caller bug. A value that is
+     * on-step and at least the floor but exceeds this device's *current* ceiling for the stored
+     * preset is NOT a caller bug (issue #317): the stepper's own offer and this call sample a
+     * live, non-stationary memory budget seconds apart, and the second sample can legitimately be
+     * lower. Never throws for that shape; see each implementation's doc for how it is handled
+     * instead (never silently as an unremarked success -- AGENTS.md §5). */
     suspend fun setBufferDurationMinutes(minutes: Int)
 
     /** Reactive: non-null exactly while there is a clamp-down notice the user has not yet
@@ -117,9 +120,17 @@ data class ClampNotice(val previousMinutes: Int, val newMinutes: Int)
 
 /** `true` iff [minutes] is at least [AudioConfig.RETENTION_WINDOW_MIN_MINUTES] and a multiple of
  * [AudioConfig.RETENTION_WINDOW_STEP_MINUTES] -- the two bounds that are fixed product choices,
- * independent of any one device. Does not by itself decide whether [minutes] fits *this* device;
- * see [isValidRetentionMinutes] for the full predicate that also folds in the dynamic ceiling. */
-private fun isOnStepAndAtLeastMinimum(minutes: Int): Boolean =
+ * independent of any one device, and therefore the only ones a caller can ever get wrong on its
+ * own (a genuine programming error). Does not by itself decide whether [minutes] fits *this*
+ * device; see [isValidRetentionMinutes] for the full predicate that also folds in the dynamic
+ * ceiling. Not `private` (issue #317): [DataStoreRetentionWindowPreferences.setBufferDurationMinutes]/
+ * [InMemoryRetentionWindowPreferences.setBufferDurationMinutes] and
+ * [cc.machado.audioblackbox.service.RecorderService.switchSettings]/`rebuildEngineIfIdleAt` all
+ * `require()` this malformed-input-only shape now -- a live memory-budget ceiling that shrinks
+ * between the value being offered and the write/switch running is a runtime condition, not a
+ * caller bug, and must never reach a `require()` (see those call sites for how each routes an
+ * over-ceiling-but-otherwise-valid value instead of throwing on it). */
+fun isOnStepAndAtLeastMinimum(minutes: Int): Boolean =
     minutes >= AudioConfig.RETENTION_WINDOW_MIN_MINUTES && minutes % AudioConfig.RETENTION_WINDOW_STEP_MINUTES == 0
 
 /** The single oracle for "is [minutes] a value this app will ever persist or hand out" (issue
@@ -253,11 +264,24 @@ class DataStoreRetentionWindowPreferences(
 
     override suspend fun currentBufferDurationMinutes(): Int = bufferDurationMinutesFlow.first()
 
+    /** Issue #317: `require()` now only guards the two fixed, device-independent bounds
+     * ([isOnStepAndAtLeastMinimum]) -- off-step or below floor is a genuine caller bug. It no
+     * longer folds in the live ceiling: the previous `require(isValidRetentionMinutes(minutes,
+     * ceiling))` sampled [maxRetentionMinutesProvider] independently from (and up to
+     * `DEBOUNCE_MILLIS` after) whatever sample [RecorderService.switchSettings] had already
+     * approved [minutes] against, so the two could legitimately disagree and this `require` threw
+     * a `FATAL EXCEPTION` in production four times (issue #317) -- a value the app's own stepper
+     * had just offered killed the process. An over-ceiling-but-otherwise-valid [minutes] is
+     * persisted as-is instead: [bufferDurationMinutesFlow] and [clampNoticeFlow] already exist
+     * specifically to resolve a present-but-over-ceiling stored value on every read (see this
+     * class's doc, and issue #298/PR #57's read-side guard) and surface a real, non-faked
+     * [ClampNotice] for it -- reusing that machinery here rather than throwing means the very next
+     * emission of [bufferDurationMinutesFlow] (this same `DataStore`'s change is observed
+     * immediately by any live collector, including [SettingsViewModel]'s `uiState`) clamps the
+     * displayed value and tells the user, instead of crashing before it ever got the chance to. */
     override suspend fun setBufferDurationMinutes(minutes: Int) {
-        val ceiling = maxRetentionMinutesProvider(currentQualityPreset())
-        require(isValidRetentionMinutes(minutes, ceiling)) {
-            "bufferDurationMinutes must be in " +
-                "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +
+        require(isOnStepAndAtLeastMinimum(minutes)) {
+            "bufferDurationMinutes must be at least ${AudioConfig.RETENTION_WINDOW_MIN_MINUTES} " +
                 "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $minutes"
         }
         dataStore.edit { prefs -> prefs[KEY_BUFFER_DURATION_MINUTES] = minutes }
@@ -365,14 +389,26 @@ class InMemoryRetentionWindowPreferences(
 
     override suspend fun currentBufferDurationMinutes(): Int = state.value
 
+    /** Issue #317: same relaxed `require()` as [DataStoreRetentionWindowPreferences] -- only the
+     * fixed, device-independent bounds are a caller bug; an over-ceiling-but-otherwise-valid
+     * [minutes] never throws. Unlike the `DataStore`-backed implementation, this class has no
+     * separate read-side resolve step ([bufferDurationMinutesFlow] here is just [state] directly,
+     * with nothing re-deriving a clamp from a raw stored value on every read), so there is no
+     * existing machinery to defer to: the clamp happens right here, at write time, with
+     * [clampNoticeState] set explicitly so the notice is still a real, observed signal rather than
+     * a silently-substituted value (AGENTS.md §5). */
     override suspend fun setBufferDurationMinutes(minutes: Int) {
-        val ceiling = maxRetentionMinutesProvider(qualityPresetState.value)
-        require(isValidRetentionMinutes(minutes, ceiling)) {
-            "bufferDurationMinutes must be in " +
-                "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +
+        require(isOnStepAndAtLeastMinimum(minutes)) {
+            "bufferDurationMinutes must be at least ${AudioConfig.RETENTION_WINDOW_MIN_MINUTES} " +
                 "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $minutes"
         }
-        state.value = minutes
+        val ceiling = maxRetentionMinutesProvider(qualityPresetState.value)
+        if (minutes > ceiling) {
+            clampNoticeState.value = ClampNotice(previousMinutes = minutes, newMinutes = ceiling)
+            state.value = ceiling
+        } else {
+            state.value = minutes
+        }
     }
 
     override val clampNoticeFlow: Flow<ClampNotice?> = clampNoticeState

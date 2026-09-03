@@ -115,20 +115,62 @@ class RetentionWindowPreferencesTest {
         assertEquals(15, preferences.bufferDurationMinutesFlow.first())
     }
 
+    // Issue #317: this used to assert setBufferDurationMinutes throws for an over-ceiling value.
+    // It does not any more -- see setBufferDurationMinutes's class doc: an over-ceiling-but-
+    // otherwise-valid value is a live-memory-budget runtime condition, not a caller bug, and the
+    // production crash this issue fixes was exactly that `require` firing against a ceiling sample
+    // that had moved since the value was offered. It is persisted as-is and immediately resolved
+    // (and announced) through the exact same clamp/notice machinery the read-side already has for
+    // a value that was valid when written and is not any more.
     @Test
-    fun `setBufferDurationMinutes rejects a value outside the bounded range instead of silently persisting it`() = runTest {
+    fun `setBufferDurationMinutes never throws for an over-ceiling value -- it persists and the read side clamps it (issue 317)`() = runTest {
         val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
-        var thrown: IllegalArgumentException? = null
-        try {
-            preferences.setBufferDurationMinutes(65)
-        } catch (e: IllegalArgumentException) {
-            thrown = e
-        }
+        preferences.setBufferDurationMinutes(65)
 
-        assertEquals(true, thrown != null)
-        // Nothing was written -- still the fallback.
-        assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.currentBufferDurationMinutes())
+        assertEquals(
+            "the read side must clamp the just-written over-ceiling value, not the caller crashing first",
+            FIXED_MAX_RETENTION_MINUTES,
+            preferences.currentBufferDurationMinutes(),
+        )
+        val notice = preferences.clampNoticeFlow.first()
+        assertEquals("the reduction must be a real, surfaced signal, not silent", 65, notice?.previousMinutes)
+        assertEquals(FIXED_MAX_RETENTION_MINUTES, notice?.newMinutes)
+    }
+
+    // Issue #317's actual production shape: the ceiling is not a fixture constant, it moves. The
+    // stepper samples `maxRetentionMinutesProvider` once to compute the value it offers the user;
+    // `setBufferDurationMinutes` samples it again, independently, when the debounced commit
+    // actually runs. A test fixture that pins one constant ceiling (as every other test in this
+    // file deliberately does, for everything *except* this scenario) cannot reproduce that -- it is
+    // exactly what let the real bug ship (see issue #317's root-cause section). This drives a
+    // provider whose return value genuinely changes between the two calls that matter.
+    @Test
+    fun `setBufferDurationMinutes survives a ceiling that shrinks between the value being offered and this call resampling it (issue 317)`() = runTest {
+        var sampleCount = 0
+        val shrinkingCeilingProvider: (cc.machado.audioblackbox.audio.QualityPreset) -> Int = {
+            sampleCount++
+            if (sampleCount == 1) 90 else 45
+        }
+        // Models the settings stepper computing its offered maximum -- the first live sample.
+        val offeredMax = shrinkingCeilingProvider(cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        assertEquals(90, offeredMax)
+
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = shrinkingCeilingProvider)
+
+        // Commits exactly the value the stepper legitimately offered a moment ago. This call
+        // resamples the provider itself -- now returning the shrunk 45 -- reproducing the real
+        // production race rather than asserting against a value the test already knows is invalid.
+        preferences.setBufferDurationMinutes(offeredMax)
+
+        assertEquals(
+            "must never throw, and the read side must resolve to the now-current ceiling",
+            45,
+            preferences.currentBufferDurationMinutes(),
+        )
+        val notice = preferences.clampNoticeFlow.first()
+        assertEquals("the reduction must be a real, surfaced signal, not silent", 90, notice?.previousMinutes)
+        assertEquals(45, notice?.newMinutes)
     }
 
     @Test
@@ -508,5 +550,77 @@ class DeviceMemoryBudgetDrivenRetentionWindowPreferencesTest {
         val notice = preferences.clampNoticeFlow.first()
         assertEquals(60, notice?.previousMinutes)
         assertEquals(expectedCeiling, notice?.newMinutes)
+    }
+}
+
+/**
+ * Issue #317: [InMemoryRetentionWindowPreferences.setBufferDurationMinutes] has no separate
+ * read-side resolve step the way [DataStoreRetentionWindowPreferences] does (its
+ * `bufferDurationMinutesFlow` is just the raw stored state), so it clamps-and-notifies at write
+ * time instead of deferring to a read-side pass -- see that method's class doc. Covered separately
+ * from [RetentionWindowPreferencesTest] because the two implementations now genuinely differ in
+ * *how* they satisfy "never throw for an over-ceiling value", not just in storage mechanism.
+ */
+class InMemoryRetentionWindowPreferencesSetBufferDurationMinutesTest {
+
+    @Test
+    fun `setBufferDurationMinutes never throws for an over-ceiling value -- it clamps and raises a notice (issue 317)`() = runTest {
+        val preferences = InMemoryRetentionWindowPreferences(
+            initialMinutes = 30,
+            maxRetentionMinutesProvider = { 45 },
+        )
+
+        preferences.setBufferDurationMinutes(65)
+
+        assertEquals(
+            "an over-ceiling value must clamp down to the live ceiling, not throw",
+            45,
+            preferences.currentBufferDurationMinutes(),
+        )
+        val notice = preferences.clampNoticeFlow.first()
+        assertEquals("the clamp must be a real, surfaced signal, not silent", 65, notice?.previousMinutes)
+        assertEquals(45, notice?.newMinutes)
+    }
+
+    // Same shrinking-provider shape as RetentionWindowPreferencesTest's DataStore-backed
+    // equivalent: a fixed-ceiling fixture cannot reproduce issue #317's actual race (the ceiling
+    // sampled when the stepper computed its offer disagreeing with the ceiling sampled when this
+    // call actually runs).
+    @Test
+    fun `setBufferDurationMinutes survives a ceiling that shrinks between the value being offered and this call resampling it (issue 317)`() = runTest {
+        var sampleCount = 0
+        val shrinkingCeilingProvider: (cc.machado.audioblackbox.audio.QualityPreset) -> Int = {
+            sampleCount++
+            if (sampleCount == 1) 90 else 45
+        }
+        val offeredMax = shrinkingCeilingProvider(cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        assertEquals(90, offeredMax)
+
+        val preferences = InMemoryRetentionWindowPreferences(
+            initialMinutes = 30,
+            maxRetentionMinutesProvider = shrinkingCeilingProvider,
+        )
+
+        preferences.setBufferDurationMinutes(offeredMax)
+
+        assertEquals(45, preferences.currentBufferDurationMinutes())
+        val notice = preferences.clampNoticeFlow.first()
+        assertEquals(90, notice?.previousMinutes)
+        assertEquals(45, notice?.newMinutes)
+    }
+
+    @Test
+    fun `setBufferDurationMinutes still rejects an off-step value as a genuine caller bug`() = runTest {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30, maxRetentionMinutesProvider = { 45 })
+
+        var thrown: IllegalArgumentException? = null
+        try {
+            preferences.setBufferDurationMinutes(37)
+        } catch (e: IllegalArgumentException) {
+            thrown = e
+        }
+
+        assertEquals(true, thrown != null)
+        assertEquals(30, preferences.currentBufferDurationMinutes())
     }
 }

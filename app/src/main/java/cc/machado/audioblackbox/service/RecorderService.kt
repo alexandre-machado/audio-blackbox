@@ -29,7 +29,8 @@ import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.PreloadedRetentionWindow
 import cc.machado.audioblackbox.settings.DataStoreRecordingPreferences
 import cc.machado.audioblackbox.settings.RecordingPreferences
-import cc.machado.audioblackbox.settings.isValidRetentionMinutes
+import cc.machado.audioblackbox.audio.ResizeOutcome
+import cc.machado.audioblackbox.settings.isOnStepAndAtLeastMinimum
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -851,16 +852,45 @@ class RecorderService : Service() {
          * the way this used to, would desync them from what the ring buffer is actually running
          * at the moment a resize cannot fit. [resizeRefusalFlow] carries the refusal for the UI
          * to surface; capture keeps running unaffected at its previous configuration either way.
+         *
+         * ## Over-ceiling is a refusal, not a crash (issue #317)
+         * [maxRetentionMinutesProvider] samples a live, non-stationary memory budget -- it can
+         * legitimately be lower right now than it was when [newBufferDurationMinutes] was offered
+         * to the user (the settings stepper's own bound, sampled up to `DEBOUNCE_MILLIS` earlier).
+         * That is a runtime condition, never a caller bug, so it must never reach a `require()`:
+         * doing exactly that shipped four production `FATAL EXCEPTION`s (measured ceilings 90, 95,
+         * 95, 5 across the four crashes -- a different sample every time). `require()` below is
+         * kept only for [newBufferDurationMinutes] failing [isOnStepAndAtLeastMinimum] -- off-step
+         * or below the product floor, which the stepper never legitimately offers, so that shape
+         * really is a programming error. An over-ceiling-but-otherwise-valid value is routed
+         * through the exact same [SwitchConfigResult.BufferResizeRefused]/[resizeRefusalFlow]
+         * channel a live buffer's own memory-fit refusal already uses (issue #272), rather than a
+         * silent clamp: the previous, still-running setting stays in force and the caller ([
+         * SettingsViewModel.commitPending]) reverts the displayed value and shows the existing
+         * refusal notice, exactly as it already does for an engine-refused resize -- one signal
+         * for "this could not be applied", not two.
          */
         fun switchSettings(
             newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
             newPreset: QualityPreset = _qualityPresetFlow.value,
         ): Boolean {
-            val ceiling = maxRetentionMinutesProvider(newPreset)
-            require(isValidRetentionMinutes(newBufferDurationMinutes, ceiling)) {
-                "newBufferDurationMinutes must be in " +
-                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +
+            require(isOnStepAndAtLeastMinimum(newBufferDurationMinutes)) {
+                "newBufferDurationMinutes must be at least ${AudioConfig.RETENTION_WINDOW_MIN_MINUTES} " +
                     "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
+            }
+            val ceiling = maxRetentionMinutesProvider(newPreset)
+            if (newBufferDurationMinutes > ceiling) {
+                val requestedCapacityBytes = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
+                    .totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                val ceilingCapacityBytes = newPreset.config(bufferDurationMinutes = ceiling).totalBufferBytes
+                _resizeRefusal.value = SwitchConfigResult.BufferResizeRefused(
+                    ResizeOutcome.Refused(
+                        requestedCapacityBytes = requestedCapacityBytes,
+                        projectedPeakBytes = requestedCapacityBytes.toLong(),
+                        maxHeapBytes = ceilingCapacityBytes,
+                    ),
+                )
+                return false
             }
             val newConfig = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
             return when (val result = _engine.switchConfig(newConfig)) {
@@ -922,13 +952,26 @@ class RecorderService : Service() {
          * [reconcileRetentionCeiling] supplies whatever its own caller-injected provider computed --
          * whichever one calls this always validates against the exact [ceiling] it decided to
          * rebuild at, never a second, independently-recomputed one.
+         *
+         * Issue #317: [rebuildEngineIfIdle] resamples [maxRetentionMinutesProvider] itself to build
+         * [ceiling] -- a *third* independent live sample on top of whatever
+         * [SettingsViewModel.commitPending]'s prior [switchSettings] call already approved
+         * [newBufferDurationMinutes] against a moment earlier. The `require()` below used to fold
+         * that sample's ceiling in too, so this could throw the exact same shape of crash even
+         * though the not-Idle check two lines down makes the call a no-op in the common case
+         * (committed while actively recording) -- the `require()` ran unconditionally, *before*
+         * that check. Now it only guards [isOnStepAndAtLeastMinimum]; an over-ceiling-but-otherwise-
+         * valid value simply makes this a no-op (`false`), same as the not-Idle case immediately
+         * below, rather than crashing -- no caller of [rebuildEngineIfIdle]/[reconcileRetentionCeiling]
+         * treats a `false` return as anything other than "nothing changed", so this stays exactly
+         * as safe as the existing not-Idle no-op.
          */
         private fun rebuildEngineIfIdleAt(newBufferDurationMinutes: Int, newPreset: QualityPreset, ceiling: Int): Boolean {
-            require(isValidRetentionMinutes(newBufferDurationMinutes, ceiling)) {
-                "newBufferDurationMinutes must be in " +
-                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +
+            require(isOnStepAndAtLeastMinimum(newBufferDurationMinutes)) {
+                "newBufferDurationMinutes must be at least ${AudioConfig.RETENTION_WINDOW_MIN_MINUTES} " +
                     "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
             }
+            if (newBufferDurationMinutes > ceiling) return false
             if (_captureState.value !is CaptureState.Idle) return false
             val newConfig = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
             _captureConfig = newConfig
