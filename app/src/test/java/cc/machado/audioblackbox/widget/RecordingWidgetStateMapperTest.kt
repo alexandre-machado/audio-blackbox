@@ -87,6 +87,60 @@ class RecordingWidgetStateMapperTest {
         )
     }
 
+    /**
+     * Issue #279 acceptance criterion 4: the widget's proactive-announcement gap (recorded as a
+     * named exception in `AGENTS.md` §5, since `RemoteViews` has no live-region equivalent) must
+     * not be allowed to erode what already *does* work -- the per-state, state-derived
+     * `contentDescription`s on the widget root and its action button, which remain the only
+     * affordance a TalkBack user has for this widget (see [RecordingWidgetRenderer]). Oracle: each
+     * of the four [CaptureState] values must map to its own distinct root and action-button
+     * description resource, so a regression that collapsed two states onto the same description
+     * (or silently dropped one) fails here on the JVM, without needing a device.
+     */
+    @Test
+    fun `every state maps to a distinct, state-derived content description pair`() {
+        val states = listOf(
+            CaptureState.Recording,
+            CaptureState.Paused,
+            CaptureState.Error(CaptureErrorReason.UNSUPPORTED_CONFIG, "boom"),
+            CaptureState.Idle,
+        )
+        val models = states.map { RecordingWidgetStateMapper.map(it) }
+
+        assertEquals(
+            R.string.widget_content_description_recording,
+            models[0].rootContentDescriptionRes,
+        )
+        assertEquals(
+            R.string.widget_content_description_paused,
+            models[1].rootContentDescriptionRes,
+        )
+        assertEquals(
+            R.string.widget_content_description_error,
+            models[2].rootContentDescriptionRes,
+        )
+        assertEquals(
+            R.string.widget_content_description_idle,
+            models[3].rootContentDescriptionRes,
+        )
+
+        val rootDescriptions = models.map { it.rootContentDescriptionRes }
+        assertEquals(
+            "Recording/Paused/Error/Idle must never share a root contentDescription -- a " +
+                "TalkBack user navigating to the widget must be able to tell them apart",
+            rootDescriptions.toSet().size,
+            rootDescriptions.size,
+        )
+
+        val actionDescriptions = models.map { it.actionButtonDescriptionRes }
+        assertEquals(
+            "Recording and Paused both offer Stop, and Error/Idle both offer Start, so the " +
+                "action-button description set collapses to exactly two distinct values, not four",
+            2,
+            actionDescriptions.toSet().size,
+        )
+    }
+
     @Test
     fun `every state maps to a distinct annunciator color`() {
         val annunciators = listOf(

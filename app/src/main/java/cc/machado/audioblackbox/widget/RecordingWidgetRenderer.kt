@@ -14,11 +14,20 @@ import cc.machado.audioblackbox.service.RecorderService
  * [RecordingWidgetStateMapper]'s doc for why that single-path property is what keeps this widget
  * from repeating the removed Quick Settings tile's "shows on while the process died" defect).
  *
- * Not unit-testable on the plain JVM (this repo has no Robolectric): `RemoteViews` and
- * `PendingIntent` are real Android framework classes with no usable JVM stand-in here. That gap is
- * real and stays a Tier 2 (physical device) concern -- [RecordingWidgetStateMapper]'s mapping
- * logic, which is what actually decides *what* gets painted, is fully covered on the JVM instead;
- * this class is a thin, mechanical translation of that model into `RemoteViews` calls.
+ * End-to-end painting (real launcher host, real `AppWidgetHostView`) stays a Tier 2 (physical
+ * device) concern -- [RecordingWidgetStateMapper]'s mapping logic, which is what actually decides
+ * *what* gets painted, is fully covered on the JVM instead. `render`'s own mechanical calls into
+ * `RemoteViews`/`PendingIntent` (both real, final Android framework classes with no Robolectric
+ * shim here) are covered on the JVM via Mockito's inline mock maker constructing and verifying
+ * against a mocked instance rather than a real one -- see [RecordingWidgetRendererTest].
+ *
+ * Issue #291: that JVM/mocked coverage proved a `RemoteViews.setInt` call was *issued*, never that
+ * a real host would *accept* it -- a mocked `RemoteViews` has no `@RemotableViewMethod` allowlist
+ * to reject against. The `setAccessibilityLiveRegion` call this doc used to reference shipped past
+ * that mocked test and crashed inflation on a real Samsung S25 launcher. The regression test for
+ * that class of defect is instrumented, not JVM: see
+ * `RecordingWidgetRendererInstrumentedTest#render_appliesCleanlyToRealHostView` in the
+ * `androidTest` source set, which applies this method's output to a real `AppWidgetHostView`.
  */
 object RecordingWidgetRenderer {
 
@@ -34,6 +43,18 @@ object RecordingWidgetRenderer {
             R.id.widget_root,
             context.getString(model.rootContentDescriptionRes),
         )
+
+        // Issue #291: a prior revision of this method also called
+        // `views.setInt(R.id.widget_root, "setAccessibilityLiveRegion", ...)`, reasoning that
+        // `RemoteViews.setInt` is a generic by-name reflective dispatcher like the `setColorFilter`
+        // call below. That reasoning was wrong in a way the JVM test suite could not catch:
+        // `RemoteViews.getMethod` only allows methods annotated `@RemotableViewMethod` (the
+        // annotation `ImageView.setColorFilter` carries and `View.setAccessibilityLiveRegion` does
+        // not), so a real host rejects the whole `RemoteViews` tree at inflate time with
+        // `ActionException`, and the widget fails to add at all ("Couldn't add widget.") on a real
+        // Samsung S25 launcher. See `AGENTS.md` §5: a widget cannot be given a live region from
+        // this app's process; `setInt` is only safe for methods carrying `@RemotableViewMethod`.
+        // `setContentDescription` above is unaffected and remains what TalkBack reads on focus.
 
         views.setInt(
             R.id.widget_annunciator,
