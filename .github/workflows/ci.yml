@@ -342,7 +342,16 @@ jobs:
                     expectedHeadOid: $oid
                 }}}' > /tmp/create-commit-body.json
 
-              RESPONSE="$(gh api graphql --input /tmp/create-commit-body.json)"
+              # `gh api graphql` exits non-zero whenever the response body carries a GraphQL-level
+              # `errors` array, even on HTTP 200 (e.g. the STALE_DATA case below) -- and this `run:`
+              # step executes under bash's default `-eo pipefail` (no `shell:` override in this
+              # file), so a bare `RESPONSE="$(gh api graphql ...)"` would abort the whole step via
+              # errexit the instant a GraphQL error came back, before the STALE_DATA retry or the
+              # "failed unexpectedly" diagnostic below it ever ran. `$(...)` still captures stdout
+              # into RESPONSE regardless of the inner command's exit status; `|| true` only stops
+              # that non-zero status from tripping errexit on this line, so the error-handling
+              # branches beneath this stay reachable.
+              RESPONSE="$(gh api graphql --input /tmp/create-commit-body.json)" || true
               NEW_OID="$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')"
 
               if [[ -n "$NEW_OID" ]]; then
