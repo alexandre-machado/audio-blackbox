@@ -228,6 +228,7 @@ jobs:
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           RUN_ID: ${{ github.run_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           ./scripts/ci/refresh-store-captures.sh
 
@@ -260,13 +261,21 @@ jobs:
             # This checkout is on the merge ref (restored above per PR #233 `@rev` finding #1), so
             # the refreshed bytes in SCREENSHOT_PATHS right now are I(R), R = merge(head, main) --
             # the same commit `build` validates. R itself isn't a branch we can push to, so the
-            # nine refreshed files are transplanted onto the real PR head branch H below, in a
-            # second, isolated worktree, touching only those nine paths -- nothing else from this
-            # (merge) tree, in particular nothing from main that H doesn't already have, crosses
-            # over. That is the part most likely to go wrong, so it's enforced twice: the transplant
-            # loop below only ever writes to the nine SCREENSHOT_PATHS destinations, and the
-            # `git add` in the head worktree lists those same nine explicit paths (never `-A`/`.`),
-            # so even if some other file in that worktree were dirty, it could not ride along.
+            # nine refreshed files are transplanted onto the real PR head branch H below.
+            #
+            # Issue #301: this used to be a `git commit -c commit.gpgsign=false` + `git push`, on a
+            # second worktree checked out from H. The runner holds no signing key, so that commit
+            # landed unsigned, and main's ruleset (required_signatures: true) then blocked the merge
+            # of any PR carrying it (this happened for real on PR #300 and had to be hand-rewritten,
+            # see #301). The commit is created through the GitHub GraphQL API instead
+            # (`createCommitOnBranch`), which GitHub signs with its own key -- no key on the runner,
+            # commit lands verified. Read directly from the nine files as they sit in this (merge-ref)
+            # checkout right now and send exactly those nine as `additions`: nothing else from this
+            # tree, in particular nothing from main that H doesn't already have, crosses over. That
+            # invariant used to be enforced twice (the transplant loop's destinations and the `git
+            # add`'s explicit path list); it's now enforced by construction -- the additions array
+            # below is built only from SCREENSHOT_PATHS, so there is no working tree for a stray
+            # dirty file to ride along in.
             #
             # Why this converges instead of flapping forever (PR #233 `@rev` finding #1): let H be
             # this PR's head, main be the current default branch, R = merge(H, main). This step
@@ -281,41 +290,26 @@ jobs:
             # a routine outcome of ordinary concurrent development.
             AUTH_HEADER="AUTHORIZATION: basic $(printf "x-access-token:%s" "$GH_TOKEN" | base64 | tr -d '\n')"
             git_auth() {
-              git -c "http.extraheader=${AUTH_HEADER}" -c commit.gpgsign=false "$@"
+              git -c "http.extraheader=${AUTH_HEADER}" "$@"
             }
 
+            # Read-only: only used to compare origin/${PR_HEAD_REF}'s current bytes against this
+            # run's captures (the "nothing to commit" check) and to read its current head oid for
+            # expectedHeadOid below. No commit or push happens through git anymore.
             git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
-
-            WORKDIR="$(mktemp -d)"
-            trap 'rm -rf "$WORKDIR"; git worktree prune >/dev/null 2>&1 || true' EXIT
 
             attempt=1
             max_attempts=2
             pushed=0
             while [[ "$attempt" -le "$max_attempts" ]]; do
-              # A fresh worktree dir *and* a fresh local branch name per attempt: `git worktree
-              # add -B` refuses to reuse a branch name still registered to a (removed) worktree
-              # path, which `rm -rf` alone doesn't unregister -- attempt-scoped naming sidesteps
-              # that instead of relying on `git worktree remove`/`prune` timing.
-              rm -rf "$WORKDIR/head"
-              git worktree add --force -B "ci-231-refresh-${RUN_ID}-${attempt}" "$WORKDIR/head" "origin/${PR_HEAD_REF}"
-
+              nothing_to_commit=1
               for path in "${SCREENSHOT_PATHS[@]}"; do
-                mkdir -p "$WORKDIR/head/$(dirname "$path")"
-                cp -f "$path" "$WORKDIR/head/$path"
-              done
-
-              nothing_to_commit=0
-              (
-                cd "$WORKDIR/head"
-                git config user.name "github-actions[bot]"
-                git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                git -c commit.gpgsign=false add -- "${SCREENSHOT_PATHS[@]}"
-                if git diff --cached --quiet --exit-code; then
-                  exit 12
+                if ! git cat-file -e "origin/${PR_HEAD_REF}:${path}" 2>/dev/null || \
+                   ! git show "origin/${PR_HEAD_REF}:${path}" | cmp -s - "$path"; then
+                  nothing_to_commit=0
+                  break
                 fi
-                git -c commit.gpgsign=false commit -m "chore(ci): refresh screenshots from capture run ${RUN_ID}"
-              ) || { [[ $? -eq 12 ]] && nothing_to_commit=1 || exit 1; }
+              done
 
               if [[ "$nothing_to_commit" -eq 1 ]]; then
                 # origin/${PR_HEAD_REF} already has these exact bytes -- most likely a concurrent
@@ -326,30 +320,69 @@ jobs:
                 break
               fi
 
-              # A push made with the default GITHUB_TOKEN does NOT trigger new workflow runs --
-              # this is GitHub's documented behavior, to stop workflow-triggered-workflow loops.
-              # Consequences: (1) there is no infinite-loop risk here that needs a guard, and (2)
-              # there will be no follow-up CI run re-verifying this push. So this step pushes and
-              # then passes, rather than waiting on or manufacturing a re-run. Do NOT "fix" this by
-              # adding a retrigger (e.g. a repository-dispatch or a PAT-based push) -- the pushed
-              # bytes are exactly what this run just captured and diffed against, so a
-              # re-verification run would be tautological.
-              if (cd "$WORKDIR/head" && git_auth push origin "HEAD:${PR_HEAD_REF}"); then
-                echo "Pushed refreshed screenshots to ${PR_HEAD_REF}." >> "$GITHUB_STEP_SUMMARY"
+              HEAD_OID="$(git rev-parse "origin/${PR_HEAD_REF}")"
+
+              ADDITIONS="$(jq -n '[]')"
+              for path in "${SCREENSHOT_PATHS[@]}"; do
+                ADDITIONS="$(jq -n --argjson acc "$ADDITIONS" --arg path "$path" --arg content "$(base64 -w0 "$path")" \
+                  '$acc + [{path: $path, contents: $content}]')"
+              done
+
+              jq -n \
+                --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid signature { isValid state } } } }' \
+                --arg repo "$REPO" \
+                --arg branch "$PR_HEAD_REF" \
+                --arg headline "chore(ci): refresh screenshots from capture run ${RUN_ID}" \
+                --argjson additions "$ADDITIONS" \
+                --arg oid "$HEAD_OID" \
+                '{query: $query, variables: {input: {
+                    branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                    message: {headline: $headline},
+                    fileChanges: {additions: $additions},
+                    expectedHeadOid: $oid
+                }}}' > /tmp/create-commit-body.json
+
+              RESPONSE="$(gh api graphql --input /tmp/create-commit-body.json)"
+              NEW_OID="$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')"
+
+              if [[ -n "$NEW_OID" ]]; then
+                # Issue #301, verified empirically on a scratch PR (#302) before this landed: a
+                # commit created this way with the default GITHUB_TOKEN does NOT trigger a new
+                # workflow run, same as the git push it replaces -- confirmed by watching a branch
+                # with an explicit `push` trigger not fire a second time after an API-created commit
+                # landed on it. So, as before: this step pushes (via the API call above) and then
+                # passes, rather than waiting on or manufacturing a re-run. Do NOT "fix" a re-trigger
+                # gap that isn't there by adding a dispatch or PAT-based push -- the committed bytes
+                # are exactly what this run just captured and diffed against, so a re-verification
+                # run would be tautological. If a future GitHub change makes this trigger a run, that
+                # is a finding to report, not something to guard away.
+                SIGNED="$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.signature.state // "unknown"')"
+                echo "Pushed refreshed screenshots to ${PR_HEAD_REF} as ${NEW_OID} (signature: ${SIGNED})." >> "$GITHUB_STEP_SUMMARY"
                 pushed=1
                 break
               fi
 
-              echo "Push to ${PR_HEAD_REF} was rejected (branch moved during this run's ~4-8 minute emulator window); re-fetching and retrying once." >&2
-              git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
-              attempt=$((attempt + 1))
+              # expectedHeadOid mismatch surfaces as a GraphQL error of type STALE_DATA rather than
+              # a git non-fast-forward rejection -- same concurrent-push scenario (branch moved
+              # during this run's ~4-8 minute emulator window), same response: re-fetch and retry
+              # once. Any other error type is not a race we know how to recover from; fail loudly.
+              if echo "$RESPONSE" | jq -e '.errors // [] | any(.type == "STALE_DATA")' >/dev/null 2>&1; then
+                echo "createCommitOnBranch on ${PR_HEAD_REF} was rejected as stale (branch moved during this run); re-fetching and retrying once." >&2
+                git_auth fetch origin "+refs/heads/${PR_HEAD_REF}:refs/remotes/origin/${PR_HEAD_REF}"
+                attempt=$((attempt + 1))
+                continue
+              fi
+
+              echo "createCommitOnBranch failed unexpectedly:" >&2
+              echo "$RESPONSE" >&2
+              exit 1
             done
 
             if [[ "$pushed" -ne 1 ]]; then
               {
                 echo "### Failed to push refreshed screenshots to ${PR_HEAD_REF}"
                 echo ""
-                echo "Pushed twice (once, then once more after re-fetching) and both attempts were rejected as non-fast-forward: ${PR_HEAD_REF} moved again during this run. Not force-pushing. Re-run this job, or apply this run's 'screen-captures' artifact locally and push, then re-run."
+                echo "Attempted twice (once, then once more after re-fetching) and both attempts were rejected as stale: ${PR_HEAD_REF} moved again during this run. Re-run this job, or apply this run's 'screen-captures' artifact locally and push, then re-run."
               } >> "$GITHUB_STEP_SUMMARY"
               exit 1
             fi
