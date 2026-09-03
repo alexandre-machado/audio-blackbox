@@ -15,8 +15,10 @@ import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.DeviceMemoryBudget
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.audio.SwitchConfigResult
+import cc.machado.audioblackbox.telemetry.PowerTelemetry
 import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportState
@@ -158,6 +160,15 @@ class RecorderService : Service() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         RecorderNotification.ensureChannel(this)
         audioManager.registerAudioRecordingCallback(recordingCallback, null)
+        // Issue #298: this Service instance is the first point in the process with a real
+        // Context, so it is what wires the second, independent memory-budget term
+        // (ActivityManager.MemoryInfo.availMem) that PreloadedRetentionWindow's earlier,
+        // Context-free preload in AudioBlackboxApplication.onCreate could not read. Recalculating
+        // right after, against this now-real availableSystemBytesProvider, is "recalculation at
+        // service start": a release whose own resident footprint has grown re-derives the ceiling
+        // here even if the user never reopens Settings.
+        availableSystemBytesProvider = { PowerTelemetry.getAvailableSystemBytes(applicationContext) }
+        reconcileRetentionCeiling()
         // Reactive notification refresh (PR #23 review, `@sec` finding 1 / `@rev` finding 2):
         // nothing about a single explicit refresh call site can catch every way engine.state
         // changes asynchronously -- a read error on the capture thread, the mic being silenced by
@@ -775,6 +786,60 @@ class RecorderService : Service() {
             _resizeRefusal.value = null
         }
 
+        // ---- Issue #298: dynamic retention ceiling ----
+
+        // The second, independent memory-budget term (ActivityManager.MemoryInfo.availMem) --
+        // `null` (heap-only) until a real Service instance's onCreate() wires the real Context-
+        // backed reading (see onCreate()'s comment). A JVM test never sets this, matching every
+        // other companion-level provider's "real production value, injectable seam for tests"
+        // shape below.
+        var availableSystemBytesProvider: () -> Long? = { null }
+
+        // The single source of truth for "what is this device's ceiling for this preset, right
+        // now" -- real production behaviour reads the live JVM heap plus whatever
+        // availableSystemBytesProvider currently reports; a test substitutes a fixed value instead
+        // of depending on the test JVM's own, environment-dependent heap size (this companion
+        // object's `var`s are also why RecorderServiceRetentionWindowTest resets this in
+        // tearDown -- see that test's setUp/tearDown).
+        var maxRetentionMinutesProvider: (QualityPreset) -> Int = { preset ->
+            DeviceMemoryBudget.maxRetentionMinutes(
+                config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+                maxHeapBytes = Runtime.getRuntime().maxMemory(),
+                usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+                availableSystemBytes = availableSystemBytesProvider(),
+            )
+        }
+
+        /**
+         * Recalculates this device's current ceiling for the active [QualityPreset] and clamps
+         * [captureConfig] down to it if the engine is [CaptureState.Idle] and the currently
+         * configured `bufferDurationMinutes` no longer fits -- a release whose own resident
+         * footprint grows must not leave a stale, too-large window in force just because the user
+         * never reopened Settings (issue #298). A no-op whenever the current value already fits, or
+         * whenever the engine is not Idle -- matching [rebuildEngineIfIdle]'s own contract: a live
+         * session's buffer is resized in place elsewhere ([switchSettings]), never discarded here.
+         *
+         * Called from [onCreate] at every service start with the real, production
+         * [maxRetentionMinutesProvider]; also the seam a JVM test drives with a fixed provider to
+         * exercise this path without a real `Service`/`Context`.
+         *
+         * `@rev` review on PR #300, finding 2 (MEDIUM): the [ceiling] this computes is the *exact*
+         * value threaded into [rebuildEngineIfIdleAt] below, not re-derived a second time from the
+         * companion-level [maxRetentionMinutesProvider] the way [rebuildEngineIfIdle]'s own
+         * `require` used to -- so a caller-supplied [maxRetentionMinutesProvider] parameter here can
+         * never diverge from what actually gets validated, by construction, rather than by every
+         * caller happening to pass matching values.
+         */
+        fun reconcileRetentionCeiling(
+            maxRetentionMinutesProvider: (QualityPreset) -> Int = RecorderService.maxRetentionMinutesProvider,
+        ): Boolean {
+            val preset = _qualityPresetFlow.value
+            val ceiling = maxRetentionMinutesProvider(preset)
+            val current = _captureConfig.bufferDurationMinutes
+            if (current <= ceiling) return false
+            return rebuildEngineIfIdleAt(newBufferDurationMinutes = ceiling, newPreset = preset, ceiling = ceiling)
+        }
+
         /**
          * Switches retention duration and/or quality preset dynamically (issues #194, #223).
          * If the engine is recording or paused, dynamically resizes the buffer and/or switches
@@ -791,9 +856,10 @@ class RecorderService : Service() {
             newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
             newPreset: QualityPreset = _qualityPresetFlow.value,
         ): Boolean {
-            require(isValidRetentionMinutes(newBufferDurationMinutes)) {
+            val ceiling = maxRetentionMinutesProvider(newPreset)
+            require(isValidRetentionMinutes(newBufferDurationMinutes, ceiling)) {
                 "newBufferDurationMinutes must be in " +
-                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} " +
+                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +
                     "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
             }
             val newConfig = newPreset.config(bufferDurationMinutes = newBufferDurationMinutes)
@@ -843,10 +909,24 @@ class RecorderService : Service() {
         fun rebuildEngineIfIdle(
             newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
             newPreset: QualityPreset = _qualityPresetFlow.value,
-        ): Boolean {
-            require(isValidRetentionMinutes(newBufferDurationMinutes)) {
+        ): Boolean = rebuildEngineIfIdleAt(
+            newBufferDurationMinutes = newBufferDurationMinutes,
+            newPreset = newPreset,
+            ceiling = maxRetentionMinutesProvider(newPreset),
+        )
+
+        /**
+         * The actual body of [rebuildEngineIfIdle], parameterised over [ceiling] instead of
+         * re-deriving it from the companion-level [maxRetentionMinutesProvider] (`@rev` review on
+         * PR #300, finding 2): [rebuildEngineIfIdle] itself supplies that companion value, and
+         * [reconcileRetentionCeiling] supplies whatever its own caller-injected provider computed --
+         * whichever one calls this always validates against the exact [ceiling] it decided to
+         * rebuild at, never a second, independently-recomputed one.
+         */
+        private fun rebuildEngineIfIdleAt(newBufferDurationMinutes: Int, newPreset: QualityPreset, ceiling: Int): Boolean {
+            require(isValidRetentionMinutes(newBufferDurationMinutes, ceiling)) {
                 "newBufferDurationMinutes must be in " +
-                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} " +
+                    "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +
                     "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $newBufferDurationMinutes"
             }
             if (_captureState.value !is CaptureState.Idle) return false

@@ -44,7 +44,12 @@ data class RetentionStepperUiState(
      * user's explicit discard confirmation -- the same enforcement point issue #45's dialog
      * existed for, now fired exactly once per commit rather than once per stepper tap. */
     val pendingConfirmationMinutes: Int?,
-    val maxSelectableMinutes: Int = AudioConfig.RETENTION_WINDOW_MAX_MINUTES,
+    // No AudioConfig constant to default to any more (issue #298) -- the real ceiling is
+    // per-device and per-preset (see DeviceMemoryBudget.maxRetentionMinutes). This default only
+    // matters for a caller that builds this state without going through
+    // SettingsViewModel.mapUiState (i.e. a hand-written test/preview value); every real caller
+    // passes its own computed value explicitly.
+    val maxSelectableMinutes: Int = Int.MAX_VALUE,
 )
 
 /**

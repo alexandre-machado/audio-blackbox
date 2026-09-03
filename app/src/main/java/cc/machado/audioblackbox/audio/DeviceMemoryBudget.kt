@@ -48,11 +48,11 @@ object DeviceMemoryBudget {
      * The largest retention window, in whole stepper steps, that [config]'s audio format can
      * safely occupy on this device right now.
      *
-     * Always within `[AudioConfig.RETENTION_WINDOW_MIN_MINUTES, hardCeilingMinutes]`: a device that
-     * could technically hold more is still capped by what the product chooses to offer, and a
-     * device that can barely hold anything still reports the minimum rather than zero -- offering
-     * "0 minutes" would be a broken product, so the minimum is treated as the cost of running at
-     * all rather than as something to negotiate.
+     * At least `AudioConfig.RETENTION_WINDOW_MIN_MINUTES` always -- a device that can barely hold
+     * anything still reports the minimum rather than zero, since offering "0 minutes" would be a
+     * broken product, so the minimum is treated as the cost of running at all rather than as
+     * something to negotiate. There is no product-chosen upper bound any more (issue #298): the
+     * only ceiling left is the structural one `addressableBytes` enforces below.
      *
      * @param config the audio format whose byte rate the window is measured in. Passing a
      *   different quality preset's config is exactly how each preset gets its own ceiling.
@@ -62,14 +62,12 @@ object DeviceMemoryBudget {
      * @param availableSystemBytes `ActivityManager.MemoryInfo.availMem`, or `null` when unknown.
      *   Applied as a second, independent limit: a heap ceiling means nothing if the system as a
      *   whole has no memory left to back it.
-     * @param hardCeilingMinutes the product's own maximum, independent of hardware.
      */
     fun maxRetentionMinutes(
         config: AudioConfig,
         maxHeapBytes: Long,
         usedHeapBytes: Long,
         availableSystemBytes: Long? = null,
-        hardCeilingMinutes: Int = AudioConfig.RETENTION_WINDOW_MAX_MINUTES,
     ): Int {
         val step = AudioConfig.RETENTION_WINDOW_STEP_MINUTES
         val floor = AudioConfig.RETENTION_WINDOW_MIN_MINUTES
@@ -94,7 +92,11 @@ object DeviceMemoryBudget {
 
         val rawMinutes = (addressableBytes / bytesPerMinute).toInt()
         val stepped = (rawMinutes / step) * step
-        return stepped.coerceIn(floor, hardCeilingMinutes)
+        // No upper coerce here (issue #298): the addressableBytes clamp above is the only upper
+        // bound left, and it is already folded into stepped/rawMinutes. Re-applying a second,
+        // separate upper bound here would just be a second arbitrary constant wearing a different
+        // name.
+        return stepped.coerceAtLeast(floor)
     }
 
     /**

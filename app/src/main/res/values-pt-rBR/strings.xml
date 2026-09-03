@@ -279,11 +279,13 @@
     <string name="settings_consumption_io_label">Gravação em disco (I/O)</string>
     <string name="settings_consumption_io_value">0 KB/s (100% RAM)</string>
 
-    <!-- Aviso de redução por clamp (issue #84): mostrado no máximo uma vez, só para quem tinha um
-         valor de retenção salvo (50/55/60, persistido antes do clamp temporário da issue #72) que
-         foi reduzido ao carregar. Nunca mostrado a quem já estava no limite atual ou abaixo dele. -->
+    <!-- Aviso de redução por clamp (issue #298, generalizando a migração pontual 60 -> 45 da issue
+         #84): mostrado sempre que a janela de retenção salva não couber mais no limite atual deste
+         aparelho, calculado dinamicamente pelo DeviceMemoryBudget (uma versão mais pesada, menos
+         memória livre agora, ou um downgrade). Nunca mostrado a quem já está no limite atual ou
+         abaixo dele. -->
     <string name="settings_retention_clamp_notice_title">Janela de retenção reduzida</string>
-    <string name="settings_retention_clamp_notice_body">Sua janela de retenção foi reduzida de %1$d para %2$d minutos como medida temporária de segurança de memória, enquanto uma correção definitiva está em andamento.</string>
+    <string name="settings_retention_clamp_notice_body">Sua janela de retenção foi reduzida de %1$d para %2$d minutos porque ela não cabe mais neste aparelho.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendi</string>
 
     <!-- Aviso de redimensionamento recusado (issue #272): mostrado quando uma alteração de

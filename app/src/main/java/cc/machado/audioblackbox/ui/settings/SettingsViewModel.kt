@@ -45,6 +45,11 @@ class SettingsViewModel(
     private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
     private val usedMemoryBytesProvider: () -> Long = { Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() },
+    // Issue #298: DeviceMemoryBudget.maxRetentionMinutes's second, independent limit --
+    // ActivityManager.MemoryInfo.availMem in production (wired by MainActivity, the same pattern as
+    // batteryStatusProvider below), null by default so a JVM test that doesn't care about this term
+    // gets the same "heap-only" behavior every existing test already assumed.
+    private val availableSystemBytesProvider: () -> Long? = { null },
     private val batteryStatusProvider: () -> cc.machado.audioblackbox.telemetry.BatteryStatus = {
         cc.machado.audioblackbox.telemetry.BatteryStatus(percent = 100, isCharging = false, isIgnoringOptimizations = true)
     },
@@ -80,6 +85,7 @@ class SettingsViewModel(
             resizeError = resizeError,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
+            availableSystemBytes = availableSystemBytesProvider(),
             batteryStatus = batteryStatusProvider(),
         )
     }.stateIn(
@@ -95,6 +101,7 @@ class SettingsViewModel(
             resizeError = null,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
+            availableSystemBytes = availableSystemBytesProvider(),
             batteryStatus = batteryStatusProvider(),
         ),
     )
@@ -108,6 +115,7 @@ class SettingsViewModel(
             config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
             maxHeapBytes = maxMemoryBytesProvider(),
             usedHeapBytes = nonBufferUsedBytes,
+            availableSystemBytes = availableSystemBytesProvider(),
         )
     }
 
@@ -234,6 +242,7 @@ class SettingsViewModel(
             resizeError: ResizeErrorInfo? = null,
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
             usedMemoryBytes: Long = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+            availableSystemBytes: Long? = null,
             batteryStatus: cc.machado.audioblackbox.telemetry.BatteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(),
         ): SettingsUiState {
             val currentBufferBytes = committedPreset.config(bufferDurationMinutes = committedMinutes).totalBufferBytes
@@ -244,6 +253,7 @@ class SettingsViewModel(
                     config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
                     maxHeapBytes = maxMemoryBytes,
                     usedHeapBytes = nonBufferUsedBytes,
+                    availableSystemBytes = availableSystemBytes,
                 )
                 QualityPresetOption(
                     preset = preset,
@@ -251,8 +261,11 @@ class SettingsViewModel(
                     isSelected = preset == pendingPreset,
                 )
             }
-            val currentPresetMax = presetOptions.firstOrNull { it.preset == pendingPreset }?.maxRetentionMinutes
-                ?: AudioConfig.RETENTION_WINDOW_MAX_MINUTES
+            // No static fallback constant any more (issue #298): every preset always has a
+            // computed entry in presetOptions (QualityPreset.entries is exhaustive), so
+            // firstOrNull{} here can only ever be null if pendingPreset itself is somehow not a
+            // real QualityPreset entry -- which the type system already rules out.
+            val currentPresetMax = presetOptions.first { it.preset == pendingPreset }.maxRetentionMinutes
             val clampedPendingMinutes = pendingMinutes.coerceAtMost(currentPresetMax)
 
             val stepper = RetentionStepperUiState(

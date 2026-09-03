@@ -19,9 +19,11 @@ import org.junit.runner.RunWith
  * Dalvik heap (issue #72 follow-up).
  *
  * ## Why this exists as a test and not an adb session
- * `AudioConfig.RETENTION_WINDOW_MAX_MINUTES` is 45, and the comment justifying it describes peak
- * memory as "roughly 2x the retention window" because `RingBuffer.snapshot()` allocated a second
- * full-size copy at save time. **That has not been true since #72 was fixed in #114**: the export
+ * `AudioConfig` used to ship a fixed `RETENTION_WINDOW_MAX_MINUTES` of 45 (removed by issue #298
+ * in favor of `DeviceMemoryBudget`'s per-device inference), and the comment justifying that number
+ * described peak memory as "roughly 2x the retention window" because `RingBuffer.snapshot()`
+ * allocated a second full-size copy at save time. **That has not been true since #72 was fixed in
+ * #114**: the export
  * path drains through `readSince` in `drainChunkSizeBytes` chunks and never materialises the
  * window (see `BoundedExportAllocationTest`). The clamp is calibrated against a cost that no
  * longer exists, and the stale table outlived the design by three days and misled at least one
@@ -169,7 +171,7 @@ class RetentionCeilingMeasurementTest {
      */
     @Test
     fun theShippedMaximumRetentionWindowCanBeAllocatedAndExported() {
-        val minutes = AudioConfig.RETENTION_WINDOW_MAX_MINUTES
+        val minutes = MEASURED_MAX_MINUTES
         val result = measure(minutes)
         assertEquals(
             "the shipped maximum retention window ($minutes min) must be exportable on this device",
@@ -239,8 +241,8 @@ class RetentionCeilingMeasurementTest {
 
         Log.i(TAG, "=== largest window that fit: $largestOk min ===")
         assertTrue(
-            "not even the shipped maximum (${AudioConfig.RETENTION_WINDOW_MAX_MINUTES} min) fit",
-            largestOk >= AudioConfig.RETENTION_WINDOW_MAX_MINUTES,
+            "not even the measured maximum ($MEASURED_MAX_MINUTES min) fit",
+            largestOk >= MEASURED_MAX_MINUTES,
         )
     }
 
@@ -256,7 +258,18 @@ class RetentionCeilingMeasurementTest {
          */
         const val MAX_PEAK_TO_BACKING_RATIO = 1.5f
 
-        /** Steps past the shipped 45-minute maximum, in the stepper's own 5-minute increments. */
+        /**
+         * The window this whole measurement is calibrated against -- historically
+         * `AudioConfig.RETENTION_WINDOW_MAX_MINUTES`, now a local constant of this measurement
+         * harness since issue #298 removed that product ceiling in favor of
+         * [cc.machado.audioblackbox.audio.DeviceMemoryBudget]'s per-device inference. This harness
+         * still measures against 45 min specifically because that is the exact window
+         * `RetentionCeilingMeasurementTest`'s own history (issue #72) is calibrated against; it is
+         * no longer "the shipped maximum" in the app itself.
+         */
+        const val MEASURED_MAX_MINUTES = 45
+
+        /** Steps past [MEASURED_MAX_MINUTES], in the stepper's own 5-minute increments. */
         val CANDIDATE_MINUTES = listOf(30, 45, 60, 75, 90, 105, 120, 150, 180)
     }
 }

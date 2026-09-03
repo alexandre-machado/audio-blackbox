@@ -247,12 +247,13 @@
     <string name="settings_retention_title">Rolling buffer retention window</string>
     <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Use the buttons below to choose a value, then tap Apply.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
-    <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES bound the
-         stepper to multiples of 5 in [5, 45] (issue #72's interim clamp, was [5, 60]), so the value
-         is never 1, and the "minutes" (plural) form is always correct here. This was true under the
-         old fixed-list domain too (re-examined for issue #44), and the stepper's range+step domain
-         does not change that: every reachable value, including newly-reachable ones like 35/40, is
-         still a multiple of 5. Re-examined again for issue #73, and again for issue #72's clamp. -->
+    <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/STEP_MINUTES bound the stepper to
+         multiples of 5, at least 5 (issue #298 removed the fixed upper MAX_MINUTES in favor of a
+         per-device DeviceMemoryBudget ceiling, always itself a multiple of 5), so the value is
+         never 1, and the "minutes" (plural) form is always correct here. This was true under the
+         old fixed-list domain too (re-examined for issue #44), and every domain change since (issue
+         #73's range+step, issue #72's interim clamp, issue #298's dynamic ceiling) has kept every
+         reachable value a multiple of 5. -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutes, approximately %2$d megabytes, currently active</string>
     <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutes, approximately %2$d megabytes, not yet applied</string>
     <string name="settings_retention_decrement_cd">Decrease retention by 5 minutes</string>
@@ -297,21 +298,22 @@
     <string name="settings_consumption_io_label">Storage disk I/O</string>
     <string name="settings_consumption_io_value">0 KB/s (Pure RAM)</string>
 
-    <!-- Clamp-down notice (issue #84): shown at most once, only to a user whose stored retention
-         window (50/55/60, persisted before issue #72's interim clamp) was reduced on load. Never
-         shown to a user already at or below the current max. -->
+    <!-- Clamp-down notice (issue #298, generalising issue #84's one-off 60 -> 45 migration): shown
+         whenever the stored retention window no longer fits this device's *current*
+         DeviceMemoryBudget-derived ceiling (a heavier release, less free memory right now, or a
+         downgrade). Never shown to a user already at or below the current ceiling. -->
     <string name="settings_retention_clamp_notice_title">Retention window reduced</string>
-    <!-- Not a plural, same reasoning as settings_retention_value_active_cd above: %1$d is always a
-         pre-clamp value (50/55/60) and %2$d is always AudioConfig.RETENTION_WINDOW_MAX_MINUTES
-         (45), so neither is ever 1. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your retention window was reduced from %1$d to %2$d minutes as an interim memory-safety measure while a permanent fix is in progress.</string>
+    <!-- Not a plural, same reasoning as settings_retention_value_active_cd above: %1$d is the raw
+         previously-stored value and %2$d is this device's current computed ceiling, both
+         multiples of 5, so neither is ever 1. -->
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your retention window was reduced from %1$d to %2$d minutes because it no longer fits on this device.</string>
     <string name="settings_retention_clamp_notice_dismiss">Got it</string>
 
     <!-- Resize-refused notice (issue #272): shown when a live settings change was refused because
          resizing the audio buffer while capture is running would not fit in this device's current
          heap. The previous, still-active setting stays in force, a refusal, never a crash and
-         never a silent no-op. Not a plural: the stepper only ever lands on multiples of 5 in
-         [5, 45] (see settings_retention_value_active_cd above), so %1$d is never 1; %2$d is a
+         never a silent no-op. Not a plural: the stepper only ever lands on multiples of 5, at
+         least 5 (see settings_retention_value_active_cd above), so %1$d is never 1; %2$d is a
          computed byte count that also never lands on exactly 1 MB. -->
     <string name="settings_resize_error_title">Setting not applied</string>
     <string name="settings_resize_error_body" tools:ignore="PluralsCandidate">Couldn\'t change the recording length to %1$d min (%2$d MB): not enough memory available on this device right now. The current setting is still active. Try a shorter retention window, or free up memory on this device and try again.</string>
