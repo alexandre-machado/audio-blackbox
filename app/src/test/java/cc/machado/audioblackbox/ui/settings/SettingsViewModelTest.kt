@@ -343,6 +343,59 @@ class SettingsViewModelTest {
         job.cancel()
     }
 
+    // ---- `@rev` finding on PR #304: navigating away inside the debounce window must not drop the edit ----
+
+    @Test
+    fun `clearing the ViewModel mid-debounce still flushes the pending commit`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
+        val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            retentionWindowPreferences = preferences,
+            onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
+            onRebuildEngine = { _, _ -> true },
+        )
+
+        // A tap lands, then -- well before the 500ms debounce elapses -- the user navigates away
+        // (e.g. `NavHost` disposes the Settings destination), which is exactly what tears down this
+        // ViewModel via `clear()`/`onCleared()`.
+        vm.incrementPending()
+        runCurrent()
+        advanceTimeBy(SettingsViewModel.DEBOUNCE_MILLIS / 2)
+        runCurrent()
+
+        vm.onCleared()
+        runCurrent()
+
+        assertEquals(
+            "an edit the UI already displayed as pending must still be committed after " +
+                "navigating away mid-debounce, not silently dropped",
+            listOf(35 to cc.machado.audioblackbox.audio.QualityPreset.VOICE),
+            switchCalls,
+        )
+        assertEquals(35, preferences.currentBufferDurationMinutes())
+    }
+
+    @Test
+    fun `clearing the ViewModel with nothing dirty does not commit anything`() = runTest(testDispatcher) {
+        val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
+        val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
+        val vm = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = MutableStateFlow(30),
+            retentionWindowPreferences = preferences,
+            onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
+        )
+        runCurrent()
+
+        vm.onCleared()
+        runCurrent()
+
+        assertTrue("nothing pending means nothing to flush", switchCalls.isEmpty())
+        assertEquals(30, preferences.currentBufferDurationMinutes())
+    }
+
     // ---- Issue #272 refusal path (surfaced through issue #299's only remaining feedback channel) ----
 
     @Test

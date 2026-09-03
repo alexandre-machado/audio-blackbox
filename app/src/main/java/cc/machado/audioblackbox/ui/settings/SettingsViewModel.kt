@@ -14,7 +14,10 @@ import cc.machado.audioblackbox.service.RecorderService
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,6 +54,17 @@ import kotlinx.coroutines.launch
  * committed one so the stepper's displayed value matches what is actually running. With no Apply
  * button left, that reversion plus [_resizeError] is the *only* feedback channel a refused change
  * has -- see [commitPending].
+ *
+ * ## Navigating away inside the debounce window (`@rev` finding on PR #304)
+ * [onCleared] flushes any still-dirty pending edit immediately, on [commitFlushScope] -- a
+ * companion-owned scope that outlives this instance, not [viewModelScope] (which
+ * `androidx.lifecycle.ViewModel.clear()` cancels before/around `onCleared()` -- launching the flush
+ * on the dying scope would just get the flush itself cancelled, silently dropping the exact edit
+ * this exists to save). Without this, a tap followed by navigating off the Settings screen before
+ * [DEBOUNCE_MILLIS] elapses would cancel [commitJob] mid-flight and lose an edit the UI had already
+ * shown as pending -- precisely the "silently-ignored tap" failure mode this whole redesign exists
+ * to rule out, just triggered by navigation instead of a second tap. See [onCleared]'s own doc for
+ * the one case this still cannot fully close: a flush that is refused after the screen is gone.
  */
 class SettingsViewModel(
     private val captureState: StateFlow<CaptureState> = RecorderService.captureState,
@@ -176,6 +190,49 @@ class SettingsViewModel(
         _pendingPreset.value = null
     }
 
+    /** `@rev` finding on PR #304: navigating away from Settings inside the [DEBOUNCE_MILLIS] window
+     * used to lose the pending edit outright -- `viewModelScope` (and [commitJob] with it) is
+     * cancelled here, before the debounced [commitPending] ever got to run, with zero feedback: no
+     * `resizeError`, no reverted display, because nothing is mounted to show either. That is exactly
+     * the failure mode issue #299 was written to design against, just reached via navigation rather
+     * than a tap race.
+     *
+     * The fix: flush a still-dirty pending edit synchronously on [commitFlushScope] -- a scope that
+     * outlives this instance -- rather than on the [viewModelScope] that is dying right now. The
+     * flushed commit still goes through the exact same [commitPending] (same success/refusal
+     * handling, same "never persist a value the engine actually refused" invariant from issue #272)
+     * as a normal, in-session commit.
+     *
+     * ## The one case this does not fully close: a refusal after the screen is already gone
+     * If the flushed commit is refused, [commitPending] still sets [_resizeError] and calls
+     * [RecorderService.acknowledgeResizeRefusal] exactly as it would in-session -- but by
+     * construction there is no longer any [SettingsScreen] mounted to read either, so the user gets
+     * no notification of the refusal this time. This is a deliberate, stated limitation, not a
+     * silent gap: the property issue #272 actually protects -- the persisted preference and the
+     * live engine's real capacity can never diverge -- still holds, because [commitPending] only
+     * ever writes the preference on success, in this path exactly as in every other. What is lost is
+     * purely the *notification*, in the narrow double-fault of "navigated away mid-debounce" AND
+     * "this exact device is currently too memory-constrained to grant the request" landing in the
+     * same commit. A real fix (e.g. surfacing the still-unacknowledged refusal the next time
+     * Settings is reopened) is not implemented here because it is not verifiable at this repo's Tier
+     * 0: [RecorderService.switchSettings] only ever refuses through the real ring buffer's real
+     * `MemoryBudget` check, which requires a live, `AudioRecord`-backed buffer -- unreachable from a
+     * JVM test (see `AGENTS.md`'s Tier 0 blind spots) -- so a fix here could not be given real
+     * regression coverage, only the appearance of it. */
+    // `public`, widened from the base `protected` (Kotlin permits widening on override): this is
+    // the seam `SettingsViewModelTest` calls directly to simulate `ViewModel.clear()` -- `clear()`
+    // itself is `internal` to `androidx.lifecycle`, unreachable from this module's own tests, and
+    // `onCleared()` is what `clear()` actually invokes, so calling it directly is the real thing,
+    // not a proxy for it.
+    public override fun onCleared() {
+        commitJob?.cancel()
+        val minutes = currentPendingMinutes()
+        val preset = currentPendingPreset()
+        if (minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value) {
+            commitFlushScope.launch { commitPending() }
+        }
+    }
+
     /** The single shared trailing-edge debounce timer (issue #299): cancels whatever commit is
      * currently scheduled -- including one still waiting out its [DEBOUNCE_MILLIS] delay -- and
      * starts a fresh one. A tap that lands before the previous timer fired therefore never lets a
@@ -247,6 +304,17 @@ class SettingsViewModel(
     companion object {
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
+
+        /** `@rev` finding on PR #304: a companion-owned scope, deliberately *not* parented to any
+         * one [SettingsViewModel] instance's [viewModelScope] -- it must survive exactly the event
+         * ([onCleared]) that cancels that scope. Mirrors the existing pattern one level down in this
+         * same codebase, [RecorderService]'s own companion-owned `forwardingScope`/`serviceScope`
+         * (process-lifetime, outliving any one Service/ViewModel instance for the same structural
+         * reason). Does not leak: every use here ([onCleared]) launches at most one short-lived,
+         * already-bounded coroutine (a single [commitPending] call, no loop, no retry) per cleared
+         * instance that had a genuinely dirty pending edit -- nothing keeps this scope's own
+         * [SupervisorJob] artificially alive, and a completed child coroutine is not retained. */
+        private val commitFlushScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
         /** Issue #299: the shared trailing-edge debounce window behind every pending edit -- see
          * [scheduleDebouncedCommit]. */
