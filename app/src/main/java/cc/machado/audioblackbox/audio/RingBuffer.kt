@@ -392,6 +392,20 @@ class RingBuffer(
             val newChunkCount = chunkCountForLocked(newCapacityBytes)
             val newChunks = arrayOfNulls<ByteArray>(newChunkCount)
 
+            // Cumulative bytes drained from each *old* chunk so far, indexed by srcChunkIndex.
+            // A single old chunk can be visited by two disjoint arcs of this loop -- whenever the
+            // copy wraps the *old* ring (bytesToKeep spans the seam at logical offset
+            // oldCapacity/0) and that seam falls inside one chunk rather than exactly on a chunk
+            // boundary, which is always true when oldCapacity <= chunkSizeBytes (a single old
+            // chunk covering the whole capacity) and can also happen at the boundary chunk for a
+            // larger, multi-chunk old capacity. Retiring a chunk after only the *first* arc
+            // reached its physical end, while a second arc still needs bytes from earlier in that
+            // same chunk, replaced live data with EMPTY_CHUNK mid-copy and spun forever once the
+            // next arc's read landed on a zero-length array (n stuck at 0). Tracking total
+            // consumed bytes per chunk, rather than trusting a single arc's own end, is what makes
+            // the "drop as soon as fully drained" optimisation correct in both cases.
+            val srcConsumed = IntArray(chunkCountForLocked(oldCapacity))
+
             var copied = 0
             while (copied < bytesToKeep) {
                 val currentStreamPos = startOffset + copied
@@ -415,12 +429,12 @@ class RingBuffer(
                 System.arraycopy(srcChunk, srcOffsetInChunk, dstChunk, dstOffsetInChunk, n)
                 copied += n
 
-                // The source chunk's bytes for this arc are read start-to-finish in one
-                // contiguous visit (the copy walks the old ring exactly once, never wrapping
-                // twice), so once we reach its end, nothing will ever read it again: drop the
-                // reference now instead of waiting for the whole resize to finish, bounding the
-                // old-plus-new overlap to about one chunk (see class doc).
-                if (srcOffsetInChunk + n >= srcChunk.size) {
+                // Drop the reference only once this chunk's *entire* backing size has been
+                // drained across every arc that has touched it so far -- not just this one --
+                // instead of waiting for the whole resize to finish, bounding the old-plus-new
+                // overlap to about one chunk (see class doc).
+                srcConsumed[srcChunkIndex] += n
+                if (srcConsumed[srcChunkIndex] >= srcChunk.size) {
                     chunks[srcChunkIndex] = EMPTY_CHUNK
                 }
             }
