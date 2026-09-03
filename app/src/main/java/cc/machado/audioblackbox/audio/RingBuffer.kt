@@ -415,23 +415,65 @@ class RingBuffer(
      * entries zero-length, while [_capacityBytes] still claims the old (fully-backed) size --
      * silent corruption for the rest of the session.
      *
-     * **The guaranteed invariant:** [resize] either returns normally with [chunks],
-     * [_capacityBytes], [baseStreamOffset] and [totalWritten] all describing one coherent buffer
-     * (the new one on [ResizeOutcome.Applied], the unchanged old one on [ResizeOutcome.Refused]),
-     * or it throws -- and even then, once the throw reaches the caller, those same fields are
-     * already back in a coherent state describing a valid (possibly smaller) *old*-capacity
+     * **The guaranteed invariant, and what it does NOT cover (`@rev` PR #295 review, residual
+     * MEDIUM, issue #296):** [resize] either returns normally with [chunks], [_capacityBytes],
+     * [baseStreamOffset] and [totalWritten] all describing one coherent buffer (the new one on
+     * [ResizeOutcome.Applied], the unchanged old one on [ResizeOutcome.Refused]), or it throws --
+     * and *for a single allocation failure*, once the throw reaches the caller, those same fields
+     * are already back in a coherent state describing a valid (possibly smaller) *old*-capacity
      * buffer: [_capacityBytes] is untouched (this method never assigns it before the copy loop and
-     * backfill both succeed), any [chunks] entry a partial run had already dropped is replaced with
-     * a fresh zero-filled array of the correct size for its index (so every index remains a valid,
-     * correctly-sized array -- no dangling [EMPTY_CHUNK]), and [baseStreamOffset] is advanced to
-     * exclude exactly the byte range that was destroyed in the process (the bytes already drained
-     * out of their source chunks before the failure, plus anything the up-front retirement pass had
-     * already dropped for being outside the retained window). That is real, intentional data loss
-     * -- those bytes cannot be reconstructed, the same way a successful shrink truncates the oldest
-     * bytes on purpose -- but it is *honest* loss: [oldestAvailableLocked] moves to match, so a
-     * reader polling across the gap gets [ReadSinceResult.Lapped], never silently-zeroed bytes
-     * standing in for real audio. See `RingBufferAllocationFailureTest` for the injected-failure
-     * regression coverage.
+     * backfill both succeed), any [chunks] entry the partial run had already dropped is replaced
+     * with a fresh zero-filled array of the correct size for its index (so every index remains a
+     * valid, correctly-sized array -- no dangling [EMPTY_CHUNK]), and [baseStreamOffset] is
+     * advanced to exclude exactly the byte range that was destroyed in the process (the bytes
+     * already drained out of their source chunks before the failure, plus anything the up-front
+     * retirement pass had already dropped for being outside the retained window). That is real,
+     * intentional data loss -- those bytes cannot be reconstructed, the same way a successful
+     * shrink truncates the oldest bytes on purpose -- but it is *honest* loss: [oldestAvailableLocked]
+     * moves to match, so a reader polling across the gap gets [ReadSinceResult.Lapped], never
+     * silently-zeroed bytes standing in for real audio. See `RingBufferAllocationFailureTest` for
+     * the injected-failure regression coverage of both the copy loop and the trailing backfill
+     * loop below.
+     *
+     * **What this does NOT cover: a second allocation failure during recovery from the first.**
+     * The `catch` block above patches every dropped [chunks] entry back with `ByteArray(...)` --
+     * i.e. it allocates again, on the same heap that just failed to allocate, before the JVM has
+     * necessarily reclaimed anything the drop released. If that reallocation itself throws, the new
+     * exception propagates and masks the original `failure`, the patch loop stops partway (some
+     * indices are still dangling [EMPTY_CHUNK]), and [baseStreamOffset] -- assigned after the patch
+     * loop -- is never advanced at all, reintroducing the zero-length-chunk hazard this whole
+     * recovery path exists to close. **This is a real, currently-open gap, not a hypothetical one.**
+     * Not hardened here (issue #296); tracked as a known, documented limit rather than an unstated
+     * one.
+     *
+     * **Why it isn't hardened, and this is NOT uniform across every failure site (`@rev` PR #312
+     * review, MEDIUM finding, round 2) -- the "no spare memory" argument only holds for one of the
+     * two cases this recovery path has to cover, and the axis is "has any new chunk been allocated
+     * yet", not "which loop is currently running":**
+     * - **The up-front-retirement case, `bytesToKeep == 0`:** genuinely nothing to reuse. A resize
+     *   before any bytes have ever been retained means [retireUntouchedOldChunksLocked]'s up-front
+     *   pass drops *every* old chunk before a single new chunk has been allocated -- at that instant
+     *   there is no already-allocated spare memory anywhere in this method. Making recovery
+     *   allocation-free for this case would mean holding the very memory this rewrite (#277) exists
+     *   to release, defeating its purpose.
+     * - **Any failure after allocation has begun -- mid-copy-loop or mid-backfill-loop alike:** the
+     *   copy loop's `while (copied < bytesToKeep)` block allocates `newChunks[dstChunkIndex]`
+     *   progressively as it runs, exactly like the trailing backfill loop does, so a failure late in
+     *   the copy loop leaves the same already-allocated-and-about-to-be-discarded `newChunks` entries
+     *   behind as a failure in the backfill loop -- real, unused, already-resident memory (see
+     *   `RingBufferAllocationFailureTest`'s mid-copy case, which fails "after some old chunks have
+     *   already been dropped and some new chunks already allocated"). Since every chunk except the
+     *   last one of a given capacity is exactly [chunkSizeBytes] regardless of which capacity it
+     *   belongs to (see [chunkSizeForIndexLocked]), a subset of those already-allocated `newChunks`
+     *   entries genuinely *could* be repurposed by the patch loop instead of calling `ByteArray(...)`
+     *   again, narrowing (not eliminating -- the last, differently-sized chunk and any index no arc
+     *   had reached yet still need a fresh allocation) the residual hazard for this whole case,
+     *   regardless of which loop the failure happened to interrupt. **Not done here:** it would only
+     *   narrow this case, not close the gap for the `bytesToKeep == 0` case above, so it buys a
+     *   partial mitigation at the cost of a size-matching reuse path threaded through the exception
+     *   handler -- a real complexity/benefit trade worth its own scoped decision, not something to
+     *   fold into this KDoc fix. Left as a candidate for a future, narrowly-scoped follow-up rather
+     *   than implemented speculatively here.
      */
     fun resize(
         newCapacityBytes: Int,
