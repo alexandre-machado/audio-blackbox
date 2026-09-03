@@ -399,31 +399,46 @@ class SettingsViewModel(
         // atomic/volatile read-modify), it is the read-then-clear pair being treated as a single
         // hand-off. A `SYNCHRONIZED` wrapper would not fix that -- it would only serialize two
         // instances racing to "consume first", not restore the ordering the hand-off actually
-        // depends on. `@MainThread`-annotated accessor functions make the requirement explicit and
-        // lint-checked (`lintDebug`, part of this repo's mandatory validation gate) instead of an
-        // implicit assumption baked into a bare field read -- see [stashPersistedResizeError] and
-        // [consumePersistedResizeError]. A real runtime assertion (`Looper.getMainLooper()`) was
-        // considered and rejected: this repo's Tier 0 JVM unit tests (`testDebugUnitTest`, see
-        // AGENTS.md §6) run on a bare `android.jar` stub with no Robolectric and no real Looper --
-        // every `SettingsViewModelTest`/`SettingsResizeErrorTest` case that constructs a
-        // `SettingsViewModel` or drives a refusal would throw "not mocked" immediately, and adding
-        // Robolectric is outside this issue's affected surface.
+        // depends on. `@MainThread`-annotated accessor functions make the requirement explicit --
+        // an unambiguous, machine-readable contract on [stashPersistedResizeError] and
+        // [consumePersistedResizeError] instead of an implicit assumption baked into a bare field
+        // read -- and give IDE-level signalling (Android Studio's editor inspection flags a call
+        // from a method it can prove runs on a different thread). It is deliberately *not* framed
+        // as a `lintDebug`-enforced guarantee: Android Lint's `WrongThread` detector (the check
+        // behind `@MainThread`) only fires when the *calling* method itself carries a conflicting
+        // thread annotation, or is a lint-recognized framework callback with a known thread
+        // context -- it does not perform whole-program dataflow to infer an arbitrary caller's
+        // actual execution thread. Both real callers here are unannotated (`commitPending`, a
+        // private `suspend fun`; the `SettingsViewModel` constructor), so `lintDebug` does not
+        // fire on either call site today, and -- this is the part that matters -- would *not*
+        // catch a future caller that genuinely violated the annotation (e.g. someone dispatching
+        // [stashPersistedResizeError] from `Dispatchers.IO` without annotating the calling
+        // function `@WorkerThread`) either. (`@rev` finding on PR #311.) A real runtime assertion
+        // (`Looper.getMainLooper()`) was considered and rejected instead: this repo's Tier 0 JVM
+        // unit tests (`testDebugUnitTest`, see AGENTS.md §6) run on a bare `android.jar` stub with
+        // no Robolectric and no real Looper -- every `SettingsViewModelTest`/`SettingsResizeErrorTest`
+        // case that constructs a `SettingsViewModel` or drives a refusal would throw "not mocked"
+        // immediately, and adding Robolectric is outside this issue's affected surface.
         private val _persistedResizeError = MutableStateFlow<ResizeErrorInfo?>(null)
 
         /** Issue #306: the write half of the [_persistedResizeError] hand-off -- see that field's
-         * doc for why this is `@MainThread` rather than a runtime-enforced check. Called only from
-         * [commitPending]'s refusal branch, itself always running on a `Dispatchers.Main.immediate`-
-         * confined scope ([viewModelScope] or [commitFlushScope]). */
+         * doc for what `@MainThread` does and does not buy here (an explicit, machine-readable
+         * contract and IDE signalling, *not* a `lintDebug`-enforced check at this call site or
+         * against a future unannotated violator). Called only from [commitPending]'s refusal
+         * branch, itself always running on a `Dispatchers.Main.immediate`-confined scope
+         * ([viewModelScope] or [commitFlushScope]). */
         @MainThread
         private fun stashPersistedResizeError(info: ResizeErrorInfo) {
             _persistedResizeError.value = info
         }
 
         /** Issue #306: the read+clear half of the [_persistedResizeError] hand-off -- see that
-         * field's doc for why this is `@MainThread` rather than a runtime-enforced check. Called
-         * only from a [SettingsViewModel] constructor, which `androidx.lifecycle.ViewModelProvider`
-         * guarantees runs on the main thread. Consumes the stashed refusal at most once: the second
-         * caller to run this after a stash sees `null`, exactly like the field read it replaces. */
+         * field's doc for what `@MainThread` does and does not buy here (an explicit, machine-
+         * readable contract and IDE signalling, *not* a `lintDebug`-enforced check at this call
+         * site or against a future unannotated violator). Called only from a [SettingsViewModel]
+         * constructor, which `androidx.lifecycle.ViewModelProvider` guarantees runs on the main
+         * thread. Consumes the stashed refusal at most once: the second caller to run this after a
+         * stash sees `null`, exactly like the field read it replaces. */
         @MainThread
         private fun consumePersistedResizeError(): ResizeErrorInfo? =
             _persistedResizeError.value?.also { _persistedResizeError.value = null }
