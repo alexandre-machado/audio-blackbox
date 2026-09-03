@@ -173,4 +173,26 @@ class RingBufferSingleAllocationTest {
         val claimedBound = maxOf(oldCapacityBytes, newCapacityBytes) + 2L * chunkSizeBytes
         assertTrue("peak ($peak) must stay within the claimed bound ($claimedBound)", peak <= claimedBound)
     }
+
+    @Test
+    fun `resizing with a non-chunk-aligned startOffset stays within the claimed two-chunk slack bound`() {
+        // `@rev` PR #295 review, MEDIUM finding: every case above starts from a freshly-constructed
+        // or exactly-full buffer, where `startOffset` always lands on a chunk boundary. The
+        // two-chunk slack's real mechanism (a partially-drained first-touched chunk plus a
+        // partially-drained last-touched chunk, see resize()'s class doc) only shows up once
+        // `startOffset` sits mid-chunk, which needs the ring to have actually wrapped.
+        val chunkSizeBytes = 1_000
+        val oldCapacityBytes = 20 * chunkSizeBytes
+        val newCapacityBytes = 21 * chunkSizeBytes
+        val buffer = RingBuffer(capacityBytes = oldCapacityBytes, chunkSizeBytes = chunkSizeBytes)
+        // Fill the buffer and then overwrite 500 more bytes than capacity, so the oldest surviving
+        // byte -- and therefore this resize's startOffset -- sits 500 bytes into a chunk, not on a
+        // chunk boundary.
+        buffer.write(ByteArray(oldCapacityBytes + chunkSizeBytes / 2))
+
+        val peak = resizeAndMeasurePeak(buffer, newCapacityBytes)
+
+        val claimedBound = maxOf(oldCapacityBytes, newCapacityBytes) + 2L * chunkSizeBytes
+        assertTrue("peak ($peak) must stay within the claimed bound ($claimedBound)", peak <= claimedBound)
+    }
 }

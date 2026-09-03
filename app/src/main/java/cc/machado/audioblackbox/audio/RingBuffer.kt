@@ -368,15 +368,27 @@ class RingBuffer(
      * allocating anything, [memoryBudget] is sampled and the resize is refused
      * ([ResizeOutcome.Refused]) unless `usedHeapBytes + max(0, newCapacityBytes - oldCapacityBytes)
      * + 2 * chunkSizeBytes` fits inside [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the reported
-     * ceiling. The two-chunk slack (not one) is deliberate: the copy loop below keeps at most one
-     * *currently active* old chunk and one *currently active* new chunk resident together as it
-     * advances, plus -- separately -- the one *boundary* old chunk that a wrapped copy can visit
-     * across two disjoint arcs (see the `srcConsumed` comment below) stays alive from its first arc
-     * until its second, i.e. for most of the loop's run. That is at most two extra chunks beyond
-     * the final resident size at any instant, never a fraction of the old or new capacity --
-     * `RingBufferSingleAllocationTest` measures this directly (not just the guard's verdict) via
-     * [residencyProbeForTesting]. A refusal leaves capacity and all buffered audio completely
-     * untouched.
+     * ceiling.
+     *
+     * The two-chunk slack (not one) is real, but **not** for the reason an earlier version of this
+     * comment claimed (`@rev` PR #295 review, MEDIUM finding): it is not "one currently-active pair
+     * plus one two-arc boundary chunk". [retireUntouchedOldChunksLocked]/the copy loop below only
+     * ever drop an old chunk once `srcConsumed[chunkIndex] >= chunk.size` -- i.e. once that chunk's
+     * *entire* backing array, not just the part inside the retained window, has been read. Unless
+     * [startOffset] happens to fall exactly on a chunk boundary, the **first** chunk the copy loop
+     * touches and the **last** chunk it touches are each only ever partially drained by the single
+     * arc that visits them (a second, later arc revisiting the same chunk only happens when the
+     * retained window spans the *entire* old capacity, i.e. `bytesToKeep == oldCapacity`) -- so
+     * those two boundary chunks stay fully resident for the rest of the resize even though most of
+     * their bytes were already copied out. That is the actual mechanism behind the two-chunk
+     * figure: one leaked first-touched chunk plus one leaked last-touched chunk, not an "active
+     * pair". No interior chunk of the retained window leaks this way, since every interior chunk is
+     * always read start-to-end by a single arc and therefore always fully drains. See
+     * `RingBufferSingleAllocationTest`'s non-chunk-aligned-`startOffset` case, which is the only
+     * scenario among this file's tests that actually exercises this bound (every other case starts
+     * from a freshly-constructed or exactly-full buffer, where `startOffset` always lands on a
+     * chunk boundary and this leak cannot occur) -- measured via [residencyProbeForTesting]. A
+     * refusal leaves capacity and all buffered audio completely untouched.
      *
      * ## Chunks outside the retained range are dropped up front, before any new capacity exists
      * (issue #277 follow-up, `@rev` PR #295 review)
@@ -391,6 +403,35 @@ class RingBuffer(
      * the new store is fully built. [retireUntouchedOldChunksLocked] runs first and unconditionally
      * drops every old chunk the copy loop below will never visit, so by the time any new chunk is
      * allocated, only chunks that still hold retained bytes remain live.
+     *
+     * ## Exception safety (`@rev` PR #295 review, HIGH finding)
+     * Because old chunks are dropped incrementally as their bytes are drained -- the entire point
+     * of the two sections above -- an allocation failure partway through this method (an
+     * [OutOfMemoryError] from a `ByteArray(...)` call; heap fragmentation, a concurrent allocation,
+     * or the budget guard's estimate simply being wrong, exactly the failure mode #272/#277 exist
+     * to make safe) can happen *after* some old chunks have already been replaced with
+     * [EMPTY_CHUNK] but *before* [chunks], [_capacityBytes], and [baseStreamOffset] are updated to
+     * the new state. Left unhandled, that leaves [chunks] sized for the old capacity but with some
+     * entries zero-length, while [_capacityBytes] still claims the old (fully-backed) size --
+     * silent corruption for the rest of the session.
+     *
+     * **The guaranteed invariant:** [resize] either returns normally with [chunks],
+     * [_capacityBytes], [baseStreamOffset] and [totalWritten] all describing one coherent buffer
+     * (the new one on [ResizeOutcome.Applied], the unchanged old one on [ResizeOutcome.Refused]),
+     * or it throws -- and even then, once the throw reaches the caller, those same fields are
+     * already back in a coherent state describing a valid (possibly smaller) *old*-capacity
+     * buffer: [_capacityBytes] is untouched (this method never assigns it before the copy loop and
+     * backfill both succeed), any [chunks] entry a partial run had already dropped is replaced with
+     * a fresh zero-filled array of the correct size for its index (so every index remains a valid,
+     * correctly-sized array -- no dangling [EMPTY_CHUNK]), and [baseStreamOffset] is advanced to
+     * exclude exactly the byte range that was destroyed in the process (the bytes already drained
+     * out of their source chunks before the failure, plus anything the up-front retirement pass had
+     * already dropped for being outside the retained window). That is real, intentional data loss
+     * -- those bytes cannot be reconstructed, the same way a successful shrink truncates the oldest
+     * bytes on purpose -- but it is *honest* loss: [oldestAvailableLocked] moves to match, so a
+     * reader polling across the gap gets [ReadSinceResult.Lapped], never silently-zeroed bytes
+     * standing in for real audio. See `RingBufferAllocationFailureTest` for the injected-failure
+     * regression coverage.
      */
     fun resize(
         newCapacityBytes: Int,
@@ -403,7 +444,20 @@ class RingBuffer(
          * GC-timing-dependent) but the exact set of chunk arrays this method itself is holding a
          * strong reference to at that instant. Production always passes null (zero overhead beyond
          * a null check). See `RingBufferSingleAllocationTest` for how a test turns this into a peak
-         * assertion.
+         * assertion, and `RingBufferAllocationFailureTest` for how a test also uses it as the seam
+         * to inject an allocation failure partway through (throwing from the callback lands inside
+         * the same `try` this method already wraps its allocation sites in -- no separate
+         * injection hook needed).
+         *
+         * Considered narrowing this (`@rev` PR #295 review, LOW finding): `internal` visibility or
+         * moving it off this primary signature were the two options raised. Neither is free here --
+         * `internal` still widens the signature for every module-internal caller, not just tests,
+         * and this project doesn't otherwise use `internal` as a test-visibility boundary; moving
+         * it off the signature means threading a second, harder-to-follow seam (a settable field or
+         * companion-object hook) through a `synchronized` method for a parameter that already
+         * defaults to `null` at zero runtime cost and is already documented as test-only. That
+         * costs more churn than the tightening buys, so it stays a defaulted trailing parameter,
+         * the same shape as this file's other test seams.
          */
         residencyProbeForTesting: ((Long) -> Unit)? = null,
     ): ResizeOutcome {
@@ -429,89 +483,118 @@ class RingBuffer(
             val bytesToKeep = minOf(availableBytes, newCapacityBytes.toLong()).toInt()
             val startOffset = totalWritten - bytesToKeep
 
-            // Track exactly how many bytes are strongly reachable through `chunks`/`newChunks`
-            // right now, so residencyProbeForTesting reports ground truth, not an estimate.
-            var residentBytes = 0L
-            for (chunk in chunks) residentBytes += chunk.size
-            residencyProbeForTesting?.invoke(residentBytes)
-
-            residentBytes -= retireUntouchedOldChunksLocked(oldCapacity, startOffset, bytesToKeep)
-            residencyProbeForTesting?.invoke(residentBytes)
-
-            val newChunkCount = chunkCountForLocked(newCapacityBytes)
-            val newChunks = arrayOfNulls<ByteArray>(newChunkCount)
-
-            // Cumulative bytes drained from each *old* chunk so far, indexed by srcChunkIndex.
-            // A single old chunk can be visited by two disjoint arcs of this loop -- whenever the
-            // copy wraps the *old* ring (bytesToKeep spans the seam at logical offset
-            // oldCapacity/0) and that seam falls inside one chunk rather than exactly on a chunk
-            // boundary, which is always true when oldCapacity <= chunkSizeBytes (a single old
-            // chunk covering the whole capacity) and can also happen at the boundary chunk for a
-            // larger, multi-chunk old capacity. Retiring a chunk after only the *first* arc
-            // reached its physical end, while a second arc still needs bytes from earlier in that
-            // same chunk, replaced live data with EMPTY_CHUNK mid-copy and spun forever once the
-            // next arc's read landed on a zero-length array (n stuck at 0). Tracking total
-            // consumed bytes per chunk, rather than trusting a single arc's own end, is what makes
-            // the "drop as soon as fully drained" optimisation correct in both cases.
-            val srcConsumed = IntArray(chunkCountForLocked(oldCapacity))
-
+            // Bytes copied out of (and therefore, per the accounting below, possibly already
+            // destroyed from) the old store so far. Read by the catch block below to compute
+            // exactly how much old data a failure partway through actually destroyed -- see
+            // resize()'s "Exception safety" doc.
             var copied = 0
-            while (copied < bytesToKeep) {
-                val currentStreamPos = startOffset + copied
-                val srcPos = (currentStreamPos % oldCapacity).toInt()
-                val dstPos = (currentStreamPos % newCapacityBytes).toInt()
 
-                val srcChunkIndex = srcPos / chunkSizeBytes
-                val srcChunk = chunks[srcChunkIndex]
-                val srcOffsetInChunk = srcPos % chunkSizeBytes
+            try {
+                // Track exactly how many bytes are strongly reachable through
+                // `chunks`/`newChunks` right now, so residencyProbeForTesting reports ground
+                // truth, not an estimate.
+                var residentBytes = 0L
+                for (chunk in chunks) residentBytes += chunk.size
+                residencyProbeForTesting?.invoke(residentBytes)
 
-                val dstChunkIndex = dstPos / chunkSizeBytes
-                val dstChunk = newChunks[dstChunkIndex]
-                    ?: ByteArray(chunkSizeForIndexLocked(dstChunkIndex, newCapacityBytes)).also {
-                        newChunks[dstChunkIndex] = it
-                        residentBytes += it.size
+                residentBytes -= retireUntouchedOldChunksLocked(oldCapacity, startOffset, bytesToKeep)
+                residencyProbeForTesting?.invoke(residentBytes)
+
+                val newChunkCount = chunkCountForLocked(newCapacityBytes)
+                val newChunks = arrayOfNulls<ByteArray>(newChunkCount)
+
+                // Cumulative bytes drained from each *old* chunk so far, indexed by srcChunkIndex.
+                // A single old chunk can be visited by two disjoint arcs of this loop -- whenever the
+                // copy wraps the *old* ring (bytesToKeep spans the seam at logical offset
+                // oldCapacity/0) and that seam falls inside one chunk rather than exactly on a chunk
+                // boundary, which is always true when oldCapacity <= chunkSizeBytes (a single old
+                // chunk covering the whole capacity) and can also happen at the boundary chunk for a
+                // larger, multi-chunk old capacity. Retiring a chunk after only the *first* arc
+                // reached its physical end, while a second arc still needs bytes from earlier in that
+                // same chunk, replaced live data with EMPTY_CHUNK mid-copy and spun forever once the
+                // next arc's read landed on a zero-length array (n stuck at 0). Tracking total
+                // consumed bytes per chunk, rather than trusting a single arc's own end, is what makes
+                // the "drop as soon as fully drained" optimisation correct in both cases.
+                val srcConsumed = IntArray(chunkCountForLocked(oldCapacity))
+
+                while (copied < bytesToKeep) {
+                    val currentStreamPos = startOffset + copied
+                    val srcPos = (currentStreamPos % oldCapacity).toInt()
+                    val dstPos = (currentStreamPos % newCapacityBytes).toInt()
+
+                    val srcChunkIndex = srcPos / chunkSizeBytes
+                    val srcChunk = chunks[srcChunkIndex]
+                    val srcOffsetInChunk = srcPos % chunkSizeBytes
+
+                    val dstChunkIndex = dstPos / chunkSizeBytes
+                    val dstChunk = newChunks[dstChunkIndex]
+                        ?: ByteArray(chunkSizeForIndexLocked(dstChunkIndex, newCapacityBytes)).also {
+                            newChunks[dstChunkIndex] = it
+                            residentBytes += it.size
+                            residencyProbeForTesting?.invoke(residentBytes)
+                        }
+                    val dstOffsetInChunk = dstPos % chunkSizeBytes
+
+                    val remainingToCopy = bytesToKeep - copied
+                    val n = minOf(remainingToCopy, srcChunk.size - srcOffsetInChunk, dstChunk.size - dstOffsetInChunk)
+
+                    System.arraycopy(srcChunk, srcOffsetInChunk, dstChunk, dstOffsetInChunk, n)
+                    copied += n
+
+                    // Drop the reference only once this chunk's *entire* backing size has been
+                    // drained across every arc that has touched it so far -- not just this one --
+                    // instead of waiting for the whole resize to finish, bounding the old-plus-new
+                    // overlap to about one chunk (see class doc).
+                    srcConsumed[srcChunkIndex] += n
+                    if (srcConsumed[srcChunkIndex] >= srcChunk.size) {
+                        residentBytes -= srcChunk.size
+                        chunks[srcChunkIndex] = EMPTY_CHUNK
                         residencyProbeForTesting?.invoke(residentBytes)
                     }
-                val dstOffsetInChunk = dstPos % chunkSizeBytes
-
-                val remainingToCopy = bytesToKeep - copied
-                val n = minOf(remainingToCopy, srcChunk.size - srcOffsetInChunk, dstChunk.size - dstOffsetInChunk)
-
-                System.arraycopy(srcChunk, srcOffsetInChunk, dstChunk, dstOffsetInChunk, n)
-                copied += n
-
-                // Drop the reference only once this chunk's *entire* backing size has been
-                // drained across every arc that has touched it so far -- not just this one --
-                // instead of waiting for the whole resize to finish, bounding the old-plus-new
-                // overlap to about one chunk (see class doc).
-                srcConsumed[srcChunkIndex] += n
-                if (srcConsumed[srcChunkIndex] >= srcChunk.size) {
-                    residentBytes -= srcChunk.size
-                    chunks[srcChunkIndex] = EMPTY_CHUNK
-                    residencyProbeForTesting?.invoke(residentBytes)
                 }
-            }
 
-            // Any remaining not-yet-written capacity (buffer wasn't full, or capacity grew beyond
-            // what was ever written) still needs real backing storage allocated now, same as
-            // construction -- by this point every source chunk that will ever be dropped has
-            // already been dropped above (both by the up-front pass and by the copy loop), so this
-            // allocates against a much smaller resident footprint than the old design ever did.
-            for (i in 0 until newChunkCount) {
-                if (newChunks[i] == null) {
-                    val chunk = ByteArray(chunkSizeForIndexLocked(i, newCapacityBytes))
-                    newChunks[i] = chunk
-                    residentBytes += chunk.size
-                    residencyProbeForTesting?.invoke(residentBytes)
+                // Any remaining not-yet-written capacity (buffer wasn't full, or capacity grew beyond
+                // what was ever written) still needs real backing storage allocated now, same as
+                // construction -- by this point every source chunk that will ever be dropped has
+                // already been dropped above (both by the up-front pass and by the copy loop), so this
+                // allocates against a much smaller resident footprint than the old design ever did.
+                for (i in 0 until newChunkCount) {
+                    if (newChunks[i] == null) {
+                        val chunk = ByteArray(chunkSizeForIndexLocked(i, newCapacityBytes))
+                        newChunks[i] = chunk
+                        residentBytes += chunk.size
+                        residencyProbeForTesting?.invoke(residentBytes)
+                    }
                 }
-            }
 
-            @Suppress("UNCHECKED_CAST")
-            chunks = (newChunks as Array<ByteArray>).toMutableList()
-            _capacityBytes = newCapacityBytes
-            baseStreamOffset = startOffset
-            pruneExpiredSegmentsLocked()
-            return ResizeOutcome.Applied
+                @Suppress("UNCHECKED_CAST")
+                chunks = (newChunks as Array<ByteArray>).toMutableList()
+                _capacityBytes = newCapacityBytes
+                baseStreamOffset = startOffset
+                pruneExpiredSegmentsLocked()
+                return ResizeOutcome.Applied
+            } catch (failure: Throwable) {
+                // See resize()'s "Exception safety" doc for the invariant this restores.
+                // `_capacityBytes` was never assigned above, so `chunks` (still sized for
+                // `oldCapacity`) is the buffer of record again -- it just needs every dropped
+                // slot patched back to a real, correctly-sized array so every index stays valid.
+                val oldChunkCount = chunkCountForLocked(oldCapacity)
+                for (i in 0 until oldChunkCount) {
+                    if (chunks[i] === EMPTY_CHUNK) {
+                        chunks[i] = ByteArray(chunkSizeForIndexLocked(i, oldCapacity))
+                    }
+                }
+                // Every byte in [startOffset, startOffset + copied) was already drained out of its
+                // source chunk (and, for a fully-drained chunk, that chunk's reference already
+                // dropped) before the failure -- unrecoverable, so move the "oldest available"
+                // boundary past it rather than presenting the zero-filled replacement chunks above
+                // as if they were real silence. Chunks the up-front retirement pass dropped for
+                // being entirely outside the retained window are already excluded by `startOffset`
+                // itself, so this one expression covers both sources of loss.
+                baseStreamOffset = maxOf(baseStreamOffset, startOffset + copied)
+                pruneExpiredSegmentsLocked()
+                throw failure
+            }
         }
     }
 
