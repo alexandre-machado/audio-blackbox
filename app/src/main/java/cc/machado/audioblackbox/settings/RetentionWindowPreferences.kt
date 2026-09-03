@@ -184,6 +184,30 @@ internal fun defaultMaxRetentionMinutesProvider(preset: QualityPreset): Int =
     )
 
 /**
+ * Same computation as [defaultMaxRetentionMinutesProvider], but also folds in
+ * [getAvailableSystemBytes] as [DeviceMemoryBudget.maxRetentionMinutes]'s independent
+ * `availableSystemBytes` term.
+ *
+ * `@rev` review on PR #300, finding 1 (HIGH): extracted specifically so a JVM test can exercise
+ * the *exact* provider [DataStoreRetentionWindowPreferences]'s `operator fun invoke(context)`
+ * factory below builds -- without this shared function, the factory's `Context`-only wiring could
+ * only ever be exercised by an instrumented/Robolectric test, and the original bug (the factory
+ * silently defaulting to heap-only, so `clampNoticeFlow` -- its sole consumer -- never reflected a
+ * system-memory-driven reduction) would have no JVM-reachable regression coverage at all. See
+ * `DeviceMemoryBudgetDrivenRetentionWindowPreferencesTest` for the regression test built against
+ * this function directly.
+ */
+internal fun systemAwareMaxRetentionMinutesProvider(getAvailableSystemBytes: () -> Long?): (QualityPreset) -> Int =
+    { preset ->
+        DeviceMemoryBudget.maxRetentionMinutes(
+            config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+            maxHeapBytes = Runtime.getRuntime().maxMemory(),
+            usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+            availableSystemBytes = getAvailableSystemBytes(),
+        )
+    }
+
+/**
  * Production [RetentionWindowPreferences], backed by a dedicated [DataStore] file.
  *
  * Takes the [DataStore] itself, not a [Context] (see the secondary `operator fun invoke` below
@@ -281,10 +305,32 @@ class DataStoreRetentionWindowPreferences(
 
         /** Production factory: builds the real, disk-backed [DataStoreRetentionWindowPreferences]
          * from a [Context] -- the constructor above stays [Context]-free for testability (see its
-         * doc). [cc.machado.audioblackbox.ui.MainActivity] calls this, not the constructor
-         * directly. */
-        operator fun invoke(context: Context): DataStoreRetentionWindowPreferences =
-            DataStoreRetentionWindowPreferences(context.applicationContext.retentionWindowDataStore)
+         * doc). [cc.machado.audioblackbox.ui.MainActivity] and
+         * [cc.machado.audioblackbox.AudioBlackboxApplication] both call this, not the constructor
+         * directly.
+         *
+         * `@rev` review on PR #300, finding 1 (HIGH): this is the one production construction site
+         * for the class that is the *sole* source of [RetentionWindowPreferences.clampNoticeFlow],
+         * so it is not enough for it to default to [defaultMaxRetentionMinutesProvider] (heap-only,
+         * no `Context`) the way the bare constructor above does for JVM tests -- a real `Context` is
+         * available right here, so this factory folds in
+         * [cc.machado.audioblackbox.telemetry.PowerTelemetry.getAvailableSystemBytes] the same way
+         * [cc.machado.audioblackbox.ui.MainActivity] already does for `SettingsViewModel`. Without
+         * this, a device where system-wide free memory (not heap) is the binding constraint would
+         * have [cc.machado.audioblackbox.service.RecorderService.reconcileRetentionCeiling] silently
+         * shrink the running buffer while `clampNoticeFlow` -- computed against a ceiling that never
+         * saw `availableSystemBytes` -- never fires a notice: exactly the silent reduction issue
+         * #298's "Accepted consequence" section says must never happen.
+         */
+        operator fun invoke(context: Context): DataStoreRetentionWindowPreferences {
+            val appContext = context.applicationContext
+            return DataStoreRetentionWindowPreferences(
+                dataStore = appContext.retentionWindowDataStore,
+                maxRetentionMinutesProvider = systemAwareMaxRetentionMinutesProvider(
+                    getAvailableSystemBytes = { cc.machado.audioblackbox.telemetry.PowerTelemetry.getAvailableSystemBytes(appContext) },
+                ),
+            )
+        }
     }
 }
 

@@ -431,6 +431,59 @@ class DeviceMemoryBudgetDrivenRetentionWindowPreferencesTest {
             usedHeapBytes = 40L * 1024 * 1024,
         )
 
+    // ---- `@rev` review on PR #300, finding 1 (HIGH) regression coverage: availableSystemBytes as
+    // the *binding* constraint (heap alone would allow far more), exercised against the exact
+    // systemAwareMaxRetentionMinutesProvider function DataStoreRetentionWindowPreferences's
+    // Context-based `invoke(context)` factory now builds -- not a hand-rolled stand-in, so a
+    // regression in that shared function (e.g. the factory silently dropping back to
+    // defaultMaxRetentionMinutesProvider, which is exactly the bug finding 1 reported) is caught
+    // here without needing a real Context/Robolectric to reach the factory itself.
+
+    @Test
+    fun `a system-memory-constrained device clamps a stored value that heap alone would allow, and raises a notice`() = runTest {
+        // Heap alone (2 GB max, 20 MB used) would allow hundreds of minutes for VOICE -- see
+        // generousDeviceProvider above -- so if availableSystemBytes were silently dropped (the
+        // exact pre-fix bug), 40 would sail through unclamped and no notice would fire.
+        val systemAwareProvider = systemAwareMaxRetentionMinutesProvider(getAvailableSystemBytes = { 64L * 1024 * 1024 })
+        val heapOnlyCeiling = generousDeviceProvider(cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        val systemConstrainedCeiling = systemAwareProvider(cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        assertTrue(
+            "this test needs availableSystemBytes to be the actual binding term, not the heap term",
+            systemConstrainedCeiling < heapOnlyCeiling,
+        )
+
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 40 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = systemAwareProvider)
+
+        assertEquals(
+            "a value heap alone would allow must still be clamped once system memory is the binding term",
+            systemConstrainedCeiling,
+            preferences.currentBufferDurationMinutes(),
+        )
+        val notice = preferences.clampNoticeFlow.first()
+        assertEquals(
+            "the reduction must be announced, never silent (issue #298's accepted-consequence requirement)",
+            40,
+            notice?.previousMinutes,
+        )
+        assertEquals(systemConstrainedCeiling, notice?.newMinutes)
+    }
+
+    @Test
+    fun `a device with no system-memory pressure is unaffected by systemAwareMaxRetentionMinutesProvider`() = runTest {
+        // getAvailableSystemBytes returning null must behave exactly like the heap-only default
+        // (both read the real, live JVM heap the same way -- see each function's own body) --
+        // proves this function is additive, not a regression for a device where availMem could not
+        // be read (see PowerTelemetry.getAvailableSystemBytes's own null-on-failure contract).
+        val provider = systemAwareMaxRetentionMinutesProvider(getAvailableSystemBytes = { null })
+        assertEquals(
+            ::defaultMaxRetentionMinutesProvider.invoke(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
+            provider(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
+        )
+    }
+
     @Test
     fun `a device whose real budget exceeds the old fixed 45-minute ceiling is offered more than 45`() = runTest {
         val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = ::generousDeviceProvider)

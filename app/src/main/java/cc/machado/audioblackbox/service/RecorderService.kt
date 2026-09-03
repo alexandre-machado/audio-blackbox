@@ -822,6 +822,13 @@ class RecorderService : Service() {
          * Called from [onCreate] at every service start with the real, production
          * [maxRetentionMinutesProvider]; also the seam a JVM test drives with a fixed provider to
          * exercise this path without a real `Service`/`Context`.
+         *
+         * `@rev` review on PR #300, finding 2 (MEDIUM): the [ceiling] this computes is the *exact*
+         * value threaded into [rebuildEngineIfIdleAt] below, not re-derived a second time from the
+         * companion-level [maxRetentionMinutesProvider] the way [rebuildEngineIfIdle]'s own
+         * `require` used to -- so a caller-supplied [maxRetentionMinutesProvider] parameter here can
+         * never diverge from what actually gets validated, by construction, rather than by every
+         * caller happening to pass matching values.
          */
         fun reconcileRetentionCeiling(
             maxRetentionMinutesProvider: (QualityPreset) -> Int = RecorderService.maxRetentionMinutesProvider,
@@ -830,7 +837,7 @@ class RecorderService : Service() {
             val ceiling = maxRetentionMinutesProvider(preset)
             val current = _captureConfig.bufferDurationMinutes
             if (current <= ceiling) return false
-            return rebuildEngineIfIdle(newBufferDurationMinutes = ceiling, newPreset = preset)
+            return rebuildEngineIfIdleAt(newBufferDurationMinutes = ceiling, newPreset = preset, ceiling = ceiling)
         }
 
         /**
@@ -902,8 +909,21 @@ class RecorderService : Service() {
         fun rebuildEngineIfIdle(
             newBufferDurationMinutes: Int = _captureConfig.bufferDurationMinutes,
             newPreset: QualityPreset = _qualityPresetFlow.value,
-        ): Boolean {
-            val ceiling = maxRetentionMinutesProvider(newPreset)
+        ): Boolean = rebuildEngineIfIdleAt(
+            newBufferDurationMinutes = newBufferDurationMinutes,
+            newPreset = newPreset,
+            ceiling = maxRetentionMinutesProvider(newPreset),
+        )
+
+        /**
+         * The actual body of [rebuildEngineIfIdle], parameterised over [ceiling] instead of
+         * re-deriving it from the companion-level [maxRetentionMinutesProvider] (`@rev` review on
+         * PR #300, finding 2): [rebuildEngineIfIdle] itself supplies that companion value, and
+         * [reconcileRetentionCeiling] supplies whatever its own caller-injected provider computed --
+         * whichever one calls this always validates against the exact [ceiling] it decided to
+         * rebuild at, never a second, independently-recomputed one.
+         */
+        private fun rebuildEngineIfIdleAt(newBufferDurationMinutes: Int, newPreset: QualityPreset, ceiling: Int): Boolean {
             require(isValidRetentionMinutes(newBufferDurationMinutes, ceiling)) {
                 "newBufferDurationMinutes must be in " +
                     "${AudioConfig.RETENTION_WINDOW_MIN_MINUTES}..$ceiling " +

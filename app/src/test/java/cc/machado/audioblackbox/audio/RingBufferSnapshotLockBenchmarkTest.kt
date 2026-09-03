@@ -15,18 +15,18 @@ import org.junit.Test
  * step to isolate. This benchmark times the whole call for that reason, not as an approximation.
  *
  * ## Configs measured
- * All at 16 kHz/mono (the real default sample format) across the bounds
- * [AudioConfig.RETENTION_WINDOW_MIN_MINUTES]/[AudioConfig.RETENTION_WINDOW_MAX_MINUTES] allow
- * (5/15/30/60 min -- the four values this benchmark predates issue #73's 5-minute-step stepper
- * and has not been re-run against every newly-reachable intermediate value), plus one hypothetical
- * config:
- * - 16 kHz / mono / 5, 15, 30, 60 min: four representative retention windows within the range the
- *   UI lets a user select.
- *   30 min is today's practical ceiling -- the largest window that both fits the app's Dalvik heap
- *   and is UI-selectable (60 min hits `OutOfMemoryError` on the real Samsung S25 device -- see
- *   issue #72 -- so it is *offered* but does not currently *work*). Measuring all four windows,
- *   not just the two extremes, shows how cost scales with size instead of leaving a reader to
- *   infer it from two isolated points.
+ * All at 16 kHz/mono (the real default sample format), at four representative windows plus one
+ * hypothetical config. There is no fixed upper bound to measure "up to" any more (issue #298
+ * removed `AudioConfig.RETENTION_WINDOW_MAX_MINUTES` in favor of a per-device
+ * [DeviceMemoryBudget.maxRetentionMinutes] ceiling) -- the four windows below (5, 15, 30, 60) are
+ * simply retained as a fixed, comparable benchmark ladder rather than re-derived from whatever a
+ * given device's dynamic ceiling happens to be right now:
+ * - 16 kHz / mono / 5, 15, 30, 60 min: four representative retention windows. 30 min is today's
+ *   practical, heap-safe ceiling on the emulator this app's other measurements are calibrated
+ *   against (60 min hits `OutOfMemoryError` on the real Samsung S25 device -- see issue #72 -- so
+ *   it is a real hazard case, not necessarily "offered" by every device's dynamic ceiling any
+ *   more). Measuring all four windows, not just the two extremes, shows how cost scales with size
+ *   instead of leaving a reader to infer it from two isolated points.
  * - 44.1 kHz / stereo / 60 min: NOT reachable through the UI today -- nothing in this app's UI
  *   or settings ever constructs an [AudioConfig] with a non-default `sampleRateHz`/`channelCount`
  *   (grep confirms every call site only varies `bufferDurationMinutes`). Measured anyway per
@@ -65,24 +65,23 @@ class RingBufferSnapshotLockBenchmarkTest {
 
     @Test
     fun `benchmark snapshot lock hold time at every UI-selectable window plus a hypothetical config`() {
-        // 5/15/30/60 -- four representative windows within
-        // [AudioConfig.RETENTION_WINDOW_MIN_MINUTES, AudioConfig.RETENTION_WINDOW_MAX_MINUTES],
-        // at the real default 16kHz/mono format, plus 60min at a hypothetical 44.1kHz/stereo
-        // format (see class doc for why that one is hypothetical).
-        // 60 is kept in this list even though issue #72's interim clamp (this change) lowered
-        // AudioConfig.RETENTION_WINDOW_MAX_MINUTES to 45, so 60 is no longer UI-selectable -- it
-        // stays here specifically *because* it is the value that OOMs, as a permanent record of the
-        // hazard the clamp exists to avoid (`reachableViaUiToday = false` for it now, unlike before
-        // this change).
+        // 5/15/30/45/60 -- five representative windows, at the real default 16kHz/mono format,
+        // plus 60min at a hypothetical 44.1kHz/stereo format (see class doc for why that one is
+        // hypothetical). There is no more fixed AudioConfig.RETENTION_WINDOW_MAX_MINUTES to compare
+        // "UI-selectable" against (issue #298: the ceiling is now per-device, via
+        // DeviceMemoryBudget) -- 60 is kept in this list specifically *because* it is the value
+        // that OOMs on the real Samsung S25 device (issue #72), as a permanent record of the
+        // hazard a device's dynamic ceiling is meant to avoid offering, not because any one fixed
+        // constant used to draw the line there.
         val benchmarkedRetentionWindowsMinutes = listOf(5, 15, 30, 45, 60)
         val configs = benchmarkedRetentionWindowsMinutes.map { minutes ->
             BenchConfig(
                 label = "16kHz/mono/${minutes}min (" +
                     (
                         if (minutes == 60) {
-                            "NO LONGER UI-selectable since issue #72's interim clamp -- OOMs on real device"
+                            "HAZARD CASE: OOMs on the real Samsung S25 device (issue #72)"
                         } else {
-                            "REAL: UI-selectable retention window"
+                            "REAL: a representative retention window"
                         }
                         ) + ")",
                 sampleRateHz = 16_000,
