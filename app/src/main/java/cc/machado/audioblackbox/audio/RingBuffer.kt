@@ -134,10 +134,9 @@ fun interface MemoryBudget {
 data class MemorySample(val maxHeapBytes: Long, val usedHeapBytes: Long)
 
 /**
- * Outcome of [RingBuffer.resize] (issue #272): a resize either applies, or is refused *before*
- * any allocation happens because the owner's on-device evidence showed it cannot fit given the
- * heap's current footprint -- not just given the requested size in isolation (one confirmed
- * crash failed to allocate only ~101 MB against a heap already at ~205 MB of a 256 MB ceiling).
+ * Outcome of [RingBuffer.resize] (issue #272, guard formula rewritten by #277): a resize either
+ * applies, or is refused *before* any allocation happens because the owner's on-device evidence
+ * showed a naive resize cannot fit given the heap's current footprint.
  */
 sealed interface ResizeOutcome {
     /** The resize was applied; the buffer now has the requested capacity. */
@@ -146,8 +145,9 @@ sealed interface ResizeOutcome {
     /**
      * Refused before allocating anything: the buffer's capacity and all buffered audio are
      * completely unchanged, exactly as if [RingBuffer.resize] had never been called.
-     * [projectedPeakBytes] is what heap usage would have reached had the new backing array been
-     * allocated while the current one was still live (they must coexist during the copy);
+     * [projectedPeakBytes] is what heap usage would reach once the resize completes and the old
+     * chunks it replaced are actually reclaimed (see [RingBuffer]'s class doc for why that is a
+     * *net-growth* figure as of #277, not "old and new capacity both resident at once");
      * [maxHeapBytes] is the ceiling it was checked against.
      */
     data class Refused(
@@ -165,13 +165,22 @@ sealed interface ResizeOutcome {
  * Pure JVM class -- no Android dependency -- so it is testable with plain local unit tests, no
  * Robolectric, no instrumentation.
  *
- * ## Allocation & Resizing
- * The backing array is allocated at construction to [capacityBytes] and can be dynamically
- * resized in-place via [resize] (issue #223) without discarding buffered audio, *if* it can fit
- * (issue #272 -- see [resize]'s own doc for the memory budget check that guards this). [write]
- * never allocates on its hot path: it only does bounds arithmetic and `System.arraycopy` into the
- * pre-allocated array plus pre-allocated marker arrays (see below). When full, [write] silently
- * overwrites the oldest bytes; it never throws on overflow.
+ * ## Allocation & Resizing (segmented backing store, issue #277)
+ * The backing store is **not** one monolithic `ByteArray`. It is a list of fixed-size chunks
+ * (each [chunkSizeBytes], the last one truncated to whatever remainder [capacityBytes] leaves),
+ * addressed exactly like the single array used to be -- `streamOffset % capacityBytes` still
+ * picks the logical position, only now that position is resolved to a `(chunk index, offset in
+ * chunk)` pair instead of a single index. This is what [resize] (issue #223) needs to avoid ever
+ * holding a full duplicate old-and-new backing store at once (issue #272 documented that
+ * coexistence peak and added a refusal guard rather than fixing it structurally; #277 is that
+ * structural fix -- see [resize]'s own doc for how). [write] never allocates on its hot path: it
+ * only does bounds arithmetic and `System.arraycopy` into the pre-allocated chunks plus
+ * pre-allocated marker arrays (see below). When full, [write] silently overwrites the oldest
+ * bytes; it never throws on overflow.
+ *
+ * Chunking adds one indirection (a chunk-list lookup) to every read/write compared to the old flat
+ * array, measured rather than assumed: [RingBufferSnapshotLockBenchmarkTest] pins the snapshot/lock
+ * hold time and passed unchanged after this rewrite at the production [DEFAULT_CHUNK_SIZE_BYTES].
  *
  * ## Heterogeneous format segments (issue #194)
  * When audio capture quality presets change mid-stream, [RingBuffer] preserves existing audio
@@ -194,6 +203,13 @@ sealed interface ResizeOutcome {
 class RingBuffer(
     capacityBytes: Int,
     val initialConfig: AudioConfig = AudioConfig(),
+    /**
+     * Storage granularity of the segmented backing store (issue #277). Production code always
+     * takes the default; tests override it to a small value so multi-chunk addressing and the
+     * incremental free-as-you-drain behaviour of [resize] are exercised directly at buffer sizes
+     * that are otherwise far too small to span more than one [DEFAULT_CHUNK_SIZE_BYTES] chunk.
+     */
+    private val chunkSizeBytes: Int = DEFAULT_CHUNK_SIZE_BYTES,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     constructor(
@@ -211,6 +227,7 @@ class RingBuffer(
         require(initialConfig.bytesPerSecond > 0) {
             "initialConfig.bytesPerSecond must be positive, was ${initialConfig.bytesPerSecond}"
         }
+        require(chunkSizeBytes > 0) { "chunkSizeBytes must be positive, was $chunkSizeBytes" }
     }
 
     private val lock = Any()
@@ -220,8 +237,64 @@ class RingBuffer(
     /** Configured maximum capacity in bytes. */
     val capacityBytes: Int get() = synchronized(lock) { _capacityBytes }
 
-    // Backing store, dynamically resizable via [resize] (issue #223).
-    private var data = ByteArray(capacityBytes)
+    private fun chunkCountForLocked(capacity: Int): Int = (capacity + chunkSizeBytes - 1) / chunkSizeBytes
+
+    private fun chunkSizeForIndexLocked(index: Int, capacity: Int): Int =
+        minOf(chunkSizeBytes, capacity - index * chunkSizeBytes)
+
+    private fun allocateChunksLocked(capacity: Int): MutableList<ByteArray> {
+        val count = chunkCountForLocked(capacity)
+        return MutableList(count) { i -> ByteArray(chunkSizeForIndexLocked(i, capacity)) }
+    }
+
+    // Backing store: a list of fixed-size chunks, dynamically resizable via [resize] (issue #223),
+    // rewritten in #277 so a resize never needs the old and new stores fully resident at once (see
+    // class doc). Addressed the same way the old flat array was -- `pos % _capacityBytes` still
+    // picks the logical position -- just resolved to (chunk index, offset-in-chunk) instead of a
+    // single array index.
+    private var chunks: MutableList<ByteArray> = allocateChunksLocked(capacityBytes)
+
+    /**
+     * Copies [length] bytes starting at logical position [startPos] (`< _capacityBytes`) from
+     * [chunks] into [dest] at [destOffset]. Must be called with [lock] held.
+     */
+    private fun readFromChunksLocked(startPos: Int, dest: ByteArray, destOffset: Int, length: Int) {
+        var pos = startPos
+        var dstPos = destOffset
+        var remaining = length
+        while (remaining > 0) {
+            val chunkIndex = pos / chunkSizeBytes
+            val chunk = chunks[chunkIndex]
+            val offsetInChunk = pos % chunkSizeBytes
+            val n = minOf(remaining, chunk.size - offsetInChunk)
+            System.arraycopy(chunk, offsetInChunk, dest, dstPos, n)
+            pos += n
+            dstPos += n
+            remaining -= n
+            if (pos >= _capacityBytes) pos = 0
+        }
+    }
+
+    /**
+     * Copies [length] bytes from [source] at [srcOffset] into [chunks] starting at logical
+     * position [startPos] (`< _capacityBytes`). Must be called with [lock] held.
+     */
+    private fun writeIntoChunksLocked(startPos: Int, source: ByteArray, srcOffset: Int, length: Int) {
+        var pos = startPos
+        var srcPos = srcOffset
+        var remaining = length
+        while (remaining > 0) {
+            val chunkIndex = pos / chunkSizeBytes
+            val chunk = chunks[chunkIndex]
+            val offsetInChunk = pos % chunkSizeBytes
+            val n = minOf(remaining, chunk.size - offsetInChunk)
+            System.arraycopy(source, srcPos, chunk, offsetInChunk, n)
+            pos += n
+            srcPos += n
+            remaining -= n
+            if (pos >= _capacityBytes) pos = 0
+        }
+    }
 
     // Total bytes ever written (monotonic, unbounded); (totalWritten % capacityBytes) is the
     // next write position. Only ever mutated inside `synchronized(lock)`.
@@ -263,28 +336,45 @@ class RingBuffer(
      * Monotonic stream coordinates ([totalWritten]) remain continuous, ensuring readers
      * ([readSince], [snapshot]) continue seamlessly without gap or stream reset.
      *
-     * ## Memory budget check (issue #272)
-     * The copy below needs the old and new backing arrays to coexist -- the old one is the copy
-     * source until the loop finishes, so this allocates a **second** full-size array on top of
-     * whatever is already resident, not a replacement for it. Three Play Store crashes showed
-     * this coexistence peak exceeding the device's 256 MB Dalvik heap growth limit, fatally, on
-     * an ordinary settings change. Before allocating anything, [memoryBudget] is sampled and the
-     * resize is refused ([ResizeOutcome.Refused]) if the projected peak would not fit inside
-     * [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the reported ceiling -- reusing that constant
-     * rather than inventing a second safety margin, since it is the one already calibrated
-     * against an on-device measurement in this codebase. A refusal leaves capacity and all
-     * buffered audio completely untouched.
+     * ## No more coexisting old+new backing stores (issue #277)
+     * The pre-#277 implementation allocated a full-capacity `ByteArray(newCapacityBytes)` while
+     * the old full-capacity array was still the copy source, so the resize's true peak demand was
+     * *old + new*, not the requested size -- three Play Store crashes showed that coexistence peak
+     * blowing straight through the device's 256 MB Dalvik heap growth limit on an ordinary settings
+     * change. #272 made the failure safe (this method's [ResizeOutcome.Refused], still in force
+     * below as a backstop) but did not remove the peak. This rewrite does, by copying chunk by
+     * chunk (see [chunks]) and dropping each source chunk the instant its bytes have been copied
+     * out (`chunks[srcChunkIndex] = EMPTY_CHUNK`, replacing the strong reference so the JVM/Dalvik
+     * collector can reclaim it) instead of waiting for the whole copy to finish. Because both old
+     * and new chunks are read/written by absolute stream offset -- never buffered as a second full
+     * copy of anything -- the transient overlap between what's left of the old store and what's
+     * been built of the new one is bounded by [chunkSizeBytes], not by the full old or new
+     * capacity: at any instant the live footprint is at most `max(oldCapacityBytes,
+     * newCapacityBytes) + chunkSizeBytes`, never their sum.
+     *
+     * ## Memory budget check, reformulated for the new model (issue #272, #277)
+     * Because there is no more full-old-plus-full-new peak, refusing based on `usedHeap +
+     * newCapacityBytes` (the pre-#277 formula) would refuse resizes this rewrite can now actually
+     * satisfy -- exactly the capability #277 exists to unlock. What still needs guarding is the
+     * real, unavoidable **net growth**: once the resize finishes and the freed old chunks are
+     * actually collected, the buffer permanently occupies [newCapacityBytes], so growing by more
+     * than the heap can absorb is still a real risk, just a smaller one than before (shrinking, or
+     * growing within already-allocated capacity, costs nothing extra and is never refused). Before
+     * allocating anything, [memoryBudget] is sampled and the resize is refused
+     * ([ResizeOutcome.Refused]) unless `usedHeapBytes + max(0, newCapacityBytes - oldCapacityBytes)
+     * + chunkSizeBytes` (net growth, plus one chunk of slack for the transient overlap above) fits
+     * inside [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the reported ceiling. A refusal leaves
+     * capacity and all buffered audio completely untouched.
      */
     fun resize(newCapacityBytes: Int, memoryBudget: MemoryBudget = MemoryBudget.REAL): ResizeOutcome {
         require(newCapacityBytes > 0) { "newCapacityBytes must be positive, was $newCapacityBytes" }
         synchronized(lock) {
-            if (newCapacityBytes == _capacityBytes) return ResizeOutcome.Applied
+            val oldCapacity = _capacityBytes
+            if (newCapacityBytes == oldCapacity) return ResizeOutcome.Applied
 
             val sample = memoryBudget.sample()
-            // The old backing array is already live and reachable through `data`, so it is
-            // already counted inside `sample.usedHeapBytes`; the peak this resize would drive
-            // heap usage to is that existing usage plus the *new* array alone.
-            val projectedPeakBytes = sample.usedHeapBytes + newCapacityBytes.toLong()
+            val netGrowthBytes = maxOf(0L, newCapacityBytes.toLong() - oldCapacity.toLong())
+            val projectedPeakBytes = sample.usedHeapBytes + netGrowthBytes + chunkSizeBytes.toLong()
             val safeHeapBytes = (sample.maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
             if (projectedPeakBytes > safeHeapBytes) {
                 return ResizeOutcome.Refused(
@@ -294,14 +384,13 @@ class RingBuffer(
                 )
             }
 
-            val oldCapacity = _capacityBytes
-            val oldData = data
-            val newData = ByteArray(newCapacityBytes)
-
             val oldOldest = oldestAvailableLocked()
             val availableBytes = totalWritten - oldOldest
             val bytesToKeep = minOf(availableBytes, newCapacityBytes.toLong()).toInt()
             val startOffset = totalWritten - bytesToKeep
+
+            val newChunkCount = chunkCountForLocked(newCapacityBytes)
+            val newChunks = arrayOfNulls<ByteArray>(newChunkCount)
 
             var copied = 0
             while (copied < bytesToKeep) {
@@ -309,16 +398,43 @@ class RingBuffer(
                 val srcPos = (currentStreamPos % oldCapacity).toInt()
                 val dstPos = (currentStreamPos % newCapacityBytes).toInt()
 
-                val srcContiguous = oldCapacity - srcPos
-                val dstContiguous = newCapacityBytes - dstPos
-                val remainingToCopy = bytesToKeep - copied
-                val chunkSize = minOf(remainingToCopy, srcContiguous, dstContiguous)
+                val srcChunkIndex = srcPos / chunkSizeBytes
+                val srcChunk = chunks[srcChunkIndex]
+                val srcOffsetInChunk = srcPos % chunkSizeBytes
 
-                System.arraycopy(oldData, srcPos, newData, dstPos, chunkSize)
-                copied += chunkSize
+                val dstChunkIndex = dstPos / chunkSizeBytes
+                val dstChunk = newChunks[dstChunkIndex]
+                    ?: ByteArray(chunkSizeForIndexLocked(dstChunkIndex, newCapacityBytes)).also {
+                        newChunks[dstChunkIndex] = it
+                    }
+                val dstOffsetInChunk = dstPos % chunkSizeBytes
+
+                val remainingToCopy = bytesToKeep - copied
+                val n = minOf(remainingToCopy, srcChunk.size - srcOffsetInChunk, dstChunk.size - dstOffsetInChunk)
+
+                System.arraycopy(srcChunk, srcOffsetInChunk, dstChunk, dstOffsetInChunk, n)
+                copied += n
+
+                // The source chunk's bytes for this arc are read start-to-finish in one
+                // contiguous visit (the copy walks the old ring exactly once, never wrapping
+                // twice), so once we reach its end, nothing will ever read it again: drop the
+                // reference now instead of waiting for the whole resize to finish, bounding the
+                // old-plus-new overlap to about one chunk (see class doc).
+                if (srcOffsetInChunk + n >= srcChunk.size) {
+                    chunks[srcChunkIndex] = EMPTY_CHUNK
+                }
             }
 
-            data = newData
+            // Any remaining not-yet-written capacity (buffer wasn't full, or capacity grew beyond
+            // what was ever written) still needs real backing storage allocated now, same as
+            // construction -- by this point every source chunk has already been dropped above, so
+            // this allocates against a much smaller resident footprint than the old design ever did.
+            for (i in 0 until newChunkCount) {
+                if (newChunks[i] == null) newChunks[i] = ByteArray(chunkSizeForIndexLocked(i, newCapacityBytes))
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            chunks = (newChunks as Array<ByteArray>).toMutableList()
             _capacityBytes = newCapacityBytes
             baseStreamOffset = startOffset
             pruneExpiredSegmentsLocked()
@@ -415,7 +531,7 @@ class RingBuffer(
      */
     fun clear() {
         synchronized(lock) {
-            java.util.Arrays.fill(data, 0)
+            for (chunk in chunks) java.util.Arrays.fill(chunk, 0)
             java.util.Arrays.fill(markerOffsets, 0)
             java.util.Arrays.fill(markerTimestamps, 0)
             val lastConfig = segments.last().config
@@ -450,12 +566,7 @@ class RingBuffer(
 
             val streamOffset = totalWritten
             val pos = (streamOffset % _capacityBytes).toInt()
-            val firstPart = minOf(writeLen, _capacityBytes - pos)
-            System.arraycopy(source, srcPos, data, pos, firstPart)
-            val secondPart = writeLen - firstPart
-            if (secondPart > 0) {
-                System.arraycopy(source, srcPos + firstPart, data, 0, secondPart)
-            }
+            writeIntoChunksLocked(pos, source, srcPos, writeLen)
 
             markerOffsets[markerNextSlot] = streamOffset
             markerTimestamps[markerNextSlot] = timestamp
@@ -513,12 +624,7 @@ class RingBuffer(
 
             val result = ByteArray(length)
             val startPos = (startOffset % _capacityBytes).toInt()
-            val firstPart = minOf(length, _capacityBytes - startPos)
-            System.arraycopy(data, startPos, result, 0, firstPart)
-            val secondPart = length - firstPart
-            if (secondPart > 0) {
-                System.arraycopy(data, 0, result, firstPart, secondPart)
-            }
+            readFromChunksLocked(startPos, result, 0, length)
 
             return AudioSnapshot(result, estimateTimestampLocked(startOffset))
         }
@@ -576,12 +682,7 @@ class RingBuffer(
             // Allocation + copy are both under the lock, bounded by `length` (<= maxBytes)
             val result = ByteArray(length)
             val startPos = (cursor % _capacityBytes).toInt()
-            val firstPart = minOf(length, _capacityBytes - startPos)
-            System.arraycopy(data, startPos, result, 0, firstPart)
-            val secondPart = length - firstPart
-            if (secondPart > 0) {
-                System.arraycopy(data, 0, result, firstPart, secondPart)
-            }
+            readFromChunksLocked(startPos, result, 0, length)
 
             val nextCursor = cursor + length
             return ReadSinceResult.Data(
@@ -631,7 +732,24 @@ class RingBuffer(
         const val MARKER_CAPACITY = 8192
         const val MILLIS_PER_SECOND = 1000L
 
+        /**
+         * Production chunk granularity for the segmented backing store (issue #277): small enough
+         * that a resize's transient old/new overlap (bounded by one chunk, see [resize]'s doc)
+         * stays a rounding error against real device retention windows (tens to hundreds of MB),
+         * large enough that per-chunk indirection on the [write]/[snapshot]/[readSince] hot paths
+         * stays negligible -- [RingBufferSnapshotLockBenchmarkTest] pins that this value does not
+         * regress lock-hold time versus the old flat array.
+         */
+        const val DEFAULT_CHUNK_SIZE_BYTES = 1 * 1024 * 1024
+
         /** Shared empty payload so an idle [readSince] poll allocates nothing at all. */
         val EMPTY = ByteArray(0)
+
+        /**
+         * Shared zero-length placeholder [resize] swaps into a drained source chunk's slot
+         * (issue #277): replacing the strong reference lets the real chunk's bytes be reclaimed
+         * immediately instead of staying reachable (via [chunks]) for the rest of the resize.
+         */
+        val EMPTY_CHUNK = ByteArray(0)
     }
 }
