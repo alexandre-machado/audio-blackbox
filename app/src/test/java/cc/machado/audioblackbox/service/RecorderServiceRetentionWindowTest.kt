@@ -4,6 +4,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -21,12 +22,30 @@ import org.junit.Test
  */
 class RecorderServiceRetentionWindowTest {
 
+    // Issue #298: RecorderService's ceiling is now DeviceMemoryBudget-derived from this JVM's own
+    // (huge, 4g -- see app/build.gradle.kts) test heap by default, which would make every value
+    // this file exercises (including 65) fit easily and defeat the "rejects out-of-range" tests
+    // below. Pinning a fixed, deterministic ceiling here is the injected seam this issue's design
+    // requires, exactly like DeviceMemoryBudgetTest does for DeviceMemoryBudget itself -- restored
+    // in tearDown so no other test in the suite inherits this override.
+    @Before
+    fun setUp() {
+        RecorderService.maxRetentionMinutesProvider = { 45 }
+    }
+
     @After
     fun tearDown() {
         RecorderService.rebuildEngineIfIdle(
             newBufferDurationMinutes = cc.machado.audioblackbox.audio.AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
             newPreset = cc.machado.audioblackbox.audio.QualityPreset.DEFAULT,
         )
+        RecorderService.maxRetentionMinutesProvider = { preset ->
+            cc.machado.audioblackbox.audio.DeviceMemoryBudget.maxRetentionMinutes(
+                config = preset.config(cc.machado.audioblackbox.audio.AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+                maxHeapBytes = Runtime.getRuntime().maxMemory(),
+                usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+            )
+        }
     }
 
     @Test
@@ -68,7 +87,7 @@ class RecorderServiceRetentionWindowTest {
             thrown = true
         }
 
-        assertTrue("65 is above AudioConfig.RETENTION_WINDOW_MAX_MINUTES", thrown)
+        assertTrue("65 is above this test's fixed 45-minute maxRetentionMinutesProvider ceiling", thrown)
         assertEquals(before, RecorderService.bufferDurationMinutes)
     }
 
@@ -106,5 +125,42 @@ class RecorderServiceRetentionWindowTest {
         assertEquals(44100, RecorderService.captureConfig.sampleRateHz)
         assertEquals(2, RecorderService.captureConfig.channelCount)
         assertNotSame(engineBefore, RecorderService.engine)
+    }
+
+    // ---- Issue #298: dynamic, device-derived ceiling ----
+
+    @Test
+    fun `a device budget above the old fixed 45-minute ceiling now allows more than 45`() {
+        RecorderService.maxRetentionMinutesProvider = { 90 }
+
+        val applied = RecorderService.rebuildEngineIfIdle(90)
+
+        assertTrue("a device whose real budget covers 90 min must not be capped at the old 45", applied)
+        assertEquals(90, RecorderService.bufferDurationMinutes)
+    }
+
+    @Test
+    fun `reconcileRetentionCeiling clamps an already-configured window down when the ceiling shrinks`() {
+        RecorderService.maxRetentionMinutesProvider = { 60 }
+        RecorderService.rebuildEngineIfIdle(60)
+        assertEquals(60, RecorderService.bufferDurationMinutes)
+
+        // Simulates a heavier release/less headroom appearing between one process start and the
+        // next (issue #298's "recalculate at service start", not just when Settings is open).
+        val shrunkToFit = RecorderService.reconcileRetentionCeiling(maxRetentionMinutesProvider = { 30 })
+
+        assertTrue("the stored 60 min no longer fits a 30 min ceiling, so this must clamp", shrunkToFit)
+        assertEquals(30, RecorderService.bufferDurationMinutes)
+    }
+
+    @Test
+    fun `reconcileRetentionCeiling is a no-op when the current window already fits`() {
+        RecorderService.maxRetentionMinutesProvider = { 60 }
+        RecorderService.rebuildEngineIfIdle(30)
+
+        val changed = RecorderService.reconcileRetentionCeiling(maxRetentionMinutesProvider = { 60 })
+
+        assertTrue("30 already fits a 60 min ceiling, nothing to reconcile", !changed)
+        assertEquals(30, RecorderService.bufferDurationMinutes)
     }
 }

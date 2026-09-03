@@ -22,13 +22,11 @@ class DeviceMemoryBudgetTest {
         maxHeapMb: Long = 256,
         usedHeapMb: Long = 56,
         availableSystemMb: Long? = null,
-        hardCeiling: Int = 120,
     ) = DeviceMemoryBudget.maxRetentionMinutes(
         config = config,
         maxHeapBytes = maxHeapMb * MB,
         usedHeapBytes = usedHeapMb * MB,
         availableSystemBytes = availableSystemMb?.times(MB),
-        hardCeilingMinutes = hardCeiling,
     )
 
     @Test
@@ -77,11 +75,6 @@ class DeviceMemoryBudgetTest {
                 minutes % AudioConfig.RETENTION_WINDOW_STEP_MINUTES,
             )
         }
-    }
-
-    @Test
-    fun `the product ceiling wins over a device that could hold more`() {
-        assertEquals(60, budget(maxHeapMb = 8192, usedHeapMb = 10, hardCeiling = 60))
     }
 
     /** Offering "0 minutes" would be a broken product, not a safe one. */
@@ -134,9 +127,21 @@ class DeviceMemoryBudgetTest {
 
     @Test
     fun `never exceeds what a ring buffer can address`() {
-        val minutes = budget(config = QualityPreset.VOICE.config(30), maxHeapMb = 64_000, usedHeapMb = 10, hardCeiling = Int.MAX_VALUE)
+        val minutes = budget(config = QualityPreset.VOICE.config(30), maxHeapMb = 64_000, usedHeapMb = 10)
         val bytes = QualityPreset.VOICE.config(minutes).totalBufferBytes
         assertTrue("$bytes bytes exceeds the Int addressing limit of RingBuffer", bytes <= Int.MAX_VALUE.toLong())
+    }
+
+    /**
+     * Issue #298: there is no product-chosen upper bound left in this function at all -- a device
+     * whose real heap covers a window well past the old fixed 45-minute ceiling must be offered
+     * that larger window, not silently capped back down to it. The only remaining limit is the
+     * structural one `never exceeds what a ring buffer can address` above.
+     */
+    @Test
+    fun `a device with headroom well past the old fixed 45-minute ceiling is offered more than 45`() {
+        val minutes = budget(maxHeapMb = 2048, usedHeapMb = 20)
+        assertTrue("a 2 GB heap device ($minutes min) must not be capped at the old fixed 45", minutes > 45)
     }
 }
 
@@ -153,7 +158,6 @@ class DeviceMemoryBudgetCalibrationTest {
             config = preset.config(30),
             maxHeapBytes = 192 * MB,
             usedHeapBytes = usedMb * MB,
-            hardCeilingMinutes = 120,
         )
 
     /**

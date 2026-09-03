@@ -53,9 +53,9 @@ data class AudioConfig(
 
         // Retention-window bounds (issue #73, superseding the fixed-list
         // RETENTION_WINDOW_OPTIONS_MINUTES from #45/#57): the stepper's domain is a range with a
-        // step, not a set of four choices, so it is expressed as MIN/MAX/STEP here instead of an
-        // enumerated list. A valid value is any multiple of [RETENTION_WINDOW_STEP_MINUTES] in
-        // `[RETENTION_WINDOW_MIN_MINUTES, RETENTION_WINDOW_MAX_MINUTES]` -- see
+        // step, not a set of four choices, so it is expressed as MIN/STEP here instead of an
+        // enumerated list. A valid value is any multiple of [RETENTION_WINDOW_STEP_MINUTES] that
+        // is at least [RETENTION_WINDOW_MIN_MINUTES] -- see
         // [cc.machado.audioblackbox.settings.RetentionWindowPreferences] for where that exact
         // predicate is enforced on both the read and the write side.
         //
@@ -64,46 +64,27 @@ data class AudioConfig(
         //   5 min  ~= 9.6 MB   -- floor: below this the buffer covers less than the time it takes
         //                         to notice something worth keeping and react.
         //   30 min ~= 57.6 MB  -- the original hardcoded default, kept as DEFAULT_BUFFER_DURATION_MINUTES.
-        //   45 min ~= 86.4 MB  -- ceiling, as an INTERIM CLAMP (see hazard table below), not a
-        //                         considered permanent design choice.
         //
-        // ## Peak memory at save -- MEASURED, and no longer 2x the window
-        // This block used to describe `RingBuffer.snapshot()` allocating a second full-size copy
-        // at save time, making peak memory ~2x the retention window. That stopped being true when
-        // issue #72 was fixed in PR #114: the export path drains through `RingBuffer.readSince` in
-        // `ExportEngine.DEFAULT_DRAIN_CHUNK_SIZE_BYTES` (4 KB) chunks and never materialises the
-        // window at all -- `BoundedExportAllocationTest` asserts that allocation size is pinned to
-        // the chunk and independent of the window, at two windows ~40x apart. The old table
-        // outlived the design it described and actively misled a reader into re-deriving a
-        // constraint that no longer exists, which is why it is replaced with measurement here
-        // rather than deleted.
+        // ## There is no upper bound here any more (issue #298)
+        // This constant used to be RETENTION_WINDOW_MAX_MINUTES = 45, an interim clamp (issue #72)
+        // calibrated against a measurement harness (`RetentionCeilingMeasurementTest`, androidTest)
+        // that held a lightweight sink and encoder with no Compose UI, no AAC encoder and no
+        // foreground notification resident -- i.e. it excluded exactly the app's own live footprint.
+        // [cc.machado.audioblackbox.audio.DeviceMemoryBudget] closed that gap: it reads
+        // `Runtime.getRuntime().maxMemory()`/the *actual* resident heap at the moment of asking, so
+        // the term the old harness could not hold is now measured directly, on this device, right
+        // now, instead of guessed once for the smallest device anyone might run. A hand-picked
+        // constant on top of that would either be redundant (device headroom already caps it) or
+        // wrong (an arbitrary number pretending to be a considered product choice) -- see
+        // [DeviceMemoryBudget]'s own class doc for the full reasoning and the measured constants
+        // ([DeviceMemoryBudget.SAFE_HEAP_UTILISATION], [DeviceMemoryBudget.PEAK_TO_BACKING_RATIO])
+        // it derives the window from instead.
         //
-        // Measured by `RetentionCeilingMeasurementTest` (androidTest) on the CI emulator,
-        // API 30, dalvik.vm.heapgrowthlimit = 192m, at the production 16 kHz/mono config.
-        // "peak" is used heap across allocate + fill + full export:
-        //   30 min  -> backing  54 MB, peak  64 MB
-        //   45 min  -> backing  82 MB, peak  94 MB   <- current MAX
-        //   60 min  -> backing 109 MB, peak 118 MB
-        //   75 min  -> backing 137 MB, peak 169 MB
-        //   90 min  -> backing 164 MB, peak 188 MB
-        //  105 min  -> OOM (needs 192.3 MB for the backing array alone, against a 192 MB limit)
-        // So peak is backing + ~15%, not 2x backing.
-        //
-        // ## Why MAX is still 45 despite the above
-        // Two reasons, neither of them the old 2x cost:
-        //  1. That harness holds a lightweight sink and encoder and no Compose UI. The real app has
-        //     Compose, the AAC encoder and the foreground notification resident at save time, and
-        //     none of that is in these numbers. 90 min "fitting" at 188 MB against a 192 MB limit
-        //     has 4 MB of headroom, which is not headroom.
-        //  2. Raising MAX interacts with the clamp-down notice built for issue #84 (users whose
-        //     stored 50/55/60 was migrated down to 45 -- see RetentionWindowPreferences), so it is
-        //     a product change, not a constant edit.
-        // Whoever raises it should budget from the *measured* backing cost above plus the app's
-        // real resident footprint, and re-run RetentionCeilingMeasurementTest on the target device
-        // rather than trusting emulator numbers: the CI emulator's 192 MB limit is stricter than
-        // the S25's 256 MB, so these rows are a conservative floor, not a ceiling.
+        // The one bound that remains is structural, not a product choice: `RingBuffer` is addressed
+        // with an `Int`, so no amount of heap can produce a window whose `totalBufferBytes` exceeds
+        // `Int.MAX_VALUE` -- [DeviceMemoryBudget.maxRetentionMinutes]'s `addressableBytes` clamp
+        // enforces exactly that, unconditionally.
         const val RETENTION_WINDOW_MIN_MINUTES = 5
-        const val RETENTION_WINDOW_MAX_MINUTES = 45
         const val RETENTION_WINDOW_STEP_MINUTES = 5
 
         private const val BITS_PER_BYTE = 8

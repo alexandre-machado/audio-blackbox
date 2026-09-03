@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.telemetry
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -48,5 +49,23 @@ object PowerTelemetry {
         } catch (_: Throwable) {
             BatteryStatus(percent = 100, isCharging = false, isIgnoringOptimizations = true)
         }
+    }
+
+    /**
+     * `ActivityManager.MemoryInfo.availMem` (issue #298): the system-wide free-memory reading
+     * [cc.machado.audioblackbox.audio.DeviceMemoryBudget.maxRetentionMinutes]'s
+     * `availableSystemBytes` parameter is meant to receive -- a heap ceiling means nothing if the
+     * system as a whole is out of memory. `null` on any failure to read it (a `SecurityException`
+     * or missing service is not expected, but this value only ever *tightens* an already-computed
+     * heap-based ceiling -- see that function's doc -- so failing open to "unknown, don't apply
+     * this second limit" is the safe default, never a crash).
+     */
+    fun getAvailableSystemBytes(context: Context): Long? = try {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        activityManager?.getMemoryInfo(info)
+        activityManager?.let { info.availMem }
+    } catch (_: Throwable) {
+        null
     }
 }

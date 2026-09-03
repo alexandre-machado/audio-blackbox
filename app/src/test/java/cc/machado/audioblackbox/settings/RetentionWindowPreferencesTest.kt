@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -29,11 +30,24 @@ import org.junit.Test
  * its class doc), so this builds one with `PreferenceDataStoreFactory.create` pointed at a real
  * temp file -- the same underlying storage mechanism production uses, minus the Android `Context`
  * indirection that only resolves *which* file to use.
+ *
+ * Issue #298 replaced the fixed `AudioConfig.RETENTION_WINDOW_MAX_MINUTES` (45) with a per-device,
+ * per-preset ceiling computed by `DeviceMemoryBudget` from the live JVM heap -- which this test
+ * JVM runs with a 4 GB max (see `app/build.gradle.kts`), far above 45 for every preset here.
+ * Every construction below pins [FIXED_MAX_RETENTION_MINUTES] as the injected
+ * `maxRetentionMinutesProvider`, which preserves this whole suite's original intent (a device whose
+ * ceiling is 45, exercising the clamp/migration machinery) without depending on the test JVM's own,
+ * unrelated heap size. [DeviceMemoryBudgetDrivenRetentionWindowPreferencesTest] below covers the
+ * genuinely dynamic case this fixed ceiling cannot: a real, varying `maxRetentionMinutesProvider`.
  */
 class RetentionWindowPreferencesTest {
 
     private lateinit var file: File
     private val scopes = mutableListOf<CoroutineScope>()
+
+    private companion object {
+        const val FIXED_MAX_RETENTION_MINUTES = 45
+    }
 
     @Before
     fun setUp() {
@@ -59,7 +73,7 @@ class RetentionWindowPreferencesTest {
 
     @Test
     fun `before anything has ever been persisted, the value is the first-run fallback`() = runTest {
-        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.currentBufferDurationMinutes())
     }
@@ -69,7 +83,7 @@ class RetentionWindowPreferencesTest {
         val firstJob = SupervisorJob()
         val firstScope = CoroutineScope(firstJob)
         val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
-        DataStoreRetentionWindowPreferences(firstDataStore).setBufferDurationMinutes(45)
+        DataStoreRetentionWindowPreferences(firstDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES }).setBufferDurationMinutes(45)
         // Cancelling this scope is what actually stands in for "the process died" -- DataStore
         // refuses a second live instance on the same file otherwise (by design, to catch real
         // multi-instance bugs), so this is not incidental test cleanup, it is the thing that makes
@@ -85,7 +99,7 @@ class RetentionWindowPreferencesTest {
         // handshake replacing a probabilistic race.
         firstJob.cancelAndJoin()
 
-        val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
+        val reloaded = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(45, reloaded.currentBufferDurationMinutes())
         assertEquals(45, reloaded.bufferDurationMinutesFlow.first())
@@ -93,7 +107,7 @@ class RetentionWindowPreferencesTest {
 
     @Test
     fun `bufferDurationMinutesFlow reacts to a later write on the same instance, not just the value at construction`() = runTest {
-        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
         assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
 
         preferences.setBufferDurationMinutes(15)
@@ -103,7 +117,7 @@ class RetentionWindowPreferencesTest {
 
     @Test
     fun `setBufferDurationMinutes rejects a value outside the bounded range instead of silently persisting it`() = runTest {
-        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         var thrown: IllegalArgumentException? = null
         try {
@@ -122,7 +136,7 @@ class RetentionWindowPreferencesTest {
         // Issue #73: the stepper's domain is a range with a step, not a fixed list -- 37 is inside
         // [MIN, MAX] but not a multiple of STEP, a distinct way to be invalid from "out of range"
         // that could not exist under the old fixed-list domain.
-        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         var thrown: IllegalArgumentException? = null
         try {
@@ -149,61 +163,60 @@ class RetentionWindowPreferencesTest {
     private val rawKeyBufferDurationMinutes = intPreferencesKey("buffer_duration_minutes")
 
     @Test
-    fun `a persisted out-of-range value degrades to the fallback instead of reaching the caller`() = runTest {
+    fun `a persisted well-formed value far above the current ceiling clamps down to it, not to the fallback`() = runTest {
+        // Issue #298: there is no fixed "this app never legitimately writes more than X" reference
+        // point any more -- the ceiling is per-device, so a value this large is treated the same as
+        // any other well-formed (on-step, at least MIN) value that no longer fits: clamp it, don't
+        // discard the user's intent by resetting to the default.
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 1000 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(
-            "an out-of-range stored value must never reach a caller that will use it to size a buffer",
-            AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
+            "a well-formed but too-large stored value must never reach a caller unclamped",
+            FIXED_MAX_RETENTION_MINUTES,
             preferences.currentBufferDurationMinutes(),
         )
-        assertEquals(AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES, preferences.bufferDurationMinutesFlow.first())
+        assertEquals(FIXED_MAX_RETENTION_MINUTES, preferences.bufferDurationMinutesFlow.first())
     }
 
-    // ---- Issue #72's interim clamp (RETENTION_WINDOW_MAX_MINUTES: 60 -> 45): the three tests
-    // below are the proof this PR's task description asks for. Each writes a value that a build of
-    // this app *before* the clamp could legitimately have persisted (60 was the old MAX itself;
-    // 50/55 were newly reachable once #73 turned the fixed list into a 5-minute-step range). None
-    // of them may throw on load, and each must resolve to a value that satisfies today's
-    // isValidRetentionMinutes -- i.e. at or below the new MAX of 45. Reverting the clamp handling
-    // in RetentionWindowPreferences.kt (resolveStoredRetentionMinutes) while keeping
-    // AudioConfig.RETENTION_WINDOW_MAX_MINUTES at 45 makes these fail: without that handling,
-    // isValidRetentionMinutes(60/55/50) is false and the old code path fell through to
-    // DEFAULT_BUFFER_DURATION_MINUTES (30), not the clamped 45 these assert -- so these tests also
-    // fail against a naive "just lower MAX" change with no migration handling, which is exactly
-    // what they are meant to catch.
+    // ---- The clamp-down machinery (issue #72's original 60 -> 45 migration, generalised by issue
+    // #298 into "any stored value this device's *current* ceiling can no longer fit"): the three
+    // tests below are the proof of that generalisation. Each writes a value that is well-formed
+    // (on-step, at least MIN) but above this fixed-ceiling test's 45. None of them may throw on
+    // load, and each must resolve to exactly the ceiling (45 here), never the default -- reverting
+    // resolveStoredRetentionMinutes to "anything above the ceiling resets to default" makes these
+    // fail, which is exactly what they are meant to catch.
 
     @Test
-    fun `a persisted 60 (the pre-clamp MAX) loads without throwing and clamps down to the new MAX of 45`() = runTest {
+    fun `a persisted 60 (above this device's current ceiling) loads without throwing and clamps down to it`() = runTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(45, preferences.currentBufferDurationMinutes())
         assertEquals(45, preferences.bufferDurationMinutesFlow.first())
     }
 
     @Test
-    fun `a persisted 55 (valid pre-clamp, now above MAX) clamps down to 45 instead of resetting to the default`() = runTest {
+    fun `a persisted 55 (above this device's current ceiling) clamps down to 45 instead of resetting to the default`() = runTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 55 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(45, preferences.currentBufferDurationMinutes())
         assertEquals(45, preferences.bufferDurationMinutesFlow.first())
     }
 
     @Test
-    fun `a persisted 50 (valid pre-clamp, now above MAX) clamps down to 45 instead of resetting to the default`() = runTest {
+    fun `a persisted 50 (above this device's current ceiling) clamps down to 45 instead of resetting to the default`() = runTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 50 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(45, preferences.currentBufferDurationMinutes())
         assertEquals(45, preferences.bufferDurationMinutesFlow.first())
@@ -217,7 +230,7 @@ class RetentionWindowPreferencesTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 37 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(
             "an off-step stored value must never reach a caller that will use it to size a buffer",
@@ -234,7 +247,7 @@ class RetentionWindowPreferencesTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
         val notice = preferences.clampNoticeFlow.first()
 
         assertEquals(60, notice?.previousMinutes)
@@ -246,7 +259,7 @@ class RetentionWindowPreferencesTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 45 }
 
-        val atMax = DataStoreRetentionWindowPreferences(rawDataStore)
+        val atMax = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
         assertEquals(null, atMax.clampNoticeFlow.first())
     }
 
@@ -255,24 +268,39 @@ class RetentionWindowPreferencesTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 15 }
 
-        val belowMax = DataStoreRetentionWindowPreferences(rawDataStore)
+        val belowMax = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
         assertEquals(null, belowMax.clampNoticeFlow.first())
     }
 
     @Test
     fun `clampNoticeFlow never fires for a fresh install with nothing persisted yet`() = runTest {
-        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
         assertEquals(null, preferences.clampNoticeFlow.first())
     }
 
     @Test
-    fun `clampNoticeFlow never fires for an off-step or never-legitimate value (falls back to default, not a clamp)`() = runTest {
+    fun `clampNoticeFlow never fires for an off-step value (falls back to default, not a clamp)`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 37 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
+
+        assertEquals(null, preferences.clampNoticeFlow.first())
+    }
+
+    @Test
+    fun `clampNoticeFlow fires even for a well-formed value far above the current ceiling`() = runTest {
+        // Issue #298: 1000 is on-step and at least MIN, so it is a clamp candidate like any other
+        // too-large value -- there is no fixed reference point above which it instead falls back to
+        // the default and stays silent about it.
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 1000 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
+        val notice = preferences.clampNoticeFlow.first()
 
-        assertEquals(null, preferences.clampNoticeFlow.first())
+        assertEquals(1000, notice?.previousMinutes)
+        assertEquals(FIXED_MAX_RETENTION_MINUTES, notice?.newMinutes)
     }
 
     @Test
@@ -281,7 +309,7 @@ class RetentionWindowPreferencesTest {
         val firstScope = CoroutineScope(firstJob)
         val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
         firstDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
-        val firstPreferences = DataStoreRetentionWindowPreferences(firstDataStore)
+        val firstPreferences = DataStoreRetentionWindowPreferences(firstDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
         assertEquals(45, firstPreferences.clampNoticeFlow.first()?.newMinutes)
 
         firstPreferences.acknowledgeClampNotice()
@@ -294,7 +322,7 @@ class RetentionWindowPreferencesTest {
         // Same "process death" handshake the round-trip test above uses -- proves the
         // acknowledged flag itself survived to disk, not just this live instance's state.
         firstJob.cancelAndJoin()
-        val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
+        val reloaded = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(
             "a notice already acknowledged before a restart must not resurface on the next launch",
@@ -314,7 +342,7 @@ class RetentionWindowPreferencesTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 15 }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(15, preferences.currentBufferDurationMinutes())
     }
@@ -325,7 +353,7 @@ class RetentionWindowPreferencesTest {
 
     @Test
     fun `before any preset has been persisted, the value is VOICE (historical default)`() = runTest {
-        val preferences = DataStoreRetentionWindowPreferences(newDataStore())
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.currentQualityPreset())
         assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.qualityPresetFlow.first())
@@ -336,10 +364,10 @@ class RetentionWindowPreferencesTest {
         val firstJob = SupervisorJob()
         val firstScope = CoroutineScope(firstJob)
         val firstDataStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
-        DataStoreRetentionWindowPreferences(firstDataStore).setQualityPreset(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY)
+        DataStoreRetentionWindowPreferences(firstDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES }).setQualityPreset(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY)
         firstJob.cancelAndJoin()
 
-        val reloaded = DataStoreRetentionWindowPreferences(newDataStore())
+        val reloaded = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, reloaded.currentQualityPreset())
         assertEquals(cc.machado.audioblackbox.audio.QualityPreset.HIGH_FIDELITY, reloaded.qualityPresetFlow.first())
@@ -350,9 +378,82 @@ class RetentionWindowPreferencesTest {
         val rawDataStore = newDataStore()
         rawDataStore.edit { prefs -> prefs[rawKeyQualityPreset] = "UNKNOWN_FUTURE_PRESET" }
 
-        val preferences = DataStoreRetentionWindowPreferences(rawDataStore)
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = { FIXED_MAX_RETENTION_MINUTES })
 
         assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.currentQualityPreset())
         assertEquals(cc.machado.audioblackbox.audio.QualityPreset.VOICE, preferences.qualityPresetFlow.first())
+    }
+}
+
+/**
+ * Issue #298: the genuinely dynamic case [RetentionWindowPreferencesTest]'s fixed-ceiling helper
+ * cannot exercise -- a real, varying `maxRetentionMinutesProvider` (as production wires it, via
+ * [cc.machado.audioblackbox.audio.DeviceMemoryBudget]) rather than a pinned 45.
+ */
+class DeviceMemoryBudgetDrivenRetentionWindowPreferencesTest {
+
+    private lateinit var file: java.io.File
+    private val scopes = mutableListOf<CoroutineScope>()
+
+    @Before
+    fun setUp() {
+        file = java.io.File.createTempFile("retention_window_dynamic_test", ".preferences_pb")
+        file.delete()
+    }
+
+    @After
+    fun tearDown() {
+        scopes.forEach { it.cancel() }
+        file.delete()
+    }
+
+    private fun newDataStore(): DataStore<Preferences> {
+        val scope = CoroutineScope(SupervisorJob())
+        scopes += scope
+        return PreferenceDataStoreFactory.create(scope = scope) { file }
+    }
+
+    private val rawKeyBufferDurationMinutes = intPreferencesKey("buffer_duration_minutes")
+
+    /** A generous device -- well past the old fixed 45-minute ceiling for VOICE. */
+    private fun generousDeviceProvider(preset: cc.machado.audioblackbox.audio.QualityPreset): Int =
+        cc.machado.audioblackbox.audio.DeviceMemoryBudget.maxRetentionMinutes(
+            config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+            maxHeapBytes = 2_048L * 1024 * 1024,
+            usedHeapBytes = 20L * 1024 * 1024,
+        )
+
+    /** A tight device -- narrower than a value that was fine when it was written. */
+    private fun tightDeviceProvider(preset: cc.machado.audioblackbox.audio.QualityPreset): Int =
+        cc.machado.audioblackbox.audio.DeviceMemoryBudget.maxRetentionMinutes(
+            config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+            maxHeapBytes = 96L * 1024 * 1024,
+            usedHeapBytes = 40L * 1024 * 1024,
+        )
+
+    @Test
+    fun `a device whose real budget exceeds the old fixed 45-minute ceiling is offered more than 45`() = runTest {
+        val preferences = DataStoreRetentionWindowPreferences(newDataStore(), maxRetentionMinutesProvider = ::generousDeviceProvider)
+
+        preferences.setBufferDurationMinutes(90)
+
+        assertEquals(90, preferences.currentBufferDurationMinutes())
+        assertEquals(null, preferences.clampNoticeFlow.first())
+    }
+
+    @Test
+    fun `a device whose real budget is below a previously-fine stored value clamps it down and raises a notice`() = runTest {
+        val rawDataStore = newDataStore()
+        rawDataStore.edit { prefs -> prefs[rawKeyBufferDurationMinutes] = 60 }
+
+        val preferences = DataStoreRetentionWindowPreferences(rawDataStore, maxRetentionMinutesProvider = ::tightDeviceProvider)
+
+        val expectedCeiling = tightDeviceProvider(cc.machado.audioblackbox.audio.QualityPreset.VOICE)
+        assertTrue("this test needs a ceiling below the stored 60 to be meaningful", expectedCeiling < 60)
+
+        assertEquals(expectedCeiling, preferences.currentBufferDurationMinutes())
+        val notice = preferences.clampNoticeFlow.first()
+        assertEquals(60, notice?.previousMinutes)
+        assertEquals(expectedCeiling, notice?.newMinutes)
     }
 }

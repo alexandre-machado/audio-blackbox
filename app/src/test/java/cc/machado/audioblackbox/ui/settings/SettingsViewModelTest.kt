@@ -58,9 +58,17 @@ class SettingsViewModelTest {
 
     @Test
     fun `incrementPending moves by the step and stops at the maximum bound`() = runTest(testDispatcher) {
+        // Issue #298: there is no fixed AudioConfig.RETENTION_WINDOW_MAX_MINUTES any more, so this
+        // test pins a device budget that lands the VOICE ceiling at exactly 45 -- see the maths in
+        // DeviceMemoryBudgetTest for how maxHeapBytes/usedHeapBytes combine, and note
+        // maxRetentionForPreset() subtracts the *committed* 40-min buffer's own bytes
+        // (32_000 B/s * 40 * 60 = 76,800,000) from usedMemoryBytesProvider() before calling
+        // DeviceMemoryBudget, so 86,800,000 here becomes an effective 10,000,000 non-buffer used.
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(40),
+            maxMemoryBytesProvider = { 130_000_000L },
+            usedMemoryBytesProvider = { 86_800_000L },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -69,7 +77,7 @@ class SettingsViewModelTest {
         vm.incrementPending()
         runCurrent()
         assertEquals(45, observed.last().retentionStepper.pendingMinutes)
-        assertFalse("45 is the interim max (issue #72) -- + must now be disabled", observed.last().retentionStepper.canIncrement)
+        assertFalse("45 is this pinned device's computed ceiling -- + must now be disabled", observed.last().retentionStepper.canIncrement)
 
         vm.incrementPending()
         runCurrent()

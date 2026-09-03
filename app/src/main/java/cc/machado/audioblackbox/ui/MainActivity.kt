@@ -206,6 +206,7 @@ class MainActivity : ComponentActivity() {
                                         onStopEngine = stopEngine,
                                         retentionWindowPreferences = DataStoreRetentionWindowPreferences(this@MainActivity),
                                         batteryStatusProvider = { cc.machado.audioblackbox.telemetry.PowerTelemetry.getBatteryStatus(this@MainActivity) },
+                                        availableSystemBytesProvider = { cc.machado.audioblackbox.telemetry.PowerTelemetry.getAvailableSystemBytes(this@MainActivity) },
                                     )
                                 }
                             }

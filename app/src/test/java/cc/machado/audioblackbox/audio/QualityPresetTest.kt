@@ -52,7 +52,10 @@ class QualityPresetTest {
     @Test
     fun `every preset builds a valid config at any allowed window`() {
         for (preset in QualityPreset.entries) {
-            for (minutes in listOf(AudioConfig.RETENTION_WINDOW_MIN_MINUTES, 30, AudioConfig.RETENTION_WINDOW_MAX_MINUTES)) {
+            // No AudioConfig.RETENTION_WINDOW_MAX_MINUTES any more (issue #298, the ceiling is now
+            // per-device/per-preset via DeviceMemoryBudget) -- 90 stands in as an arbitrary "large"
+            // window here, just to prove config() keeps working well past the old fixed 45.
+            for (minutes in listOf(AudioConfig.RETENTION_WINDOW_MIN_MINUTES, 30, 90)) {
                 val config = preset.config(minutes)
                 assertEquals(minutes, config.bufferDurationMinutes)
                 assertTrue("${preset.name} at $minutes min produced no data rate", config.bytesPerSecond > 0)

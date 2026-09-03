@@ -790,10 +790,14 @@ private fun previewStepperState(
         canIncrement = canIncrement,
         pendingConfirmationMinutes = pendingConfirmation,
     ),
+    // Illustrative per-preset ceilings for a hypothetical device (issue #298: there is no
+    // AudioConfig constant these could reference any more -- DeviceMemoryBudget computes a real
+    // one per device/preset at runtime instead). Only the relative order (VOICE >= BALANCED >=
+    // HIGH_FIDELITY, matching each preset's byte rate) matters for what this preview demonstrates.
     qualityPresets = listOf(
-        QualityPresetOption(QualityPreset.VOICE, maxRetentionMinutes = 45, isSelected = selectedPreset == QualityPreset.VOICE),
-        QualityPresetOption(QualityPreset.BALANCED, maxRetentionMinutes = 30, isSelected = selectedPreset == QualityPreset.BALANCED),
-        QualityPresetOption(QualityPreset.HIGH_FIDELITY, maxRetentionMinutes = 15, isSelected = selectedPreset == QualityPreset.HIGH_FIDELITY),
+        QualityPresetOption(QualityPreset.VOICE, maxRetentionMinutes = 90, isSelected = selectedPreset == QualityPreset.VOICE),
+        QualityPresetOption(QualityPreset.BALANCED, maxRetentionMinutes = 45, isSelected = selectedPreset == QualityPreset.BALANCED),
+        QualityPresetOption(QualityPreset.HIGH_FIDELITY, maxRetentionMinutes = 20, isSelected = selectedPreset == QualityPreset.HIGH_FIDELITY),
     ),
     selectedPreset = selectedPreset,
 )
