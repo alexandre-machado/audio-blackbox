@@ -12,8 +12,8 @@ private const val MB = 1024L * 1024L
  * [RingBuffer.resize]'s own doc for the net-growth formula this file now pins).
  *
  * ## The oracle, stated up front (AGENTS.md §2)
- * A resize whose projected peak (current heap usage, plus the *net growth* in capacity, plus one
- * chunk of slack for the transient old/new overlap -- not the old pre-#277 "current heap usage
+ * A resize whose projected peak (current heap usage, plus the *net growth* in capacity, plus two
+ * chunks of slack for the transient old/new overlap -- not the old pre-#277 "current heap usage
  * plus the full new capacity") would exceed [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the
  * injected [MemoryBudget]'s reported ceiling must be refused *before* any allocation happens:
  * [RingBuffer.capacityBytes] and [RingBuffer.bufferedBytes] stay exactly as they were, and
@@ -87,15 +87,16 @@ class RingBufferResizeBudgetTest {
         // itself is load-bearing in this test, not just "some margin exists".
         //
         // #277 changed the guarded quantity from `usedHeapBytes + newCapacityBytes` to
-        // `usedHeapBytes + netGrowthBytes + chunkSizeBytes` (one chunk of slack for the transient
-        // old/new overlap the segmented store allows -- see RingBuffer.resize's doc). This test
-        // fixes chunkSizeBytes at a small, known value and old capacity at 0 so netGrowthBytes
-        // equals the requested capacity exactly, keeping the boundary arithmetic precise.
+        // `usedHeapBytes + netGrowthBytes + 2 * chunkSizeBytes` (two chunks of slack for the
+        // transient old/new overlap the segmented store allows -- see RingBuffer.resize's doc,
+        // and RingBufferSingleAllocationTest for why two, not one). This test fixes chunkSizeBytes
+        // at a small, known value and old capacity at 0 so netGrowthBytes equals the requested
+        // capacity exactly, keeping the boundary arithmetic precise.
         val chunkSizeBytes = 4_096
         val maxHeapBytes = 200L * MB
         val usedHeapBytes = 50L * MB
         val safeHeapBytes = (maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
-        val exactlyFits = (safeHeapBytes - usedHeapBytes - chunkSizeBytes).toInt()
+        val exactlyFits = (safeHeapBytes - usedHeapBytes - 2L * chunkSizeBytes).toInt()
 
         val budget = MemoryBudget { MemorySample(maxHeapBytes = maxHeapBytes, usedHeapBytes = usedHeapBytes) }
 

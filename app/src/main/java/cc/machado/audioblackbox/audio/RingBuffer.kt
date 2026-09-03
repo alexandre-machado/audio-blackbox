@@ -178,9 +178,14 @@ sealed interface ResizeOutcome {
  * pre-allocated marker arrays (see below). When full, [write] silently overwrites the oldest
  * bytes; it never throws on overflow.
  *
- * Chunking adds one indirection (a chunk-list lookup) to every read/write compared to the old flat
- * array, measured rather than assumed: [RingBufferSnapshotLockBenchmarkTest] pins the snapshot/lock
- * hold time and passed unchanged after this rewrite at the production [DEFAULT_CHUNK_SIZE_BYTES].
+ * Chunking adds one indirection (a chunk-list lookup, plus one `System.arraycopy` call per chunk
+ * boundary crossed instead of the old flat array's at-most-two) to every read/write compared to the
+ * old flat array. [RingBufferSnapshotLockBenchmarkTest] measures the resulting snapshot/lock hold
+ * time rather than assuming it; it does not assert a threshold (see its class doc for why -- the
+ * only Tier-0-safe assertion is "does not OOM"), and the measured numbers *did* move after this
+ * rewrite: `@rev`'s PR #295 review recorded 44.1kHz/stereo/60min's worst-case hold time roughly
+ * doubling versus issue #71's pre-#277 figure (66.6ms -> 126.7ms in that CI run). Tracked
+ * separately on issue #71, not fixed here.
  *
  * ## Heterogeneous format segments (issue #194)
  * When audio capture quality presets change mid-stream, [RingBuffer] preserves existing audio
@@ -362,11 +367,46 @@ class RingBuffer(
      * growing within already-allocated capacity, costs nothing extra and is never refused). Before
      * allocating anything, [memoryBudget] is sampled and the resize is refused
      * ([ResizeOutcome.Refused]) unless `usedHeapBytes + max(0, newCapacityBytes - oldCapacityBytes)
-     * + chunkSizeBytes` (net growth, plus one chunk of slack for the transient overlap above) fits
-     * inside [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the reported ceiling. A refusal leaves
-     * capacity and all buffered audio completely untouched.
+     * + 2 * chunkSizeBytes` fits inside [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the reported
+     * ceiling. The two-chunk slack (not one) is deliberate: the copy loop below keeps at most one
+     * *currently active* old chunk and one *currently active* new chunk resident together as it
+     * advances, plus -- separately -- the one *boundary* old chunk that a wrapped copy can visit
+     * across two disjoint arcs (see the `srcConsumed` comment below) stays alive from its first arc
+     * until its second, i.e. for most of the loop's run. That is at most two extra chunks beyond
+     * the final resident size at any instant, never a fraction of the old or new capacity --
+     * `RingBufferSingleAllocationTest` measures this directly (not just the guard's verdict) via
+     * [residencyProbeForTesting]. A refusal leaves capacity and all buffered audio completely
+     * untouched.
+     *
+     * ## Chunks outside the retained range are dropped up front, before any new capacity exists
+     * (issue #277 follow-up, `@rev` PR #295 review)
+     * The copy loop below only ever visits, and therefore only ever retires, source chunks whose
+     * bytes fall inside `[startOffset, startOffset + bytesToKeep)`. An old chunk entirely outside
+     * that window (buffer never filled, or a previous resize already shrank the *meaningful* range
+     * well below the *physical* old capacity) would otherwise never be touched by the loop and
+     * would stay fully resident until the very end of this method, by which point the backfill
+     * loop has already allocated the *entire* new capacity -- reintroducing the exact full-old-
+     * plus-full-new peak this rewrite exists to remove. Worst case `bytesToKeep == 0` (a resize
+     * before any [write]): with no up-front drop, *zero* old chunks would ever be released before
+     * the new store is fully built. [retireUntouchedOldChunksLocked] runs first and unconditionally
+     * drops every old chunk the copy loop below will never visit, so by the time any new chunk is
+     * allocated, only chunks that still hold retained bytes remain live.
      */
-    fun resize(newCapacityBytes: Int, memoryBudget: MemoryBudget = MemoryBudget.REAL): ResizeOutcome {
+    fun resize(
+        newCapacityBytes: Int,
+        memoryBudget: MemoryBudget = MemoryBudget.REAL,
+        /**
+         * Test-only instrumentation (issue #277 follow-up): if non-null, invoked with the total
+         * bytes currently strongly reachable through [chunks]/the in-progress new chunk array
+         * every time that total changes (a chunk is retired or allocated). This is the ground-truth
+         * quantity the "no old+new coexistence peak" claim is about -- not a JVM heap sample (noisy,
+         * GC-timing-dependent) but the exact set of chunk arrays this method itself is holding a
+         * strong reference to at that instant. Production always passes null (zero overhead beyond
+         * a null check). See `RingBufferSingleAllocationTest` for how a test turns this into a peak
+         * assertion.
+         */
+        residencyProbeForTesting: ((Long) -> Unit)? = null,
+    ): ResizeOutcome {
         require(newCapacityBytes > 0) { "newCapacityBytes must be positive, was $newCapacityBytes" }
         synchronized(lock) {
             val oldCapacity = _capacityBytes
@@ -374,7 +414,7 @@ class RingBuffer(
 
             val sample = memoryBudget.sample()
             val netGrowthBytes = maxOf(0L, newCapacityBytes.toLong() - oldCapacity.toLong())
-            val projectedPeakBytes = sample.usedHeapBytes + netGrowthBytes + chunkSizeBytes.toLong()
+            val projectedPeakBytes = sample.usedHeapBytes + netGrowthBytes + 2L * chunkSizeBytes
             val safeHeapBytes = (sample.maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
             if (projectedPeakBytes > safeHeapBytes) {
                 return ResizeOutcome.Refused(
@@ -388,6 +428,15 @@ class RingBuffer(
             val availableBytes = totalWritten - oldOldest
             val bytesToKeep = minOf(availableBytes, newCapacityBytes.toLong()).toInt()
             val startOffset = totalWritten - bytesToKeep
+
+            // Track exactly how many bytes are strongly reachable through `chunks`/`newChunks`
+            // right now, so residencyProbeForTesting reports ground truth, not an estimate.
+            var residentBytes = 0L
+            for (chunk in chunks) residentBytes += chunk.size
+            residencyProbeForTesting?.invoke(residentBytes)
+
+            residentBytes -= retireUntouchedOldChunksLocked(oldCapacity, startOffset, bytesToKeep)
+            residencyProbeForTesting?.invoke(residentBytes)
 
             val newChunkCount = chunkCountForLocked(newCapacityBytes)
             val newChunks = arrayOfNulls<ByteArray>(newChunkCount)
@@ -420,6 +469,8 @@ class RingBuffer(
                 val dstChunk = newChunks[dstChunkIndex]
                     ?: ByteArray(chunkSizeForIndexLocked(dstChunkIndex, newCapacityBytes)).also {
                         newChunks[dstChunkIndex] = it
+                        residentBytes += it.size
+                        residencyProbeForTesting?.invoke(residentBytes)
                     }
                 val dstOffsetInChunk = dstPos % chunkSizeBytes
 
@@ -435,16 +486,24 @@ class RingBuffer(
                 // overlap to about one chunk (see class doc).
                 srcConsumed[srcChunkIndex] += n
                 if (srcConsumed[srcChunkIndex] >= srcChunk.size) {
+                    residentBytes -= srcChunk.size
                     chunks[srcChunkIndex] = EMPTY_CHUNK
+                    residencyProbeForTesting?.invoke(residentBytes)
                 }
             }
 
             // Any remaining not-yet-written capacity (buffer wasn't full, or capacity grew beyond
             // what was ever written) still needs real backing storage allocated now, same as
-            // construction -- by this point every source chunk has already been dropped above, so
-            // this allocates against a much smaller resident footprint than the old design ever did.
+            // construction -- by this point every source chunk that will ever be dropped has
+            // already been dropped above (both by the up-front pass and by the copy loop), so this
+            // allocates against a much smaller resident footprint than the old design ever did.
             for (i in 0 until newChunkCount) {
-                if (newChunks[i] == null) newChunks[i] = ByteArray(chunkSizeForIndexLocked(i, newCapacityBytes))
+                if (newChunks[i] == null) {
+                    val chunk = ByteArray(chunkSizeForIndexLocked(i, newCapacityBytes))
+                    newChunks[i] = chunk
+                    residentBytes += chunk.size
+                    residencyProbeForTesting?.invoke(residentBytes)
+                }
             }
 
             @Suppress("UNCHECKED_CAST")
@@ -532,6 +591,56 @@ class RingBuffer(
     fun bufferedDurationMillis(): Long = synchronized(lock) {
         val oldest = oldestAvailableLocked()
         durationMillisLocked(oldest, totalWritten)
+    }
+
+    /**
+     * Drops every chunk of the *old* backing store (indices into the still-live [chunks], sized
+     * for [oldCapacity]) whose bytes fall entirely outside the retained range
+     * `[startOffset, startOffset + bytesToKeep)` (mod [oldCapacity]) -- i.e. every chunk [resize]'s
+     * copy loop will never visit and therefore would otherwise never retire. Must run *before* any
+     * new chunk is allocated: this is what keeps a resize of a mostly-empty or sparsely-written
+     * buffer (worst case [bytesToKeep] == 0, e.g. a resize before the first [write]) from holding
+     * the entire old capacity resident until the entire new capacity has also been built (see
+     * [resize]'s doc, "Chunks outside the retained range..."). Returns the number of bytes freed,
+     * so callers can keep an exact running residency count. Must be called with [lock] held.
+     */
+    private fun retireUntouchedOldChunksLocked(oldCapacity: Int, startOffset: Long, bytesToKeep: Int): Long {
+        val oldChunkCount = chunkCountForLocked(oldCapacity)
+        var freedBytes = 0L
+
+        if (bytesToKeep == 0) {
+            for (i in 0 until oldChunkCount) {
+                if (chunks[i] !== EMPTY_CHUNK) {
+                    freedBytes += chunks[i].size
+                    chunks[i] = EMPTY_CHUNK
+                }
+            }
+            return freedBytes
+        }
+
+        // The retained range, expressed as one or two half-open sub-ranges of [0, oldCapacity):
+        // one if it doesn't wrap the old ring's seam, two (a tail piece and a head piece) if it
+        // does. bytesToKeep <= oldCapacity always (see resize), so neither sub-range can itself
+        // wrap a second time.
+        val keepStartPos = (startOffset % oldCapacity).toInt()
+        val keepEndPos = keepStartPos + bytesToKeep
+        fun overlaps(aStart: Int, aEnd: Int, bStart: Int, bEnd: Int) = aStart < bEnd && bStart < aEnd
+
+        for (i in 0 until oldChunkCount) {
+            val chunkStart = i * chunkSizeBytes
+            val chunkEnd = chunkStart + chunkSizeForIndexLocked(i, oldCapacity)
+            val touched = if (keepEndPos <= oldCapacity) {
+                overlaps(chunkStart, chunkEnd, keepStartPos, keepEndPos)
+            } else {
+                overlaps(chunkStart, chunkEnd, keepStartPos, oldCapacity) ||
+                    overlaps(chunkStart, chunkEnd, 0, keepEndPos - oldCapacity)
+            }
+            if (!touched && chunks[i] !== EMPTY_CHUNK) {
+                freedBytes += chunks[i].size
+                chunks[i] = EMPTY_CHUNK
+            }
+        }
+        return freedBytes
     }
 
     /**
