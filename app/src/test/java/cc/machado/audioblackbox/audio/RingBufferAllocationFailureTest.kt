@@ -31,6 +31,12 @@ import org.junit.Test
  * - Whatever old data the partial run actually destroyed while draining source chunks is reported
  *   as lost through the ordinary [ReadSinceResult.Lapped] path -- never silently returned as
  *   zero-filled bytes standing in for real audio.
+ *
+ * Coverage spans both loops the recovery path has to patch up after: a mid-copy-loop failure and a
+ * trailing-backfill-loop failure (issue #296, closing the gap `@rev`'s PR #295 review found between
+ * this doc's claim and what was actually exercised). It does **not** cover a second failure during
+ * recovery itself -- see [RingBuffer.resize]'s KDoc for why that residual case is left as a
+ * documented limit rather than hardened here.
  */
 class RingBufferAllocationFailureTest {
 
@@ -83,6 +89,76 @@ class RingBufferAllocationFailureTest {
 
         // A cursor at the (now-advanced) oldest available position must still read real, working
         // data going forward -- the buffer keeps functioning past the point of the failure.
+        val fresh = buffer.readSince(cursor = buffer.oldestCursor(), maxBytes = oldCapacityBytes + 3)
+        assertTrue("reading from the current oldest cursor must succeed", fresh is ReadSinceResult.Data)
+    }
+
+    @Test
+    fun `a resize that fails during the trailing backfill loop leaves the buffer coherent at the old capacity`() {
+        // `@rev`'s LOW finding on PR #295 (folded into issue #296): both prior tests in this file
+        // fail either before anything is touched, or mid-copy-loop -- neither exercises the
+        // trailing `for (i in 0 until newChunkCount) if (newChunks[i] == null)` backfill loop that
+        // runs after the copy loop completes. A small write (bytesToKeep << newCapacityBytes) makes
+        // the copy loop finish in one chunk, so almost the entire new capacity is built by the
+        // backfill loop instead -- exactly the gap to close.
+        val chunkSizeBytes = 1_000
+        val oldCapacityBytes = 5 * chunkSizeBytes
+        val newCapacityBytes = 10 * chunkSizeBytes
+
+        // Learn exactly how many residencyProbeForTesting invocations this specific resize makes
+        // (a real, non-failing run) rather than hardcoding a fragile invocation number -- the last
+        // invocation is, by construction below, inside the backfill loop.
+        val probe = RingBuffer(capacityBytes = oldCapacityBytes, chunkSizeBytes = chunkSizeBytes)
+        probe.write(ByteArray(chunkSizeBytes))
+        var totalInvocations = 0
+        probe.resize(newCapacityBytes) { _ -> totalInvocations++ }
+        assertTrue("setup must actually invoke the probe", totalInvocations > 0)
+
+        val buffer = RingBuffer(capacityBytes = oldCapacityBytes, chunkSizeBytes = chunkSizeBytes)
+        buffer.write(ByteArray(chunkSizeBytes))
+
+        var invocations = 0
+        var failed = false
+        try {
+            buffer.resize(newCapacityBytes) { _ ->
+                invocations++
+                // Fail on the very last invocation. With bytesToKeep == chunkSizeBytes, the copy
+                // loop copies everything in a single iteration (one destination chunk exactly
+                // full), so it and the up-front retirement pass are done in the first handful of
+                // invocations; the rest -- including this last one -- come from the trailing
+                // backfill loop allocating the remaining, never-written new chunks.
+                if (invocations == totalInvocations) throw InjectedAllocationFailure()
+            }
+        } catch (e: InjectedAllocationFailure) {
+            failed = true
+        }
+        assertTrue("resize must propagate the injected failure rather than swallowing it", failed)
+        assertEquals(
+            "test setup must actually reach the last (backfill-loop) invocation before failing",
+            totalInvocations,
+            invocations,
+        )
+
+        assertEquals(
+            "capacityBytes must revert to the old size after a failed resize",
+            oldCapacityBytes,
+            buffer.capacityBytes,
+        )
+
+        // The buffer must still be structurally usable: no dangling zero-length chunk should make
+        // write/read throw.
+        buffer.write(byteArrayOf(1, 2, 3))
+        assertTrue("buffer must still hold buffered bytes after recovering from a failed resize", buffer.bufferedBytes() > 0)
+
+        // The copy loop had already fully drained the retained window before the backfill loop (and
+        // therefore the failure) ran, so all of it is honestly reported as lost rather than
+        // silently returned.
+        val stale = buffer.readSince(cursor = 0L, maxBytes = oldCapacityBytes)
+        assertTrue(
+            "a cursor from before the failure must be reported Lapped, not returned as Data",
+            stale is ReadSinceResult.Lapped,
+        )
+
         val fresh = buffer.readSince(cursor = buffer.oldestCursor(), maxBytes = oldCapacityBytes + 3)
         assertTrue("reading from the current oldest cursor must succeed", fresh is ReadSinceResult.Data)
     }
