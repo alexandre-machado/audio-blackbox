@@ -7,14 +7,17 @@ import org.junit.Test
 private const val MB = 1024L * 1024L
 
 /**
- * Unit tests for [RingBuffer.resize]'s memory-budget refusal (issue #272).
+ * Unit tests for [RingBuffer.resize]'s memory-budget refusal (issue #272, guard formula
+ * reformulated by #277 for the segmented, single-allocation-peak backing store -- see
+ * [RingBuffer.resize]'s own doc for the net-growth formula this file now pins).
  *
  * ## The oracle, stated up front (AGENTS.md §2)
- * A resize whose projected peak (current heap usage + the new array being allocated) would
- * exceed [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the injected [MemoryBudget]'s reported
- * ceiling must be refused *before* any allocation happens: [RingBuffer.capacityBytes] and
- * [RingBuffer.bufferedBytes] stay exactly as they were, and [RingBuffer.resize] returns
- * [ResizeOutcome.Refused] rather than throwing or silently truncating.
+ * A resize whose projected peak (current heap usage, plus the *net growth* in capacity, plus two
+ * chunks of slack for the transient old/new overlap -- not the old pre-#277 "current heap usage
+ * plus the full new capacity") would exceed [DeviceMemoryBudget.SAFE_HEAP_UTILISATION] of the
+ * injected [MemoryBudget]'s reported ceiling must be refused *before* any allocation happens:
+ * [RingBuffer.capacityBytes] and [RingBuffer.bufferedBytes] stay exactly as they were, and
+ * [RingBuffer.resize] returns [ResizeOutcome.Refused] rather than throwing or silently truncating.
  *
  * ## Why this is genuinely Tier-0 testable, unlike the OOM itself (AGENTS.md §6)
  * The 256 MB Dalvik heap growth limit that actually killed the app in production
@@ -82,18 +85,29 @@ class RingBufferResizeBudgetTest {
     fun `a request that only barely fits is applied, and one byte more is refused`() {
         // Pins the exact boundary rather than an arbitrary comfortable case, so the 0.85 constant
         // itself is load-bearing in this test, not just "some margin exists".
+        //
+        // #277 changed the guarded quantity from `usedHeapBytes + newCapacityBytes` to
+        // `usedHeapBytes + netGrowthBytes + 2 * chunkSizeBytes` (two chunks of slack for the
+        // transient old/new overlap the segmented store allows -- see RingBuffer.resize's doc,
+        // and RingBufferSingleAllocationTest for why two, not one). This test fixes chunkSizeBytes
+        // at a small, known value and old capacity at 0 so netGrowthBytes equals the requested
+        // capacity exactly, keeping the boundary arithmetic precise.
+        val chunkSizeBytes = 4_096
         val maxHeapBytes = 200L * MB
         val usedHeapBytes = 50L * MB
         val safeHeapBytes = (maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
-        val exactlyFits = (safeHeapBytes - usedHeapBytes).toInt()
+        val exactlyFits = (safeHeapBytes - usedHeapBytes - 2L * chunkSizeBytes).toInt()
 
-        val buffer = RingBuffer(capacityBytes = 1_000)
         val budget = MemoryBudget { MemorySample(maxHeapBytes = maxHeapBytes, usedHeapBytes = usedHeapBytes) }
 
-        val fits = buffer.resize(exactlyFits, budget)
+        // Two independent buffers, both starting at capacity 1, so each resize's net growth is
+        // the full requested capacity -- a single buffer reused across both calls would make the
+        // second resize's net growth just the incremental byte, never re-hitting the boundary.
+        val fits = RingBuffer(capacityBytes = 1, chunkSizeBytes = chunkSizeBytes).resize(exactlyFits, budget)
         assertEquals(ResizeOutcome.Applied, fits)
 
-        val tooMuch = buffer.resize(exactlyFits + MB.toInt(), budget)
+        val tooMuch = RingBuffer(capacityBytes = 1, chunkSizeBytes = chunkSizeBytes)
+            .resize(exactlyFits + MB.toInt(), budget)
         assertTrue("one MB past the safe ceiling must be refused, got $tooMuch", tooMuch is ResizeOutcome.Refused)
     }
 
