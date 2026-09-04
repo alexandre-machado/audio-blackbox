@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.theme
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
@@ -182,6 +183,11 @@ private val RBF_ENTRY_SLIDE = 24.dp
 
 private const val RBF_ENTRY_DURATION_MS = 320
 
+/** How much further the tag carries on in the pull direction as it comes off the panel. */
+private val RBF_EXIT_TRAVEL = 40.dp
+
+private const val RBF_EXIT_DURATION_MS = 180
+
 /** Degrees the tag swings about its grommet at a full-threshold pull. */
 private const val RBF_MAX_SWING_DEGREES = 7f
 
@@ -199,6 +205,12 @@ private const val RBF_MAX_SWING_DEGREES = 7f
  * affordance: when it is live the tag also carries a named accessibility action
  * ([removeActionLabel]) so TalkBack, Switch Access and keyboard users get the same one-step route
  * without having to produce a drag, and the tag's own text stays readable as plain status.
+ *
+ * A dragging tag needs a host that neither clips it nor lets it take part in the layout, and this
+ * composable does not provide one -- it is an ordinary `fillMaxWidth()` Surface. On the dashboard
+ * that host is `RbfTagOverlay` in `DashboardScreen`, which lays it over the mic-input-level rack
+ * from a zero-size layout outside the card's clipping `Surface`. Anywhere else, put it somewhere
+ * with the same two properties or the tag will be cut off at the first ancestor that clips.
  *
  * @param onRemove invoked at most once, when the tag is pulled clear. Null makes the tag inert.
  * @param removeEnabled mirrors the engine switch's own enabled gate; false freezes the gesture in
@@ -222,6 +234,7 @@ fun RemoveBeforeFlightTag(
     val density = LocalDensity.current
     val thresholdPx = with(density) { RBF_PULL_THRESHOLD.toPx() }
     val entrySlidePx = with(density) { RBF_ENTRY_SLIDE.toPx() }
+    val exitTravelPx = with(density) { RBF_EXIT_TRAVEL.toPx() }
 
     val currentOnRemove by rememberUpdatedState(onRemove)
     val gate = remember(thresholdPx) {
@@ -241,26 +254,86 @@ fun RemoveBeforeFlightTag(
     val entry = remember {
         Animatable(if (playEntryAnimation && animationsEnabled) 0f else 1f)
     }
+
+    // 1 = on the panel, 0 = off it. Only the successful pull drives this, so it is separate from
+    // [entry]: a tag being put back on the panel and a tag coming off it are different motions in
+    // opposite directions, and multiplying the two alphas keeps either one from having to know
+    // about the other.
+    val departure = remember { Animatable(1f) }
+
     LaunchedEffect(entry) {
         if (entry.value != 1f) {
             entry.animateTo(1f, tween(RBF_ENTRY_DURATION_MS, easing = FastOutSlowInEasing))
         }
     }
 
+    suspend fun settleHome() {
+        if (animationsEnabled) {
+            offset.animateTo(
+                targetValue = Offset.Zero,
+                animationSpec = spring(
+                    dampingRatio = 0.42f,
+                    stiffness = Spring.StiffnessLow,
+                    visibilityThreshold = Offset.VisibilityThreshold,
+                ),
+            )
+        } else {
+            offset.snapTo(Offset.Zero)
+        }
+    }
+
     fun settleBack() {
+        scope.launch { settleHome() }
+    }
+
+    /**
+     * The exit motion for a successful pull: the tag keeps going the way it was pulled and fades
+     * out, instead of hanging at the release position for the whole pending window (PR #320 review,
+     * `@rev` finding 5). With animations off it goes straight to that animation's end state -- off
+     * the panel -- which is a loss of motion, never of function.
+     */
+    fun peelOff() {
         scope.launch {
-            if (animationsEnabled) {
-                offset.animateTo(
-                    targetValue = Offset.Zero,
-                    animationSpec = spring(
-                        dampingRatio = 0.42f,
-                        stiffness = Spring.StiffnessLow,
-                        visibilityThreshold = Offset.VisibilityThreshold,
-                    ),
-                )
-            } else {
-                offset.snapTo(Offset.Zero)
+            if (!animationsEnabled) {
+                departure.snapTo(0f)
+                return@launch
             }
+            val released = offset.value
+            val travelled = released.getDistance()
+            val direction = if (travelled > 0f) released / travelled else Offset(1f, 0f)
+            launch {
+                offset.animateTo(
+                    targetValue = released + direction * exitTravelPx,
+                    animationSpec = tween(RBF_EXIT_DURATION_MS, easing = FastOutSlowInEasing),
+                )
+            }
+            departure.animateTo(0f, tween(RBF_EXIT_DURATION_MS, easing = LinearEasing))
+        }
+    }
+
+    // What happens when the gesture stops or starts being live while the tag is still composed.
+    // Both directions matter, and neither used to be handled (PR #320 review, `@rev` findings 1 and
+    // 2): the tag stays on the panel through the whole pending window, and comes back to it
+    // whenever a start fails into `Error` or `toggleEngine`'s timeout backstop clears `pending`
+    // with the recorder still idle.
+    LaunchedEffect(gate, gestureLive) {
+        if (gestureLive) {
+            // The pull did not take. Give the drag route back and refit the tag, rather than
+            // leaving a dead affordance lying where the finger dropped it.
+            if (gate.rearm()) {
+                offset.snapTo(Offset.Zero)
+                departure.snapTo(1f)
+                if (animationsEnabled) {
+                    entry.snapTo(0f)
+                    entry.animateTo(1f, tween(RBF_ENTRY_DURATION_MS, easing = FastOutSlowInEasing))
+                } else {
+                    entry.snapTo(1f)
+                }
+            }
+        } else if (gate.standDown()) {
+            // The detector has just been uninstalled mid-drag, so no onDragEnd/onDragCancel is
+            // coming for the gesture in progress. Put the tag back by hand.
+            settleHome()
         }
     }
 
@@ -286,10 +359,12 @@ fun RemoveBeforeFlightTag(
                     }
                 },
                 onDragEnd = {
-                    // The gate runs onRemove itself on a PULL; there is nothing left to do here
-                    // but put the tag back when it was not pulled far enough.
-                    if (gate.release() == RemoveBeforeFlightDragGate.Release.SPRING_BACK) {
-                        settleBack()
+                    // The gate runs onRemove itself on a PULL; all that is left here is the
+                    // motion -- home if it was not pulled far enough, off the panel if it was.
+                    when (gate.release()) {
+                        RemoveBeforeFlightDragGate.Release.SPRING_BACK -> settleBack()
+                        RemoveBeforeFlightDragGate.Release.PULL -> peelOff()
+                        RemoveBeforeFlightDragGate.Release.INERT -> Unit
                     }
                 },
                 onDragCancel = {
@@ -307,7 +382,7 @@ fun RemoveBeforeFlightTag(
             .graphicsLayer {
                 translationX = offset.value.x - (1f - entry.value) * entrySlidePx
                 translationY = offset.value.y
-                alpha = entry.value
+                alpha = entry.value * departure.value
                 // A real tag hangs off its grommet, so it swings rather than sliding flat.
                 rotationZ = (offset.value.x / thresholdPx).coerceIn(-1f, 1f) * RBF_MAX_SWING_DEGREES
                 transformOrigin = TransformOrigin(0f, 0.5f)

@@ -146,6 +146,86 @@ class RemoveBeforeFlightDragTest {
         assertEquals(0f, gate.offsetY, 0f)
     }
 
+    // ---- the gesture going inert and live again while the tag is still on the panel ----
+    //
+    // PR #320 review (`@rev` findings 1 and 2). The original latch never cleared, justified by "the
+    // state change removes the tag from the composition" -- true only when the start succeeds.
+    // `mapEngineSwitchState` keeps `checked = false` for both Idle and Error, so a start that fails,
+    // or a `toggleEngine` timeout backstop that clears `pending` with the status still Idle, leaves
+    // the same remembered gate composed with `pulled` stuck on.
+
+    @Test
+    fun `a pull that did not take gives the drag route back`() {
+        val gate = gate()
+
+        gate.drag(0f, 250f)
+        assertEquals(RemoveBeforeFlightDragGate.Release.PULL, gate.release())
+        assertEquals(1, armCount)
+
+        // The recorder never started (Error, or the pending window closed with it still idle), so
+        // the tag is still composed and the gesture goes live again.
+        assertTrue("a spent gate must re-arm once its pull is known not to have taken", gate.rearm())
+        assertFalse(gate.pulled)
+        assertEquals("re-arming must also bring the tag home", 0f, gate.offsetX, 0f)
+        assertEquals(0f, gate.offsetY, 0f)
+
+        // ...and the route is alive, rather than dead for the rest of this composition.
+        assertTrue(gate.drag(0f, 250f))
+        assertEquals(RemoveBeforeFlightDragGate.Release.PULL, gate.release())
+        assertEquals("the second pull must reach the recorder too", 2, armCount)
+    }
+
+    @Test
+    fun `re-arming a gate that never armed anything reports that it had nothing to undo`() {
+        val gate = gate()
+
+        gate.drag(10f, 10f)
+        gate.release()
+
+        assertFalse(
+            "nothing was pulled, so there is nothing to refit -- the tag must not play a return " +
+                "animation every time the switch's enabled gate flickers",
+            gate.rearm(),
+        )
+    }
+
+    @Test
+    fun `a tag stranded mid-drag is brought home when the gesture goes inert`() {
+        val gate = gate()
+
+        gate.drag(0f, 400f)
+        // The switch's enabled gate closes mid-gesture, which uninstalls the drag detector, so no
+        // onDragEnd or onDragCancel will ever arrive for this gesture.
+        gate.enabled = false
+
+        assertTrue("a tag left mid-drag must be reported as stranded", gate.standDown())
+        assertEquals(0f, gate.offsetX, 0f)
+        assertEquals("the tag must not be left hanging where the finger dropped it", 0f, gate.offsetY, 0f)
+        assertEquals("standing down must never arm the recorder", 0, armCount)
+    }
+
+    @Test
+    fun `a tag that never moved reports nothing to stand down from`() {
+        val gate = gate()
+
+        assertFalse(gate.standDown())
+    }
+
+    @Test
+    fun `a tag that was pulled off is left where it is, to carry on off the panel`() {
+        val gate = gate()
+
+        gate.drag(300f, 0f)
+        assertEquals(RemoveBeforeFlightDragGate.Release.PULL, gate.release())
+
+        // The gesture goes inert because the pull worked (the switch is disabled while the toggle
+        // is pending). The tag is not stranded here -- it is leaving, and its offset is where the
+        // exit motion continues from.
+        assertFalse("a pulled tag is on its way out, not stranded", gate.standDown())
+        assertEquals(300f, gate.offsetX, 0f)
+        assertTrue(gate.pulled)
+    }
+
     @Test
     fun `travel accumulates across the whole gesture rather than per event`() {
         val gate = gate()
