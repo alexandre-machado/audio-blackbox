@@ -86,6 +86,7 @@
     <string name="dashboard_annunciator_error">AVISO PRINCIPAL // ERRO</string>
     <string name="dashboard_annunciator_error_sub">CH-01 · RECUPERAÇÃO DE HARDWARE NECESSÁRIA</string>
     <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // GRAVADOR EM ESPERA</string>
+    <string name="dashboard_rbf_remove_action">Remover a etiqueta e armar o gravador</string>
     <string name="dashboard_card_lookback_label">BUFFER LOOKBACK // PERSISTÊNCIA EM DISCO</string>
     <string name="dashboard_card_forward_label">GRAVADOR DE VOO AO VIVO // CONTÍNUO</string>
     <string name="dashboard_card_vu_label">NÍVEL DE ENTRADA DO MIC (VU)</string>

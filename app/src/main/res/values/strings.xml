@@ -100,6 +100,11 @@
     <string name="dashboard_annunciator_error">MASTER WARNING // ERROR</string>
     <string name="dashboard_annunciator_error_sub">CH-01 · HARDWARE RECOVERY REQUIRED</string>
     <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // RECORDER STANDBY</string>
+    <!-- Named accessibility action on the REMOVE BEFORE FLIGHT tag (issue #284): the tag can be
+         dragged off to arm the recorder, and this is the equivalent one-step route for anyone who
+         cannot or would rather not perform a drag. The engine switch remains available either
+         way. -->
+    <string name="dashboard_rbf_remove_action">Remove the tag and arm the recorder</string>
     <string name="dashboard_card_lookback_label">LOOKBACK BUFFER // DISK PERSISTENCE</string>
     <string name="dashboard_card_forward_label">LIVE FLIGHT RECORDER // CONTINUOUS</string>
     <string name="dashboard_card_vu_label">MIC INPUT LEVEL (VU)</string>

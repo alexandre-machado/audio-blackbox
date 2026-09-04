@@ -397,7 +397,18 @@
       transition: transform 0.2s;
     }
 
-    /* Remove Before Flight Tag Banner */
+    /* Remove Before Flight Tag Banner.
+       Draggable: pull it off the panel in any direction and the recorder arms, the way the real
+       tag comes off before the aircraft moves (issue #284). This is an *additional* route to the
+       same action as the engine switch, never a replacement for it -- the switch stays, and so
+       does the keyboard/assistive route on the tag itself. The gesture only ever arms; the tag is
+       hidden while recording, so no drag can interrupt a capture.
+
+       It is laid *over* the mic-input-level rack rather than sitting above it in the flow (the
+       owner's call after testing the gesture on a device): out of flow, so showing or hiding it
+       resizes nothing below, and z-indexed above its siblings so a drag can travel over any other
+       element instead of being painted over by whatever comes next. Compose does the same thing
+       with a zero-size overlay layout, see DashboardScreen's RbfTagOverlay. */
     .rbf-tag {
       background: #B91C1C;
       border: 1px solid #EF4444;
@@ -422,6 +433,81 @@
       background: #FFFFFF;
       border-radius: 50%;
       box-shadow: 0 0 0 2px #7F1D1D;
+    }
+
+    /* The tag hangs off its grommet, so it swings about its left edge rather than sliding flat. */
+    .rbf-tag {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      transform-origin: 0 50%;
+    }
+
+    /* The mic-input-level rack, plus the standby tag floating over it. The wrapper is the only
+       thing that takes part in the layout; the tag inside it never does, so the rack keeps exactly
+       the same height whether the tag is there or not. Nothing in this chain clips (no
+       overflow: hidden on .avionics-card), so a dragged tag can leave the card entirely -- only
+       the phone frame's own scroll viewport bounds it, which is the prototype's stand-in for the
+       Compose screen's verticalScroll. */
+    .vu-rack-slot {
+      position: relative;
+    }
+
+    .rbf-overlay {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 40;
+      /* Only the tag itself takes the pointer; the strip around it belongs to the rack below. */
+      pointer-events: none;
+    }
+
+    .rbf-overlay .rbf-tag {
+      pointer-events: auto;
+    }
+
+    .rbf-tag:focus-visible {
+      outline: 2px solid var(--color-flight-orange);
+      outline-offset: 2px;
+    }
+
+    .rbf-tag.rbf-dragging {
+      cursor: grabbing;
+    }
+
+    /* Released short of the threshold: the tag is still attached, so it springs home. */
+    .rbf-tag.rbf-settling {
+      transition: transform 0.42s cubic-bezier(0.2, 1.5, 0.4, 1);
+    }
+
+    /* Put back on the panel when the recorder is switched off -- it returns to its place rather
+       than appearing between two frames. */
+    @keyframes rbf-refit {
+      from { opacity: 0; transform: translateX(-24px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .rbf-tag.rbf-refitting {
+      animation: rbf-refit 320ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Pulled past the threshold: the tag carries on the way it was pulled and fades, instead of
+       hanging at the release position until the state catches up (PR #320 review, `@rev` finding
+       5). Compose does the same with a `departure` animatable in RemoveBeforeFlightTag. */
+    .rbf-tag.rbf-peeling {
+      transition: transform 180ms cubic-bezier(0.4, 0, 1, 1), opacity 180ms linear;
+      opacity: 0;
+    }
+
+    /* Animations off means no transition, never no function: the tag still returns, still comes
+       off when pulled, and still arms the recorder. Compose reads
+       Settings.Global.ANIMATOR_DURATION_SCALE for the same reason (ui/theme/Motion.kt). */
+    @media (prefers-reduced-motion: reduce) {
+      .rbf-tag.rbf-settling { transition: none; }
+      .rbf-tag.rbf-refitting { animation: none; }
+      .rbf-tag.rbf-peeling { transition: none; }
     }
 
     /* VU Meter Segmented LED Bars */
@@ -866,19 +952,28 @@
                 </div>
               </div>
 
-              <!-- Remove Before Flight Standby Tag -->
-              <div class="rbf-tag" id="rbf-standby-tag">
-                <span>REMOVE BEFORE FLIGHT // RECORDER STANDBY</span>
-              </div>
-
-              <!-- VU Meter -->
-              <div class="vu-meter-rack">
-                <div class="vu-rack-header">
-                  <span>MIC INPUT LEVEL (VU)</span>
-                  <span id="vu-db-readout">-18 dBFS</span>
+              <!-- VU Meter, with the Remove Before Flight standby tag laid over it.
+                   Drag the tag off in any direction to arm the recorder; Enter/Space does the same
+                   thing in one step for anyone who cannot drag. The engine switch above remains
+                   the primary control either way.
+                   The tag sits inside .rbf-overlay rather than in the flow above the rack, so the
+                   rack neither moves nor resizes when the tag appears or disappears -- and the
+                   overlay's z-index lets a dragged tag travel over everything else on the panel. -->
+              <div class="vu-rack-slot">
+                <div class="vu-meter-rack">
+                  <div class="vu-rack-header">
+                    <span>MIC INPUT LEVEL (VU)</span>
+                    <span id="vu-db-readout">-18 dBFS</span>
+                  </div>
+                  <div class="vu-rack-bars" id="vu-rack-bars">
+                    <!-- 20 segments generated via JS -->
+                  </div>
                 </div>
-                <div class="vu-rack-bars" id="vu-rack-bars">
-                  <!-- 20 segments generated via JS -->
+                <div class="rbf-overlay">
+                  <div class="rbf-tag" id="rbf-standby-tag" tabindex="0" role="button"
+                       aria-label="REMOVE BEFORE FLIGHT // RECORDER STANDBY. Remove the tag and arm the recorder.">
+                    <span>REMOVE BEFORE FLIGHT // RECORDER STANDBY</span>
+                  </div>
                 </div>
               </div>
 
@@ -1383,6 +1478,7 @@
       } else if (state === 'IDLE') {
         event && event.target && event.target.classList.add('active');
         rbfTag.style.display = 'flex';
+        refitRbfTag();
         annunciatorBox.style.display = 'none';
       } else if (state === 'OVERFLOW') {
         event && event.target && event.target.classList.add('active');
@@ -1400,6 +1496,129 @@
         setSimState('RECORDING');
       }
     }
+
+    // --- REMOVE BEFORE FLIGHT: drag the tag off to arm the recorder (issue #284) ---------------
+    //
+    // Deliberately an extra way in, not the way in. It ends in exactly the same
+    // toggleEngineState() the switch calls, so the gesture can be dropped without leaving the
+    // panel without a way to start recording, and the tag keeps a keyboard/AT route of its own.
+    //
+    // One-way by design: the tag is hidden while recording, so no accidental drag can stop a
+    // capture in progress -- the one thing this product exists not to do.
+    const RBF_PULL_THRESHOLD_PX = 72;
+    const RBF_MAX_SWING_DEG = 7;
+    // How much further the tag carries on in the pull direction as it comes off, and for how long.
+    const RBF_PEEL_TRAVEL_PX = 40;
+    const RBF_PEEL_MS = 180;
+
+    let rbfPointerId = null;
+    let rbfStartX = 0;
+    let rbfStartY = 0;
+    let rbfDx = 0;
+    let rbfDy = 0;
+    let rbfPulled = false;
+
+    function rbfReducedMotion() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function rbfPaint(tag) {
+      const swing = Math.max(-1, Math.min(1, rbfDx / RBF_PULL_THRESHOLD_PX)) * RBF_MAX_SWING_DEG;
+      tag.style.transform = 'translate(' + rbfDx + 'px, ' + rbfDy + 'px) rotate(' + swing + 'deg)';
+    }
+
+    function rbfSettleBack(tag) {
+      rbfDx = 0;
+      rbfDy = 0;
+      tag.style.transform = '';
+      if (rbfReducedMotion()) return;
+      tag.classList.add('rbf-settling');
+      setTimeout(function () { tag.classList.remove('rbf-settling'); }, 480);
+    }
+
+    // Called when the tag goes back on the panel, i.e. the recorder was switched off.
+    function refitRbfTag() {
+      const tag = document.getElementById('rbf-standby-tag');
+      if (!tag) return;
+      rbfPulled = false;
+      rbfDx = 0;
+      rbfDy = 0;
+      tag.style.transform = '';
+      tag.classList.remove('rbf-settling', 'rbf-dragging', 'rbf-refitting', 'rbf-peeling');
+      if (rbfReducedMotion()) return;
+      // Restart the keyframes even if the class was still present from a previous return.
+      void tag.offsetWidth;
+      tag.classList.add('rbf-refitting');
+    }
+
+    (function initRbfTagDrag() {
+      const tag = document.getElementById('rbf-standby-tag');
+      if (!tag) return;
+
+      tag.addEventListener('pointerdown', function (e) {
+        if (rbfPulled || currentState === 'RECORDING') return;
+        rbfPointerId = e.pointerId;
+        rbfStartX = e.clientX;
+        rbfStartY = e.clientY;
+        tag.classList.remove('rbf-settling', 'rbf-refitting', 'rbf-peeling');
+        tag.classList.add('rbf-dragging');
+        tag.setPointerCapture(rbfPointerId);
+      });
+
+      tag.addEventListener('pointermove', function (e) {
+        if (e.pointerId !== rbfPointerId || rbfPulled) return;
+        rbfDx = e.clientX - rbfStartX;
+        rbfDy = e.clientY - rbfStartY;
+        rbfPaint(tag);
+      });
+
+      function endGesture(e) {
+        if (e.pointerId !== rbfPointerId) return;
+        rbfPointerId = null;
+        tag.classList.remove('rbf-dragging');
+        // Free in both axes: what counts is how far the tag travelled, not along which axis.
+        const pulledFarEnough = !rbfPulled &&
+          Math.hypot(rbfDx, rbfDy) >= RBF_PULL_THRESHOLD_PX &&
+          e.type === 'pointerup';
+        if (pulledFarEnough) {
+          // Latched, so a second release before the tag is hidden cannot toggle twice. The latch
+          // is cleared again by refitRbfTag(), i.e. only once the tag is actually put back on the
+          // panel -- in the app that is also what recovers the drag route when a start fails
+          // (RemoveBeforeFlightDragGate.rearm; PR #320 review, `@rev` findings 1 and 2).
+          rbfPulled = true;
+          if (rbfReducedMotion()) {
+            rbfDx = 0;
+            rbfDy = 0;
+            tag.style.transform = '';
+            toggleEngineState();
+          } else {
+            // Keep going the way it was pulled, and fade, instead of hanging at the release point.
+            const travelled = Math.hypot(rbfDx, rbfDy) || 1;
+            rbfDx += (rbfDx / travelled) * RBF_PEEL_TRAVEL_PX;
+            rbfDy += (rbfDy / travelled) * RBF_PEEL_TRAVEL_PX;
+            tag.classList.add('rbf-peeling');
+            rbfPaint(tag);
+            // Stands in for the app's pending window: the tag is off the panel before the
+            // annunciator catches up.
+            setTimeout(toggleEngineState, RBF_PEEL_MS);
+          }
+        } else {
+          rbfSettleBack(tag);
+        }
+      }
+
+      tag.addEventListener('pointerup', endGesture);
+      tag.addEventListener('pointercancel', endGesture);
+
+      // The same one step, without a drag. Mirrors the named accessibility action the Compose tag
+      // exposes (R.string.dashboard_rbf_remove_action).
+      tag.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        if (currentState === 'RECORDING') return;
+        toggleEngineState();
+      });
+    })();
 
     // Current Settings State
     let currentPreset = 'voice';

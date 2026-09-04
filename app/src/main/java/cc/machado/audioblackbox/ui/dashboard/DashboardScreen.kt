@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,13 +37,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -55,8 +61,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
@@ -140,6 +150,11 @@ fun DashboardScreen(
         EngineCard(
             uiState = uiState,
             onToggleEngine = onToggleEngine,
+            // Draw order, not layout. The REMOVE BEFORE FLIGHT tag is an overlay hosted inside this
+            // card's slot (see [EngineCard]), and while it is dragged it has to be able to travel
+            // over the cards below it, which are later siblings in this Column and would otherwise
+            // paint on top of it. Nothing moves: zIndex only reorders drawing and hit-testing.
+            modifier = Modifier.zIndex(1f),
         )
         SaveSection(uiState, onSaveRecent)
         ForwardRecordingSection(
@@ -175,10 +190,171 @@ private fun AppHeader() {
     )
 }
 
+/**
+ * Remembers that the REMOVE BEFORE FLIGHT tag has been off the panel at least once during this
+ * composition of [EngineCard], which is what tells the tag apart from "the screen just opened"
+ * (issue #284): a returning tag animates back on, a freshly-opened screen does not animate at all.
+ *
+ * Deliberately a plain holder rather than a `MutableState`: the flag is written in the frame where
+ * the tag is *not* composed and read in a later frame where it is, so it never needs to invalidate
+ * anything, and making it observable would only add a needless recomposition (and a write-during-
+ * composition to a value read in the same pass).
+ */
+private class RbfTagReturn {
+    var hasBeenAway: Boolean = false
+}
+
+/**
+ * Where the mic-input-level (VU) rack sits inside [EngineCard]'s slot, in that slot's own pixels,
+ * so [RbfTagOverlay] can lay the REMOVE BEFORE FLIGHT tag over it.
+ *
+ * Measured rather than hardcoded because the rack's position moves with font scale, locale and
+ * width, and an overlay pinned to a guessed offset would drift off it. Both edges of the
+ * subtraction move together when the dashboard scrolls, so [bounds] does not change during a
+ * scroll and the overlay is not re-laid-out for one: the tag scrolls with the card because it is
+ * inside the same scrolling Column, not because anything recomputes per frame.
+ */
+private class RbfOverlaySlot {
+    private var host: LayoutCoordinates? = null
+    private var anchor: LayoutCoordinates? = null
+
+    /** Null until both the slot and the rack have been positioned once. */
+    var bounds: IntRect? by mutableStateOf(null)
+        private set
+
+    fun onHost(coordinates: LayoutCoordinates) {
+        host = coordinates
+        recompute()
+    }
+
+    fun onAnchor(coordinates: LayoutCoordinates) {
+        anchor = coordinates
+        recompute()
+    }
+
+    private fun recompute() {
+        val host = host ?: return
+        val anchor = anchor ?: return
+        if (!host.isAttached || !anchor.isAttached) return
+        val topLeft = host.localPositionOf(anchor, Offset.Zero).round()
+        val next = IntRect(topLeft, anchor.size)
+        if (next != bounds) bounds = next
+    }
+}
+
+/**
+ * Hosts the REMOVE BEFORE FLIGHT tag over the mic-input-level rack (issue #284, the owner's verdict
+ * after testing the gesture on the device: *"poderia ficar por cima do 'mic input level' de modo
+ * que o card abaixo não sofra resize, e a etiqueta sobreponha qualquer elemento da tela"*).
+ *
+ * Two invariants, and how each is met:
+ *
+ * **Showing or hiding the tag moves and resizes nothing.** `Modifier.matchParentSize()` is
+ * precisely the "do not take part in sizing this Box" contract: the surrounding Box is measured
+ * from [EngineChassisCard] alone, and this overlay is then measured a second time against whatever
+ * size that produced. So the card below cannot reflow when the tag appears or disappears -- not
+ * because the tag happens to be shorter than the card, but because the tag's measurement is never
+ * an input to anyone else's.
+ *
+ * **The tag draws above everything and is not clipped while dragged.** Nothing in the chain from
+ * here up to the dashboard's scroll viewport clips: it is Boxes all the way, whereas the card is a
+ * [androidx.compose.material3.Surface] and *does* clip, which is why the tag had to leave it. The
+ * `zIndex` at the [EngineCard] call site then carries a dragged tag over the sibling cards below,
+ * which would otherwise paint on top of it. The only boundary left is the `verticalScroll`
+ * viewport -- the visible screen -- and the floating bottom bar, which lives in `AppScaffold`
+ * outside this composition and still draws over the tag. That last one is deliberate: it is what
+ * stops a draggable element from covering the app's own navigation, and it is what keeps
+ * `ScreenLayoutTest`'s "content stays clear of the bar" assertion meaningful.
+ *
+ * The overlay is given the whole slot's size rather than a zero one so that the tag at rest is
+ * inside its parent's bounds and is unambiguously hit-testable. Once a drag is under way the
+ * pointer is held by `detectDragGestures` for the rest of the gesture, so the tag keeps following
+ * the finger even where it has travelled outside every bound in sight.
+ */
+@Composable
+private fun BoxScope.RbfTagOverlay(
+    slot: RbfOverlaySlot,
+    content: @Composable () -> Unit,
+) {
+    val bounds = slot.bounds
+    Layout(content = content, modifier = Modifier.matchParentSize()) { measurables, constraints ->
+        val width = bounds?.width ?: constraints.maxWidth
+        val placeable = measurables.first().measure(Constraints.fixedWidth(width))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            // Before the first layout pass has positioned the rack there is nowhere honest to put
+            // the tag, so it is measured but not placed for that one frame rather than flashing at
+            // the slot's origin and jumping.
+            if (bounds != null) {
+                placeable.place(
+                    x = bounds.left,
+                    y = bounds.top + (bounds.height - placeable.height) / 2,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The engine card's slot: the chassis card itself, plus the REMOVE BEFORE FLIGHT tag laid over its
+ * mic-input-level rack.
+ *
+ * The tag used to be an item in the card's own Column, between the annunciator and the VU rack,
+ * which meant showing or hiding it reflowed everything below it -- and, once it became draggable
+ * (issue #284), that the card's `Surface` clipped it the moment it left the card. It is now an
+ * overlay instead, on the owner's call after testing the gesture on the device. [RbfTagOverlay]
+ * carries the whole argument for how that stays true.
+ */
 @Composable
 private fun EngineCard(
     uiState: DashboardUiState,
     onToggleEngine: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tagReturn = remember { RbfTagReturn() }
+    val rbfSlot = remember { RbfOverlaySlot() }
+
+    Box(modifier = modifier.fillMaxWidth().onGloballyPositioned(rbfSlot::onHost)) {
+        EngineChassisCard(
+            uiState = uiState,
+            onToggleEngine = onToggleEngine,
+            rbfSlot = rbfSlot,
+        )
+
+        // Standby / "REMOVE BEFORE FLIGHT" ribbon tag.
+        //
+        // Pulling the tag off arms the recorder (issue #284) by calling the very same
+        // onToggleEngine() the Switch calls -- two ways in, one destination, so the gesture can be
+        // dropped at any time without leaving the screen without a way to start recording.
+        //
+        // Whether the tag is here at all, and whether a pull may arm, are both
+        // RemoveBeforeFlightTagPolicy's to answer: they are the rule that keeps the gesture
+        // one-way, and they are exhaustively tested over every CaptureStatus rather than defended
+        // by reading (PR #320 review, `@rev` finding 4).
+        if (RemoveBeforeFlightTagPolicy.isOnPanel(uiState.captureStatus, uiState.engineSwitch)) {
+            RbfTagOverlay(rbfSlot) {
+                RemoveBeforeFlightTag(
+                    text = stringResource(R.string.dashboard_rbf_tag),
+                    onRemove = onToggleEngine.takeIf {
+                        RemoveBeforeFlightTagPolicy.mayArm(uiState.engineSwitch)
+                    },
+                    removeEnabled = uiState.engineSwitch.enabled,
+                    removeActionLabel = stringResource(R.string.dashboard_rbf_remove_action),
+                    playEntryAnimation = tagReturn.hasBeenAway,
+                )
+            }
+        } else {
+            // Recording: the tag is off the panel. Remember that, so that when the recorder is
+            // switched off the tag is animated back on instead of blinking into existence.
+            tagReturn.hasBeenAway = true
+        }
+    }
+}
+
+@Composable
+private fun EngineChassisCard(
+    uiState: DashboardUiState,
+    onToggleEngine: () -> Unit,
+    rbfSlot: RbfOverlaySlot,
 ) {
     val status = uiState.captureStatus
     val (annunciatorTitleRes, annunciatorSubRes) = when (status) {
@@ -270,17 +446,16 @@ private fun EngineCard(
                 }
             }
 
-            // Standby / "REMOVE BEFORE FLIGHT" Ribbon Tag
-            if (status is CaptureStatus.Idle || !uiState.engineSwitch.checked) {
-                RemoveBeforeFlightTag(text = stringResource(R.string.dashboard_rbf_tag))
-            }
-
-            // VU Meter Recessed Rack
+            // VU Meter Recessed Rack -- also the REMOVE BEFORE FLIGHT tag's anchor: the tag is laid
+            // over this rack rather than sitting above it in the flow, so it costs the card no
+            // height and the rack cannot be reflowed by it appearing or disappearing.
             Surface(
                 shape = RoundedCornerShape(RADIUS_SM),
                 color = CockpitSlate,
                 border = BorderStroke(1.dp, CockpitBorder),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned(rbfSlot::onAnchor),
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
