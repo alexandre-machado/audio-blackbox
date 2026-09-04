@@ -110,6 +110,12 @@ class ExportEngine(
     private val minExportDurationMillis: Long = 0L,
     private val clock: () -> Long = System::currentTimeMillis,
     private val errorLogFile: java.io.File? = null,
+    // Issue #322: fresh read of the capture config, for the one place [config] is still consulted
+    // (the no-segments fallback in [runExport]). [config] is captured once at construction, and
+    // since #194 a quality-preset change really can move sampleRateHz/channelCount underneath it --
+    // so a constructor-captured copy is a stale-format trap even though nothing reaches it today.
+    // Mirrors [ForwardRecordingEngine]'s `configProvider`. `null` keeps the old behavior.
+    private val configProvider: (() -> AudioConfig)? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -260,7 +266,13 @@ class ExportEngine(
 
             val gaps = gapsProvider()
             val activeSegs = segmentsProvider?.invoke() ?: emptyList()
-            val targetConfig = activeSegs.lastOrNull()?.config ?: config
+            // The last segment wins: the file declares the format the newest buffered audio was
+            // recorded in, and everything older is converted up/down into it by
+            // [BoundedExportReader]. The fallback is only reachable if the ring buffer ever stops
+            // seeding a segment (it always does today, see RingBuffer's `segments` init), and it
+            // now reads the capture config fresh rather than a copy captured at construction
+            // (issue #322).
+            val targetConfig = activeSegs.lastOrNull()?.config ?: configProvider?.invoke() ?: config
             val plan = BoundedExportPlanner.plan(
                 startCursor = oldestCursor,
                 rawLength = rawLength,

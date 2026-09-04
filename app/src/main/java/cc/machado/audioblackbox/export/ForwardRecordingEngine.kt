@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.export
 
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.FormatSegment
 import cc.machado.audioblackbox.audio.PauseGap
 import cc.machado.audioblackbox.audio.ReadSinceResult
 import java.io.IOException
@@ -88,6 +89,13 @@ class ForwardRecordingEngine(
     private val drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
     private val configProvider: (() -> AudioConfig)? = null,
     private val errorLogFile: java.io.File? = null,
+    // Issue #322: the ring buffer's own record of which format each byte range was recorded in --
+    // `RingBuffer.activeSegments()`, the same single source of truth `ExportEngine` already drives
+    // its converter from, deliberately not a second guess at "what is the config right now".
+    // Re-sampled on every drain iteration (a lambda, not a value captured at start()) so a preset
+    // change that lands mid-session is seen; `null` means "no segment record available", which
+    // keeps the legacy `AudioCaptureEngine`-free constructor behaving exactly as before.
+    private val segmentsProvider: (() -> List<FormatSegment>)? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -107,6 +115,7 @@ class ForwardRecordingEngine(
         writerFactory = writerFactory,
         clock = clock,
         errorLogFile = null,
+        segmentsProvider = { engine.activeSegments() ?: emptyList() },
     )
 
     private val _state = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
@@ -205,7 +214,10 @@ class ForwardRecordingEngine(
             stateValue = ForwardRecordingState.Recording(displayName, 0L)
 
             val drainThread = Thread({
-                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps)
+                // `currentConfig` is the format the writer above was configured with, i.e. the
+                // format this file declares -- so it is also the format every drained chunk must
+                // be converted into (issue #322).
+                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig)
             }, "ForwardRecordingDrain")
             drainThread.isDaemon = true
             activeDrainThread = drainThread
@@ -251,6 +263,83 @@ class ForwardRecordingEngine(
         return _state.value
     }
 
+    /**
+     * Per-session format reconciliation for the forward-recording drain (issue #322).
+     *
+     * The forward path writes into one long-lived encoder configured once, at session start, with
+     * the session's declared format ([sessionConfig]) -- that is the shape of the container, and
+     * re-configuring an open `MediaCodec`/`MediaMuxer` mid-file would change the file's shape
+     * rather than fix anything. So the reconciliation goes the other way, exactly as the retro
+     * export path already does it: every drained chunk is converted *into* [sessionConfig] before
+     * the writer ever sees it, keeping one format per file.
+     *
+     * **Converter state survives chunk boundaries within a segment.** [PcmAudioConverter] is
+     * explicitly streaming and stateful (fractional resampling phase plus the previous input
+     * frame); a fresh instance per chunk would reintroduce the phase drift and boundary pops it
+     * tracks that state to avoid. One converter is held per source format and only retired --
+     * after a [PcmAudioConverter.flush] -- when the source format actually changes.
+     *
+     * ## This relies on one chunk never straddling a format boundary
+     * It does not enforce that itself, because [cc.machado.audioblackbox.audio.RingBuffer.readSince]
+     * already guarantees it (issue #194: "returned chunks are bounded to segment boundaries so that
+     * each chunk contains audio from exactly one `AudioConfig`"). An earlier draft of this class
+     * clamped the read size again on this side; mutation testing showed that clamp could be deleted
+     * with no test failing anywhere, because it could never bind -- untestable duplicate defence,
+     * so it was removed rather than shipped. The dependency is real though, so it is pinned by a
+     * test of its own: `ForwardRecordingFormatBoundaryTest.readSince never returns a chunk
+     * spanning two formats`.
+     */
+    private class ForwardFormatReconciler(
+        private val sessionConfig: AudioConfig,
+        private val segmentsProvider: (() -> List<FormatSegment>)?,
+    ) {
+        private var converter: PcmAudioConverter? = null
+        private var converterSource: AudioConfig? = null
+
+        /** Segments covering the live window, oldest first. Empty when there is no record. */
+        private fun segments(): List<FormatSegment> =
+            segmentsProvider?.invoke()?.sortedBy { it.startOffset } ?: emptyList()
+
+        /** The format `cursor`'s bytes were recorded in, or `null` when there is no record. */
+        private fun sourceAt(cursor: Long): AudioConfig? {
+            val segs = segments()
+            if (segs.isEmpty()) return null
+            return segs.lastOrNull { it.startOffset <= cursor }?.config ?: segs.first().config
+        }
+
+        /**
+         * Converts [bytes] (read at [cursor]) into [sessionConfig], returning everything that must
+         * be written: any tail flushed out of a retiring converter, followed by the converted
+         * chunk. Identity when the recorded format already matches, so a single-format session
+         * allocates and copies nothing.
+         */
+        fun reconcile(cursor: Long, bytes: ByteArray): List<ByteArray> {
+            val source = sourceAt(cursor) ?: return listOf(bytes)
+            val needsConversion = source.sampleRateHz != sessionConfig.sampleRateHz ||
+                source.channelCount != sessionConfig.channelCount
+
+            val out = mutableListOf<ByteArray>()
+            if (converterSource != source) {
+                // Boundary crossing: drain the outgoing converter's held frame before switching,
+                // so nothing recorded before the boundary is lost at it.
+                converter?.flush()?.takeIf { it.isNotEmpty() }?.let { out += it }
+                converter = if (needsConversion) PcmAudioConverter(source, sessionConfig) else null
+                converterSource = source
+            }
+            val active = converter
+            out += if (active != null) active.convert(bytes) else bytes
+            return out.filter { it.isNotEmpty() }
+        }
+
+        /** Final tail of the last converter, for the end of the session. */
+        fun flush(): ByteArray? {
+            val tail = converter?.flush()
+            converter = null
+            converterSource = null
+            return tail?.takeIf { it.isNotEmpty() }
+        }
+    }
+
     private fun drainLoop(
         displayName: String,
         initialCursor: Long,
@@ -258,11 +347,23 @@ class ForwardRecordingEngine(
         writer: StreamingAudioWriter,
         sessionStartMillis: Long,
         initialGaps: List<PauseGap>,
+        sessionConfig: AudioConfig,
     ) {
         var cursor = initialCursor
         var totalBytesDrained = 0L
         val handledGaps = initialGaps.toMutableSet()
         var lastRefinalizeAtNanos = System.nanoTime()
+        val reconciler = ForwardFormatReconciler(sessionConfig, segmentsProvider)
+
+        // Writes `bytes` (already in sessionConfig) and keeps the reported byte count in step with
+        // what actually reached the file, not with how much raw PCM was read -- those differ by the
+        // conversion ratio whenever a segment predates the session's format.
+        fun emit(chunks: List<ByteArray>) {
+            for (chunk in chunks) {
+                writer.write(chunk)
+                totalBytesDrained += chunk.size
+            }
+        }
 
         // Re-finalizes the MediaStore row's SIZE/DURATION from what has actually been written so
         // far (issue #140/#53 item 3). Never lets a refinalize failure interrupt the recording (see
@@ -322,9 +423,8 @@ class ForwardRecordingEngine(
                     }
                     is ReadSinceResult.Data -> {
                         if (result.bytes.isNotEmpty()) {
-                            writer.write(result.bytes)
+                            emit(reconciler.reconcile(cursor, result.bytes))
                             cursor = result.nextCursor
-                            totalBytesDrained += result.bytes.size
                             synchronized(lock) {
                                 if (_state.value is ForwardRecordingState.Recording) {
                                     stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained)
@@ -379,9 +479,8 @@ class ForwardRecordingEngine(
                 when (val result = readSinceProvider(cursor, drainChunkSizeBytes)) {
                     is ReadSinceResult.Data -> {
                         if (result.bytes.isNotEmpty()) {
-                            writer.write(result.bytes)
+                            emit(reconciler.reconcile(cursor, result.bytes))
                             cursor = result.nextCursor
-                            totalBytesDrained += result.bytes.size
                         }
                         if (result.remainingBytes == 0L) {
                             finalDrainDone = true
@@ -390,6 +489,9 @@ class ForwardRecordingEngine(
                     else -> finalDrainDone = true
                 }
             }
+
+            // Last converter's held boundary frame, before the encoder is closed for good.
+            reconciler.flush()?.let { emit(listOf(it)) }
 
             writer.finish()
             target.finish()

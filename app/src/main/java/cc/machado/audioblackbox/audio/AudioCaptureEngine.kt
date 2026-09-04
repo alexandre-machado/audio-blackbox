@@ -95,6 +95,14 @@ class AudioCaptureEngine(
     private val config: AudioConfig = AudioConfig(),
     private val clock: () -> Long = System::currentTimeMillis,
     private val audioRecordFactory: (AudioConfig, Int) -> AudioRecord = ::createAudioRecord,
+    // Issue #322: the same kind of seam `audioRecordFactory` already is, for the *other* framework
+    // call this class makes. `AudioRecord.getMinBufferSize` is static, and Mockito's static mocks
+    // are thread-local -- so a JVM test could only ever mock it for calls made on the test thread,
+    // which left the capture thread's own format-swap path (`captureLoop`, the one that decides
+    // whether `buffer.setFormat` may advance) structurally untestable at Tier 0. That is exactly
+    // how the mislabelling this issue is about went unnoticed. Routing the lookup through a
+    // function makes both call sites reachable from a test on any thread.
+    private val minBufferSizeProvider: (AudioConfig) -> Int = ::defaultMinBufferSize,
 ) {
     private val _state = MutableStateFlow<CaptureState>(CaptureState.Idle)
     val state: StateFlow<CaptureState> = _state.asStateFlow()
@@ -283,22 +291,26 @@ class AudioCaptureEngine(
                 return
             }
 
-            val channelConfig = channelConfigFor(currentCfg.channelCount)
-            val minBufferSize = AudioRecord.getMinBufferSize(
-                currentCfg.sampleRateHz,
-                channelConfig,
-                AudioFormat.ENCODING_PCM_16BIT,
-            )
+            val minBufferSize = minBufferSizeProvider(currentCfg)
             if (minBufferSize <= 0) {
                 _state.value = CaptureState.Error(
                     CaptureErrorReason.UNSUPPORTED_CONFIG,
-                    "AudioRecord.getMinBufferSize returned $minBufferSize for $config",
+                    "AudioRecord.getMinBufferSize returned $minBufferSize for $currentCfg",
                 )
                 return
             }
 
+            // `currentCfg` (== activeConfig), never the constructor's `config` (issue #322).
+            // A preset change that reaches this engine while it is not Recording/Paused moves
+            // `activeConfig` only -- there is no capture thread to hand a pending swap to -- so the
+            // two diverge, and the ring buffer above is already stamped `currentCfg`. Opening
+            // AudioRecord at `config` here therefore wrote PCM in one format under a label
+            // declaring another: export saw source == target, converted nothing, and declared the
+            // wrong rate for real audio. 16 kHz mono PCM declared 44.1 kHz stereo plays 5.5x fast
+            // and unintelligible, with a duration that still looks plausible in the container --
+            // silent corruption of the one artifact this product exists to produce.
             val record = try {
-                audioRecordFactory(config, minBufferSize)
+                audioRecordFactory(currentCfg, minBufferSize)
             } catch (e: Exception) {
                 _state.value = CaptureState.Error(
                     CaptureErrorReason.AUDIO_RECORD_INIT_FAILED,
@@ -336,8 +348,15 @@ class AudioCaptureEngine(
             val myGeneration = generation
             _state.value = CaptureState.Recording
 
-            val thread =
-                Thread({ captureLoop(record, buffer, minBufferSize, myGeneration) }, "AudioCaptureEngine")
+            val thread = Thread(
+                // `currentCfg` again, for the same reason (issue #322): the loop's notion of "the
+                // format the open AudioRecord is delivering" must start as the format this session
+                // actually opened it with, or the first pending swap compares against the wrong
+                // baseline -- a swap to the format already running would be skipped as a no-op
+                // while the buffer stayed mislabelled.
+                { captureLoop(record, buffer, minBufferSize, myGeneration, currentCfg) },
+                "AudioCaptureEngine",
+            )
             thread.isDaemon = true
             captureThread = thread
             thread.start()
@@ -464,14 +483,26 @@ class AudioCaptureEngine(
      * repeated mic contention) over an arbitrarily long run. Must be called with [lock] held.
      */
     private fun pruneExpiredGaps(gaps: List<PauseGap>, now: Long): List<PauseGap> {
-        val retentionMillis = config.bufferDurationMinutes.toLong() * MILLIS_PER_MINUTE
+        // activeConfig, not the constructor `config` (issue #322, same family as start()'s bug):
+        // a retention-window change moves `bufferDurationMinutes` on activeConfig, so pruning
+        // against `config` measured gaps against whatever window this engine happened to be
+        // constructed with -- dropping still-relevant gaps after the window grew, or keeping dead
+        // ones after it shrank. Not audio corruption, but the gap list feeds export's silence
+        // placement, so it is the same "one source of truth for the live format" rule.
+        val retentionMillis = activeConfig.bufferDurationMinutes.toLong() * MILLIS_PER_MINUTE
         val cutoff = now - retentionMillis
         return gaps.filter { it.endTimestampMillis > cutoff }
     }
 
-    private fun captureLoop(record: AudioRecord, buffer: RingBuffer, minBufferSize: Int, myGeneration: Long) {
+    private fun captureLoop(
+        record: AudioRecord,
+        buffer: RingBuffer,
+        minBufferSize: Int,
+        myGeneration: Long,
+        sessionConfig: AudioConfig,
+    ) {
         var currentRecord = record
-        var currentConfig = config
+        var currentConfig = sessionConfig
         var scratch = ByteArray(minBufferSize)
         try {
             while (!stopRequested) {
@@ -480,12 +511,16 @@ class AudioCaptureEngine(
                     val formatChanged = targetConfig.sampleRateHz != currentConfig.sampleRateHz ||
                         targetConfig.channelCount != currentConfig.channelCount
                     if (formatChanged) {
-                        val channelConfig = channelConfigFor(targetConfig.channelCount)
-                        val newMinBufferSize = AudioRecord.getMinBufferSize(
-                            targetConfig.sampleRateHz,
-                            channelConfig,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                        )
+                        // Deliberately inside the same guard as the swap itself: if this lookup
+                        // fails, or the swap below fails, `buffer.setFormat` must NOT run --
+                        // the buffer's label may only advance once AudioRecord is genuinely
+                        // delivering the new format (issue #322). Keeping the old label with the
+                        // old data is correct; advancing the label alone is the corruption.
+                        val newMinBufferSize = try {
+                            minBufferSizeProvider(targetConfig)
+                        } catch (_: Exception) {
+                            0
+                        }
                         if (newMinBufferSize > 0) {
                             try {
                                 val newRecord = audioRecordFactory(targetConfig, newMinBufferSize)
@@ -578,6 +613,13 @@ class AudioCaptureEngine(
             AudioRecord.ERROR_DEAD_OBJECT -> CaptureErrorReason.READ_DEAD_OBJECT
             else -> CaptureErrorReason.READ_UNKNOWN_ERROR
         }
+
+        /** Production [minBufferSizeProvider]: the real framework lookup for [config]'s format. */
+        fun defaultMinBufferSize(config: AudioConfig): Int = AudioRecord.getMinBufferSize(
+            config.sampleRateHz,
+            channelConfigFor(config.channelCount),
+            AudioFormat.ENCODING_PCM_16BIT,
+        )
 
         fun channelConfigFor(channelCount: Int): Int = when (channelCount) {
             1 -> AudioFormat.CHANNEL_IN_MONO

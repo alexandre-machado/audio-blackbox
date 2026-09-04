@@ -101,9 +101,20 @@ class RecorderService : Service() {
     // block's first evaluation (issue #45): a retention-window change can replace `engine`
     // wholesale for the lifetime of this same Service instance (see `rebuildEngineIfIdle`), and a
     // bound reference would keep exporting from the old, abandoned engine forever after that.
-    // `config` does not need the same treatment -- sampleRateHz/encoding/channelCount never
-    // change across a rebuild, only bufferDurationMinutes, which ExportEngine never reads (see its
-    // own field, private and unused for that purpose).
+    // `config` used to be documented here as not needing the same treatment, on the premise that
+    // "sampleRateHz/encoding/channelCount never change across a rebuild, only
+    // bufferDurationMinutes". **That premise was true before #194 and is false now** (issue #322):
+    // a quality-preset change moves sampleRateHz and channelCount, both across a rebuild
+    // (`rebuildEngineIfIdle` builds `newPreset.config(...)`) and, for a live engine, within one
+    // session (`switchSettings` -> `AudioCaptureEngine.switchConfig` -> `RingBuffer.setFormat`).
+    //
+    // It was never load-bearing: `ExportEngine` drives the encoder from `plan.targetConfig`, which
+    // resolves from the ring buffer's own format segments, and the ring buffer always seeds a
+    // segment -- so the constructor `config` is only a fallback that nothing reaches. Rather than
+    // leave a correct-by-accident stale field with a comment asserting something untrue, the
+    // fallback now reads through `configProvider` below, on the same "read `captureConfig` fresh
+    // on every call" basis as every other provider here. The stale-read hazard is gone, not
+    // merely re-documented.
     //
     // AacPayloadEncoder (`.m4a`, issue #32) is the production default, not WavPayloadEncoder --
     // see issue #32's device evidence for why (176 audio files on the target device, zero WAV).
@@ -121,6 +132,7 @@ class RecorderService : Service() {
             segmentsProvider = { engine.activeSegments() ?: emptyList() },
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
+            configProvider = { captureConfig },
         )
     }
 
@@ -134,6 +146,12 @@ class RecorderService : Service() {
             sink = MediaStoreSink(applicationContext),
             writerFactory = { target, cfg -> StreamingAacWriter(target, cfg) },
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
+            // Issue #322: read fresh on every drain iteration, same reason as the providers above
+            // (a rebuild replaces `engine` wholesale) and additionally so a preset change landing
+            // mid-session is seen. A forward recording always starts from `oldestCursor`, so it
+            // drains the retained past too -- which means it reads across whatever format
+            // boundaries the ring buffer already holds, not only ones created during the session.
+            segmentsProvider = { engine.activeSegments() ?: emptyList() },
         )
     }
 
