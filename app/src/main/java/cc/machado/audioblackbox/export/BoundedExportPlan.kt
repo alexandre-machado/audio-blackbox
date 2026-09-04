@@ -99,16 +99,39 @@ object BoundedExportPlanner {
             totalRawDurationMillis += millisFor(sr.end - sr.start, sr.config.bytesPerSecond)
         }
 
-        val windowEnd = windowStart + totalRawDurationMillis
-        val relevantGaps = gaps
-            .map {
-                PauseGap(
-                    startTimestampMillis = it.startTimestampMillis.coerceIn(windowStart, windowEnd),
-                    endTimestampMillis = it.endTimestampMillis.coerceIn(windowStart, windowEnd),
-                )
-            }
-            .filter { it.endTimestampMillis > it.startTimestampMillis }
-            .sortedBy { it.startTimestampMillis }
+        // Where this window ends in WALL CLOCK -- the clock `gaps` timestamps are in.
+        //
+        // It is NOT `windowStart + totalRawDurationMillis` (issue #328). That advances a wall-clock
+        // instant by an audio-only duration, so it lands short of the window's real end by exactly
+        // the interruption time inside the window. Gaps past that under-computed end used to clamp
+        // to zero length and get filtered out, so no silence was planned for them and the export
+        // came out short by precisely the interruptions it exists to splice. Worse, it compounded:
+        // every dropped gap left the end a further gap-length below reality, making the next gap
+        // likelier to fall outside too.
+        //
+        // So account for gap time in the end as well, oldest gap first, growing the end by each gap
+        // as it is accepted. This is the same bookkeeping the planning loop below runs on
+        // `currentWallClock` (advance by audio time, advance by gap time), which is what keeps the
+        // two from disagreeing again. Gaps do not overlap, so accepting one only ever pushes the
+        // end later: a single ascending pass is enough, and the result does not depend on the order
+        // the caller supplied.
+        var windowEnd = windowStart + totalRawDurationMillis
+        val relevantGaps = mutableListOf<PauseGap>()
+        for (gap in gaps.sortedBy { it.startTimestampMillis }) {
+            // Past the end, the gap postdates the newest buffered sample entirely, so there is no
+            // window for it to belong to -- and no later gap can qualify either, since they start
+            // later still. A gap starting exactly AT the end is kept: that is an interruption the
+            // user saved immediately after it ended (resume, then export before much new audio
+            // arrived), and dropping it would shorten the file by that interruption, which is the
+            // very defect this accounting exists to prevent. It plans as trailing silence.
+            if (gap.startTimestampMillis > windowEnd) break
+            // A gap that straddles the start of the buffered window contributes only the part
+            // inside it; one that ended before the window has nothing left to be spliced between.
+            val clippedStart = maxOf(gap.startTimestampMillis, windowStart)
+            if (gap.endTimestampMillis <= clippedStart) continue
+            relevantGaps += PauseGap(clippedStart, gap.endTimestampMillis)
+            windowEnd += gap.endTimestampMillis - clippedStart
+        }
 
         val rawSegments = mutableListOf<PlanSegment>()
         var currentWallClock = windowStart
