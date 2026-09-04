@@ -300,11 +300,25 @@ class ForwardRecordingEngine(
         private fun segments(): List<FormatSegment> =
             segmentsProvider?.invoke()?.sortedBy { it.startOffset } ?: emptyList()
 
-        /** The format `cursor`'s bytes were recorded in, or `null` when there is no record. */
-        private fun sourceAt(cursor: Long): AudioConfig? {
+        /**
+         * The format `cursor`'s bytes were recorded in.
+         *
+         * [NoRecord] means there is no segment record at all -- the legacy
+         * `AudioCaptureEngine`-free constructor, where the session is single-format by definition
+         * and nothing is converted. [Unresolvable] means there *is* a record but it no longer
+         * covers `cursor`: see [reconcile] for why that must not be guessed at.
+         */
+        private sealed interface SourceFormat {
+            data class Known(val config: AudioConfig) : SourceFormat
+            data object NoRecord : SourceFormat
+            data object Unresolvable : SourceFormat
+        }
+
+        private fun sourceAt(cursor: Long): SourceFormat {
             val segs = segments()
-            if (segs.isEmpty()) return null
-            return segs.lastOrNull { it.startOffset <= cursor }?.config ?: segs.first().config
+            if (segs.isEmpty()) return SourceFormat.NoRecord
+            val covering = segs.lastOrNull { it.startOffset <= cursor } ?: return SourceFormat.Unresolvable
+            return SourceFormat.Known(covering.config)
         }
 
         /**
@@ -312,9 +326,39 @@ class ForwardRecordingEngine(
          * be written: any tail flushed out of a retiring converter, followed by the converted
          * chunk. Identity when the recorded format already matches, so a single-format session
          * allocates and copies nothing.
+         *
+         * Returns `null` when the source format cannot be resolved, which the drain loop surfaces
+         * as [ForwardRecordingFailureReason.CURSOR_LAPPED].
+         *
+         * ## Why an unresolvable format is an error and not a fallback (issue #322, `@rev` finding 4)
+         * This used to end with `?: segs.first().config` -- if no segment covered `cursor`, it
+         * converted the chunk from the *oldest surviving* segment's format instead. That is a guess,
+         * and a wrong guess here writes real audio converted from the wrong source rate into a file
+         * that declares it correctly: quietly wrong audio, with no error anywhere. That is precisely
+         * the failure class this issue exists to close, so reintroducing it one file over would be
+         * indefensible.
+         *
+         * `@rev` proposed resolving through `RingBuffer.formatAt` instead, on the grounds that it is
+         * window-independent. **Measured, that is not a fix**: `oldestCursor()` *is*
+         * `oldestAvailableLocked()`, so a segment leaves `activeSegments`' window and gets pruned
+         * from `segments` at the same instant, and `formatAt` carries the identical
+         * `?: segments.first().config` fallback. Both strategies return the same correct answer at
+         * every lap depth where the covering segment survives, and the same wrong answer once it
+         * does not. The API choice was never the defect; the silent fallback was.
+         *
+         * When it does fire, the information is genuinely gone -- the segment describing those
+         * bytes has been pruned -- so there is nothing to convert *from* and no correct output to
+         * produce. Failing loudly is the only honest option, and it is what this class already does
+         * one layer up for [ReadSinceResult.Lapped]: the next `readSince` would report `Lapped`
+         * anyway, so this surfaces the same condition one chunk earlier instead of writing a
+         * corrupt chunk first.
          */
-        fun reconcile(cursor: Long, bytes: ByteArray): List<ByteArray> {
-            val source = sourceAt(cursor) ?: return listOf(bytes)
+        fun reconcile(cursor: Long, bytes: ByteArray): List<ByteArray>? {
+            val source = when (val resolved = sourceAt(cursor)) {
+                is SourceFormat.Known -> resolved.config
+                SourceFormat.NoRecord -> return listOf(bytes)
+                SourceFormat.Unresolvable -> return null
+            }
             val needsConversion = source.sampleRateHz != sessionConfig.sampleRateHz ||
                 source.channelCount != sessionConfig.channelCount
 
@@ -423,7 +467,25 @@ class ForwardRecordingEngine(
                     }
                     is ReadSinceResult.Data -> {
                         if (result.bytes.isNotEmpty()) {
-                            emit(reconciler.reconcile(cursor, result.bytes))
+                            // A null reconcile means the segment describing these bytes was pruned
+                            // between `readSince` returning them and the reconciler resolving their
+                            // format, so there is nothing to convert *from* (issue #322, `@rev`
+                            // finding 4). Same condition, same reason and same exit as the
+                            // `Lapped` branch above -- the next `readSince` would report `Lapped`
+                            // anyway; this just surfaces it one chunk earlier, instead of writing a
+                            // chunk converted from a guessed format first.
+                            val reconciled = reconciler.reconcile(cursor, result.bytes)
+                            if (reconciled == null) {
+                                synchronized(lock) {
+                                    stateValue = ForwardRecordingState.Error(
+                                        ForwardRecordingFailureReason.CURSOR_LAPPED,
+                                        "Forward writer fell behind: the recorded format at cursor " +
+                                            "$cursor is no longer known",
+                                    )
+                                }
+                                return
+                            }
+                            emit(reconciled)
                             cursor = result.nextCursor
                             synchronized(lock) {
                                 if (_state.value is ForwardRecordingState.Recording) {
@@ -479,8 +541,21 @@ class ForwardRecordingEngine(
                 when (val result = readSinceProvider(cursor, drainChunkSizeBytes)) {
                     is ReadSinceResult.Data -> {
                         if (result.bytes.isNotEmpty()) {
-                            emit(reconciler.reconcile(cursor, result.bytes))
-                            cursor = result.nextCursor
+                            // Unresolvable format on the clean-stop path stops the drain rather
+                            // than failing the recording (issue #322, `@rev` finding 4). This
+                            // deliberately matches how this same loop already treats `Lapped` --
+                            // the `else` branch below -- because both mean "the tail is gone", and
+                            // at this point a complete, correctly-labelled file has already been
+                            // written. Turning a finished recording into an Error over a lost tail
+                            // would destroy more than it protects. What must not happen, and no
+                            // longer can, is writing that tail converted from a guessed format.
+                            val reconciled = reconciler.reconcile(cursor, result.bytes)
+                            if (reconciled == null) {
+                                finalDrainDone = true
+                            } else {
+                                emit(reconciled)
+                                cursor = result.nextCursor
+                            }
                         }
                         if (result.remainingBytes == 0L) {
                             finalDrainDone = true

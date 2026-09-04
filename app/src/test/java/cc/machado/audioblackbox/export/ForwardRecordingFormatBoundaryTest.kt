@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.export
 
 import android.net.Uri
 import cc.machado.audioblackbox.audio.AudioConfig
+import cc.machado.audioblackbox.audio.FormatSegment
 import cc.machado.audioblackbox.audio.GoertzelDetector
 import cc.machado.audioblackbox.audio.ReadSinceResult
 import cc.machado.audioblackbox.audio.RingBuffer
@@ -9,6 +10,8 @@ import cc.machado.audioblackbox.audio.ToneGenerator
 import java.io.ByteArrayOutputStream
 import java.io.FileDescriptor
 import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -168,6 +171,120 @@ class ForwardRecordingFormatBoundaryTest {
         assertEquals(2L * BOUNDARY_BYTES, cursor)
     }
 
+    @Test
+    fun `an unresolvable source format fails the recording instead of guessing one`() {
+        // `@rev` finding 4 on PR #323. [ForwardFormatReconciler] resolves a chunk's source format
+        // from the segment list *after* readSince has already returned the bytes, so a lap in
+        // between leaves a chunk whose describing segment has been pruned. The first draft ended
+        // `sourceAt` with `?: segs.first().config` -- it converted the chunk from the *oldest
+        // surviving* format instead. That is a guess, and a wrong guess writes real audio
+        // converted from the wrong source rate into a file that declares the target correctly:
+        // quietly wrong audio, no error anywhere. Exactly the failure class issue #322 exists to
+        // close, reintroduced one file over.
+        //
+        // `@rev` proposed resolving via RingBuffer.formatAt instead, as window-independent.
+        // Measured, that is a no-op: oldestCursor() *is* oldestAvailableLocked(), so a segment
+        // leaves activeSegments' window and is pruned at the same instant, and formatAt carries
+        // the identical `?: segments.first().config` fallback. Both strategies agree at every lap
+        // depth -- right while the covering segment survives, wrong once it does not. The API
+        // choice was never the defect; the silent fallback was, so the fallback is gone.
+        //
+        // The interleaving is a race in production (the lap has to land between the read and the
+        // resolve), so it is staged here rather than waited for: readSince serves the pre-lap
+        // bytes while segmentsProvider reports the post-lap view. Racing it for real would mean a
+        // timing-dependent test, which AGENTS.md 3 forbids and which this PR has already been
+        // bitten by once (see CaptureFormatLabelTest's M4b).
+        val ring = RingBuffer(capacityBytes = 200_000, initialConfig = voice)
+        ring.write(ToneGenerator.tone(TONE_HZ, 16_000, 1_000, channelCount = 1))
+
+        val firstRead = CountDownLatch(1)
+        var writer: CapturingWriter? = null
+        val engine = ForwardRecordingEngine(
+            config = hiFi,
+            configProvider = { hiFi },
+            readSinceProvider = { cursor, maxBytes ->
+                ring.readSince(cursor, maxBytes).also { firstRead.countDown() }
+            },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = FakeSink(),
+            writerFactory = { _, cfg -> CapturingWriter(cfg).also { writer = it } },
+            // The post-lap view: every surviving segment starts past the bytes being drained, so
+            // nothing covers the cursor. Non-empty, so this is "the record exists but no longer
+            // describes these bytes", not "there is no record" -- the legacy no-segments
+            // constructor must keep passing bytes straight through, and does (test above).
+            segmentsProvider = { listOf(FormatSegment(startOffset = LAPPED_PAST_BYTES, config = hiFi)) },
+        )
+
+        assertTrue(engine.start("probe.m4a") is ForwardRecordingState.Recording)
+        // Synchronise on an observable event, never on elapsed time: the drain thread has entered
+        // the live loop and taken a chunk. Without this the test can reach stop() first, which
+        // short-circuits `while (!stopRequested)` and exercises the final-drain path instead --
+        // a different, deliberately different, branch (covered by the next test).
+        assertTrue("drain thread never read a chunk", firstRead.await(5, TimeUnit.SECONDS))
+        // stop() joins the drain thread, so this is a real synchronisation point, not a wait.
+        val finalState = engine.stop()
+
+        assertTrue(
+            "an unresolvable source format must surface as an error, not a guessed conversion -- got $finalState",
+            finalState is ForwardRecordingState.Error,
+        )
+        assertEquals(
+            ForwardRecordingFailureReason.CURSOR_LAPPED,
+            (finalState as ForwardRecordingState.Error).reason,
+        )
+        // The point of the fix: nothing converted from a guessed format reached the file. Before
+        // it, the writer was fed the whole second of 16kHz mono resampled as though it had been
+        // recorded at 44.1kHz stereo.
+        assertEquals(
+            "no audio may be written once its recorded format is unknown",
+            0,
+            writer!!.out.size(),
+        )
+    }
+
+    @Test
+    fun `an unresolvable source format on the clean-stop path ends the file instead of failing it`() {
+        // The asymmetry is deliberate. On the live path (test above) the recording is still in
+        // flight and the honest outcome is an error. On the clean-stop path a complete,
+        // correctly-labelled file has already been written and only the tail is unresolvable --
+        // and this same loop already treats `Lapped` that way, via its `else` branch. Turning a
+        // finished recording into an Error over a lost tail would destroy more than it protects.
+        // What must not happen on either path, and no longer can, is writing that tail converted
+        // from a guessed format.
+        val ring = RingBuffer(capacityBytes = 200_000, initialConfig = voice)
+        ring.write(ToneGenerator.tone(TONE_HZ, 16_000, 1_000, channelCount = 1))
+
+        var writer: CapturingWriter? = null
+        val engine = ForwardRecordingEngine(
+            config = hiFi,
+            configProvider = { hiFi },
+            readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = FakeSink(),
+            writerFactory = { _, cfg -> CapturingWriter(cfg).also { writer = it } },
+            segmentsProvider = { listOf(FormatSegment(startOffset = LAPPED_PAST_BYTES, config = hiFi)) },
+        )
+
+        assertTrue(engine.start("probe.m4a") is ForwardRecordingState.Recording)
+        // No await here, deliberately: stopping immediately is what routes the unresolvable chunk
+        // through the final-drain branch rather than the live one.
+        val finalState = engine.stop()
+
+        assertTrue(
+            "a finished recording must not be failed by an unresolvable tail -- got $finalState",
+            finalState is ForwardRecordingState.Success,
+        )
+        assertEquals(
+            "no audio may be written once its recorded format is unknown, on this path either",
+            0,
+            writer!!.out.size(),
+        )
+    }
+
     private class FakeTarget : StreamingExportTarget {
         override val uri: Uri = org.mockito.kotlin.mock()
         override val fileDescriptor: FileDescriptor = FileDescriptor()
@@ -201,5 +318,8 @@ class ForwardRecordingFormatBoundaryTest {
         const val TONE_HZ = 400.0
         const val MISLABEL_RANGE_BYTES = 32_000
         const val BOUNDARY_BYTES = 32_000
+
+        /** Segment start far past anything the drain reads, so no segment covers the cursor. */
+        const val LAPPED_PAST_BYTES = 1_000_000L
     }
 }
