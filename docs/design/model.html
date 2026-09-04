@@ -397,7 +397,12 @@
       transition: transform 0.2s;
     }
 
-    /* Remove Before Flight Tag Banner */
+    /* Remove Before Flight Tag Banner.
+       Draggable: pull it off the panel in any direction and the recorder arms, the way the real
+       tag comes off before the aircraft moves (issue #284). This is an *additional* route to the
+       same action as the engine switch, never a replacement for it -- the switch stays, and so
+       does the keyboard/assistive route on the tag itself. The gesture only ever arms; the tag is
+       hidden while recording, so no drag can interrupt a capture. */
     .rbf-tag {
       background: #B91C1C;
       border: 1px solid #EF4444;
@@ -422,6 +427,47 @@
       background: #FFFFFF;
       border-radius: 50%;
       box-shadow: 0 0 0 2px #7F1D1D;
+    }
+
+    /* The tag hangs off its grommet, so it swings about its left edge rather than sliding flat. */
+    .rbf-tag {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      transform-origin: 0 50%;
+    }
+
+    .rbf-tag:focus-visible {
+      outline: 2px solid var(--color-flight-orange);
+      outline-offset: 2px;
+    }
+
+    .rbf-tag.rbf-dragging {
+      cursor: grabbing;
+    }
+
+    /* Released short of the threshold: the tag is still attached, so it springs home. */
+    .rbf-tag.rbf-settling {
+      transition: transform 0.42s cubic-bezier(0.2, 1.5, 0.4, 1);
+    }
+
+    /* Put back on the panel when the recorder is switched off -- it returns to its place rather
+       than appearing between two frames. */
+    @keyframes rbf-refit {
+      from { opacity: 0; transform: translateX(-24px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .rbf-tag.rbf-refitting {
+      animation: rbf-refit 320ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Animations off means no transition, never no function: the tag still returns, and still
+       comes off when pulled. Compose reads Settings.Global.ANIMATOR_DURATION_SCALE for the same
+       reason (ui/theme/Motion.kt). */
+    @media (prefers-reduced-motion: reduce) {
+      .rbf-tag.rbf-settling { transition: none; }
+      .rbf-tag.rbf-refitting { animation: none; }
     }
 
     /* VU Meter Segmented LED Bars */
@@ -866,8 +912,11 @@
                 </div>
               </div>
 
-              <!-- Remove Before Flight Standby Tag -->
-              <div class="rbf-tag" id="rbf-standby-tag">
+              <!-- Remove Before Flight Standby Tag. Drag it off in any direction to arm the
+                   recorder; Enter/Space does the same thing in one step for anyone who cannot
+                   drag. The engine switch above remains the primary control either way. -->
+              <div class="rbf-tag" id="rbf-standby-tag" tabindex="0" role="button"
+                   aria-label="REMOVE BEFORE FLIGHT // RECORDER STANDBY. Remove the tag and arm the recorder.">
                 <span>REMOVE BEFORE FLIGHT // RECORDER STANDBY</span>
               </div>
 
@@ -1383,6 +1432,7 @@
       } else if (state === 'IDLE') {
         event && event.target && event.target.classList.add('active');
         rbfTag.style.display = 'flex';
+        refitRbfTag();
         annunciatorBox.style.display = 'none';
       } else if (state === 'OVERFLOW') {
         event && event.target && event.target.classList.add('active');
@@ -1400,6 +1450,111 @@
         setSimState('RECORDING');
       }
     }
+
+    // --- REMOVE BEFORE FLIGHT: drag the tag off to arm the recorder (issue #284) ---------------
+    //
+    // Deliberately an extra way in, not the way in. It ends in exactly the same
+    // toggleEngineState() the switch calls, so the gesture can be dropped without leaving the
+    // panel without a way to start recording, and the tag keeps a keyboard/AT route of its own.
+    //
+    // One-way by design: the tag is hidden while recording, so no accidental drag can stop a
+    // capture in progress -- the one thing this product exists not to do.
+    const RBF_PULL_THRESHOLD_PX = 72;
+    const RBF_MAX_SWING_DEG = 7;
+
+    let rbfPointerId = null;
+    let rbfStartX = 0;
+    let rbfStartY = 0;
+    let rbfDx = 0;
+    let rbfDy = 0;
+    let rbfPulled = false;
+
+    function rbfReducedMotion() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function rbfPaint(tag) {
+      const swing = Math.max(-1, Math.min(1, rbfDx / RBF_PULL_THRESHOLD_PX)) * RBF_MAX_SWING_DEG;
+      tag.style.transform = 'translate(' + rbfDx + 'px, ' + rbfDy + 'px) rotate(' + swing + 'deg)';
+    }
+
+    function rbfSettleBack(tag) {
+      rbfDx = 0;
+      rbfDy = 0;
+      tag.style.transform = '';
+      if (rbfReducedMotion()) return;
+      tag.classList.add('rbf-settling');
+      setTimeout(function () { tag.classList.remove('rbf-settling'); }, 480);
+    }
+
+    // Called when the tag goes back on the panel, i.e. the recorder was switched off.
+    function refitRbfTag() {
+      const tag = document.getElementById('rbf-standby-tag');
+      if (!tag) return;
+      rbfPulled = false;
+      rbfDx = 0;
+      rbfDy = 0;
+      tag.style.transform = '';
+      tag.classList.remove('rbf-settling', 'rbf-dragging', 'rbf-refitting');
+      if (rbfReducedMotion()) return;
+      // Restart the keyframes even if the class was still present from a previous return.
+      void tag.offsetWidth;
+      tag.classList.add('rbf-refitting');
+    }
+
+    (function initRbfTagDrag() {
+      const tag = document.getElementById('rbf-standby-tag');
+      if (!tag) return;
+
+      tag.addEventListener('pointerdown', function (e) {
+        if (rbfPulled || currentState === 'RECORDING') return;
+        rbfPointerId = e.pointerId;
+        rbfStartX = e.clientX;
+        rbfStartY = e.clientY;
+        tag.classList.remove('rbf-settling', 'rbf-refitting');
+        tag.classList.add('rbf-dragging');
+        tag.setPointerCapture(rbfPointerId);
+      });
+
+      tag.addEventListener('pointermove', function (e) {
+        if (e.pointerId !== rbfPointerId || rbfPulled) return;
+        rbfDx = e.clientX - rbfStartX;
+        rbfDy = e.clientY - rbfStartY;
+        rbfPaint(tag);
+      });
+
+      function endGesture(e) {
+        if (e.pointerId !== rbfPointerId) return;
+        rbfPointerId = null;
+        tag.classList.remove('rbf-dragging');
+        // Free in both axes: what counts is how far the tag travelled, not along which axis.
+        const pulledFarEnough = !rbfPulled &&
+          Math.hypot(rbfDx, rbfDy) >= RBF_PULL_THRESHOLD_PX &&
+          e.type === 'pointerup';
+        if (pulledFarEnough) {
+          // Latched, so a second release before the tag is hidden cannot toggle twice.
+          rbfPulled = true;
+          rbfDx = 0;
+          rbfDy = 0;
+          tag.style.transform = '';
+          toggleEngineState();
+        } else {
+          rbfSettleBack(tag);
+        }
+      }
+
+      tag.addEventListener('pointerup', endGesture);
+      tag.addEventListener('pointercancel', endGesture);
+
+      // The same one step, without a drag. Mirrors the named accessibility action the Compose tag
+      // exposes (R.string.dashboard_rbf_remove_action).
+      tag.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        if (currentState === 'RECORDING') return;
+        toggleEngineState();
+      });
+    })();
 
     // Current Settings State
     let currentPreset = 'voice';

@@ -1,9 +1,17 @@
 package cc.machado.audioblackbox.ui.theme
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +29,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,11 +44,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 /**
  * An avionics chassis card matching `docs/design/model.html`'s `.avionics-card`:
@@ -153,17 +174,156 @@ fun AvionicsTag(
     }
 }
 
+/** How far the tag must be pulled before releasing it counts as removing it (issue #284). */
+val RBF_PULL_THRESHOLD = 72.dp
+
+/** How far the tag slides in from as it is put back on the panel. */
+private val RBF_ENTRY_SLIDE = 24.dp
+
+private const val RBF_ENTRY_DURATION_MS = 320
+
+/** Degrees the tag swings about its grommet at a full-threshold pull. */
+private const val RBF_MAX_SWING_DEGREES = 7f
+
 /**
  * "REMOVE BEFORE FLIGHT" ribbon / tag banner matching `docs/design/model.html`'s `.rbf-tag`.
  * Rendered when capture is idle / on standby.
+ *
+ * Pass [onRemove] to make it behave like the real thing: the tag can be dragged off the panel in
+ * any direction, and letting go past [RBF_PULL_THRESHOLD] removes it and runs [onRemove] once
+ * (issue #284). Left null -- the default -- it is the passive banner it has always been.
+ *
+ * This is deliberately an *extra* path to the same action, never the only one. The dashboard's
+ * engine `Switch` stays exactly where it was and does exactly the same thing; a drag is a nicer
+ * way to reach it, not a toll gate in front of it. Accordingly the gesture is never the only
+ * affordance: when it is live the tag also carries a named accessibility action
+ * ([removeActionLabel]) so TalkBack, Switch Access and keyboard users get the same one-step route
+ * without having to produce a drag, and the tag's own text stays readable as plain status.
+ *
+ * @param onRemove invoked at most once, when the tag is pulled clear. Null makes the tag inert.
+ * @param removeEnabled mirrors the engine switch's own enabled gate; false freezes the gesture in
+ *   place (the tag does not even move) so the two controls can never disagree about whether the
+ *   recorder may be armed right now.
+ * @param removeActionLabel the accessibility-action label. Required for the action to be offered.
+ * @param playEntryAnimation true when the tag is being put *back* on the panel, so it slides and
+ *   fades in instead of appearing between two frames. False on first render, so the screen does
+ *   not animate on arrival.
  */
 @Composable
 fun RemoveBeforeFlightTag(
     text: String,
     modifier: Modifier = Modifier,
+    onRemove: (() -> Unit)? = null,
+    removeEnabled: Boolean = true,
+    removeActionLabel: String? = null,
+    playEntryAnimation: Boolean = false,
 ) {
+    val animationsEnabled = rememberSystemAnimationsEnabled()
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { RBF_PULL_THRESHOLD.toPx() }
+    val entrySlidePx = with(density) { RBF_ENTRY_SLIDE.toPx() }
+
+    val currentOnRemove by rememberUpdatedState(onRemove)
+    val gate = remember(thresholdPx) {
+        RemoveBeforeFlightDragGate(thresholdPx) { currentOnRemove?.invoke() }
+    }
+    val gestureLive = onRemove != null && removeEnabled
+    gate.enabled = gestureLive
+
+    val scope = rememberCoroutineScope()
+    val offset = remember {
+        Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
+    }
+
+    // 0 = just being put back on the panel, 1 = settled. Starts settled unless this is a return
+    // and the user still wants animations, so neither a cold start nor an animations-off device
+    // ever sees a transition here.
+    val entry = remember {
+        Animatable(if (playEntryAnimation && animationsEnabled) 0f else 1f)
+    }
+    LaunchedEffect(entry) {
+        if (entry.value != 1f) {
+            entry.animateTo(1f, tween(RBF_ENTRY_DURATION_MS, easing = FastOutSlowInEasing))
+        }
+    }
+
+    fun settleBack() {
+        scope.launch {
+            if (animationsEnabled) {
+                offset.animateTo(
+                    targetValue = Offset.Zero,
+                    animationSpec = spring(
+                        dampingRatio = 0.42f,
+                        stiffness = Spring.StiffnessLow,
+                        visibilityThreshold = Offset.VisibilityThreshold,
+                    ),
+                )
+            } else {
+                offset.snapTo(Offset.Zero)
+            }
+        }
+    }
+
+    // Only claim touches while the gesture can actually do something. The tag sits inside the
+    // dashboard's vertical scroll and detectDragGestures consumes the slop crossing as soon as it
+    // wins the pointer, so an always-installed detector would swallow scrolls that start on the
+    // tag even in the states where the tag refuses to move.
+    val pullGesture = if (!gestureLive) {
+        Modifier
+    } else {
+        Modifier.pointerInput(gate) {
+            detectDragGestures(
+                onDragStart = {
+                    scope.launch {
+                        offset.stop()
+                        offset.snapTo(Offset(gate.offsetX, gate.offsetY))
+                    }
+                },
+                onDrag = { change, delta ->
+                    if (gate.drag(delta.x, delta.y)) {
+                        change.consume()
+                        scope.launch { offset.snapTo(Offset(gate.offsetX, gate.offsetY)) }
+                    }
+                },
+                onDragEnd = {
+                    // The gate runs onRemove itself on a PULL; there is nothing left to do here
+                    // but put the tag back when it was not pulled far enough.
+                    if (gate.release() == RemoveBeforeFlightDragGate.Release.SPRING_BACK) {
+                        settleBack()
+                    }
+                },
+                onDragCancel = {
+                    if (gate.cancel() == RemoveBeforeFlightDragGate.Release.SPRING_BACK) {
+                        settleBack()
+                    }
+                },
+            )
+        }
+    }
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                translationX = offset.value.x - (1f - entry.value) * entrySlidePx
+                translationY = offset.value.y
+                alpha = entry.value
+                // A real tag hangs off its grommet, so it swings rather than sliding flat.
+                rotationZ = (offset.value.x / thresholdPx).coerceIn(-1f, 1f) * RBF_MAX_SWING_DEGREES
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            }
+            .then(pullGesture)
+            .semantics(mergeDescendants = true) {
+                val action = currentOnRemove
+                if (action != null && removeEnabled && removeActionLabel != null) {
+                    customActions = listOf(
+                        CustomAccessibilityAction(removeActionLabel) {
+                            action()
+                            true
+                        },
+                    )
+                }
+            },
         shape = RoundedCornerShape(RADIUS_RIVET),
         color = SafetyRedTag,
         border = BorderStroke(1.dp, WarningRed),

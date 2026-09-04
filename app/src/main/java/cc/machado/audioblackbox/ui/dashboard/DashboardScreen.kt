@@ -175,6 +175,20 @@ private fun AppHeader() {
     )
 }
 
+/**
+ * Remembers that the REMOVE BEFORE FLIGHT tag has been off the panel at least once during this
+ * composition of [EngineCard], which is what tells the tag apart from "the screen just opened"
+ * (issue #284): a returning tag animates back on, a freshly-opened screen does not animate at all.
+ *
+ * Deliberately a plain holder rather than a `MutableState`: the flag is written in the frame where
+ * the tag is *not* composed and read in a later frame where it is, so it never needs to invalidate
+ * anything, and making it observable would only add a needless recomposition (and a write-during-
+ * composition to a value read in the same pass).
+ */
+private class RbfTagReturn {
+    var hasBeenAway: Boolean = false
+}
+
 @Composable
 private fun EngineCard(
     uiState: DashboardUiState,
@@ -196,6 +210,7 @@ private fun EngineCard(
     val label = stringResource(labelRes)
     val explanation = stringResource(explanationRes)
     val announcement = stringResource(R.string.dashboard_status_announcement, label)
+    val tagReturn = remember { RbfTagReturn() }
 
     AvionicsCard(
         modifier = Modifier
@@ -270,9 +285,30 @@ private fun EngineCard(
                 }
             }
 
-            // Standby / "REMOVE BEFORE FLIGHT" Ribbon Tag
+            // Standby / "REMOVE BEFORE FLIGHT" Ribbon Tag.
+            //
+            // Pulling the tag off arms the recorder (issue #284) by calling the very same
+            // onToggleEngine() the Switch above calls -- two ways in, one destination, so the
+            // gesture can be dropped at any time without leaving the screen without a way to
+            // start recording.
+            //
+            // The gesture only ever arms: onRemove is wired only while the switch is off. The tag
+            // is also shown in the (transient) case where the switch is already on but capture has
+            // not reached Recording yet, and there a pull would *stop* the recorder -- the one
+            // thing this app exists not to do by accident. Passing null there leaves the tag the
+            // passive banner it always was, with no drag and no accessibility action.
             if (status is CaptureStatus.Idle || !uiState.engineSwitch.checked) {
-                RemoveBeforeFlightTag(text = stringResource(R.string.dashboard_rbf_tag))
+                RemoveBeforeFlightTag(
+                    text = stringResource(R.string.dashboard_rbf_tag),
+                    onRemove = onToggleEngine.takeIf { !uiState.engineSwitch.checked },
+                    removeEnabled = uiState.engineSwitch.enabled,
+                    removeActionLabel = stringResource(R.string.dashboard_rbf_remove_action),
+                    playEntryAnimation = tagReturn.hasBeenAway,
+                )
+            } else {
+                // Recording: the tag is off the panel. Remember that, so that when the recorder is
+                // switched off the tag is animated back on instead of blinking into existence.
+                tagReturn.hasBeenAway = true
             }
 
             // VU Meter Recessed Rack
