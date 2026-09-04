@@ -93,9 +93,15 @@ class ForwardRecordingEngine(
     // `RingBuffer.activeSegments()`, the same single source of truth `ExportEngine` already drives
     // its converter from, deliberately not a second guess at "what is the config right now".
     // Re-sampled on every drain iteration (a lambda, not a value captured at start()) so a preset
-    // change that lands mid-session is seen; `null` means "no segment record available", which
-    // keeps the legacy `AudioCaptureEngine`-free constructor behaving exactly as before.
-    private val segmentsProvider: (() -> List<FormatSegment>)? = null,
+    // change that lands mid-session is seen.
+    //
+    // Two levels of null, and they mean opposite things -- see `ForwardFormatReconciler.sourceAt`.
+    // A null *provider* means this engine has no segment record by construction: the legacy
+    // `AudioCaptureEngine`-free constructor, single-format by definition, bytes pass through
+    // unconverted exactly as before. A provider that *returns* null means the record was expected
+    // and is not there (`AudioCaptureEngine.activeSegments()` does this once its ring buffer is
+    // gone), which is an error rather than a licence to guess.
+    private val segmentsProvider: (() -> List<FormatSegment>?)? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -115,7 +121,7 @@ class ForwardRecordingEngine(
         writerFactory = writerFactory,
         clock = clock,
         errorLogFile = null,
-        segmentsProvider = { engine.activeSegments() ?: emptyList() },
+        segmentsProvider = { engine.activeSegments() },
     )
 
     private val _state = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
@@ -291,22 +297,18 @@ class ForwardRecordingEngine(
      */
     private class ForwardFormatReconciler(
         private val sessionConfig: AudioConfig,
-        private val segmentsProvider: (() -> List<FormatSegment>)?,
+        private val segmentsProvider: (() -> List<FormatSegment>?)?,
     ) {
         private var converter: PcmAudioConverter? = null
         private var converterSource: AudioConfig? = null
 
-        /** Segments covering the live window, oldest first. Empty when there is no record. */
-        private fun segments(): List<FormatSegment> =
-            segmentsProvider?.invoke()?.sortedBy { it.startOffset } ?: emptyList()
-
         /**
          * The format `cursor`'s bytes were recorded in.
          *
-         * [NoRecord] means there is no segment record at all -- the legacy
+         * [NoRecord] means there is no segment record to consult *by construction* -- the legacy
          * `AudioCaptureEngine`-free constructor, where the session is single-format by definition
-         * and nothing is converted. [Unresolvable] means there *is* a record but it no longer
-         * covers `cursor`: see [reconcile] for why that must not be guessed at.
+         * and nothing is converted. [Unresolvable] means a record was expected but does not
+         * describe `cursor`: see [reconcile] for why that must not be guessed at.
          */
         private sealed interface SourceFormat {
             data class Known(val config: AudioConfig) : SourceFormat
@@ -314,8 +316,24 @@ class ForwardRecordingEngine(
             data object Unresolvable : SourceFormat
         }
 
+        /**
+         * Note the three-way distinction on the provider, which `@rev` caught on PR #323 after the
+         * first cut collapsed it (finding 2). `AudioCaptureEngine.activeSegments()` returns **null**
+         * when its ring buffer is gone -- a rebuild between two drain iterations, say. The call
+         * sites used to write `{ engine.activeSegments() ?: emptyList() }`, which laundered that
+         * null into an empty list and therefore into [NoRecord], i.e. "single-format, pass the
+         * bytes through unconverted". That is the guess this fix exists to remove, reopened for
+         * exactly the case where we know least. So:
+         *
+         * - no provider at all -> [NoRecord] (the legacy constructor; nothing to convert, ever);
+         * - provider returns `null` -> [Unresolvable] (there should be a record and there is not);
+         * - provider returns an empty list -> [NoRecord], unchanged: a live engine reporting no
+         *   segments has nothing buffered to misattribute.
+         */
         private fun sourceAt(cursor: Long): SourceFormat {
-            val segs = segments()
+            val provider = segmentsProvider ?: return SourceFormat.NoRecord
+            val reported = provider.invoke() ?: return SourceFormat.Unresolvable
+            val segs = reported.sortedBy { it.startOffset }
             if (segs.isEmpty()) return SourceFormat.NoRecord
             val covering = segs.lastOrNull { it.startOffset <= cursor } ?: return SourceFormat.Unresolvable
             return SourceFormat.Known(covering.config)
@@ -477,10 +495,16 @@ class ForwardRecordingEngine(
                             val reconciled = reconciler.reconcile(cursor, result.bytes)
                             if (reconciled == null) {
                                 synchronized(lock) {
+                                    // Wording deliberately not the `Lapped` branch's "fell behind"
+                                    // (`@sec`, PR #323): the drain has not lost the race here, the
+                                    // segment describing these bytes was pruned out from under it.
+                                    // Same reason code, because the user-visible consequence and
+                                    // the recovery are identical, but the log must not misdescribe
+                                    // which condition actually fired.
                                     stateValue = ForwardRecordingState.Error(
                                         ForwardRecordingFailureReason.CURSOR_LAPPED,
-                                        "Forward writer fell behind: the recorded format at cursor " +
-                                            "$cursor is no longer known",
+                                        "Recorded format at cursor $cursor is no longer described " +
+                                            "by any retained segment",
                                     )
                                 }
                                 return
@@ -551,6 +575,24 @@ class ForwardRecordingEngine(
                             // longer can, is writing that tail converted from a guessed format.
                             val reconciled = reconciler.reconcile(cursor, result.bytes)
                             if (reconciled == null) {
+                                // Keep the Success, but never silently: both reviewers on PR #323
+                                // landed on the same point from different sides -- for evidentiary
+                                // audio, a file that ends early with no trace anywhere is an
+                                // integrity claim the app makes without saying so (AGENTS.md 5).
+                                // The state stays Success because the file written so far is
+                                // complete and correctly labelled, and failing it over a lost tail
+                                // would destroy more than it protects; the log is what makes the
+                                // truncation auditable afterwards. Whether the *user* should also
+                                // be told, in the UI, is a product decision and is filed separately.
+                                logExportError(
+                                    errorLogFile,
+                                    clock,
+                                    "ForwardRecordingEngine",
+                                    "TAIL_TRUNCATED",
+                                    "Clean stop dropped ${result.bytes.size} bytes at cursor $cursor: " +
+                                        "no retained segment describes their recorded format",
+                                    null,
+                                )
                                 finalDrainDone = true
                             } else {
                                 emit(reconciled)

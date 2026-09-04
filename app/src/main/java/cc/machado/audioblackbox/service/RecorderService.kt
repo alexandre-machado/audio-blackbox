@@ -129,7 +129,7 @@ class RecorderService : Service() {
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
-            segmentsProvider = { engine.activeSegments() ?: emptyList() },
+            segmentsProvider = { engine.activeSegments() },
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             configProvider = { captureConfig },
@@ -151,7 +151,7 @@ class RecorderService : Service() {
             // mid-session is seen. A forward recording always starts from `oldestCursor`, so it
             // drains the retained past too -- which means it reads across whatever format
             // boundaries the ring buffer already holds, not only ones created during the session.
-            segmentsProvider = { engine.activeSegments() ?: emptyList() },
+            segmentsProvider = { engine.activeSegments() },
         )
     }
 

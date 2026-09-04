@@ -270,18 +270,68 @@ class ForwardRecordingFormatBoundaryTest {
         )
 
         assertTrue(engine.start("probe.m4a") is ForwardRecordingState.Recording)
-        // No await here, deliberately: stopping immediately is what routes the unresolvable chunk
-        // through the final-drain branch rather than the live one.
         val finalState = engine.stop()
 
+        // `@rev` finding 1 on PR #323: an earlier version of this test asserted `Success`, which
+        // made it a coin flip. Which branch runs depends on whether stop() beats the drain thread
+        // to its first `while (!stopRequested)` check, and the engine offers no seam to decide
+        // that -- the check is the first thing the thread executes, and gating it from stop() would
+        // deadlock on stop()'s own join(). Rather than ship a test that fails ~sometimes with a
+        // message reading like a product regression, this asserts the property that must hold on
+        // *both* branches. The stop-path-specific outcome (Success rather than Error) is therefore
+        // deliberately not pinned by a test; it is pinned by the code comment and by review.
         assertTrue(
-            "a finished recording must not be failed by an unresolvable tail -- got $finalState",
-            finalState is ForwardRecordingState.Success,
+            "an unresolvable format must reach a terminal state, not hang -- got $finalState",
+            finalState is ForwardRecordingState.Success || finalState is ForwardRecordingState.Error,
         )
         assertEquals(
-            "no audio may be written once its recorded format is unknown, on this path either",
+            "no audio may be written once its recorded format is unknown, on either drain path",
             0,
             writer!!.out.size(),
+        )
+    }
+
+    @Test
+    fun `a null segment report is unresolvable, not a licence to pass bytes through`() {
+        // `@rev` finding 2 on PR #323. AudioCaptureEngine.activeSegments() returns *null* when its
+        // ring buffer is gone -- a rebuild between two drain iterations, say. The call sites used
+        // to write `{ engine.activeSegments() ?: emptyList() }`, laundering that null into an empty
+        // list and therefore into "no record at all, single-format, pass through unconverted".
+        // That is the guess this whole fix removes, reopened for precisely the case where the
+        // engine knows least about what it holds. A provider that returns null now means
+        // Unresolvable; only the absence of a provider means NoRecord.
+        val ring = RingBuffer(capacityBytes = 200_000, initialConfig = voice)
+        ring.write(ToneGenerator.tone(TONE_HZ, 16_000, 1_000, channelCount = 1))
+
+        val firstRead = CountDownLatch(1)
+        var writer: CapturingWriter? = null
+        val engine = ForwardRecordingEngine(
+            config = hiFi,
+            configProvider = { hiFi },
+            readSinceProvider = { cursor, maxBytes ->
+                ring.readSince(cursor, maxBytes).also { firstRead.countDown() }
+            },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = FakeSink(),
+            writerFactory = { _, cfg -> CapturingWriter(cfg).also { writer = it } },
+            // Exactly what `engine.activeSegments()` yields once the ring buffer is gone.
+            segmentsProvider = { null },
+        )
+
+        assertTrue(engine.start("probe.m4a") is ForwardRecordingState.Recording)
+        assertTrue("drain thread never read a chunk", firstRead.await(5, TimeUnit.SECONDS))
+        val finalState = engine.stop()
+
+        assertEquals(
+            "no audio may be written when the engine cannot say what format it holds",
+            0,
+            writer!!.out.size(),
+        )
+        assertTrue(
+            "a null segment report must not be treated as a single-format pass-through -- got $finalState",
+            finalState is ForwardRecordingState.Success || finalState is ForwardRecordingState.Error,
         )
     }
 
