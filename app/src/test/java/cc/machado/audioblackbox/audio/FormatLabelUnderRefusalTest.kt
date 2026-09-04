@@ -41,23 +41,52 @@ class FormatLabelUnderRefusalTest {
         // not to commit. `switchConfig` returns before touching either `activeConfig` or
         // `pendingConfigSwitch`, so it cannot -- asserted here rather than argued, and asserted on
         // the *label*, which the existing AudioCaptureEngineSwitchConfigTest does not look at.
+        //
+        // ## Anchoring an absence (`@rev` finding 1, PR #323 round 2)
+        // This asserts that something never happens, so it has to be anchored on the loop's own
+        // progress or it cannot tell "never happened" from "has not happened yet" -- the §10
+        // absence trap. Two anchors, both events rather than delays:
+        //   * `minBufferSizeProvider` records any lookup for a non-VOICE format. The capture thread
+        //     calls it as the first thing inside the `formatChanged` branch, so a lookup recorded
+        //     there means a pending switch really was consumed;
+        //   * the fake `AudioRecord.read` counts loop iterations, and this waits for a fixed number
+        //     of them *after* the refusal, so the absence is measured over a known amount of real
+        //     loop progress rather than over an unspecified wait.
         val opened = mutableListOf<AudioConfig>()
-        val engine = engine(voice, opened)
+        val lookedUpNonVoiceFormat = java.util.concurrent.atomic.AtomicBoolean(false)
+        val readCount = AtomicInteger(0)
+        val engine = engine(
+            config = voice,
+            opened = opened,
+            readCount = readCount,
+            minBufferSizeProvider = { cfg ->
+                if (cfg.sampleRateHz != voice.sampleRateHz) lookedUpNonVoiceFormat.set(true)
+                4_096
+            },
+        )
         engine.start()
         awaitBuffered(engine, 100)
 
         val result = engine.switchConfig(hiFi, memoryBudget = refusingBudget)
         assertTrue("expected a refusal, got $result", result is SwitchConfigResult.BufferResizeRefused)
 
-        // Keep capturing well past the point at which a pending switch would have been picked up:
-        // 300ms more buffered audio is thousands of trips round the read loop.
-        awaitBuffered(engine, 400)
+        val readsAtRefusal = readCount.get()
+        awaitCondition("$LOOP_ITERATIONS_AFTER_REFUSAL further read loop iterations after the refusal") {
+            readCount.get() >= readsAtRefusal + LOOP_ITERATIONS_AFTER_REFUSAL
+        }
 
         val segments = engine.activeSegments()!!
         val openedFormats = synchronized(opened) { opened.toList() }
         val active = engine.activeConfig
         engine.stop()
 
+        assertTrue(
+            "over $LOOP_ITERATIONS_AFTER_REFUSAL loop iterations after a refused switch, the " +
+                "capture thread must never have attempted a swap -- a lookup for the refused " +
+                "format means `pendingConfigSwitch` was left set, which is the divergence that " +
+                "makes export skip conversion over real audio",
+            !lookedUpNonVoiceFormat.get(),
+        )
         assertEquals("a refused switch must not open a second AudioRecord", 1, openedFormats.size)
         assertEquals(
             "a refused switch must not advance the buffer's format label -- a label the service " +
@@ -71,7 +100,7 @@ class FormatLabelUnderRefusalTest {
     @Test
     fun `a refusal followed by a successful switch lands only the successful one`() {
         val opened = mutableListOf<AudioConfig>()
-        val engine = engine(voice, opened)
+        val engine = engine(config = voice, opened = opened)
         engine.start()
         awaitBuffered(engine, 100)
 
@@ -155,25 +184,30 @@ class FormatLabelUnderRefusalTest {
         assertEquals("every retained byte must have been checked", ring.writeCursor() - ring.oldestCursor(), checked)
     }
 
-    private fun engine(config: AudioConfig, opened: MutableList<AudioConfig>) = AudioCaptureEngine(
+    private fun engine(
+        config: AudioConfig,
+        opened: MutableList<AudioConfig>,
+        readCount: AtomicInteger = AtomicInteger(0),
+        minBufferSizeProvider: (AudioConfig) -> Int = { 4_096 },
+    ) = AudioCaptureEngine(
         config = config,
         audioRecordFactory = { cfg, _ ->
             synchronized(opened) { opened += cfg }
-            countingRecord(cfg)
+            countingRecord(cfg, readCount)
         },
-        minBufferSizeProvider = { 4_096 },
+        minBufferSizeProvider = minBufferSizeProvider,
     )
 
-    /** A fake `AudioRecord` that always has a full, frame-aligned block ready. */
-    private fun countingRecord(config: AudioConfig): AudioRecord {
+    /** A fake `AudioRecord` that always has a full, frame-aligned block ready, counting each
+     * `read` so a test can anchor on real capture-loop progress instead of on elapsed time. */
+    private fun countingRecord(config: AudioConfig, readCount: AtomicInteger): AudioRecord {
         val record = mock<AudioRecord>()
         whenever(record.state).thenReturn(AudioRecord.STATE_INITIALIZED)
         whenever(record.recordingState).thenReturn(AudioRecord.RECORDSTATE_RECORDING)
-        val position = AtomicInteger(0)
         whenever(record.read(any<ByteArray>(), any(), any())).thenAnswer { invocation ->
             val length = invocation.getArgument<Int>(2)
             val take = length - (length % config.bytesPerFrame)
-            position.addAndGet(take)
+            readCount.incrementAndGet()
             take
         }
         return record
@@ -202,6 +236,10 @@ class FormatLabelUnderRefusalTest {
 
     private companion object {
         const val AWAIT_TIMEOUT_MILLIS = 10_000L
+
+        /** Enough real read-loop iterations after a refusal that a consumed pending switch
+         * could not still be in flight -- the absence is measured over loop progress, not time. */
+        const val LOOP_ITERATIONS_AFTER_REFUSAL = 200
         const val VOICE_BYTES = 32_000
         const val HIFI_BYTES = 176_400
         const val VOICE_MARKER: Byte = 1

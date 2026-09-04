@@ -57,6 +57,16 @@ class RecorderServiceEngineRebuildDeclineTest {
 
     @After
     fun tearDown() {
+        // Unconditionally, and *before* the restoring rebuild below (`@rev` finding 2, PR #323
+        // round 2). `stop()` is what moves `CaptureState.Error` back to `Idle`, and
+        // `rebuildEngineIfIdle` returns false at its `!is Idle` check without touching anything --
+        // so if this ran at the end of a test body instead, any earlier assertion failure would
+        // leave the process-global companion on HIGH_FIDELITY with an errored engine for every
+        // class that runs afterwards. There is no `forkEvery` in `app/build.gradle.kts`, so that is
+        // the whole suite in one JVM: `@rev` injected a late failure here and got 13 failures, 12
+        // of them collateral in `RecorderServiceRetentionWindowTest` and `SettingsViewModelTest`.
+        // A real regression must name its own cause, not blow up three unrelated classes.
+        RecorderService.engine.stop()
         RecorderService.maxRetentionMinutesProvider = { GENEROUS_CEILING_MINUTES }
         RecorderService.rebuildEngineIfIdle(
             newBufferDurationMinutes = AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES,
@@ -146,10 +156,7 @@ class RecorderServiceEngineRebuildDeclineTest {
         assertTrue("the switch itself is not gated on capture state", applied)
         assertFalse("the rebuild must decline while capture state is not Idle", rebuilt)
         assertSame("so the engine instance is again left unrebuilt", engineBefore, RecorderService.engine)
-
-        // Leave the companion in a clean state for the next test: stop() is what moves Error to
-        // Idle, and only then can tearDown's rebuild actually apply.
-        RecorderService.engine.stop()
+        // Restoring the companion is tearDown's job, not this method's -- see tearDown.
     }
 
     private companion object {

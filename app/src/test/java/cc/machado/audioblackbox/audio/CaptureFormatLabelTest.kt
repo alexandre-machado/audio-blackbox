@@ -7,6 +7,8 @@ import cc.machado.audioblackbox.export.TestInMemorySink
 import cc.machado.audioblackbox.export.WavPayloadEncoder
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import org.junit.Assert.assertEquals
@@ -58,6 +60,10 @@ class CaptureFormatLabelTest {
 
     /** Records every format `AudioRecord` was actually opened in, in order. */
     private val openedFormats = mutableListOf<AudioConfig>()
+
+    /** Counts every `AudioRecord.read` the capture loop performs, so a test can anchor on real
+     * loop progress rather than on elapsed time or a buffered-duration proxy. */
+    private val readCount = AtomicInteger(0)
 
     private fun engineWith(
         constructedWith: AudioConfig,
@@ -225,31 +231,71 @@ class CaptureFormatLabelTest {
 
     @Test
     fun `a failed mid-session format swap leaves the label describing the audio still being captured`() {
-        // The swap's own min-buffer-size lookup refuses the target format -- the shape a device
-        // takes when it cannot open 44.1kHz stereo on this mic. The first (start()) lookup must
-        // still succeed, or there would be no session to swap within.
+        // ## Why this synchronises on a latch inside the provider and not on buffered duration
+        //
+        // `@rev` caught the previous version of this test green-when-broken (PR #323 round 2): it
+        // waited on an *absolute* buffered-duration threshold, which after the preceding 100ms wait
+        // is only about two 4096-byte loop iterations, so the capture thread could consume the
+        // pending switch *after* the assertion had already read the segment list. Mutation M4b
+        // (hoisting `buffer.setFormat` above the swap) survived roughly one run in five.
+        //
+        // `minBufferSizeProvider` is the right handshake because the capture thread calls it, on
+        // the capture thread, at exactly the moment a swap is attempted -- and it is the first
+        // thing inside the `formatChanged` branch, so anything the branch does to the buffer has
+        // already happened by the time it is called. Awaiting it is a happens-before edge on the
+        // event itself, not a delay standing in for one (AGENTS.md §3). Lengthening the wait was
+        // explicitly not the fix: a longer sleep is still a race.
+        val swapAttempted = CountDownLatch(1)
         val engine = engineWith(
             constructedWith = voice,
-            minBufferSizeProvider = { cfg -> if (cfg.sampleRateHz == voice.sampleRateHz) 4_096 else 0 },
+            // The swap's own min-buffer-size lookup refuses the target format -- the shape a device
+            // takes when it cannot open 44.1kHz stereo on this mic. The first (start()) lookup must
+            // still succeed, or there would be no session to swap within.
+            minBufferSizeProvider = { cfg ->
+                if (cfg.sampleRateHz == voice.sampleRateHz) {
+                    4_096
+                } else {
+                    swapAttempted.countDown()
+                    0
+                }
+            },
         )
         engine.start()
         awaitBuffered(engine, 100)
 
         assertEquals(SwitchConfigResult.Applied, engine.switchConfig(hiFi))
-        // Give the capture loop room to consume the pending switch and fail it. Bounded by real
-        // captured audio rather than a fixed wait: 200ms more buffered means the loop has gone
-        // round many times, so the pending switch has certainly been picked up.
-        awaitBuffered(engine, 300)
+        assertTrue(
+            "the capture thread must have reached the swap attempt within " +
+                "${AWAIT_TIMEOUT_MILLIS}ms -- without observing that, an assertion about what the " +
+                "swap did or did not do to the buffer proves nothing",
+            swapAttempted.await(AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
+        )
+        // The latch proves the swap was *attempted*; this proves real audio has since been written.
+        // Both are needed. A label advanced at the swap point is invisible to `activeSegments`
+        // until a byte lands past it (a segment whose `startOffset == endCursor` is excluded), so
+        // asserting immediately after the latch would miss it -- which is how the first attempt at
+        // this fix still let M4b survive. Anchoring on the read counter, not on elapsed time, keeps
+        // it a handshake on the loop's own progress.
+        val readsAtSwap = readCount.get()
+        awaitCondition("$READS_AFTER_SWAP further capture-loop reads after the failed swap") {
+            readCount.get() >= readsAtSwap + READS_AFTER_SWAP
+        }
 
         val segments = engine.activeSegments()!!
+        val labelForIncomingAudio = engine.formatAt(engine.writeCursor()!!)!!
         val opened = synchronized(openedFormats) { openedFormats.toList() }
         engine.stop()
 
         assertEquals("no second AudioRecord should have been opened", 1, opened.size)
         assertEquals(
-            "a swap that did not happen must not advance the buffer's label: the bytes still " +
-                "arriving are the old format, and keeping the old label is what makes them " +
+            "a swap that did not happen must not advance the label the audio still arriving gets: " +
+                "those bytes are the old format, and keeping the old label is what makes them " +
                 "exportable correctly. Advancing the label alone is the corruption.",
+            16_000 to 1,
+            labelForIncomingAudio.sampleRateHz to labelForIncomingAudio.channelCount,
+        )
+        assertEquals(
+            "and no second format segment may exist at all -- the buffer holds one format",
             listOf(16_000 to 1),
             segments.map { it.config.sampleRateHz to it.config.channelCount },
         )
@@ -318,13 +364,19 @@ class CaptureFormatLabelTest {
         whenever(record.read(any<ByteArray>(), any(), any())).thenAnswer { invocation ->
             val destination = invocation.getArgument<ByteArray>(0)
             val length = invocation.getArgument<Int>(2)
-            val pos = position.get()
+            // Wraps rather than running dry, so a test can wait on an arbitrary number of
+            // further reads without the source silently freezing the counter. The frequency test
+            // exports far less than one pass, so it never sees the wrap discontinuity.
+            val pos = position.get() % source.size
             val available = minOf(length, source.size - pos)
-            if (available <= 0) return@thenAnswer 0
             val take = available - (available % config.bytesPerFrame)
-            if (take <= 0) return@thenAnswer 0
+            if (take <= 0) {
+                position.set(0)
+                return@thenAnswer 0
+            }
             System.arraycopy(source, pos, destination, 0, take)
             position.addAndGet(take)
+            readCount.incrementAndGet()
             take
         }
         return record
@@ -359,6 +411,10 @@ class CaptureFormatLabelTest {
 
     private companion object {
         const val AWAIT_TIMEOUT_MILLIS = 10_000L
+
+        /** Capture-loop reads to let elapse after a swap attempt, so that any label advanced at
+         * the swap point has real audio written past it and is therefore observable. */
+        const val READS_AFTER_SWAP = 50
         const val TONE_DURATION_MILLIS = 5_000L
         const val WAV_HEADER_BYTES = 44
         const val WAV_FMT_CHANNELS_OFFSET = 22
