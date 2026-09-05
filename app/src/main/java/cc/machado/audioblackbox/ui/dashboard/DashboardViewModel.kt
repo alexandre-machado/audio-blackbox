@@ -8,9 +8,14 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.export.ErrorLogEntry
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
+import cc.machado.audioblackbox.export.clearErrorLog
+import cc.machado.audioblackbox.export.readErrorLog
 import cc.machado.audioblackbox.service.RecorderService
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +25,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Frozen at the instant [DashboardViewModel] observes an [ExportState.Error] -- see
  * [SaveUiState.Error]'s doc for why this must not be re-derived from live state on every
@@ -85,6 +92,26 @@ class DashboardViewModel(
     private val onSaveIntent: () -> Unit = {},
     private val onStartForwardRecording: () -> Unit = {},
     private val onStopForwardRecording: () -> Unit = {},
+    // Issue #346: resolved lazily (not read once at construction) since
+    // `ErrorLogFileHolder.file` is set by `AudioBlackboxApplication.onCreate` -- guaranteed to
+    // have already run by the time a real `DashboardViewModel` is constructed (same "Application
+    // preloads before this companion/ViewModel is first touched" ordering `RecorderService`'s own
+    // companion doc documents), but a test constructing this ViewModel before that holder is set
+    // still gets a correct, testable `null` (safe no-op, see `readErrorLog`'s doc) rather than a
+    // value frozen from before the test's own `errorLogFileProvider` override took effect.
+    private val errorLogFileProvider: () -> File? = { cc.machado.audioblackbox.ErrorLogFileHolder.file },
+    private val errorLogPollMillis: Long = ERROR_LOG_POLL_MILLIS,
+    // Issue #346: the actual disk read, factored out from `errorLogFileProvider` above so a test
+    // can drive `errorLogUiState` deterministically under a virtual-time `TestDispatcher` (no real
+    // `Dispatchers.IO` thread hop to synchronize with) while production still gets the real
+    // "parse the log off the main thread" behavior via the default here.
+    private val errorLogReader: suspend () -> List<ErrorLogEntry> = {
+        withContext(Dispatchers.IO) { readErrorLog(errorLogFileProvider()) }
+    },
+    // Mirrors `errorLogReader`'s testability reasoning above, for the "Clear log" action's delete.
+    private val errorLogClearer: suspend () -> Unit = {
+        withContext(Dispatchers.IO) { clearErrorLog(errorLogFileProvider()) }
+    },
 ) : ViewModel() {
 
     // The most recent terminal ExportState (Success/Error) the user has explicitly dismissed --
@@ -507,6 +534,84 @@ class DashboardViewModel(
         }
     }
 
+    // Modal-only UI state (open/closed, current page, the Clear confirmation) -- deliberately
+    // kept separate from the parsed `entries` themselves (see `errorLogEntriesFlow` below), which
+    // come from disk on their own polling cadence, not from a user action.
+    private data class ErrorLogModalState(
+        val isModalOpen: Boolean = false,
+        val page: Int = 0,
+        val isClearConfirmVisible: Boolean = false,
+    )
+
+    private val _errorLogModalState = MutableStateFlow(ErrorLogModalState())
+
+    // Issue #346: reads + parses the durable error log off Dispatchers.IO on a polling cadence,
+    // the same "ticks only while something is collecting" shape as `bufferedMillisFlow` above --
+    // costs nothing while the dashboard is not visible (governed by `errorLogUiState`'s own
+    // `stateIn` below), and picks up an error the moment it lands without this ViewModel having
+    // to know about every producer (AudioCaptureEngine/ExportEngine/ForwardRecordingEngine) that
+    // can write one. `readErrorLog` is a plain blocking function by design (see its doc) --
+    // `withContext(Dispatchers.IO)` is this call site's job, not that function's.
+    private val errorLogEntriesFlow: Flow<List<ErrorLogEntry>> = flow {
+        while (true) {
+            emit(errorLogReader())
+            delay(errorLogPollMillis)
+        }
+    }
+
+    val errorLogUiState: StateFlow<ErrorLogUiState> = combine(
+        errorLogEntriesFlow,
+        _errorLogModalState,
+    ) { entries, modal ->
+        ErrorLogUiState(
+            entries = entries,
+            page = modal.page,
+            isModalOpen = modal.isModalOpen,
+            isClearConfirmVisible = modal.isClearConfirmVisible,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        initialValue = ErrorLogUiState(),
+    )
+
+    /** Opens the error-list modal (issue #346), always starting at page 0 -- newest entries. */
+    fun openErrorLog() {
+        _errorLogModalState.update { it.copy(isModalOpen = true, page = 0) }
+    }
+
+    fun dismissErrorLog() {
+        _errorLogModalState.update { it.copy(isModalOpen = false, isClearConfirmVisible = false) }
+    }
+
+    fun nextErrorLogPage() {
+        val pageCount = errorLogUiState.value.pageCount
+        _errorLogModalState.update { it.copy(page = (it.page + 1).coerceAtMost(pageCount - 1)) }
+    }
+
+    fun previousErrorLogPage() {
+        _errorLogModalState.update { it.copy(page = (it.page - 1).coerceAtLeast(0)) }
+    }
+
+    /** First step of the destructive "clear the list" action (issue #346) -- shows the
+     * confirmation, does not delete anything yet. See [confirmClearErrorLog]. */
+    fun requestClearErrorLog() {
+        _errorLogModalState.update { it.copy(isClearConfirmVisible = true) }
+    }
+
+    fun dismissClearErrorLogConfirmation() {
+        _errorLogModalState.update { it.copy(isClearConfirmVisible = false) }
+    }
+
+    /** Deletes the durable error log (both the live file and its rotated `.old` generation --
+     * see [clearErrorLog]'s doc) after the user has confirmed. Off `Dispatchers.IO`; the next
+     * `errorLogEntriesFlow` tick picks up the now-empty log. */
+    fun confirmClearErrorLog() {
+        _errorLogModalState.update { it.copy(isClearConfirmVisible = false, page = 0) }
+        viewModelScope.launch {
+            errorLogClearer()
+        }
+    }
 
     companion object {
         private const val DEFAULT_TICK_MILLIS = 500L
@@ -525,6 +630,13 @@ class DashboardViewModel(
         // the capture logic itself -- same order of magnitude as the save dispatch, hence the same
         // value.
         private const val ENGINE_TOGGLE_TIMEOUT_MILLIS = 5_000L
+
+        // How often, while the dashboard is visible, `errorLogEntriesFlow` re-reads the durable
+        // error log from disk (issue #346). Short enough that a freshly-logged failure shows up
+        // on the card within a couple of seconds of it happening; long enough that re-parsing a
+        // log bounded at 2x5 MB (the live file plus its one `.old` generation) is not a
+        // continuous background cost.
+        private const val ERROR_LOG_POLL_MILLIS = 3_000L
 
         /** 1:1 mapping, kept as its own pure function (rather than inlined into [mapUiState]) so
          * it has a single, obvious oracle: every [CaptureState] subtype maps to exactly the

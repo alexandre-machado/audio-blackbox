@@ -384,6 +384,20 @@
     <string name="dashboard_error_copied_toast">Incident report copied to clipboard</string>
     <string name="dashboard_error_share_chooser_title">Share Incident Report</string>
 
+    <!-- Durable Error Log card + modal (issue #346) -->
+    <string name="dashboard_card_error_log_label">Error log</string>
+    <string name="dashboard_error_log_card_body">Recording errors were logged. Tap to review.</string>
+    <string name="dashboard_error_log_card_content_description">%1$d recording error(s) logged. Tap to view the error log.</string>
+    <string name="dashboard_error_log_modal_title">Error log</string>
+    <string name="dashboard_error_log_modal_empty">No errors logged.</string>
+    <string name="dashboard_error_log_page_previous">Previous</string>
+    <string name="dashboard_error_log_page_next">Next</string>
+    <string name="dashboard_error_log_page_indicator">Page %1$d of %2$d</string>
+    <string name="dashboard_error_log_clear">Clear log</string>
+    <string name="dashboard_error_log_clear_confirm_body">This permanently deletes the entire error log from this device. This cannot be undone.</string>
+    <string name="dashboard_error_log_clear_cancel">Cancel</string>
+    <string name="dashboard_error_log_clear_confirm">Delete log</string>
+
     <!-- Gallery File Specifications -->
     <string name="gallery_details_title">Recording specifications</string>
     <string name="gallery_details_created_at">Capture started</string>

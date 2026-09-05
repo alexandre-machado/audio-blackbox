@@ -60,11 +60,20 @@ class ExportErrorLoggingTest {
         
         flushErrorLogsForTest()
         assertTrue("Log file should be written", errorLogFile.exists() && errorLogFile.length() > 0)
-        
-        val logContent = errorLogFile.readText()
-        assertTrue("Log should contain component", logContent.contains("[ExportEngine]"))
-        assertTrue("Log should contain reason", logContent.contains("[SINK_OPEN_FAILED]"))
-        assertTrue("Log should contain message", logContent.contains("simulated disk full"))
-        assertTrue("Log should contain exception class", logContent.contains("java.io.IOException"))
+
+        // Issue #346: the log is now JSONL (one JSON object per line), not the old
+        // "[timestamp] [component] [reason] message" plain-text shape -- assert on the parsed
+        // record, which is also the oracle the dashboard's error-list card/modal reads through.
+        val entries = readErrorLog(errorLogFile)
+        assertEquals("Exactly one entry should be logged", 1, entries.size)
+        val entry = entries.single()
+        assertEquals("ExportEngine", entry.component)
+        assertEquals("SINK_OPEN_FAILED", entry.reason)
+        assertTrue("Log should contain message", entry.message.contains("simulated disk full"))
+        assertTrue(
+            "Log should contain exception class",
+            entry.stackTrace?.contains("java.io.IOException") == true,
+        )
+        assertEquals(ErrorLogSeverity.ERROR, entry.severity)
     }
 }

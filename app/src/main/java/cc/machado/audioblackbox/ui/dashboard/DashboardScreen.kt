@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -64,9 +65,13 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.export.ErrorLogEntry
+import cc.machado.audioblackbox.export.ErrorLogSeverity
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.dashboardTagLabelRes
@@ -76,6 +81,7 @@ import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
 import cc.machado.audioblackbox.ui.theme.AvionicsGreenGlow
 import cc.machado.audioblackbox.ui.theme.AvionicsLabelValueRow
+import cc.machado.audioblackbox.ui.theme.AvionicsModal
 import cc.machado.audioblackbox.ui.theme.AvionicsPanelButton
 import cc.machado.audioblackbox.ui.theme.AvionicsPanelButtonRow
 import cc.machado.audioblackbox.ui.theme.AvionicsTag
@@ -94,8 +100,10 @@ import cc.machado.audioblackbox.ui.theme.RADIUS_SM
 import cc.machado.audioblackbox.ui.theme.RemoveBeforeFlightTag
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
+import cc.machado.audioblackbox.ui.theme.TelemetryCyan
 import cc.machado.audioblackbox.ui.theme.TextDim
 import cc.machado.audioblackbox.ui.theme.TextMuted
+import cc.machado.audioblackbox.ui.theme.TextStencil
 import cc.machado.audioblackbox.ui.theme.WarningRed
 import cc.machado.audioblackbox.ui.theme.WarningRedGlow
 import java.util.Locale
@@ -113,6 +121,8 @@ fun DashboardRoute(
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val errorLogUiState by viewModel.errorLogUiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     DashboardScreen(
         uiState = uiState,
         onToggleEngine = viewModel::toggleEngine,
@@ -121,6 +131,17 @@ fun DashboardRoute(
         onStartForwardRecording = viewModel::startForwardRecording,
         onStopForwardRecording = viewModel::stopForwardRecording,
         onDismissForwardNotice = viewModel::dismissForwardRecordingNotice,
+        errorLogUiState = errorLogUiState,
+        onOpenErrorLog = viewModel::openErrorLog,
+        onDismissErrorLog = viewModel::dismissErrorLog,
+        onNextErrorLogPage = viewModel::nextErrorLogPage,
+        onPreviousErrorLogPage = viewModel::previousErrorLogPage,
+        onRequestClearErrorLog = viewModel::requestClearErrorLog,
+        onDismissClearErrorLogConfirmation = viewModel::dismissClearErrorLogConfirmation,
+        onConfirmClearErrorLog = viewModel::confirmClearErrorLog,
+        onCopyErrorLogPage = { entries ->
+            DiagnosticsReportHelper.copyToClipboard(context, formatErrorLogPageForClipboard(entries))
+        },
         modifier = modifier,
     )
 }
@@ -134,6 +155,18 @@ fun DashboardScreen(
     onStartForwardRecording: () -> Unit,
     onStopForwardRecording: () -> Unit,
     onDismissForwardNotice: () -> Unit,
+    // Issue #346: all default to a no-op/empty state so every existing positional call site
+    // (including every `@Preview` below) keeps compiling unchanged -- only DashboardRoute wires
+    // these to a real ViewModel.
+    errorLogUiState: ErrorLogUiState = ErrorLogUiState(),
+    onOpenErrorLog: () -> Unit = {},
+    onDismissErrorLog: () -> Unit = {},
+    onNextErrorLogPage: () -> Unit = {},
+    onPreviousErrorLogPage: () -> Unit = {},
+    onRequestClearErrorLog: () -> Unit = {},
+    onDismissClearErrorLogConfirmation: () -> Unit = {},
+    onConfirmClearErrorLog: () -> Unit = {},
+    onCopyErrorLogPage: (List<ErrorLogEntry>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -159,6 +192,24 @@ fun DashboardScreen(
             // mid-drag. Nothing moves: zIndex only reorders drawing and hit-testing.
             modifier = Modifier.zIndex(1f),
         )
+        if (errorLogUiState.hasVisibleErrors) {
+            DurableErrorLogCard(
+                errorCount = errorLogUiState.entries.count { it.severity == ErrorLogSeverity.ERROR },
+                onClick = onOpenErrorLog,
+            )
+        }
+        if (errorLogUiState.isModalOpen) {
+            ErrorLogModal(
+                errorLogUiState = errorLogUiState,
+                onDismiss = onDismissErrorLog,
+                onNextPage = onNextErrorLogPage,
+                onPreviousPage = onPreviousErrorLogPage,
+                onRequestClear = onRequestClearErrorLog,
+                onDismissClearConfirmation = onDismissClearErrorLogConfirmation,
+                onConfirmClear = onConfirmClearErrorLog,
+                onCopyPage = onCopyErrorLogPage,
+            )
+        }
         if (uiState.saveState is SaveUiState.Success || uiState.saveState is SaveUiState.Error) {
             SaveOutcomeNotice(
                 saveState = uiState.saveState,
@@ -1082,6 +1133,221 @@ private fun ForwardOutcomeNotice(
                     Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
                 }
             }
+        }
+    }
+}
+
+/**
+ * Durable error-list card (issue #346) -- rendered by [DashboardScreen] only when
+ * [ErrorLogUiState.hasVisibleErrors] is `true` (see that property's doc for why an
+ * [ErrorLogSeverity.AUDIT]-only log does not trigger this). Tapping anywhere on the card opens
+ * [ErrorLogModal]. No empty state exists for this card -- it simply is not composed when there is
+ * nothing to show, per the acceptance criterion.
+ */
+@Composable
+private fun DurableErrorLogCard(
+    errorCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val countLabel = errorCount.coerceAtMost(99).toString()
+    val description = stringResource(R.string.dashboard_error_log_card_content_description, errorCount)
+    AvionicsCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = description
+            },
+    ) {
+        AvionicsCardHeaderBar(
+            label = stringResource(R.string.dashboard_card_error_log_label),
+            tag = { AvionicsTag(text = countLabel, color = WarningRed, containerColor = WarningRedGlow) },
+        )
+        Text(
+            text = stringResource(R.string.dashboard_error_log_card_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted,
+        )
+    }
+}
+
+/**
+ * The paginated error-list modal (issue #346), built on [AvionicsModal] -- the first avionics
+ * dialog/modal primitive in this design system, added by this issue (see [AvionicsModal]'s own
+ * doc for why no earlier primitive covered this shape).
+ *
+ * Newest-first (that ordering already comes from [cc.machado.audioblackbox.export.readErrorLog]),
+ * one page ([ErrorLogUiState.pageEntries]) rendered at a time via [LazyColumn] so an arbitrarily
+ * long page still scrolls rather than overflowing the modal's own height cap.
+ */
+@Composable
+private fun ErrorLogModal(
+    errorLogUiState: ErrorLogUiState,
+    onDismiss: () -> Unit,
+    onNextPage: () -> Unit,
+    onPreviousPage: () -> Unit,
+    onRequestClear: () -> Unit,
+    onDismissClearConfirmation: () -> Unit,
+    onConfirmClear: () -> Unit,
+    onCopyPage: (List<ErrorLogEntry>) -> Unit,
+) {
+    AvionicsModal(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.dashboard_error_log_modal_title),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (errorLogUiState.entries.isEmpty()) {
+                // Reachable only in the brief window between the card being tapped and the next
+                // background poll observing a Clear that just happened -- not a designed "empty
+                // state" for this modal (the card itself is never shown with zero errors, per its
+                // own doc), just a safe placeholder for that transition.
+                Text(
+                    text = stringResource(R.string.dashboard_error_log_modal_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMuted,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(errorLogUiState.pageEntries) { entry ->
+                        ErrorLogEntryRow(entry)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(onClick = onPreviousPage, enabled = errorLogUiState.page > 0) {
+                        Text(text = stringResource(R.string.dashboard_error_log_page_previous))
+                    }
+                    Text(
+                        text = stringResource(
+                            R.string.dashboard_error_log_page_indicator,
+                            errorLogUiState.page + 1,
+                            errorLogUiState.pageCount,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextMuted,
+                    )
+                    OutlinedButton(
+                        onClick = onNextPage,
+                        enabled = errorLogUiState.page < errorLogUiState.pageCount - 1,
+                    ) {
+                        Text(text = stringResource(R.string.dashboard_error_log_page_next))
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { onCopyPage(errorLogUiState.pageEntries) },
+                    modifier = Modifier.weight(1f),
+                    enabled = errorLogUiState.pageEntries.isNotEmpty(),
+                ) {
+                    Text(text = stringResource(R.string.dashboard_error_action_copy))
+                }
+                OutlinedButton(
+                    onClick = onRequestClear,
+                    modifier = Modifier.weight(1f),
+                    enabled = errorLogUiState.entries.isNotEmpty(),
+                ) {
+                    Text(text = stringResource(R.string.dashboard_error_log_clear))
+                }
+            }
+
+            if (errorLogUiState.isClearConfirmVisible) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(RADIUS_SM),
+                    color = CockpitSlate,
+                    border = BorderStroke(1.dp, WarningRed.copy(alpha = 0.5f)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.dashboard_error_log_clear_confirm_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextStencil,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(onClick = onDismissClearConfirmation, modifier = Modifier.weight(1f)) {
+                                Text(text = stringResource(R.string.dashboard_error_log_clear_cancel))
+                            }
+                            Button(
+                                onClick = onConfirmClear,
+                                modifier = Modifier.weight(1f),
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = WarningRed),
+                            ) {
+                                Text(text = stringResource(R.string.dashboard_error_log_clear_confirm))
+                            }
+                        }
+                    }
+                }
+            }
+
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(text = stringResource(R.string.dashboard_save_notice_dismiss))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorLogEntryRow(entry: ErrorLogEntry) {
+    val severityColor = if (entry.severity == ErrorLogSeverity.ERROR) WarningRed else TelemetryCyan
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(RADIUS_SM),
+        color = CockpitSlate,
+        border = BorderStroke(1.dp, CockpitBorder),
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = formatErrorLogTimestamp(entry.timestampMillis),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = TextMuted,
+                )
+                Text(
+                    text = entry.severity.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = severityColor,
+                )
+            }
+            Text(
+                text = "${entry.component} · ${entry.reason}",
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = TextStencil,
+            )
+            Text(
+                text = entry.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+            )
         }
     }
 }

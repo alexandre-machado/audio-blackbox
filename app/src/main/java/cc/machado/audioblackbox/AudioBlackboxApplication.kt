@@ -38,6 +38,14 @@ class AudioBlackboxApplication : Application() {
         // whichever comes first -- not immediate on its own; see RecordingWidgetUpdater's doc for
         // the full mechanism (`@rev` review on PR #278, finding 2).
         RecordingWidgetStateObserver.start(this)
+
+        // Issue #346: the durable error log's path needs a `Context.filesDir`, which
+        // `RecorderService`'s companion object -- built the first time anything touches it,
+        // possibly before any Service instance exists -- does not have (see e.g.
+        // `AudioCaptureEngine`'s own companion-owned `_engine`). Setting it here, exactly once at
+        // process start, mirrors `PreloadedRetentionWindow` above: a plain, `Application.onCreate`
+        // -written holder is the only context-bearing thing guaranteed to run first.
+        ErrorLogFileHolder.file = java.io.File(applicationContext.filesDir, "export_errors.log")
     }
 }
 
@@ -57,4 +65,18 @@ object PreloadedRetentionWindow {
 
     @Volatile
     var preset: QualityPreset = QualityPreset.DEFAULT
+}
+
+/**
+ * Holds the durable error log's file path (issue #346), set once by
+ * [AudioBlackboxApplication.onCreate] -- see that call site's doc for why a plain top-level holder
+ * is needed here, the same shape as [PreloadedRetentionWindow]. `null` (the default) only in a
+ * plain JVM unit test that never runs [AudioBlackboxApplication]; every real production code path
+ * that reads this (`RecorderService`'s companion) already treats a `null` error-log file as a safe
+ * no-op -- see [cc.machado.audioblackbox.export.logExportError]'s and
+ * [cc.machado.audioblackbox.export.readErrorLog]'s own docs.
+ */
+object ErrorLogFileHolder {
+    @Volatile
+    var file: java.io.File? = null
 }

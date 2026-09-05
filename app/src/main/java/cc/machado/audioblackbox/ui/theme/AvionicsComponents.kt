@@ -62,12 +62,15 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 
 /**
@@ -813,5 +816,49 @@ fun DashedDivider(
             strokeWidth = 1.dp.toPx(),
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()), 0f),
         )
+    }
+}
+
+/**
+ * The first avionics-themed dialog/modal primitive in this design system (issue #346: no such
+ * primitive existed before this issue -- every full-screen overlay on this codebase up to now was
+ * either an inline card in a `Column` or a stock `AlertDialog`/`Toast`). Built directly on
+ * [androidx.compose.ui.window.Dialog] rather than Material 3's `AlertDialog`/`BasicAlertDialog`:
+ * those size themselves to their text content, which does not fit a scrollable *list* (this
+ * primitive's reason for existing -- issue #346's paginated error list), and their fixed
+ * title/text/button slots do not leave room for [AvionicsCardHeaderBar]-style chrome.
+ *
+ * Renders an [AvionicsCard] inside the platform [Dialog] window, capped to 92% of the available
+ * width and 80% of the available height so it never runs edge-to-edge or off the bottom of a
+ * short/rotated screen -- [content] is responsible for making its own body scrollable if it can
+ * exceed that height (issue #346's list does, via `LazyColumn`).
+ *
+ * [title] renders through the same [AvionicsCardHeaderBar] every other avionics card uses, so a
+ * long pt-BR title behaves identically to any other card header (single line, ellipsized) rather
+ * than needing its own overflow handling -- see [AvionicsCardHeaderBar]'s own doc for why that
+ * matters at this screen's narrowest supported width.
+ */
+@Composable
+fun AvionicsModal(
+    onDismissRequest: () -> Unit,
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            AvionicsCard(
+                modifier = modifier
+                    .widthIn(max = maxWidth * 0.92f)
+                    .heightIn(max = maxHeight * 0.8f),
+                content = {
+                    AvionicsCardHeaderBar(label = title)
+                    content()
+                },
+            )
+        }
     }
 }

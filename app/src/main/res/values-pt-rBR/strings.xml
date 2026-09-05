@@ -342,6 +342,20 @@
     <string name="dashboard_error_copied_toast">Relatório de incidente copiado</string>
     <string name="dashboard_error_share_chooser_title">Compartilhar Relatório de Incidente</string>
 
+    <!-- Cartão + modal de log de erros durável (issue #346) -->
+    <string name="dashboard_card_error_log_label">Log de erros</string>
+    <string name="dashboard_error_log_card_body">Erros de gravação foram registrados. Toque para revisar.</string>
+    <string name="dashboard_error_log_card_content_description">%1$d erro(s) de gravação registrado(s). Toque para ver o log de erros.</string>
+    <string name="dashboard_error_log_modal_title">Log de erros</string>
+    <string name="dashboard_error_log_modal_empty">Nenhum erro registrado.</string>
+    <string name="dashboard_error_log_page_previous">Anterior</string>
+    <string name="dashboard_error_log_page_next">Próxima</string>
+    <string name="dashboard_error_log_page_indicator">Página %1$d de %2$d</string>
+    <string name="dashboard_error_log_clear">Limpar log</string>
+    <string name="dashboard_error_log_clear_confirm_body">Isso exclui permanentemente todo o log de erros deste dispositivo. Essa ação não pode ser desfeita.</string>
+    <string name="dashboard_error_log_clear_cancel">Cancelar</string>
+    <string name="dashboard_error_log_clear_confirm">Excluir log</string>
+
     <!-- Especificações do arquivo na Galeria -->
     <string name="gallery_details_title">Especificações da gravação</string>
     <string name="gallery_details_created_at">Início da captura</string>
