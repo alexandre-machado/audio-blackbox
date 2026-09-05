@@ -66,6 +66,24 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
 
+      # Issue #345: a Gradle console failure only ever prints `file:line` (e.g.
+      # "AssertionError at CaptureFormatLabelTest.kt:130") -- the assertion message, which
+      # usually carries the actual diagnosable state (`got $result`), lives only in the JUnit
+      # XML/HTML report, which this job previously discarded. Uploaded on failure only: a green
+      # run has nothing worth keeping here, and uploading every run would just accumulate noise.
+      # Scoped to the two report dirs Gradle actually writes for this task (verified locally,
+      # see PR description) rather than all of app/build/, to keep the artifact bounded.
+      - name: Upload unit test report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unit-test-report-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Lint
         run: ./gradlew lintDebug --no-daemon
 
@@ -206,6 +224,24 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
           disable-animations: true
           script: ./scripts/ci/run-instrumented-tier.sh
+
+      # Issue #345: this tier drives `am instrument` directly (see run-instrumented-tier.sh's
+      # header for why it can't just be `connectedDebugAndroidTest`), so there is no Gradle-
+      # generated JUnit XML/HTML for it -- the only record of a failing assertion's message is
+      # the raw `am instrument` transcript the script already tees to these two fixed paths.
+      # Uploaded on failure only, same reasoning as the unit test report above. Both files are
+      # small, plain-text, single-run transcripts (no build output), and the second one may
+      # legitimately not exist if phase 1 itself failed first.
+      - name: Upload instrumented test logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: instrumented-test-logs-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/instrumented-phase1.log
+            /tmp/instrumented-splice.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       # Issue #231: the committed Play Store listing images and hotsite screenshots have drifted
       # silently from the UI twice (#228, #227) because nothing compared them against what

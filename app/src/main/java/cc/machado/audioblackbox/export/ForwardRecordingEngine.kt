@@ -605,6 +605,10 @@ class ForwardRecordingEngine(
                                     "Clean stop dropped ${result.bytes.size} bytes at cursor $cursor: " +
                                         "no retained segment describes their recorded format",
                                     null,
+                                    // Issue #346: the recording still ends in Success (see the
+                                    // comment above) -- AUDIT, not ERROR, so the dashboard's error
+                                    // card does not render as though this session failed.
+                                    ErrorLogSeverity.AUDIT,
                                 )
                                 finalDrainDone = true
                             } else {
@@ -624,6 +628,24 @@ class ForwardRecordingEngine(
             reconciler.flush()?.let { emit(listOf(it)) }
 
             writer.finish()
+            if (writer is StreamingAacWriter && writer.recoveredFromMuxerAlreadyStopped) {
+                // The file is complete and valid (see StreamingAacWriter.finish()'s catch site for
+                // why that is guaranteed rather than assumed) -- state stays Success below -- but
+                // this is still worth an audit trail entry rather than disappearing silently
+                // (issue #347, same evidentiary standard already applied to TAIL_TRUNCATED above).
+                logExportError(
+                    errorLogFile,
+                    clock,
+                    "ForwardRecordingEngine",
+                    "MUXER_STOP_RECOVERED",
+                    "MediaMuxer had already stopped itself before finish() could call stop() " +
+                        "explicitly; the file was still fully finalized and is not lost",
+                    null,
+                    // Issue #346: same reasoning as TAIL_TRUNCATED above -- a recovered-but-
+                    // noteworthy event on a session that still succeeded, not a failure.
+                    ErrorLogSeverity.AUDIT,
+                )
+            }
             target.finish()
 
             synchronized(lock) {

@@ -62,11 +62,15 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 
 /**
@@ -130,6 +134,18 @@ fun AvionicsCard(
 /**
  * Top data plate header bar matching `docs/design/model.html`'s `.card-label-bar`:
  * Monospace uppercase label with optional trailing status tag.
+ *
+ * Issue #337: the trailing [tag] slot is wrapped in `Modifier.weight(1f, fill = false)`, so it is
+ * capped to whatever width [label] does not use rather than measured at its own unbounded
+ * intrinsic width -- a plain `Row` with neither child weighted lets a long tag (`44.1 kHz ·
+ * Estéreo`, confirmed overflowing on-device) run past the card's right edge instead of shrinking.
+ * The dashboard sample-rate tag's actual fix is a shorter string
+ * ([cc.machado.audioblackbox.ui.dashboardTagLabelRes]), but this bar is reused by three other
+ * header/tag pairs on this screen (buffer status, save outcome, forward outcome), so the width cap
+ * is added here once rather than trusting every future caller to hand this bar a string that
+ * happens to fit. `label` keeps its own single line -- it is the fixed, short half of every call
+ * site here -- while [tag] gets `maxLines = 1` + ellipsis inside [AvionicsTag] as a last-resort
+ * degrade if a future value is still too wide for its capped share.
  */
 @Composable
 fun AvionicsCardHeaderBar(
@@ -151,8 +167,18 @@ fun AvionicsCardHeaderBar(
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.06.sp,
             color = TextDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        tag?.invoke()
+        if (tag != null) {
+            // Weighted with fill = false: Row measures `label` first at its own natural width
+            // (unweighted children go first), then this Box is capped to whatever width is left
+            // over, rather than to its own unbounded intrinsic width. That is what actually stops
+            // a too-wide tag from running past the card's right edge.
+            Box(modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false)) {
+                tag()
+            }
+        }
     }
 }
 
@@ -180,7 +206,71 @@ fun AvionicsTag(
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.04.sp,
             color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+/**
+ * A monospace label/value data-plate row that cannot overflow by construction (issue #342).
+ *
+ * ## Why this exists
+ * #337 (the dashboard sample-rate tag) and #342 (the circular-buffer retention row) are the same
+ * defect shape: a label and a value placed in a plain `Row(fillMaxWidth, SpaceBetween)` with
+ * neither child weighted, so at narrow widths -- or with pt-BR's longer label text -- both
+ * children measure at their own unbounded intrinsic width and the row overflows instead of
+ * shrinking. That is a component-level defect, not two unrelated call-site bugs, and this is the
+ * third time it has shipped on this one screen in a week. Per-call-site font-size or string
+ * shortening tweaks do not close the underlying gap: the next new row would reintroduce it. This
+ * primitive closes the *shape*, not just the two known instances of it -- [AvionicsCardHeaderBar]
+ * above gets its own, slightly different fix (a trailing tag chip, not a value) for the same
+ * reason.
+ *
+ * ## The structural fix
+ * [label] is weighted with `fill = false` and allowed to wrap onto a second line (`maxLines = 2`)
+ * before it ellipsizes -- so it yields width to [value] instead of pushing it off the card. [value]
+ * is never weighted, never wraps and never ellipsizes: a partially-cut number or percentage would
+ * be actively misleading (`44.1 KHZ · EST…`-shaped ambiguity, which issue #337 explicitly ruled
+ * out), so it is measured at its natural width and the layout is only "safe" in the sense that the
+ * *label* always yields to make room for it.
+ *
+ * New label/value rows on this screen (or a future one) should use this rather than a bare `Row`.
+ */
+@Composable
+fun AvionicsLabelValueRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    labelColor: Color = TextMuted,
+    valueColor: Color = FlightOrange,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = labelColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(end = 8.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -726,5 +816,49 @@ fun DashedDivider(
             strokeWidth = 1.dp.toPx(),
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()), 0f),
         )
+    }
+}
+
+/**
+ * The first avionics-themed dialog/modal primitive in this design system (issue #346: no such
+ * primitive existed before this issue -- every full-screen overlay on this codebase up to now was
+ * either an inline card in a `Column` or a stock `AlertDialog`/`Toast`). Built directly on
+ * [androidx.compose.ui.window.Dialog] rather than Material 3's `AlertDialog`/`BasicAlertDialog`:
+ * those size themselves to their text content, which does not fit a scrollable *list* (this
+ * primitive's reason for existing -- issue #346's paginated error list), and their fixed
+ * title/text/button slots do not leave room for [AvionicsCardHeaderBar]-style chrome.
+ *
+ * Renders an [AvionicsCard] inside the platform [Dialog] window, capped to 92% of the available
+ * width and 80% of the available height so it never runs edge-to-edge or off the bottom of a
+ * short/rotated screen -- [content] is responsible for making its own body scrollable if it can
+ * exceed that height (issue #346's list does, via `LazyColumn`).
+ *
+ * [title] renders through the same [AvionicsCardHeaderBar] every other avionics card uses, so a
+ * long pt-BR title behaves identically to any other card header (single line, ellipsized) rather
+ * than needing its own overflow handling -- see [AvionicsCardHeaderBar]'s own doc for why that
+ * matters at this screen's narrowest supported width.
+ */
+@Composable
+fun AvionicsModal(
+    onDismissRequest: () -> Unit,
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            AvionicsCard(
+                modifier = modifier
+                    .widthIn(max = maxWidth * 0.92f)
+                    .heightIn(max = maxHeight * 0.8f),
+                content = {
+                    AvionicsCardHeaderBar(label = title)
+                    content()
+                },
+            )
+        }
     }
 }

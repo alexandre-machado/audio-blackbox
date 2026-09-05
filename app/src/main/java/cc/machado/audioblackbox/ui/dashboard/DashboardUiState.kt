@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.export.ErrorLogEntry
+import cc.machado.audioblackbox.export.ErrorLogSeverity
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
 
@@ -125,6 +127,33 @@ sealed interface ForwardRecordingUiState {
         val capacityMillis: Long,
         val qualityPreset: QualityPreset,
     ) : ForwardRecordingUiState
+}
+
+/**
+ * The dashboard's durable error-list card + modal (issue #346), produced by
+ * [DashboardViewModel]'s own `errorLogUiState` -- deliberately its own top-level [StateFlow] on
+ * the ViewModel rather than folded into [DashboardUiState], since it is polled/loaded from disk
+ * (see [DashboardViewModel]'s doc) on its own cadence, independent of the engine/export/forward
+ * state this file's other types mirror.
+ *
+ * [entries] holds every parsed entry, newest first, both [ErrorLogSeverity.ERROR] and
+ * [ErrorLogSeverity.AUDIT] -- see [cc.machado.audioblackbox.export.readErrorLog]'s doc for what
+ * "newest first" means across the live file and its rotated `.old` generation. [hasVisibleErrors]
+ * is the oracle for the card's "appears only when there is at least one error" acceptance
+ * criterion, and counts [ErrorLogSeverity.ERROR] only -- an [ErrorLogSeverity.AUDIT]-only log
+ * (e.g. only a `MUXER_STOP_RECOVERED` entry) must not make the card claim a recording failed when
+ * it did not (issue #347's finding, folded into #346's schema).
+ */
+data class ErrorLogUiState(
+    val entries: List<ErrorLogEntry> = emptyList(),
+    val page: Int = 0,
+    val pageSize: Int = 20,
+    val isModalOpen: Boolean = false,
+    val isClearConfirmVisible: Boolean = false,
+) {
+    val hasVisibleErrors: Boolean get() = entries.any { it.severity == ErrorLogSeverity.ERROR }
+    val pageCount: Int get() = errorLogPageCount(entries.size, pageSize)
+    val pageEntries: List<ErrorLogEntry> get() = paginate(entries, page, pageSize)
 }
 
 data class DashboardUiState(

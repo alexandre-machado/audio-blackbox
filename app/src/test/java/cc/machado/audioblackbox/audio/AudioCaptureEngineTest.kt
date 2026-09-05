@@ -169,6 +169,50 @@ class AudioCaptureEngineTest {
         }
     }
 
+    // ---- Issue #344: an unexpected Throwable from the write step must not fall back to Idle ----
+
+    @Test
+    fun `an unexpected exception during buffer write surfaces as UNEXPECTED_CAPTURE_FAILURE, not a silent Idle, and is logged`() =
+        withMinBufferSizeMocked(value = 4096) {
+            val record = fakeAudioRecord()
+            // read() reporting more bytes than `scratch` (sized to minBufferSize) actually holds is
+            // exactly the kind of framework-boundary surprise this issue is about: it drives a real
+            // RingBuffer.write() call whose own `require()` throws IllegalArgumentException --
+            // nothing about this path is a hand-rolled fake exception, it is production code
+            // genuinely throwing from the write step.
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(4096 + 1_000)
+            val loggedCalls = mutableListOf<Pair<String, Throwable>>()
+            val engine = AudioCaptureEngine(
+                config = fastConfig,
+                audioRecordFactory = { _, _ -> record },
+                captureFailureLogger = { message, throwable -> loggedCalls += message to throwable },
+            )
+
+            engine.start()
+            awaitState(engine, description = "UNEXPECTED_CAPTURE_FAILURE") { it is CaptureState.Error }
+
+            val state = engine.state.value
+            assertTrue("expected Error, got $state", state is CaptureState.Error)
+            assertEquals(
+                "an unexpected write-step exception must be its own distinct reason, never Idle " +
+                    "and never confused with a plain AudioRecord.read() error code",
+                CaptureErrorReason.UNEXPECTED_CAPTURE_FAILURE,
+                (state as CaptureState.Error).reason,
+            )
+            assertEquals(
+                "the failure must be logged exactly once, not silently dropped",
+                1,
+                loggedCalls.size,
+            )
+            assertTrue(
+                "the logged throwable must be the real exception the write step threw, not a placeholder",
+                loggedCalls.single().second is IllegalArgumentException,
+            )
+            // state flips to Error slightly before the capture thread's finally reaches release()
+            // (buffer#clear() runs in between) -- allow it to catch up, same as the read()-error-code test.
+            verify(record, org.mockito.kotlin.timeout(2_000)).release()
+        }
+
     // ---- PR #23 round 2, @techlead adjudication: removed
     // `a collector attached before start() observes every state transition...`.
     // That test asserted a StateFlow collector observes *every* intermediate state

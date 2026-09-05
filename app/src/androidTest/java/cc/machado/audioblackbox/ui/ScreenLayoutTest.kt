@@ -7,6 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
 import cc.machado.audioblackbox.ui.dashboard.ENGINE_SWITCH_TEST_TAG
 import cc.machado.audioblackbox.ui.dashboard.ForwardRecordingUiState
@@ -678,6 +679,175 @@ class ScreenLayoutTest {
                 "AppScaffold's.",
             (galleryTitleLeft - dashboardTitleLeft).value.absoluteValue <= GAP_TOLERANCE_DP,
         )
+    }
+
+    /**
+     * Regression test for issue #337: the dashboard header's sample-rate tag overflowed on a real
+     * S25 rendering `44.1 kHz · Estéreo` (Settings' long form, before this fix wired the dashboard
+     * tag to its own short form). Exercises exactly the combination the automatic screenshot gate
+     * cannot see -- HIGH_FIDELITY, pt-BR -- at the app's smallest supported width.
+     *
+     * Oracle: fails if the tag's right edge runs past the root window's right edge. Against the
+     * pre-fix code (Settings' full-word `specLabelRes()` on the dashboard tag, no weight cap on
+     * [cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar]'s tag slot) this fails; against the
+     * fix (short form + weighted tag slot) it passes.
+     */
+    @Test
+    fun dashboardSampleRateTagDoesNotOverflowAtCompactWidthWithHighFidelityPresetInPortuguese() {
+        val ptLocale = Locale.forLanguageTag("pt-BR")
+        composeRule.setContent {
+            val ptConfig = Configuration(LocalConfiguration.current).apply { setLocale(ptLocale) }
+            val ptContext = LocalContext.current.createConfigurationContext(ptConfig)
+            CompositionLocalProvider(
+                LocalConfiguration provides ptConfig,
+                LocalContext provides ptContext,
+            ) {
+                CompactHarnessApp(
+                    Destination.DASHBOARD,
+                    dashboardUiState = DashboardViewModel.mapUiState(
+                        captureState = CaptureState.Paused,
+                        bufferedMillis = 5L * 60_000L,
+                        capacityMinutes = 30,
+                        saveState = SaveUiState.Idle,
+                        qualityPreset = QualityPreset.HIGH_FIDELITY,
+                    ),
+                )
+            }
+        }
+
+        val tagText = localizedString(ptLocale, R.string.dashboard_preset_high_fidelity_specs)
+            .uppercase(ptLocale)
+        val tagNode = composeRule.onNodeWithText(tagText)
+        tagNode.performScrollTo()
+        tagNode.assertIsDisplayed()
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val tagBounds = tagNode.getUnclippedBoundsInRoot()
+        assertTrue(
+            "the dashboard sample-rate tag \"$tagText\" overflows the right edge: its right edge is " +
+                "at ${tagBounds.right}, but the root window right edge is at ${rootBounds.right}.",
+            tagBounds.right <= rootBounds.right,
+        )
+    }
+
+    /**
+     * Regression test for issue #342: the circular-buffer retention row's label and value collided
+     * at compact width in pt-BR, where the label ("RETENÇÃO DO BUFFER CIRCULAR") is longer than its
+     * English counterpart and the value widens further at large capacities. Exercises the widest
+     * realistic value named in the issue: a 3-digit capacity, fully buffered (100%).
+     *
+     * Oracle: fails if either the label or the value runs past the root's right edge, or if they
+     * horizontally overlap -- the exact failure mode of a plain `Row(fillMaxWidth, SpaceBetween)`
+     * with neither child weighted. Passes once both go through
+     * [cc.machado.audioblackbox.ui.theme.AvionicsLabelValueRow].
+     */
+    @Test
+    fun bufferRetentionRowDoesNotOverflowAtCompactWidthWithWidestValueInPortuguese() {
+        val ptLocale = Locale.forLanguageTag("pt-BR")
+        composeRule.setContent {
+            val ptConfig = Configuration(LocalConfiguration.current).apply { setLocale(ptLocale) }
+            val ptContext = LocalContext.current.createConfigurationContext(ptConfig)
+            CompositionLocalProvider(
+                LocalConfiguration provides ptConfig,
+                LocalContext provides ptContext,
+            ) {
+                CompactHarnessApp(
+                    Destination.DASHBOARD,
+                    dashboardUiState = DashboardViewModel.mapUiState(
+                        captureState = CaptureState.Paused,
+                        bufferedMillis = 300L * 60_000L,
+                        capacityMinutes = 300,
+                        saveState = SaveUiState.Idle,
+                    ),
+                )
+            }
+        }
+
+        val labelNode = composeRule.onNodeWithText(
+            localizedString(ptLocale, R.string.dashboard_card_tape_label),
+        )
+        labelNode.performScrollTo()
+        labelNode.assertIsDisplayed()
+
+        val valueNode = composeRule.onNodeWithText("300.0 / 300 min (100%)")
+        valueNode.assertIsDisplayed()
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val labelBounds = labelNode.getUnclippedBoundsInRoot()
+        val valueBounds = valueNode.getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "the buffer retention value \"300.0 / 300 min (100%)\" overflows the right edge: its " +
+                "right edge is at ${valueBounds.right}, but the root window right edge is at " +
+                "${rootBounds.right}.",
+            valueBounds.right <= rootBounds.right,
+        )
+        assertTrue(
+            "the buffer retention label overlaps the value: label right edge is at " +
+                "${labelBounds.right}, value left edge is at ${valueBounds.left}.",
+            labelBounds.right <= valueBounds.left,
+        )
+    }
+
+    /**
+     * Regression test for issue #340: bottom-nav labels now read "Cockpit"/"Recordings"/"Avionics"
+     * (pt-BR: "Cockpit"/"Gravações"/"Aviônicos"), matching `docs/design/model.html`. "Recordings"
+     * and "Gravações" are both longer than the "Gallery"/"Galeria" they replace -- the issue
+     * explicitly warns against fixing #337's overflow only to ship a second one here.
+     *
+     * Oracle: fails if a label's node cannot be found under its new text (the rename did not
+     * happen), if it runs past the screen's right edge, or if it wraps onto a second line at the
+     * app's smallest supported width -- checked by comparing its rendered height against
+     * "Cockpit"'s, a label in the same bar short enough to never wrap.
+     */
+    private fun assertNavLabelsFitOnOneLineAtCompactWidth(locale: Locale) {
+        val cockpitNode = composeRule.onNodeWithText(localizedString(locale, R.string.nav_dashboard_label))
+        cockpitNode.assertIsDisplayed()
+        val cockpitBounds = cockpitNode.getUnclippedBoundsInRoot()
+        val cockpitHeight = cockpitBounds.bottom - cockpitBounds.top
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+
+        for (labelRes in listOf(R.string.nav_gallery_label, R.string.nav_settings_label)) {
+            val labelText = localizedString(locale, labelRes)
+            val node = composeRule.onNodeWithText(labelText)
+            node.assertIsDisplayed()
+            val bounds = node.getUnclippedBoundsInRoot()
+            val height = bounds.bottom - bounds.top
+
+            assertTrue(
+                "nav label \"$labelText\" overflows the right edge of the screen: its right edge is " +
+                    "at ${bounds.right}, but the root window right edge is at ${rootBounds.right}.",
+                bounds.right <= rootBounds.right,
+            )
+            assertTrue(
+                "nav label \"$labelText\" appears to wrap onto a second line at compact width: its " +
+                    "height ($height) is more than 50% taller than the single-line \"Cockpit\" " +
+                    "label's ($cockpitHeight) in the same bar.",
+                height <= cockpitHeight * 1.5f,
+            )
+        }
+    }
+
+    @Test
+    fun bottomNavLabelsMatchDesignSystemAndFitAtCompactWidth() {
+        composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
+        assertNavLabelsFitOnOneLineAtCompactWidth(Locale.ENGLISH)
+    }
+
+    @Test
+    fun bottomNavLabelsMatchDesignSystemAndFitAtCompactWidthInPortuguese() {
+        val ptLocale = Locale.forLanguageTag("pt-BR")
+        composeRule.setContent {
+            val ptConfig = Configuration(LocalConfiguration.current).apply { setLocale(ptLocale) }
+            val ptContext = LocalContext.current.createConfigurationContext(ptConfig)
+            CompositionLocalProvider(
+                LocalConfiguration provides ptConfig,
+                LocalContext provides ptContext,
+            ) {
+                CompactHarnessApp(Destination.DASHBOARD)
+            }
+        }
+        assertNavLabelsFitOnOneLineAtCompactWidth(ptLocale)
     }
 
     // ---- helpers ----

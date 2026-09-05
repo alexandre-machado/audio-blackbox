@@ -92,4 +92,42 @@ class DashboardFormatTest {
             distinctResourceIds.size,
         )
     }
+
+    // ---- paginate/errorLogPageCount (issue #346) ----
+
+    @Test
+    fun `paginate returns the first page exactly`() {
+        val items = (1..45).toList()
+        assertEquals((1..20).toList(), paginate(items, page = 0, pageSize = 20))
+    }
+
+    @Test
+    fun `paginate at the exact page boundary returns the second page's items, not an off-by-one`() {
+        val items = (1..45).toList()
+        assertEquals((21..40).toList(), paginate(items, page = 1, pageSize = 20))
+    }
+
+    @Test
+    fun `paginate the final, partial page returns only the remainder`() {
+        val items = (1..45).toList()
+        assertEquals((41..45).toList(), paginate(items, page = 2, pageSize = 20))
+    }
+
+    @Test
+    fun `paginate a page index past the end clamps to the last valid page`() {
+        val items = (1..45).toList()
+        assertEquals((41..45).toList(), paginate(items, page = 99, pageSize = 20))
+    }
+
+    @Test
+    fun `paginate an empty list returns an empty page`() {
+        assertEquals(emptyList<Int>(), paginate(emptyList<Int>(), page = 0, pageSize = 20))
+    }
+
+    @Test
+    fun `errorLogPageCount rounds up a partial final page`() {
+        assertEquals(3, errorLogPageCount(totalItems = 45, pageSize = 20))
+        assertEquals(2, errorLogPageCount(totalItems = 40, pageSize = 20))
+        assertEquals(1, errorLogPageCount(totalItems = 0, pageSize = 20))
+    }
 }

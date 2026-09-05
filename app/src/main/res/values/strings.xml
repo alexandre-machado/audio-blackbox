@@ -107,6 +107,15 @@
     <string name="dashboard_card_vu_label">MIC INPUT LEVEL (VU)</string>
     <string name="dashboard_card_tape_label">CIRCULAR BUFFER RETENTION</string>
 
+    <!-- Issue #337: the dashboard header's short-form spec tag, one channel-word letter
+         (Mono -> M, Stereo -> S) instead of the full word settings_preset_*_specs carries, since
+         44.1 kHz · Estéreo overflowed the tag's much tighter width budget on-device. Owner-decided
+         2026-09-05: this abbreviation applies to the dashboard tag only, not Settings. See
+         QualityPreset.dashboardTagLabelRes(). -->
+    <string name="dashboard_preset_voice_specs">16 kHz · M</string>
+    <string name="dashboard_preset_balanced_specs">32 kHz · M</string>
+    <string name="dashboard_preset_high_fidelity_specs">44.1 kHz · S</string>
+
     <string name="dashboard_card_save_outcome_label">EXPORT STATUS // MEDIASTORE</string>
     <string name="dashboard_card_forward_outcome_label">RECORDING STATUS // MEDIASTORE</string>
     <string name="gallery_empty_card_label">FLIGHT LOG REPOSITORY // MEDIASTORE</string>
@@ -150,6 +159,7 @@
     <string name="capture_error_read_dead_object">The system audio service stopped responding. Turn recording off and on again, or restart your device.</string>
     <string name="capture_error_read_unknown_error">An unexpected audio recording error occurred. Turn recording off and on again to retry.</string>
     <string name="capture_error_foreground_service_promotion_refused">Android refused to start recording right now. Open the app and try again.</string>
+    <string name="capture_error_unexpected_capture_failure">Recording stopped because of an unexpected error. Turn recording off and on again to retry.</string>
 
     <string name="dashboard_status_announcement">Recording state: %1$s</string>
 
@@ -253,9 +263,11 @@
     <string name="gallery_delete_error_body">This recording couldn\'t be deleted. This can happen with older recordings after reinstalling the app.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
     <!-- Floating bottom bar -->
-    <string name="nav_dashboard_label">Dashboard</string>
-    <string name="nav_gallery_label">Gallery</string>
-    <string name="nav_settings_label">Settings</string>
+    <!-- Issue #340: names match docs/design/model.html's .phone-bottom-nav labels exactly.
+         Resource names are unchanged, only the values move to the design-system wording. -->
+    <string name="nav_dashboard_label">Cockpit</string>
+    <string name="nav_gallery_label">Recordings</string>
+    <string name="nav_settings_label">Avionics</string>
 
     <!-- Settings screen / retention stepper (issue #73, superseding the dashboard's chip
          selector from #45/#57) -->
@@ -371,6 +383,20 @@
     <string name="dashboard_error_action_share">Share log</string>
     <string name="dashboard_error_copied_toast">Incident report copied to clipboard</string>
     <string name="dashboard_error_share_chooser_title">Share Incident Report</string>
+
+    <!-- Durable Error Log card + modal (issue #346) -->
+    <string name="dashboard_card_error_log_label">Error log</string>
+    <string name="dashboard_error_log_card_body">Recording errors were logged. Tap to review.</string>
+    <string name="dashboard_error_log_card_content_description">%1$d recording error(s) logged. Tap to view the error log.</string>
+    <string name="dashboard_error_log_modal_title">Error log</string>
+    <string name="dashboard_error_log_modal_empty">No errors logged.</string>
+    <string name="dashboard_error_log_page_previous">Previous</string>
+    <string name="dashboard_error_log_page_next">Next</string>
+    <string name="dashboard_error_log_page_indicator">Page %1$d of %2$d</string>
+    <string name="dashboard_error_log_clear">Clear log</string>
+    <string name="dashboard_error_log_clear_confirm_body">This permanently deletes the entire error log from this device. This cannot be undone.</string>
+    <string name="dashboard_error_log_clear_cancel">Cancel</string>
+    <string name="dashboard_error_log_clear_confirm">Delete log</string>
 
     <!-- Gallery File Specifications -->
     <string name="gallery_details_title">Recording specifications</string>

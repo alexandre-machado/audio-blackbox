@@ -39,3 +39,25 @@ fun QualityPreset.specLabelRes(): Int = when (this) {
     QualityPreset.BALANCED -> R.string.settings_preset_balanced_specs
     QualityPreset.HIGH_FIDELITY -> R.string.settings_preset_high_fidelity_specs
 }
+
+/**
+ * The dashboard header tag's short form of the exact same fact (issue #337).
+ *
+ * `AvionicsCardHeaderBar`'s trailing tag on the dashboard has far less width budget than the
+ * Settings screen's own header/spec-row tags do, and rendering [specLabelRes]'s full channel word
+ * there overflowed on-device (`44.1 kHz · Estéreo`, confirmed on a Samsung S25, 2026-09-05). The
+ * owner's chosen fix abbreviates the channel word (`Mono` -> `M`, `Estéreo`/`Stereo` -> `S`) **in
+ * the dashboard tag only** -- Settings keeps [specLabelRes]'s full words unchanged.
+ *
+ * This is deliberately a second, sibling derived form of [QualityPreset], not a hand-written
+ * duplicate list living inside a Composable: both [specLabelRes] and this are exhaustive `when`s
+ * over [QualityPreset.entries] with no `else` branch, so adding a fourth preset fails both of them
+ * to compile until each is given its own long-form and short-form label. `EngineChassisCard` (the
+ * dashboard header) calls this one; every Settings call site keeps calling [specLabelRes].
+ */
+@StringRes
+fun QualityPreset.dashboardTagLabelRes(): Int = when (this) {
+    QualityPreset.VOICE -> R.string.dashboard_preset_voice_specs
+    QualityPreset.BALANCED -> R.string.dashboard_preset_balanced_specs
+    QualityPreset.HIGH_FIDELITY -> R.string.dashboard_preset_high_fidelity_specs
+}

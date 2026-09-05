@@ -116,6 +116,13 @@ class ExportEngine(
     // so a constructor-captured copy is a stale-format trap even though nothing reaches it today.
     // Mirrors [ForwardRecordingEngine]'s `configProvider`. `null` keeps the old behavior.
     private val configProvider: (() -> AudioConfig)? = null,
+    // Issue #344: when the cursor providers above report "capture is not running" (null), this
+    // optionally distinguishes *why* -- "never started" (this returns null, e.g. CaptureState.Idle)
+    // from "capture died unexpectedly" (a non-null description, e.g. AudioCaptureEngine's own
+    // CaptureState.Error.message once its captureLoop routes an unexpected Throwable there instead
+    // of falling back to Idle silently). `null` (the default, and every existing caller before this
+    // issue) keeps the exact prior message, so this is purely additive.
+    private val captureFailureDescriptionProvider: (() -> String?)? = null,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -138,7 +145,20 @@ class ExportEngine(
         segmentsProvider = { engine.activeSegments() },
         minExportDurationMillis = minExportDurationMillis,
         errorLogFile = errorLogFile,
+        captureFailureDescriptionProvider = {
+            (engine.state.value as? cc.machado.audioblackbox.audio.CaptureState.Error)
+                ?.let { "capture died unexpectedly (${it.reason}): ${it.message}" }
+        },
     )
+
+    /** "capture is not running", plus why if [captureFailureDescriptionProvider] can say (issue
+     * #344) -- e.g. "capture died unexpectedly (UNEXPECTED_CAPTURE_FAILURE): ..." instead of the
+     * bare message that reads identically whether capture was simply never started or died mid
+     * session. */
+    private fun captureNotRunningMessage(): String {
+        val detail = captureFailureDescriptionProvider?.invoke()
+        return if (detail != null) "capture is not running: $detail" else "capture is not running"
+    }
 
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
     val state: StateFlow<ExportState> = _state.asStateFlow()
@@ -254,15 +274,15 @@ class ExportEngine(
             // the whole buffered window" instead of "ask for a padded duration", since a
             // [BoundedExportPlan] costs nothing to compute over cursors alone.
             val writeCursor = writeCursorProvider()
-                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
+                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
             val oldestCursor = oldestCursorProvider()
-                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
+                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
             val rawLength = writeCursor - oldestCursor
             if (rawLength <= 0L) {
                 return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "nothing buffered yet")
             }
             val windowStart = estimateTimestampProvider(oldestCursor)
-                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
+                ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
 
             val gaps = gapsProvider()
             // Two levels of "no segments" here, and they must not collapse to the same thing
@@ -282,7 +302,7 @@ class ExportEngine(
                 emptyList()
             } else {
                 segmentsProvider.invoke()
-                    ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
+                    ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
             }
             // The last segment wins: the file declares the format the newest buffered audio was
             // recorded in, and everything older is converted up/down into it by

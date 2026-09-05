@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,6 +77,14 @@ enum class CaptureErrorReason {
      * ever ran. Reported via [AudioCaptureEngine.reportForegroundPromotionRefused], not raised
      * from inside this class. */
     FOREGROUND_SERVICE_PROMOTION_REFUSED,
+
+    /** An unexpected `Throwable` escaped the capture thread's read/write step -- something other
+     * than `AudioRecord.read()` returning a negative error code (issue #344). Before this reason
+     * existed, such a throwable propagated through `captureLoop`'s `finally` with nothing having
+     * set [CaptureState.Error], so the engine fell back to [CaptureState.Idle] and looked
+     * indistinguishable from "capture was never started" -- this reason is what lets a downstream
+     * consumer (e.g. an export failure) tell the two apart. */
+    UNEXPECTED_CAPTURE_FAILURE,
 }
 
 /**
@@ -103,6 +112,14 @@ class AudioCaptureEngine(
     // how the mislabelling this issue is about went unnoticed. Routing the lookup through a
     // function makes both call sites reachable from a test on any thread.
     private val minBufferSizeProvider: (AudioConfig) -> Int = ::defaultMinBufferSize,
+    // Issue #344: the seam that lets a JVM test force-inject and observe a logged failure without
+    // depending on `android.util.Log`, which is an unmocked framework stub under plain JUnit (see
+    // `minBufferSizeProvider`'s doc above for the same "this repo has no Robolectric" constraint).
+    // The production default (`::defaultCaptureFailureLogger`) is the same `Log.e` call sites
+    // elsewhere in the app already use (e.g. `RecorderService`'s `Log.w`); this is not a new,
+    // parallel logging channel for #346 to have to special-case, only this class's own seam for
+    // reaching it testably.
+    private val captureFailureLogger: (String, Throwable) -> Unit = ::defaultCaptureFailureLogger,
 ) {
     private val _state = MutableStateFlow<CaptureState>(CaptureState.Idle)
     val state: StateFlow<CaptureState> = _state.asStateFlow()
@@ -556,8 +573,35 @@ class AudioCaptureEngine(
                 val bytesRead = currentRecord.read(scratch, 0, scratch.size)
                 if (bytesRead > 0) {
                     if (!paused) {
-                        buffer.write(scratch, 0, bytesRead)
-                        _inputLevel.value = AudioLevel.peakLevel(scratch, 0, bytesRead)
+                        // Issue #344: anything other than AudioRecord.read() itself returning a
+                        // negative error code (handled below) used to have no catch clause at all --
+                        // it propagated straight through this method's `finally`, which clears
+                        // ringBuffer/audioRecord/captureThread but never sets CaptureState.Error, so
+                        // the engine fell back to Idle indistinguishable from "never started" and the
+                        // daemon thread died with nothing logged. `buffer.write()` is documented
+                        // allocation-free (see RingBuffer.write's doc) so it is not expected to throw
+                        // OutOfMemoryError in practice, and this catch does not compete with or
+                        // replace the dedicated OOM handling RingBuffer's own resize()/constructor
+                        // paths already have (issues #272/#277) -- those live in start()/switchConfig(),
+                        // never in this write step. There is also no coroutine here to cancel:
+                        // captureLoop runs on a plain, non-coroutine `Thread` (see `start()`), so
+                        // catching `Throwable` broadly cannot swallow a `CancellationException` the
+                        // way it could inside a coroutine.
+                        try {
+                            buffer.write(scratch, 0, bytesRead)
+                            _inputLevel.value = AudioLevel.peakLevel(scratch, 0, bytesRead)
+                        } catch (unexpected: Throwable) {
+                            val message = "captureLoop(): unexpected ${unexpected.javaClass.simpleName} " +
+                                "during buffer.write()/AudioLevel.peakLevel(): ${unexpected.message}"
+                            captureFailureLogger(message, unexpected)
+                            synchronized(lock) {
+                                _state.value = CaptureState.Error(
+                                    CaptureErrorReason.UNEXPECTED_CAPTURE_FAILURE,
+                                    message,
+                                )
+                            }
+                            return
+                        }
                     }
                 } else if (bytesRead < 0) {
                     val reason = mapReadError(bytesRead)
@@ -606,6 +650,13 @@ class AudioCaptureEngine(
     private companion object {
         const val MILLIS_PER_SECOND = 1000L
         const val MILLIS_PER_MINUTE = 60_000L
+        const val TAG = "AudioCaptureEngine"
+
+        /** Production [captureFailureLogger]: the same `Log.e`/`Log.w` mechanism the rest of the
+         * app already uses (issue #344) -- not a new logging channel. */
+        fun defaultCaptureFailureLogger(message: String, throwable: Throwable) {
+            Log.e(TAG, message, throwable)
+        }
 
         fun mapReadError(code: Int): CaptureErrorReason = when (code) {
             AudioRecord.ERROR_INVALID_OPERATION -> CaptureErrorReason.READ_INVALID_OPERATION

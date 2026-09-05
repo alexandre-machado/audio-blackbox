@@ -133,6 +133,14 @@ class RecorderService : Service() {
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             configProvider = { captureConfig },
+            // Issue #344: lets a "capture is not running" export failure say whether capture was
+            // simply never started, or died unexpectedly mid-session (CaptureState.Error) --
+            // read fresh from the companion's engine, same "never a stale/bound reference across a
+            // retention-window rebuild" reasoning as every other provider above.
+            captureFailureDescriptionProvider = {
+                (engine.state.value as? CaptureState.Error)
+                    ?.let { "capture died unexpectedly (${it.reason}): ${it.message}" }
+            },
         )
     }
 
@@ -546,6 +554,10 @@ class RecorderService : Service() {
         capacityMinutes = captureConfig.bufferDurationMinutes,
         forwardRecordingState = forwardRecordingEngine.state.value,
         bytesPerSecond = captureConfig.bytesPerSecond,
+        // Read fresh (via the companion's qualityPreset getter) on every call, same reasoning as
+        // captureConfig/engine above (issue #322/#341): a preset switch mid-session must show up
+        // the next time this is rebuilt, not just at the next transition.
+        qualityPreset = qualityPreset,
     )
 
     private fun refreshNotification() {
@@ -723,7 +735,30 @@ class RecorderService : Service() {
         private fun attachEngineForwarding(newEngine: AudioCaptureEngine) {
             engineForwardingJob?.cancel()
             engineForwardingJob = forwardingScope.launch {
-                newEngine.state.collect { _captureState.value = it }
+                newEngine.state.collect { state ->
+                    _captureState.value = state
+                    // Issue #346: every CaptureState.Error transition -- not only the
+                    // UNEXPECTED_CAPTURE_FAILURE reason AudioCaptureEngine's captureFailureLogger
+                    // seam covers via Log.e -- gets a durable entry, from this one place, so a
+                    // start()/switchConfig() failure (UNSUPPORTED_CONFIG,
+                    // AUDIO_RECORD_INIT_FAILED, a read error, BUFFER_ALLOCATION_FAILED, or
+                    // FOREGROUND_SERVICE_PROMOTION_REFUSED) is reviewable after the fact the same
+                    // way an export/forward-recording failure already is. This does not duplicate
+                    // captureFailureLogger's own Log.e -- that seam stays exactly as documented
+                    // there ("not a new, parallel logging channel"); this is simply the durable
+                    // sink for the CaptureState this same failure already produces, wired at the
+                    // single point (this collector) every engine replacement re-subscribes to.
+                    if (state is CaptureState.Error) {
+                        cc.machado.audioblackbox.export.logExportError(
+                            file = cc.machado.audioblackbox.ErrorLogFileHolder.file,
+                            clock = System::currentTimeMillis,
+                            component = "AudioCaptureEngine",
+                            reason = state.reason.name,
+                            message = state.message,
+                            exception = null,
+                        )
+                    }
+                }
             }
             levelForwardingJob?.cancel()
             _inputLevel.value = 0f

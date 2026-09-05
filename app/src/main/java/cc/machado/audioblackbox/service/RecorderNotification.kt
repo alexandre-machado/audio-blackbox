@@ -9,9 +9,11 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.ui.MainActivity
+import cc.machado.audioblackbox.ui.specLabelRes
 import java.util.Locale
 
 /**
@@ -53,7 +55,45 @@ object RecorderNotification {
     /** Builds the current notification content for [state]/[bufferedDurationMillis]/[exportState]/[forwardRecordingState].
      * Called on every [RecorderService.onStartCommand] so the shown state and buffered duration
      * stay fresh, and via `NotificationManager.notify` whenever [RecorderService] observes a
-     * [CaptureState], [ExportState], or [ForwardRecordingState] change while already running. */
+     * [CaptureState], [ExportState], or [ForwardRecordingState] change while already running.
+     *
+     * ## Placement of the active quality preset (issue #341)
+     * The owner's ask was "maybe the first line" -- a suggestion, not a spec -- so this weighs the
+     * three real options rather than assuming it:
+     *  - **Chosen: append to the title**, after the state word (see [titleFor]). The state word is
+     *    the single most important fact in this notification and must never be displaced; keeping
+     *    it *first* means that on the rare narrow-width device where the title's tail clips, only
+     *    the added preset text is at risk, never the state.
+     *  - Appending to the second line instead was rejected: that line already stacks
+     *    [bufferedText] with an optional export/forward status (`extraStatus`) ahead of it, and is
+     *    already the more crowded of the two lines -- piling a third fact onto it raises the odds
+     *    of truncating something already there, not just the new addition.
+     *  - `setSubText` was rejected too: its header-row slot is meant for a short qualifier like an
+     *    account name, competes for width with the timestamp Android renders in the same row, and
+     *    is a less prominent read than either content line -- worse visibility for the fact this
+     *    issue exists to surface, not better.
+     *
+     * [QualityPresetFormat.specLabelRes] (the full form, e.g. `"44.1 kHz · Estéreo"`), not
+     * `dashboardTagLabelRes`'s `S`/`M` abbreviation -- that shorthand was an owner-decided
+     * dashboard-card-only choice (issue #337, tight header-tag width), not a general convention.
+     * Checked against the longest realistic case: pt-BR's `"Pausado (microfone em uso)"` plus
+     * `"44.1 kHz · Estéreo"` is `"Pausado (microfone em uso) · 44.1 kHz · Estéreo"` (48 chars) --
+     * long, and free to clip at its tail on a narrow device, but the state word stays intact by
+     * construction since it is always the leading segment.
+     *
+     * Updates mid-session within [PeriodicNotificationRefresher]'s existing tick cadence
+     * (`DEFAULT_INTERVAL_MILLIS`, 10s): a preset switch while Recording
+     * (`RecorderService.switchQualityPreset`) does not itself transition [CaptureState], so the
+     * transition-driven collector in [RecorderService.onCreate] would not catch it alone -- but the
+     * periodic ticker already calls [refreshNotification][RecorderService.refreshNotification]
+     * unconditionally every tick, which re-reads `qualityPreset` fresh each time (see
+     * [RecorderService.currentNotification]) the same way it already re-reads buffered duration.
+     * No new refresh trigger was needed for this to work.
+     *
+     * Does not touch the home-screen widget: `widget_status_*` (see `values/strings.xml`) is a
+     * wholly separate, deliberately shorter string set with its own narrow-cell reasoning already
+     * documented there -- it shares no string resource with this notification.
+     */
     fun build(
         context: Context,
         state: CaptureState,
@@ -62,6 +102,7 @@ object RecorderNotification {
         capacityMinutes: Int = RecorderService.bufferDurationMinutes,
         forwardRecordingState: ForwardRecordingState = ForwardRecordingState.Idle,
         bytesPerSecond: Int = cc.machado.audioblackbox.audio.AudioConfig.DEFAULT_SAMPLE_RATE_HZ * 2,
+        qualityPreset: QualityPreset = QualityPreset.DEFAULT,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
@@ -85,6 +126,8 @@ object RecorderNotification {
                 is CaptureState.Idle -> R.string.recorder_notification_state_idle
             },
         )
+        val presetText = context.getString(qualityPreset.specLabelRes())
+        val titleText = titleFor(stateText, presetText)
         val bufferedText = context.getString(
             R.string.recorder_notification_buffered,
             formatDuration(bufferedDurationMillis ?: 0L),
@@ -125,7 +168,7 @@ object RecorderNotification {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_mic)
-            .setContentTitle(stateText)
+            .setContentTitle(titleText)
             .setContentText(contentText)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -191,6 +234,15 @@ object RecorderNotification {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
     }
+
+    /**
+     * Composes the notification title from the already-localized state word and preset label
+     * (issue #341). A plain, `Context`-free function -- unlike [build] itself -- specifically so a
+     * JVM unit test can pin the composition (state word first, `" · "` separator, preset label
+     * appended) without a Robolectric `Context` this repo's JVM tier does not have (see
+     * `QualityPresetFormatTest`'s doc for the same constraint).
+     */
+    internal fun titleFor(stateText: String, presetText: String): String = "$stateText · $presetText"
 
     private fun formatDuration(millis: Long): String {
         val totalSeconds = millis / 1000
