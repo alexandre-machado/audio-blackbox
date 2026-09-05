@@ -2,10 +2,6 @@ package cc.machado.audioblackbox.ui.dashboard
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -26,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -37,12 +32,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -54,7 +49,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -81,6 +75,8 @@ import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
 import cc.machado.audioblackbox.ui.theme.AvionicsGreenGlow
+import cc.machado.audioblackbox.ui.theme.AvionicsPanelButton
+import cc.machado.audioblackbox.ui.theme.AvionicsPanelButtonRow
 import cc.machado.audioblackbox.ui.theme.AvionicsTag
 import cc.machado.audioblackbox.ui.theme.CARD_INNER_PADDING
 import cc.machado.audioblackbox.ui.theme.CARD_SHAPE
@@ -92,6 +88,7 @@ import cc.machado.audioblackbox.ui.theme.CockpitPanel
 import cc.machado.audioblackbox.ui.theme.CockpitSlate
 import cc.machado.audioblackbox.ui.theme.FlightOrange
 import cc.machado.audioblackbox.ui.theme.FlightTapeRulerTrack
+import cc.machado.audioblackbox.ui.theme.PulsingDot
 import cc.machado.audioblackbox.ui.theme.RADIUS_SM
 import cc.machado.audioblackbox.ui.theme.RemoveBeforeFlightTag
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
@@ -100,7 +97,6 @@ import cc.machado.audioblackbox.ui.theme.TextDim
 import cc.machado.audioblackbox.ui.theme.TextMuted
 import cc.machado.audioblackbox.ui.theme.WarningRed
 import cc.machado.audioblackbox.ui.theme.WarningRedGlow
-import cc.machado.audioblackbox.ui.theme.primaryCtaButtonColors
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -151,17 +147,16 @@ fun DashboardScreen(
         EngineCard(
             uiState = uiState,
             onToggleEngine = onToggleEngine,
+            onSaveRecent = onSaveRecent,
+            onStartForwardRecording = onStartForwardRecording,
+            onStopForwardRecording = onStopForwardRecording,
             // Draw order, not layout. The REMOVE BEFORE FLIGHT tag is an overlay hosted inside this
             // card's slot (see [EngineCard]), and while it is dragged it has to be able to travel
-            // over the cards below it, which are later siblings in this Column and would otherwise
-            // paint on top of it. Nothing moves: zIndex only reorders drawing and hit-testing.
+            // over whatever is below it. Issue #335 folded Save/forward-recording into this card
+            // itself, so the only later siblings left are SaveOutcomeNotice/ForwardOutcomeNotice
+            // below -- they are still ordinary Column items the tag must be able to paint over
+            // mid-drag. Nothing moves: zIndex only reorders drawing and hit-testing.
             modifier = Modifier.zIndex(1f),
-        )
-        SaveSection(uiState, onSaveRecent)
-        ForwardRecordingSection(
-            forwardState = uiState.forwardRecordingState,
-            onStart = onStartForwardRecording,
-            onStop = onStopForwardRecording,
         )
         if (uiState.saveState is SaveUiState.Success || uiState.saveState is SaveUiState.Error) {
             SaveOutcomeNotice(
@@ -309,6 +304,9 @@ private fun BoxScope.RbfTagOverlay(
 private fun EngineCard(
     uiState: DashboardUiState,
     onToggleEngine: () -> Unit,
+    onSaveRecent: () -> Unit,
+    onStartForwardRecording: () -> Unit,
+    onStopForwardRecording: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tagReturn = remember { RbfTagReturn() }
@@ -318,6 +316,9 @@ private fun EngineCard(
         EngineChassisCard(
             uiState = uiState,
             onToggleEngine = onToggleEngine,
+            onSaveRecent = onSaveRecent,
+            onStartForwardRecording = onStartForwardRecording,
+            onStopForwardRecording = onStopForwardRecording,
             rbfSlot = rbfSlot,
         )
 
@@ -355,6 +356,9 @@ private fun EngineCard(
 private fun EngineChassisCard(
     uiState: DashboardUiState,
     onToggleEngine: () -> Unit,
+    onSaveRecent: () -> Unit,
+    onStartForwardRecording: () -> Unit,
+    onStopForwardRecording: () -> Unit,
     rbfSlot: RbfOverlaySlot,
 ) {
     val status = uiState.captureStatus
@@ -417,7 +421,7 @@ private fun EngineChassisCard(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         if (status is CaptureStatus.Recording) {
-                            RecordingPulse()
+                            PulsingDot(color = AvionicsGreen, size = 10.dp)
                         } else {
                             Box(
                                 modifier = Modifier
@@ -498,6 +502,18 @@ private fun EngineChassisCard(
 
             // FDR Flight Tape / Circular Buffer Visualizer
             BufferRamVisualizer(uiState)
+
+            // Action Panel -- issue #335: the two card-level primary actions (Save the lookback
+            // buffer; start/stop live forward recording), as an aviation-panel button pair rather
+            // than the two full-sentence `Button`s that used to live in their own cards below this
+            // one (`SaveSection`/`ForwardRecordingSection`, removed). See [ActionPanelRow] for every
+            // state each button carries forward from those.
+            ActionPanelRow(
+                uiState = uiState,
+                onSaveRecent = onSaveRecent,
+                onStartForwardRecording = onStartForwardRecording,
+                onStopForwardRecording = onStopForwardRecording,
+            )
 
             if (explanation.isNotEmpty()) {
                 Text(
@@ -633,27 +649,6 @@ private fun BufferRamVisualizer(uiState: DashboardUiState) {
     }
 }
 
-@Composable
-private fun RecordingPulse() {
-    val transition = rememberInfiniteTransition(label = "recording-pulse")
-    val alpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "recording-pulse-alpha",
-    )
-    Box(
-        modifier = Modifier
-            .size(10.dp)
-            .alpha(alpha)
-            .background(AvionicsGreen, CircleShape)
-            .clearAndSetSemantics {},
-    )
-}
-
 private fun statusColor(status: CaptureStatus): Color = when (status) {
     is CaptureStatus.Idle -> Color(0xFF64748B) // TextDim
     is CaptureStatus.Paused -> CautionAmber
@@ -661,40 +656,85 @@ private fun statusColor(status: CaptureStatus): Color = when (status) {
     is CaptureStatus.Recording -> AvionicsGreen
 }
 
+/**
+ * Issue #335's aviation-panel button pair, replacing the two full-sentence `Button`s that used to
+ * live in their own cards below [EngineChassisCard] (`SaveSection`/`ForwardRecordingSection`,
+ * removed by this change along with the cards themselves). Every state-dependent affordance those
+ * two carried moves here unchanged:
+ * - Save: enabled only once the buffer holds audio and no export is already running, an
+ *   in-progress spinner while exporting, and a caption that always shows the relevant buffer
+ *   duration (buffered so far, or full-buffer capacity once the ring is full).
+ * - Live: starts forward recording when idle, or stops it and shows the elapsed clock while it
+ *   runs -- one control whose label/caption/LED change with state, not two controls (see
+ *   [AvionicsPanelButton]'s doc).
+ *
+ * The owner's addition to #335: the Live LED pulses in [FlightOrange] for exactly as long as
+ * forward recording is active, the same way the annunicator's own LED pulses in [AvionicsGreen]
+ * for exactly as long as the buffer is capturing -- both now share [PulsingDot] rather than each
+ * carrying a private copy of that animation.
+ *
+ * `dashboard_save_button_cd_full`/`_partial` (issue #66) and `dashboard_forward_start_button`/
+ * `dashboard_forward_stop_button` -- the full-sentence strings the two old buttons used to render
+ * as their visible text -- are unchanged in meaning, only repurposed as [AvionicsPanelButton]'s
+ * `contentDescription`: the panel label shortens for the physical-switch framing, the accessible
+ * name does not.
+ */
 @Composable
-private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
-    var lastSaveClickTime by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+private fun ActionPanelRow(
+    uiState: DashboardUiState,
+    onSaveRecent: () -> Unit,
+    onStartForwardRecording: () -> Unit,
+    onStopForwardRecording: () -> Unit,
+) {
+    var lastSaveClickTime by remember { mutableLongStateOf(0L) }
     val isExporting = uiState.saveState is SaveUiState.Exporting
     val canSave = uiState.bufferedMillis > 0 && !isExporting
     val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
     val capacityMinutes = (uiState.capacityMillis / 60_000L).toInt()
 
-    val explanation = when {
-        isExporting -> stringResource(R.string.dashboard_save_exporting_body)
-        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
-        uiState.isBufferFull -> stringResource(R.string.dashboard_save_explanation_full, capacityMinutes)
-        else -> stringResource(R.string.dashboard_save_explanation_partial, bufferedClock)
+    val saveLabel = if (isExporting) {
+        stringResource(R.string.dashboard_panel_save_saving_label)
+    } else {
+        stringResource(R.string.dashboard_panel_save_label)
     }
-
-    val buttonCd = when {
+    val saveCaption = when {
+        isExporting -> stringResource(R.string.dashboard_panel_save_caption_saving)
+        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
+        uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
+        else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+    }.uppercase()
+    val saveCd = when {
         isExporting -> stringResource(R.string.dashboard_save_exporting_title)
         uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
         uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
         else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
     }
 
-    AvionicsCard(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AvionicsCardHeaderBar(
-                label = stringResource(R.string.dashboard_card_lookback_label),
-            )
-            Text(text = explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val forwardState = uiState.forwardRecordingState
+    val isForwardRecording = forwardState is ForwardRecordingUiState.Recording
+    val liveLabel = if (isForwardRecording) {
+        stringResource(R.string.dashboard_panel_live_stop_label)
+    } else {
+        stringResource(R.string.dashboard_panel_live_label)
+    }
+    val liveCaption = if (isForwardRecording) {
+        stringResource(
+            R.string.dashboard_panel_live_caption_recording,
+            formatMillisAsClock((forwardState as ForwardRecordingUiState.Recording).elapsedMillis),
+        )
+    } else {
+        stringResource(R.string.dashboard_panel_live_caption_idle)
+    }.uppercase()
+    val liveCd = if (isForwardRecording) {
+        stringResource(R.string.dashboard_forward_stop_button)
+    } else {
+        stringResource(R.string.dashboard_forward_start_button)
+    }
 
-            Button(
+    AvionicsPanelButtonRow(
+        save = {
+            AvionicsPanelButton(
+                label = saveLabel,
                 onClick = {
                     val now = System.currentTimeMillis()
                     if (now - lastSaveClickTime >= 500L) {
@@ -703,112 +743,27 @@ private fun SaveSection(uiState: DashboardUiState, onSaveRecent: () -> Unit) {
                     }
                 },
                 enabled = canSave,
-                colors = primaryCtaButtonColors(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(SAVE_BUTTON_TEST_TAG)
-                    .semantics { contentDescription = buttonCd },
-            ) {
-                if (isExporting) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp,
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_save_exporting_title),
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                } else {
-                    Text(
-                        text = stringResource(R.string.dashboard_save_button),
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ForwardRecordingSection(
-    forwardState: ForwardRecordingUiState,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-) {
-    AvionicsCard(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AvionicsCardHeaderBar(
-                label = stringResource(R.string.dashboard_card_forward_label),
+                inProgress = isExporting,
+                caption = saveCaption,
+                ledColor = FlightOrange,
+                contentDescription = saveCd,
+                modifier = Modifier.testTag(SAVE_BUTTON_TEST_TAG),
             )
-            when (forwardState) {
-                is ForwardRecordingUiState.Recording -> {
-                    val elapsedFormatted = formatMillisAsClock(forwardState.elapsedMillis)
-                    val elapsedText = stringResource(R.string.dashboard_forward_elapsed_label, elapsedFormatted)
-                    val elapsedCd = stringResource(R.string.dashboard_forward_elapsed_cd, elapsedFormatted)
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics {
-                                liveRegion = LiveRegionMode.Polite
-                                contentDescription = elapsedCd
-                            },
-                    ) {
-                        Text(
-                            text = elapsedText,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.testTag(FORWARD_ELAPSED_TEST_TAG),
-                        )
-                        Text(
-                            text = forwardState.displayName,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-
-                    Button(
-                        onClick = onStop,
-                        colors = primaryCtaButtonColors(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(FORWARD_STOP_BUTTON_TEST_TAG),
-                    ) {
-                        Text(text = stringResource(R.string.dashboard_forward_stop_button))
-                    }
-                }
-                else -> {
-                    Text(
-                        text = stringResource(R.string.dashboard_forward_explanation),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(
-                        onClick = onStart,
-                        colors = primaryCtaButtonColors(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(FORWARD_START_BUTTON_TEST_TAG),
-                    ) {
-                        Text(text = stringResource(R.string.dashboard_forward_start_button))
-                    }
-                }
-            }
-        }
-    }
+        },
+        live = {
+            AvionicsPanelButton(
+                label = liveLabel,
+                onClick = if (isForwardRecording) onStopForwardRecording else onStartForwardRecording,
+                caption = liveCaption,
+                ledColor = FlightOrange,
+                pulsing = isForwardRecording,
+                contentDescription = liveCd,
+                modifier = Modifier.testTag(
+                    if (isForwardRecording) FORWARD_STOP_BUTTON_TEST_TAG else FORWARD_START_BUTTON_TEST_TAG,
+                ),
+            )
+        },
+    )
 }
 
 @Composable
@@ -1292,9 +1247,6 @@ const val FORWARD_START_BUTTON_TEST_TAG = "dashboard_forward_start_button"
 
 /** Test tag for the stop continuous recording button. */
 const val FORWARD_STOP_BUTTON_TEST_TAG = "dashboard_forward_stop_button"
-
-/** Test tag for the forward recording elapsed clock display. */
-const val FORWARD_ELAPSED_TEST_TAG = "dashboard_forward_elapsed"
 
 /** Parses start timestamp from standard filename format: blackbox_yyyy-MM-dd_HH-mm-ss_... */
 fun parseTimestampFromFilename(filename: String): Long? {

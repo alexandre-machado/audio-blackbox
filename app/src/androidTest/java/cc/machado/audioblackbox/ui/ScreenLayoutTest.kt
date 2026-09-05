@@ -6,13 +6,20 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import cc.machado.audioblackbox.audio.CaptureState
+import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
 import cc.machado.audioblackbox.ui.dashboard.ENGINE_SWITCH_TEST_TAG
+import cc.machado.audioblackbox.ui.dashboard.ForwardRecordingUiState
 import cc.machado.audioblackbox.ui.dashboard.SAVE_BUTTON_TEST_TAG
 import cc.machado.audioblackbox.ui.dashboard.FORWARD_START_BUTTON_TEST_TAG
+import cc.machado.audioblackbox.ui.dashboard.FORWARD_STOP_BUTTON_TEST_TAG
+import cc.machado.audioblackbox.ui.dashboard.SaveUiState
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import java.util.Locale
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.graphics.toPixelMap
@@ -78,8 +85,11 @@ class ScreenLayoutTest {
 
     private fun assertSaveSectionValid(locale: Locale) {
         val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
-        val saveButtonText = localizedString(locale, R.string.dashboard_save_button)
-        val saveButtonNode = composeRule.onNode(hasText(saveButtonText) and hasClickAction())
+        // Issue #335 folded the Save button into the engine card's action panel and dropped its
+        // full-sentence visible label in favour of a short caption, so this is matched by its test
+        // tag rather than the button's old on-screen text (which is now only its content
+        // description -- see ActionPanelRow).
+        val saveButtonNode = composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG)
         saveButtonNode.performScrollTo()
         saveButtonNode.assertIsDisplayed()
 
@@ -95,7 +105,10 @@ class ScreenLayoutTest {
             saveButtonBounds.left >= rootBounds.left,
         )
 
-        val explanationText = localizedString(locale, R.string.dashboard_save_disabled_no_audio)
+        // The panel button's caption, not the pre-#335 explanation paragraph -- see ActionPanelRow's
+        // doc for why the disabled reason moved there. ActionPanelRow renders it uppercased, the way
+        // every other panel label/caption is.
+        val explanationText = localizedString(locale, R.string.dashboard_panel_save_caption_no_audio).uppercase()
         val explanationNode = composeRule.onNodeWithText(explanationText)
         explanationNode.performScrollTo()
         explanationNode.assertIsDisplayed()
@@ -119,11 +132,10 @@ class ScreenLayoutTest {
     fun dashboardPrimaryActionIsNotObscuredByTheFloatingBottomBar() {
         composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
 
-        // `hasClickAction` disambiguates the Save button from the save card's title, which is the
-        // same string.
-        val primaryAction = composeRule.onNode(
-            hasText(string(R.string.dashboard_save_button)) and hasClickAction(),
-        )
+        // Matched by tag, not text, since issue #335: the Save button's on-screen label is now the
+        // short panel caption, not this unique full-sentence string (which survives only as its
+        // content description).
+        val primaryAction = composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG)
         primaryAction.performScrollTo()
         primaryAction.assertIsDisplayed()
         primaryAction.assertClearOfBottomBar("the dashboard's primary action (Save recent audio)")
@@ -346,6 +358,81 @@ class ScreenLayoutTest {
         }
 
         assertSaveSectionValid(ptLocale)
+    }
+
+    /**
+     * Regression test for issue #335: the Save/Live action panel pair now lives inside the engine
+     * card itself (`ActionPanelRow`), replacing the two standalone `SaveSection`/
+     * `ForwardRecordingSection` cards this file used to exercise separately. This walks both
+     * buttons through every state those two used to carry, to pin them all down in the one place
+     * they now live.
+     *
+     * Oracle: fails if either button is missing, wrongly enabled/disabled for its state, or the
+     * live button's test tag does not flip between its start and stop identities.
+     */
+    @Test
+    fun actionPanelButtonsCoverEveryStateInsideTheEngineCard() {
+        // No audio yet: Save must be disabled: Live (forward recording) is independent of the
+        // lookback buffer and stays enabled.
+        composeRule.setContent {
+            CompactHarnessApp(Destination.DASHBOARD, dashboardUiState = emptyBufferDashboardFixture())
+        }
+        composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG).apply {
+            performScrollTo()
+            assertIsDisplayed()
+            assertIsNotEnabled()
+        }
+        composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).apply {
+            performScrollTo()
+            assertIsDisplayed()
+            assertIsEnabled()
+        }
+        composeRule.onNodeWithTag(FORWARD_STOP_BUTTON_TEST_TAG).assertDoesNotExist()
+
+        // Buffer holds audio, exporting in progress: Save must render disabled-styled (`inProgress`)
+        // even though `onClick` is still wired -- the fix for `@rev`'s PR #339 finding that
+        // `inProgress` alone did not apply the disabled look.
+        composeRule.setContent {
+            CompactHarnessApp(
+                Destination.DASHBOARD,
+                dashboardUiState = DashboardViewModel.mapUiState(
+                    captureState = CaptureState.Recording,
+                    bufferedMillis = 5L * 60_000L,
+                    capacityMinutes = 30,
+                    saveState = SaveUiState.Exporting,
+                ),
+            )
+        }
+        composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG).apply {
+            performScrollTo()
+            assertIsDisplayed()
+            assertIsNotEnabled()
+        }
+
+        // Forward recording live: the Live control must present as its STOP identity, and the
+        // start identity must no longer exist -- one control, not two, per AvionicsPanelButton's
+        // doc.
+        composeRule.setContent {
+            CompactHarnessApp(
+                Destination.DASHBOARD,
+                dashboardUiState = DashboardViewModel.mapUiState(
+                    captureState = CaptureState.Recording,
+                    bufferedMillis = 5L * 60_000L,
+                    capacityMinutes = 30,
+                    saveState = SaveUiState.Idle,
+                    forwardRecordingState = ForwardRecordingUiState.Recording(
+                        displayName = "blackbox_2026-09-04_10-00-00_forward.m4a",
+                        elapsedMillis = 42_000L,
+                    ),
+                ),
+            )
+        }
+        composeRule.onNodeWithTag(FORWARD_STOP_BUTTON_TEST_TAG).apply {
+            performScrollTo()
+            assertIsDisplayed()
+            assertIsEnabled()
+        }
+        composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).assertDoesNotExist()
     }
 
     /**

@@ -212,6 +212,17 @@
     <string name="dashboard_panel_live_label">Live</string>
     <string name="dashboard_panel_live_stop_label">Stop</string>
 
+    <!-- Issue #335 wiring: the panel buttons' one-line captions, filling the same role the
+         explanation paragraphs / elapsed-clock text used to fill in the now-removed
+         SaveSection/ForwardRecordingSection cards. Rendered uppercase by the call site to match
+         AvionicsPanelButton's stencil styling. -->
+    <string name="dashboard_panel_save_caption_no_audio">No audio yet</string>
+    <string name="dashboard_panel_save_caption_saving">Writing to disk…</string>
+    <string name="dashboard_panel_save_caption_full">Buffer full · %1$d min</string>
+    <string name="dashboard_panel_save_caption_buffered">%1$s buffered</string>
+    <string name="dashboard_panel_live_caption_idle">Starts a new file</string>
+    <string name="dashboard_panel_live_caption_recording">%1$s live</string>
+
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Saved recordings</string>
     <string name="gallery_subtitle">Playback, share &amp; delete</string>

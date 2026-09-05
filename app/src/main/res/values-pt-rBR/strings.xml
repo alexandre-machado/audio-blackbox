@@ -185,6 +185,15 @@
     <string name="dashboard_panel_live_label">Ao vivo</string>
     <string name="dashboard_panel_live_stop_label">Parar</string>
 
+    <!-- Issue #335 wiring: legendas de uma linha dos botões do painel, ver comentário equivalente
+         em values/strings.xml. -->
+    <string name="dashboard_panel_save_caption_no_audio">Sem áudio ainda</string>
+    <string name="dashboard_panel_save_caption_saving">Gravando no disco…</string>
+    <string name="dashboard_panel_save_caption_full">Buffer cheio · %1$d min</string>
+    <string name="dashboard_panel_save_caption_buffered">%1$s no buffer</string>
+    <string name="dashboard_panel_live_caption_idle">Inicia um novo arquivo</string>
+    <string name="dashboard_panel_live_caption_recording">%1$s ao vivo</string>
+
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Gravações salvas</string>
     <string name="gallery_subtitle">Reprodução, compartilhamento e exclusão</string>
