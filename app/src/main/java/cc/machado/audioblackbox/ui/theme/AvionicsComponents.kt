@@ -15,17 +15,20 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +53,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -172,6 +176,160 @@ fun AvionicsTag(
             color = color,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
         )
+    }
+}
+
+/**
+ * Design proposal for issue #335: an aviation-panel button primitive, sized and lit like a
+ * physical rocker/press switch rather than a `Material3` `Button` -- a rectangular bezel, a status
+ * LED, an all-caps monospace label, and an optional one-line caption underneath it for the state
+ * detail a caption-less icon button would otherwise lose. It is meant to sit in a
+ * [AvionicsPanelButtonRow] of two, inside [EngineCard]'s chassis, replacing the two full-sentence
+ * `Button`s that used to live in `SaveSection`/`ForwardRecordingSection` (see the PR for #335 for
+ * the full writeup of what moved and why).
+ *
+ * States, all of which the two real actions need (issue #335's "cover every state" requirement):
+ * - **Enabled**, [ledColor] lit ([FlightOrange] by default -- the brand CTA colour, matching
+ *   [primaryCtaButtonColors]).
+ * - **Disabled with a reason**: pass `enabled = false` and put the reason in [caption] (e.g. "NO
+ *   AUDIO YET" for Save with an empty buffer). The LED dims to [TextDim] and the whole control's
+ *   alpha drops, same visual language `Button` already uses for its disabled state.
+ * - **In progress**: pass `inProgress = true`. The LED is replaced by a small spinner and the
+ *   caption should describe the operation ("WRITING TO DISK…"); [onClick] is still wired by the
+ *   caller but the control also renders disabled-styled so a second tap mid-export cannot double
+ *   fire (mirrors the existing 500 ms debounce in `SaveSection`, which callers keep doing
+ *   independently -- this primitive does not replace that guard).
+ * - **Toggled / "stop" state**: same primitive, different [label]/[caption]/[ledColor] (e.g.
+ *   [WarningRed] or [CautionAmber] for a live "STOP" control) -- there is deliberately no separate
+ *   "stop variant" composable, because `ForwardRecordingSection` already proved the start/stop pair
+ *   is one control whose text and color change, not two controls.
+ *
+ * Content description: pass the *existing* accessibility strings
+ * (`dashboard_save_button_cd_full`/`_partial`, etc.) as [contentDescription] unchanged -- this
+ * primitive does not shorten or replace them, only the visible [label] shortens for panel framing.
+ *
+ * Touch target: the control enforces a 48dp minimum height ([PANEL_BUTTON_MIN_HEIGHT]) regardless
+ * of how little [label] + [caption] need, per the platform accessibility minimum -- previously this
+ * came for free from `Button`'s own defaults, so it has to be asserted explicitly now that the
+ * control is hand-rolled.
+ */
+val PANEL_BUTTON_MIN_HEIGHT = 48.dp
+
+@Composable
+fun AvionicsPanelButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    inProgress: Boolean = false,
+    caption: String? = null,
+    ledColor: Color = FlightOrange,
+    contentDescription: String? = null,
+) {
+    val interactable = enabled && !inProgress
+    val displayLedColor = if (enabled) ledColor else TextDim
+    val labelColor = if (enabled) TextStencil else TextDim
+    val captionColor = if (enabled) TextMuted else TextDim
+    val borderColor = if (enabled) ledColor.copy(alpha = 0.45f) else CockpitBorder
+
+    Surface(
+        onClick = onClick,
+        enabled = interactable,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = PANEL_BUTTON_MIN_HEIGHT)
+            .semantics {
+                if (contentDescription != null) {
+                    this.contentDescription = contentDescription
+                }
+            },
+        shape = RoundedCornerShape(RADIUS_SM),
+        color = if (enabled) CockpitPanelRaised else CockpitPanel,
+        border = BorderStroke(1.dp, borderColor),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (inProgress) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    color = ledColor,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(9.dp)
+                        .background(displayLedColor, CircleShape)
+                        .then(
+                            if (enabled) {
+                                Modifier.background(
+                                    Brush.radialGradient(
+                                        colors = listOf(displayLedColor.copy(alpha = 0.55f), Color.Transparent),
+                                    ),
+                                    CircleShape,
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label.uppercase(),
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp,
+                    letterSpacing = 0.06.sp,
+                    color = labelColor,
+                )
+                if (caption != null) {
+                    Text(
+                        text = caption,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        color = captionColor,
+                        modifier = Modifier.padding(top = 1.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Lays out the two `AvionicsPanelButton`s ([save] and [live]) as a "control pair": side by side
+ * whenever there is width to spare, stacked full-width below [PANEL_ROW_STACK_BELOW] -- the app's
+ * smallest supported width (360dp, `CompactHarnessApp`) leaves only ~280dp inside the engine card
+ * after its own padding, which is not enough for two labelled buttons with captions side by side
+ * without truncating the caption issue #335 needs to keep visible (buffer duration / disable
+ * reason). Stacking there costs vertical space, never legibility.
+ */
+val PANEL_ROW_STACK_BELOW = 400.dp
+
+@Composable
+fun AvionicsPanelButtonRow(
+    modifier: Modifier = Modifier,
+    save: @Composable () -> Unit,
+    live: @Composable () -> Unit,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        if (maxWidth < PANEL_ROW_STACK_BELOW) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                save()
+                live()
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.weight(1f)) { save() }
+                Box(modifier = Modifier.weight(1f)) { live() }
+            }
+        }
     }
 }
 
