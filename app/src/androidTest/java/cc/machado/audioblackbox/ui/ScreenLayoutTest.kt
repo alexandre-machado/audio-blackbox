@@ -27,7 +27,10 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -39,6 +42,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.machado.audioblackbox.R
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -363,17 +367,26 @@ class ScreenLayoutTest {
     /**
      * Regression test for issue #335: the Save/Live action panel pair now lives inside the engine
      * card itself (`ActionPanelRow`), replacing the two standalone `SaveSection`/
-     * `ForwardRecordingSection` cards this file used to exercise separately. This walks both
-     * buttons through every state those two used to carry, to pin them all down in the one place
-     * they now live.
+     * `ForwardRecordingSection` cards this file used to exercise separately. This and the two
+     * `@Test`s below it walk both buttons through every state those two used to carry, to pin them
+     * all down in the one place they now live.
      *
-     * Oracle: fails if either button is missing, wrongly enabled/disabled for its state, or the
-     * live button's test tag does not flip between its start and stop identities.
+     * Split into three `@Test` methods rather than three `composeRule.setContent {}` calls inside
+     * one -- `createAndroidComposeRule<ComponentActivity>()`'s `ComponentActivity` accepts exactly
+     * one `setContent` per instance, and JUnit hands each `@Test` method a fresh one (`@get:Rule`
+     * re-creates it per test). A second call throws `IllegalStateException: ... has already set
+     * content` (`@rev`, PR #343 round 2) -- this file's other multi-state tests avoid the same trap
+     * by driving all their states through one `setContent` and one composition, as
+     * [scrollViewportOfEachScreenEndsAboveTheFloatingBottomBar] does by switching tabs; there is no
+     * equivalent single-composition way to move here without a live ViewModel, since these states
+     * are three different [cc.machado.audioblackbox.ui.dashboard.DashboardUiState] values passed in
+     * at composition time, not something a click can transition between.
+     *
+     * Oracle (each test): fails if either button is missing, wrongly enabled/disabled for its
+     * state, or the live button's test tag does not flip between its start and stop identities.
      */
     @Test
-    fun actionPanelButtonsCoverEveryStateInsideTheEngineCard() {
-        // No audio yet: Save must be disabled: Live (forward recording) is independent of the
-        // lookback buffer and stays enabled.
+    fun actionPanelSaveButtonIsDisabledWithNoBufferedAudio() {
         composeRule.setContent {
             CompactHarnessApp(Destination.DASHBOARD, dashboardUiState = emptyBufferDashboardFixture())
         }
@@ -382,16 +395,22 @@ class ScreenLayoutTest {
             assertIsDisplayed()
             assertIsNotEnabled()
         }
+        // Live (forward recording) is independent of the lookback buffer and stays enabled.
         composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).apply {
             performScrollTo()
             assertIsDisplayed()
             assertIsEnabled()
         }
         composeRule.onNodeWithTag(FORWARD_STOP_BUTTON_TEST_TAG).assertDoesNotExist()
+    }
 
-        // Buffer holds audio, exporting in progress: Save must render disabled-styled (`inProgress`)
-        // even though `onClick` is still wired -- the fix for `@rev`'s PR #339 finding that
-        // `inProgress` alone did not apply the disabled look.
+    /**
+     * Buffer holds audio, exporting in progress: Save must render disabled-styled (`inProgress`)
+     * even though `onClick` is still wired -- the fix for `@rev`'s PR #339 finding that
+     * `inProgress` alone did not apply the disabled look.
+     */
+    @Test
+    fun actionPanelSaveButtonIsDisabledStyledWhileExporting() {
         composeRule.setContent {
             CompactHarnessApp(
                 Destination.DASHBOARD,
@@ -408,10 +427,14 @@ class ScreenLayoutTest {
             assertIsDisplayed()
             assertIsNotEnabled()
         }
+    }
 
-        // Forward recording live: the Live control must present as its STOP identity, and the
-        // start identity must no longer exist -- one control, not two, per AvionicsPanelButton's
-        // doc.
+    /**
+     * Forward recording live: the Live control must present as its STOP identity, and the start
+     * identity must no longer exist -- one control, not two, per [AvionicsPanelButton]'s doc.
+     */
+    @Test
+    fun actionPanelLiveButtonPresentsAsStopWhileForwardRecording() {
         composeRule.setContent {
             CompactHarnessApp(
                 Destination.DASHBOARD,
@@ -433,6 +456,54 @@ class ScreenLayoutTest {
             assertIsEnabled()
         }
         composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).assertDoesNotExist()
+    }
+
+    /**
+     * Regression test for `@sec`'s PR #343 round-2 finding: the deleted `ForwardRecordingSection`
+     * exposed the ticking elapsed clock through a `liveRegion = Polite` semantics node, which
+     * `ActionPanelRow` dropped when it folded that section into a single panel button. This checks
+     * the restoration -- see `ActionPanelRow`'s doc for why issue #291 does not excuse the gap
+     * (that issue is about a `RemoteViews` widget's reflective `setInt` call, an unrelated
+     * mechanism, not Compose's own `Modifier.semantics { liveRegion = ... }`).
+     *
+     * Oracle: fails if the Live/STOP button does not carry [SemanticsProperties.LiveRegion] while
+     * forward recording is active, or if its announced text does not include the elapsed clock
+     * (i.e. if the live region exists but never actually changes as time passes).
+     */
+    @Test
+    fun actionPanelLiveButtonExposesALiveRegionWithTheElapsedClockWhileForwardRecording() {
+        composeRule.setContent {
+            CompactHarnessApp(
+                Destination.DASHBOARD,
+                dashboardUiState = DashboardViewModel.mapUiState(
+                    captureState = CaptureState.Recording,
+                    bufferedMillis = 5L * 60_000L,
+                    capacityMinutes = 30,
+                    saveState = SaveUiState.Idle,
+                    forwardRecordingState = ForwardRecordingUiState.Recording(
+                        displayName = "blackbox_2026-09-04_10-00-00_forward.m4a",
+                        elapsedMillis = 42_000L,
+                    ),
+                ),
+            )
+        }
+        val stopButton = composeRule.onNodeWithTag(FORWARD_STOP_BUTTON_TEST_TAG)
+        stopButton.performScrollTo()
+        val config = stopButton.fetchSemanticsNode().config
+        assertTrue(
+            "expected the Live/STOP button to carry a LiveRegion semantics property while forward " +
+                "recording is active, so TalkBack re-announces it as the elapsed clock changes",
+            config.contains(SemanticsProperties.LiveRegion),
+        )
+        assertEquals(LiveRegionMode.Polite, config.getOrNull(SemanticsProperties.LiveRegion))
+
+        val announced = config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString(" ") ?: ""
+        assertTrue(
+            "expected the Live/STOP button's announced content description (\"$announced\") to " +
+                "include the elapsed clock, not just the static \"stop\" action name -- otherwise " +
+                "the live region exists but never actually changes as time passes",
+            announced.contains("00:42"),
+        )
     }
 
     /**

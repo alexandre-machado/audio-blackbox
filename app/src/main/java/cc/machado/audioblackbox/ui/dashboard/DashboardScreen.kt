@@ -712,21 +712,40 @@ private fun ActionPanelRow(
 
     val forwardState = uiState.forwardRecordingState
     val isForwardRecording = forwardState is ForwardRecordingUiState.Recording
+    // Non-null only while forward recording is live -- computed once so the caption and the
+    // accessibility announcement below format the same clock reading rather than risking two
+    // separate `formatMillisAsClock` calls drifting a frame apart.
+    val elapsedClock = (forwardState as? ForwardRecordingUiState.Recording)?.let {
+        formatMillisAsClock(it.elapsedMillis)
+    }
     val liveLabel = if (isForwardRecording) {
         stringResource(R.string.dashboard_panel_live_stop_label)
     } else {
         stringResource(R.string.dashboard_panel_live_label)
     }
-    val liveCaption = if (isForwardRecording) {
-        stringResource(
-            R.string.dashboard_panel_live_caption_recording,
-            formatMillisAsClock((forwardState as ForwardRecordingUiState.Recording).elapsedMillis),
-        )
+    val liveCaption = if (elapsedClock != null) {
+        stringResource(R.string.dashboard_panel_live_caption_recording, elapsedClock)
     } else {
         stringResource(R.string.dashboard_panel_live_caption_idle)
     }.uppercase()
-    val liveCd = if (isForwardRecording) {
-        stringResource(R.string.dashboard_forward_stop_button)
+    // `@sec`'s PR #343 round-2 finding: the deleted `ForwardRecordingSection` exposed the ticking
+    // elapsed clock through its own `liveRegion = Polite` node (AGENTS.md §5), which this dropped --
+    // note issue #291's live-region finding does NOT excuse that: #291 is about a `RemoteViews`
+    // widget's *reflective* `setInt(..., "setAccessibilityLiveRegion", ...)` call being rejected by
+    // `RemoteViews.getMethod`'s `@RemotableViewMethod` allowlist, an Android-widget-specific
+    // restriction. This is a plain Compose `Modifier.semantics { liveRegion = ... }`, the same
+    // mechanism already in live use elsewhere on this same screen (the annunciator's own
+    // `liveRegion` a few lines up in `EngineChassisCard`, `SaveOutcomeNotice`,
+    // `ForwardOutcomeNotice`) -- #291 never touched that mechanism and has nothing to say about it.
+    // The live button's contentDescription therefore carries the elapsed announcement, not just the
+    // static action name, and only while recording -- restoring the original behaviour rather than
+    // adding a second announcing node.
+    val liveCd = if (elapsedClock != null) {
+        stringResource(
+            R.string.dashboard_forward_live_announcement,
+            stringResource(R.string.dashboard_forward_elapsed_cd, elapsedClock),
+            stringResource(R.string.dashboard_forward_stop_button),
+        )
     } else {
         stringResource(R.string.dashboard_forward_start_button)
     }
@@ -758,9 +777,11 @@ private fun ActionPanelRow(
                 ledColor = FlightOrange,
                 pulsing = isForwardRecording,
                 contentDescription = liveCd,
-                modifier = Modifier.testTag(
-                    if (isForwardRecording) FORWARD_STOP_BUTTON_TEST_TAG else FORWARD_START_BUTTON_TEST_TAG,
-                ),
+                modifier = Modifier
+                    .testTag(
+                        if (isForwardRecording) FORWARD_STOP_BUTTON_TEST_TAG else FORWARD_START_BUTTON_TEST_TAG,
+                    )
+                    .semantics { if (isForwardRecording) liveRegion = LiveRegionMode.Polite },
             )
         },
     )

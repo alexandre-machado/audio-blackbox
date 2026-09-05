@@ -75,5 +75,18 @@ class ScreenSourceContractTest {
                 "there is no separate primaryCtaButtonColors() override left to drift apart)",
             panelButtonCallSites >= 2,
         )
+
+        // `@sec`'s PR #343 round-2 finding: sharing one primitive is not by itself proof of shared
+        // colour -- AvionicsPanelButton takes ledColor as a per-call argument, so this still checks
+        // issue #221's actual concern (a CTA colour drifting off the app's brand colour) rather than
+        // assuming the shared call site makes that impossible.
+        val flightOrangeLedSites = Regex("""ledColor\s*=\s*FlightOrange""").findAll(dashboardSource).count()
+        assertTrue(
+            "expected both AvionicsPanelButton call sites (Save, Live) to set ledColor = " +
+                "FlightOrange -- found $flightOrangeLedSites site(s), expected at least 2 " +
+                "(issue #221's concern, restated for the #335 primitive: no card-level primary " +
+                "action may drift off the app's brand colour)",
+            flightOrangeLedSites >= 2,
+        )
     }
 }

@@ -104,8 +104,6 @@
          cannot or would rather not perform a drag. The engine switch remains available either
          way. -->
     <string name="dashboard_rbf_remove_action">Remove the tag and arm the recorder</string>
-    <string name="dashboard_card_lookback_label">LOOKBACK BUFFER // DISK PERSISTENCE</string>
-    <string name="dashboard_card_forward_label">LIVE FLIGHT RECORDER // CONTINUOUS</string>
     <string name="dashboard_card_vu_label">MIC INPUT LEVEL (VU)</string>
     <string name="dashboard_card_tape_label">CIRCULAR BUFFER RETENTION</string>
 
@@ -169,9 +167,11 @@
     <string name="dashboard_buffer_status_cd">Audio buffer: %1$s of %2$s in memory</string>
     <string name="dashboard_buffer_full_notice">Buffer full: recording over the oldest audio</string>
 
-    <!-- Issue #139: the card's title used to duplicate this button's own text one line below it;
-         removed the title, the button label plus the explanation sentence below already carry
-         the meaning. -->
+    <!-- Kept though unreferenced from Compose since issue #335 ("ActionPanelRow" no longer renders
+         this as visible button text): AccessibilityStringsTest's
+         "saveRecentAudioNamingConventionIsConsistentAcrossAllReferences" asserts this exact string
+         against gallery_empty_body's cross-reference as a naming-convention regression, so removing
+         it would mean weakening that test too, which is not worth doing for one unreferenced string. -->
     <string name="dashboard_save_button">Save recent audio</string>
     <string name="dashboard_save_explanation_full">Save the full buffer (%1$d min) to device storage.</string>
     <string name="dashboard_save_explanation_partial">Save the audio recorded so far (%1$s) to device storage.</string>
@@ -189,11 +189,15 @@
 
     <!-- Forward recording (Action 2, issue #55; always includes the retained past, issue #139).
          Card title removed here too, same reasoning as dashboard_save_button above. -->
-    <string name="dashboard_forward_explanation">Starts a new file with everything currently buffered, then keeps recording live until you stop -- the rolling buffer keeps running the whole time.</string>
     <string name="dashboard_forward_start_button">Save the past and keep recording</string>
     <string name="dashboard_forward_recording_title">Recording forward</string>
-    <string name="dashboard_forward_elapsed_label">Elapsed time: %1$s</string>
     <string name="dashboard_forward_elapsed_cd">Continuous recording elapsed time: %1$s</string>
+    <!-- Issue #335 wiring, @sec PR #343 finding: joins the ticking elapsed-time announcement with
+         the Live/STOP panel button's own action description, so the combined content description
+         changes every time the elapsed clock does, restoring the accessibility live-region
+         announcement ForwardRecordingSection used to provide before it was folded into
+         ActionPanelRow's single button. -->
+    <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
     <string name="dashboard_forward_stop_button">Stop continuous recording</string>
     <string name="dashboard_forward_success_title">Continuous recording saved</string>
     <string name="dashboard_forward_success_body">File: %1$s</string>

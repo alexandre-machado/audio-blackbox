@@ -86,8 +86,6 @@
     <string name="dashboard_annunciator_error_sub">CH-01 · RECUPERAÇÃO DE HARDWARE NECESSÁRIA</string>
     <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // GRAVADOR EM ESPERA</string>
     <string name="dashboard_rbf_remove_action">Remover a etiqueta e armar o gravador</string>
-    <string name="dashboard_card_lookback_label">BUFFER LOOKBACK // PERSISTÊNCIA EM DISCO</string>
-    <string name="dashboard_card_forward_label">GRAVADOR DE VOO AO VIVO // CONTÍNUO</string>
     <string name="dashboard_card_vu_label">NÍVEL DE ENTRADA DO MIC (VU)</string>
     <string name="dashboard_card_tape_label">RETENÇÃO DO BUFFER CIRCULAR</string>
 
@@ -167,11 +165,10 @@
     <string name="dashboard_save_notice_dismiss">OK</string>
 
     <!-- Gravação para frente (Ação 2, issue #55; agora sempre inclui o passado retido, issue #139) -->
-    <string name="dashboard_forward_explanation">Inicia um novo arquivo com tudo que já está no buffer e continua gravando ao vivo até você parar -- o buffer contínuo continua ativo o tempo todo.</string>
     <string name="dashboard_forward_start_button">Salvar o passado e seguir gravando</string>
     <string name="dashboard_forward_recording_title">Gravando para frente</string>
-    <string name="dashboard_forward_elapsed_label">Tempo decorrido: %1$s</string>
     <string name="dashboard_forward_elapsed_cd">Tempo decorrido da gravação contínua: %1$s</string>
+    <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
     <string name="dashboard_forward_stop_button">Parar gravação contínua</string>
     <string name="dashboard_forward_success_title">Gravação contínua salva</string>
     <string name="dashboard_forward_success_body">Arquivo: %1$s</string>
