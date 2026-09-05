@@ -3,9 +3,13 @@ package cc.machado.audioblackbox.ui.theme
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -40,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -53,6 +58,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -222,15 +228,20 @@ fun AvionicsPanelButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     inProgress: Boolean = false,
+    pulsing: Boolean = false,
     caption: String? = null,
     ledColor: Color = FlightOrange,
     contentDescription: String? = null,
 ) {
+    // `interactable`, not `enabled`, drives every visual below: an in-progress control is not
+    // `enabled = false` (the caller still wants the click wired so a second tap is absorbed rather
+    // than dead), but it must still *look* disabled -- a lit LED/full-brightness label mid-export
+    // reads as "you can tap this again" (PR #339 review, `@rev`).
     val interactable = enabled && !inProgress
-    val displayLedColor = if (enabled) ledColor else TextDim
-    val labelColor = if (enabled) TextStencil else TextDim
-    val captionColor = if (enabled) TextMuted else TextDim
-    val borderColor = if (enabled) ledColor.copy(alpha = 0.45f) else CockpitBorder
+    val displayLedColor = if (interactable) ledColor else TextDim
+    val labelColor = if (interactable) TextStencil else TextDim
+    val captionColor = if (interactable) TextMuted else TextDim
+    val borderColor = if (interactable) ledColor.copy(alpha = 0.45f) else CockpitBorder
 
     Surface(
         onClick = onClick,
@@ -244,7 +255,7 @@ fun AvionicsPanelButton(
                 }
             },
         shape = RoundedCornerShape(RADIUS_SM),
-        color = if (enabled) CockpitPanelRaised else CockpitPanel,
+        color = if (interactable) CockpitPanelRaised else CockpitPanel,
         border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
@@ -260,13 +271,19 @@ fun AvionicsPanelButton(
                     color = ledColor,
                     strokeWidth = 2.dp,
                 )
+            } else if (pulsing && interactable) {
+                // The owner's addition to #335: the LED pulses while the action it represents is
+                // live (forward recording in progress), the same way the annunciator's own LED
+                // pulses while the buffer is capturing -- see [PulsingDot], shared by both rather
+                // than reimplemented here.
+                PulsingDot(color = displayLedColor, size = 9.dp)
             } else {
                 Box(
                     modifier = Modifier
                         .size(9.dp)
                         .background(displayLedColor, CircleShape)
                         .then(
-                            if (enabled) {
+                            if (interactable) {
                                 Modifier.background(
                                     Brush.radialGradient(
                                         colors = listOf(displayLedColor.copy(alpha = 0.55f), Color.Transparent),
@@ -300,6 +317,43 @@ fun AvionicsPanelButton(
             }
         }
     }
+}
+
+/**
+ * A softly breathing status LED: matches the annunciator's own recording indicator
+ * (`DashboardScreen`'s green pulse, issue #6) exactly -- same 900ms linear tween, same
+ * 0.35..1f alpha swing, reversed rather than restarted -- so every "this is live right now" light
+ * in the app shares one timing and one feel, whatever colour it happens to be lit. Introduced for
+ * issue #335's [AvionicsPanelButton] `pulsing` state (the orange LIVE button LED, per the owner's
+ * call) and reused by the annunciator, which used to carry its own private copy of this animation.
+ *
+ * `clearAndSetSemantics {}` mirrors the annunciator's own dot: a purely decorative, infinitely
+ * animating node has nothing a screen reader should announce, and TalkBack polling an
+ * `infiniteRepeatable` for a description would be actively unhelpful.
+ */
+@Composable
+fun PulsingDot(
+    color: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 10.dp,
+) {
+    val transition = rememberInfiniteTransition(label = "avionics-pulse")
+    val alpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "avionics-pulse-alpha",
+    )
+    Box(
+        modifier = modifier
+            .size(size)
+            .alpha(alpha)
+            .background(color, CircleShape)
+            .clearAndSetSemantics {},
+    )
 }
 
 /**
