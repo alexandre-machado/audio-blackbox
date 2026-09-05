@@ -89,6 +89,13 @@
     <string name="dashboard_card_vu_label">NÍVEL DE ENTRADA DO MIC (VU)</string>
     <string name="dashboard_card_tape_label">RETENÇÃO DO BUFFER CIRCULAR</string>
 
+    <!-- Issue #337: dashboard header short-form spec tag (Mono -> M, Estéreo -> S). See the
+         matching values/strings.xml comment; this abbreviation is dashboard-only, Settings keeps
+         the full words. -->
+    <string name="dashboard_preset_voice_specs">16 kHz · M</string>
+    <string name="dashboard_preset_balanced_specs">32 kHz · M</string>
+    <string name="dashboard_preset_high_fidelity_specs">44.1 kHz · S</string>
+
     <string name="dashboard_card_save_outcome_label">STATUS DA EXPORTAÇÃO // MEDIASTORE</string>
     <string name="dashboard_card_forward_outcome_label">STATUS DA GRAVAÇÃO // MEDIASTORE</string>
     <string name="gallery_empty_card_label">REPOSITÓRIO DE VOOS // MEDIASTORE</string>
@@ -217,9 +224,12 @@
     <string name="gallery_delete_error_body">Esta gravação não pôde ser excluída. Isso pode acontecer com gravações antigas após reinstalar o aplicativo.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
     <!-- Barra flutuante inferior -->
-    <string name="nav_dashboard_label">Painel</string>
-    <string name="nav_gallery_label">Galeria</string>
-    <string name="nav_settings_label">Ajustes</string>
+    <!-- Issue #340: owner-approved pt-BR set, decided 2026-09-05. "Cockpit" stays untranslated
+         deliberately (aviation vocabulary that reads natively in pt-BR); the other two are
+         translated. Resource names are unchanged, only the values move. -->
+    <string name="nav_dashboard_label">Cockpit</string>
+    <string name="nav_gallery_label">Gravações</string>
+    <string name="nav_settings_label">Aviônicos</string>
 
     <!-- Tela de ajustes / controle deslizante de retenção (issue #73, substituindo os chips
          fixos das issues #45/#57) -->

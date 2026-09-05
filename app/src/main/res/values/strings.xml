@@ -107,6 +107,15 @@
     <string name="dashboard_card_vu_label">MIC INPUT LEVEL (VU)</string>
     <string name="dashboard_card_tape_label">CIRCULAR BUFFER RETENTION</string>
 
+    <!-- Issue #337: the dashboard header's short-form spec tag, one channel-word letter
+         (Mono -> M, Stereo -> S) instead of the full word settings_preset_*_specs carries, since
+         44.1 kHz · Estéreo overflowed the tag's much tighter width budget on-device. Owner-decided
+         2026-09-05: this abbreviation applies to the dashboard tag only, not Settings. See
+         QualityPreset.dashboardTagLabelRes(). -->
+    <string name="dashboard_preset_voice_specs">16 kHz · M</string>
+    <string name="dashboard_preset_balanced_specs">32 kHz · M</string>
+    <string name="dashboard_preset_high_fidelity_specs">44.1 kHz · S</string>
+
     <string name="dashboard_card_save_outcome_label">EXPORT STATUS // MEDIASTORE</string>
     <string name="dashboard_card_forward_outcome_label">RECORDING STATUS // MEDIASTORE</string>
     <string name="gallery_empty_card_label">FLIGHT LOG REPOSITORY // MEDIASTORE</string>
@@ -253,9 +262,11 @@
     <string name="gallery_delete_error_body">This recording couldn\'t be deleted. This can happen with older recordings after reinstalling the app.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
     <!-- Floating bottom bar -->
-    <string name="nav_dashboard_label">Dashboard</string>
-    <string name="nav_gallery_label">Gallery</string>
-    <string name="nav_settings_label">Settings</string>
+    <!-- Issue #340: names match docs/design/model.html's .phone-bottom-nav labels exactly.
+         Resource names are unchanged, only the values move to the design-system wording. -->
+    <string name="nav_dashboard_label">Cockpit</string>
+    <string name="nav_gallery_label">Recordings</string>
+    <string name="nav_settings_label">Avionics</string>
 
     <!-- Settings screen / retention stepper (issue #73, superseding the dashboard's chip
          selector from #45/#57) -->

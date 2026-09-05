@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 import java.io.File
@@ -92,5 +93,63 @@ class QualityPresetFormatTest {
         val pt = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
         assertFalse(en.containsKey("dashboard_engine_sample_rate"))
         assertFalse(pt.containsKey("dashboard_engine_sample_rate"))
+    }
+
+    /** Mirrors [QualityPreset.dashboardTagLabelRes]'s `when` by resource name (issue #337). */
+    private fun dashboardResourceNameFor(preset: QualityPreset): String = when (preset) {
+        QualityPreset.VOICE -> "dashboard_preset_voice_specs"
+        QualityPreset.BALANCED -> "dashboard_preset_balanced_specs"
+        QualityPreset.HIGH_FIDELITY -> "dashboard_preset_high_fidelity_specs"
+    }
+
+    /**
+     * Regression coverage for issue #337: the dashboard header's sample-rate tag overflowed on a
+     * real S25 rendering `44.1 kHz · Estéreo` (the same [specLabelRes] Settings still uses).
+     *
+     * Oracle: [QualityPreset.dashboardTagLabelRes] must resolve to a *distinct* resource from
+     * [QualityPreset.specLabelRes] for every preset, and that resource's text must actually be
+     * shorter (the abbreviated channel word), not merely a different resource ID pointing at the
+     * same long-form string -- a mapping that compiled but forwarded to `specLabelRes` under a new
+     * name would pass a same-resource-ID check but reproduce the exact overflow this issue fixes.
+     */
+    @Test
+    fun `dashboardTagLabelRes resolves to its own distinct, shorter-text resource per preset`() {
+        val en = loadStringMap("src/main/res/values/strings.xml")
+        for (preset in QualityPreset.entries) {
+            val longFormId = resourceNameFor(preset)
+            val shortFormId = dashboardResourceNameFor(preset)
+            assertNotEquals(
+                "preset $preset must have a dashboard-specific resource distinct from its Settings one",
+                longFormId,
+                shortFormId,
+            )
+            val longText = en.getValue(longFormId)
+            val shortText = en.getValue(shortFormId)
+            assertTrue(
+                "dashboard short form \"$shortText\" for $preset must be strictly shorter than the " +
+                    "Settings long form \"$longText\" it replaces on the dashboard tag",
+                shortText.length < longText.length,
+            )
+        }
+    }
+
+    /**
+     * Pins the exact expected strings from the owner's decision comment on #337: `44.1 kHz · S`,
+     * `32 kHz · M`, `16 kHz · M` (the `AvionicsTag` composable uppercases at render time, so the
+     * resource itself is mixed-case).
+     */
+    @Test
+    fun `dashboard short forms match the owner-decided abbreviations in both locales`() {
+        val en = loadStringMap("src/main/res/values/strings.xml")
+        val pt = loadStringMap("src/main/res/values-pt-rBR/strings.xml")
+        for (map in listOf(en, pt)) {
+            assertEquals("16 kHz · M", map[dashboardResourceNameFor(QualityPreset.VOICE)])
+            assertEquals("32 kHz · M", map[dashboardResourceNameFor(QualityPreset.BALANCED)])
+            assertEquals("44.1 kHz · S", map[dashboardResourceNameFor(QualityPreset.HIGH_FIDELITY)])
+        }
+        // Settings' full words must be completely unaffected by this change (owner decision: the
+        // abbreviation applies to the dashboard tag only).
+        assertEquals("44.1 kHz · Estéreo", pt[resourceNameFor(QualityPreset.HIGH_FIDELITY)])
+        assertEquals("44.1 kHz · Stereo", en[resourceNameFor(QualityPreset.HIGH_FIDELITY)])
     }
 }

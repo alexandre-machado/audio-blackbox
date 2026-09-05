@@ -69,12 +69,13 @@ import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
-import cc.machado.audioblackbox.ui.specLabelRes
+import cc.machado.audioblackbox.ui.dashboardTagLabelRes
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
 import cc.machado.audioblackbox.ui.theme.AvionicsGreen
 import cc.machado.audioblackbox.ui.theme.AvionicsGreenGlow
+import cc.machado.audioblackbox.ui.theme.AvionicsLabelValueRow
 import cc.machado.audioblackbox.ui.theme.AvionicsPanelButton
 import cc.machado.audioblackbox.ui.theme.AvionicsPanelButtonRow
 import cc.machado.audioblackbox.ui.theme.AvionicsTag
@@ -394,10 +395,12 @@ private fun EngineChassisCard(
                 label = stringResource(R.string.dashboard_card_annunciator_label),
                 tag = {
                     // Derived from the active QualityPreset (issue #334) -- was a fixed
-                    // "16.0 kHz PCM" string that never changed with the selected preset. See
-                    // QualityPreset.specLabelRes() for the single source of truth this, and
-                    // Settings' own preset tag, now both read from.
-                    AvionicsTag(text = stringResource(uiState.qualityPreset.specLabelRes()))
+                    // "16.0 kHz PCM" string that never changed with the selected preset. Issue
+                    // #337: this reads the dashboard's own short form (channel word abbreviated to
+                    // one letter), not Settings' specLabelRes() -- the full word overflowed this
+                    // tag's tighter width budget on-device. See
+                    // QualityPreset.dashboardTagLabelRes().
+                    AvionicsTag(text = stringResource(uiState.qualityPreset.dashboardTagLabelRes()))
                 },
             )
 
@@ -615,26 +618,28 @@ private fun BufferRamVisualizer(uiState: DashboardUiState) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.dashboard_card_tape_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMuted,
-                )
-                Text(
-                    text = String.format(Locale.US, "%.1f / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = FlightOrange,
-                )
-            }
+            // Issue #342: was a bare Row(fillMaxWidth, SpaceBetween) with neither Text weighted,
+            // so pt-BR's longer label ("RETENÇÃO DO BUFFER CIRCULAR", 27 chars) collided with the
+            // value at the app's smallest supported width. AvionicsLabelValueRow (issue #337/#342)
+            // is the shared fix: the label yields (wraps, then ellipsizes) before the value can be
+            // pushed off the card; the value itself never wraps or truncates.
+            //
+            // Locale.US is deliberate here, not the same bug as the overflow: every other
+            // numeric-format call site in this app (RecorderNotification's elapsed clock,
+            // DashboardFormat/GalleryFormat's clocks and file sizes) also formats through
+            // Locale.US, as a consistent avionics-instrument numeric style independent of the
+            // device locale -- the "12.3 / 30 min" decimal point reads the same way "02:34" does
+            // elsewhere on this screen. Switching only this one call site to the default locale
+            // would make this row's decimal separator disagree with every other number on the same
+            // screen in pt-BR, which is a worse inconsistency than the one being fixed. Unifying
+            // all of them onto locale-aware formatting is a real option but is a repo-wide decision
+            // (it touches RecorderNotification, DashboardFormat and GalleryFormat too), not one
+            // scoped to this row -- left as a follow-up rather than done partially and silently
+            // here.
+            AvionicsLabelValueRow(
+                label = stringResource(R.string.dashboard_card_tape_label),
+                value = String.format(Locale.US, "%.1f / %.0f min (%d%%)", bufferedMin, capacityMin, percentage),
+            )
 
             Box(modifier = Modifier.semantics { contentDescription = progressCd }) {
                 FlightTapeRulerTrack(fraction = fraction)
