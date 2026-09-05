@@ -33,6 +33,27 @@ enum class ErrorLogSeverity {
     AUDIT,
 }
 
+/** Reasons that are known to describe a session that still completed successfully -- worth a
+ * durable, reviewable trail, but must never flip the dashboard's "does at least one error exist"
+ * check. This is the *single* source of truth for reason->severity: both [logExportError]'s
+ * default parameter (the JSON write path) and [LegacyBuilder.build] (the pre-#346 plain-text read
+ * path, which never had a severity field on disk at all) resolve through [severityForReason]
+ * rather than keeping their own lists, so a reason added here can never silently be misclassified
+ * by the other path (issue #346 review finding on PR #349). */
+private val AUDIT_REASONS = setOf("TAIL_TRUNCATED", "MUXER_STOP_RECOVERED")
+
+/** Resolves the severity for a bare `reason` string, used both as [logExportError]'s default for
+ * newly-written entries and by [LegacyBuilder.build] for entries recovered from the old
+ * plain-text format that predates the severity field entirely.
+ *
+ * An unrecognized `reason` defaults to [ErrorLogSeverity.ERROR]: this is the fail-safe direction --
+ * a genuine failure wrongly shown as AUDIT would be silently hidden from the dashboard's error
+ * card (exactly what issue #346 exists to prevent), whereas a benign event wrongly shown as ERROR
+ * is merely a false alarm the user can dismiss. Only reasons explicitly known to be non-fatal are
+ * ever downgraded to AUDIT. */
+internal fun severityForReason(reason: String): ErrorLogSeverity =
+    if (reason in AUDIT_REASONS) ErrorLogSeverity.AUDIT else ErrorLogSeverity.ERROR
+
 /** One parsed line of the durable error log (issue #346), independent of whether the line on
  * disk was written as JSON (current format) or the old plain-text format (see [readErrorLog]'s
  * doc for the migration story). [legacy] is `true` only for a line recovered from that old
@@ -79,7 +100,7 @@ internal fun logExportError(
     reason: String,
     message: String,
     exception: Throwable?,
-    severity: ErrorLogSeverity = ErrorLogSeverity.ERROR,
+    severity: ErrorLogSeverity = severityForReason(reason),
 ) {
     if (file == null) return
     val entry = PendingWrite(
@@ -294,7 +315,12 @@ private class LegacyBuilder(
         reason = reason,
         message = message,
         stackTrace = if (stackLines.isEmpty()) null else stackLines.joinToString("\n"),
-        severity = ErrorLogSeverity.ERROR,
+        // The pre-#346 plain-text format has no severity field at all -- derive it from `reason`
+        // through the same mapping the JSON write path defaults through, so a legacy
+        // TAIL_TRUNCATED/MUXER_STOP_RECOVERED line already on a device from before this migration
+        // (issue #322/#323, predates #346) comes back AUDIT and does not pop the error card for a
+        // session that actually succeeded.
+        severity = severityForReason(reason),
         legacy = true,
     )
 }

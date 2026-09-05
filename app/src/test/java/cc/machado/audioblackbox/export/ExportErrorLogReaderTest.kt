@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.export
 
+import cc.machado.audioblackbox.ui.dashboard.ErrorLogUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -98,6 +99,57 @@ class ExportErrorLogReaderTest {
 
         val entry = readErrorLog(file).single()
         assertEquals(ErrorLogSeverity.AUDIT, entry.severity)
+    }
+
+    @Test
+    fun readErrorLog_legacyTailTruncatedLine_isAuditNotError_andDoesNotRaiseTheCard() {
+        // The exact shape ForwardRecordingEngine wrote before issue #346 migrated the format to
+        // JSON (issue #322/#323's TAIL_TRUNCATED call site): a device that recorded before this
+        // migration has this line on disk today, with no severity field at all. PR #349 review
+        // finding: LegacyBuilder.build() used to hardcode ERROR for every migrated line regardless
+        // of `reason`, which would flip this pre-existing, already-successful session's dashboard
+        // card on after the migration -- exactly what #346 said must not happen.
+        val file = tempDir.newFile("export_errors.log")
+        file.writeText(
+            "[2026-01-01T00:00:00.000+00:00] [ForwardRecordingEngine] [TAIL_TRUNCATED] " +
+                "Clean stop dropped 512 bytes at cursor 4096: no retained segment describes their " +
+                "recorded format\n",
+        )
+
+        val entries = readErrorLog(file)
+        val entry = entries.single()
+        assertEquals("TAIL_TRUNCATED", entry.reason)
+        assertTrue(entry.legacy)
+        assertEquals(ErrorLogSeverity.AUDIT, entry.severity)
+        assertTrue(
+            "an AUDIT-only legacy line must not raise the dashboard's error card",
+            !ErrorLogUiState(entries = entries).hasVisibleErrors,
+        )
+    }
+
+    @Test
+    fun readErrorLog_legacyMuxerStopRecoveredLine_isAudit() {
+        val file = tempDir.newFile("export_errors.log")
+        file.writeText(
+            "[2026-01-01T00:00:00.000+00:00] [ForwardRecordingEngine] [MUXER_STOP_RECOVERED] " +
+                "MediaMuxer had already stopped itself before finish() could call stop() explicitly\n",
+        )
+
+        val entry = readErrorLog(file).single()
+        assertEquals(ErrorLogSeverity.AUDIT, entry.severity)
+    }
+
+    @Test
+    fun readErrorLog_legacyUnrecognizedReason_defaultsToError() {
+        // An unrecognized legacy reason must default to ERROR (the fail-safe direction), not
+        // silently become AUDIT and hide a genuine failure.
+        val file = tempDir.newFile("export_errors.log")
+        file.writeText(
+            "[2026-01-01T00:00:00.000+00:00] [ExportEngine] [SOME_FUTURE_REASON] unrecognized\n",
+        )
+
+        val entry = readErrorLog(file).single()
+        assertEquals(ErrorLogSeverity.ERROR, entry.severity)
     }
 
     @Test
