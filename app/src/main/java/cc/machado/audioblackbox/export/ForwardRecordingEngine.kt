@@ -624,6 +624,21 @@ class ForwardRecordingEngine(
             reconciler.flush()?.let { emit(listOf(it)) }
 
             writer.finish()
+            if (writer is StreamingAacWriter && writer.recoveredFromMuxerAlreadyStopped) {
+                // The file is complete and valid (see StreamingAacWriter.finish()'s catch site for
+                // why that is guaranteed rather than assumed) -- state stays Success below -- but
+                // this is still worth an audit trail entry rather than disappearing silently
+                // (issue #347, same evidentiary standard already applied to TAIL_TRUNCATED above).
+                logExportError(
+                    errorLogFile,
+                    clock,
+                    "ForwardRecordingEngine",
+                    "MUXER_STOP_RECOVERED",
+                    "MediaMuxer had already stopped itself before finish() could call stop() " +
+                        "explicitly; the file was still fully finalized and is not lost",
+                    null,
+                )
+            }
             target.finish()
 
             synchronized(lock) {

@@ -90,6 +90,7 @@ class StreamingAacWriter private constructor(
     private var totalBytesFed = 0L
     private var isFinished = false
     private var isClosed = false
+    private var recoveredFromAlreadyStoppedMuxer = false
 
     /** Total PCM bytes (audio + injected silence) fed into the encoder so far. */
     override val totalBytesWritten: Long
@@ -102,6 +103,35 @@ class StreamingAacWriter private constructor(
     /** Whether this writer has been closed / released. */
     override val isSessionClosed: Boolean
         get() = synchronized(lock) { isClosed }
+
+    /**
+     * Whether [finish] recovered from the native muxer having already stopped itself before the
+     * explicit `muxer.stop()` call (issue #347). When `true`, [finish] still completed and the
+     * output file is a complete, valid container -- see [finish]'s catch site for why that is
+     * guaranteed rather than assumed. Exposed so a caller (e.g. `ForwardRecordingEngine`) can log
+     * the occurrence for audit purposes even though the session did not fail.
+     */
+    val recoveredFromMuxerAlreadyStopped: Boolean
+        get() = synchronized(lock) { recoveredFromAlreadyStoppedMuxer }
+
+    /**
+     * Test-only seam (issue #347): when `true`, [finish] calls the real `muxer.stop()` itself,
+     * once, immediately before its own explicit stop attempt -- deliberately at the exact point in
+     * the sequence where the native auto-stop this issue is about would have already happened, so
+     * this class's own explicit `muxer.stop()` call race against an already-stopped muxer exactly
+     * as it does in production. Nothing in production sets this -- the default is `false`, a no-op
+     * -- so it changes no production behaviour.
+     *
+     * This exists because the actual trigger (a hardware AAC encoder setting
+     * `BUFFER_FLAG_END_OF_STREAM` on a buffer that also carries real sample data, which makes the
+     * *native* muxer auto-finalize out from under this class's own `muxerStarted` flag) is
+     * hardware-specific and cannot be produced deterministically from the software encoder
+     * available in CI. This seam reproduces the resulting state mismatch -- an already-stopped
+     * muxer at the point `finish()` calls `stop()` -- against the real `MediaCodec`/`MediaMuxer`
+     * objects, exercising `finish()`'s actual recovery code end-to-end rather than a hand-built
+     * fixture standing in for them.
+     */
+    internal var forceMuxerAlreadyStoppedBeforeExplicitStopForTest: Boolean = false
 
     init {
         require(config.sampleRateHz > 0) { "sampleRateHz must be positive, was ${config.sampleRateHz}" }
@@ -266,16 +296,41 @@ class StreamingAacWriter private constructor(
                 }
                 else -> if (outputIndex >= 0) {
                     val outputBuffer = requireNotNull(codec.getOutputBuffer(outputIndex))
+                    val isEndOfStream = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
                     if (bufferInfo.size > 0 &&
                         (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
                     ) {
                         check(muxerStarted) { "encoder produced sample data before the muxer's track was added" }
                         outputBuffer.position(bufferInfo.offset)
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                        if (isEndOfStream) {
+                            // Issue #347: MediaMuxer.writeSampleData's own contract is that
+                            // BUFFER_FLAG_END_OF_STREAM is only meaningful on a dedicated, *empty*
+                            // (size == 0) marker buffer used to set the previous sample's duration --
+                            // never on a buffer that also carries real encoded data. Software encoders
+                            // generally honor that and emit the EOS marker as a separate zero-size
+                            // buffer after the last real one, but the hardware AAC encoder on the
+                            // owner's Galaxy S25 instead sets BUFFER_FLAG_END_OF_STREAM directly on the
+                            // buffer holding the final real frame. Handing that combination to the
+                            // muxer makes its native writer treat the track as finished and silently
+                            // run its own internal stop/finalize sequence right there -- well before
+                            // our explicit finish() reaches muxer.stop() below, which then throws
+                            // IllegalStateException ("muxer would have stopped already") because the
+                            // native muxer has already gone through it. So: still write the real
+                            // sample data, but never let the EOS flag reach the muxer attached to
+                            // non-empty data. `isEndOfStream` (captured above, before this mutation)
+                            // still drives the deadline-bounded drain loop's own exit condition below.
+                            bufferInfo.set(
+                                bufferInfo.offset,
+                                bufferInfo.size,
+                                bufferInfo.presentationTimeUs,
+                                bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv(),
+                            )
+                        }
                         muxer.writeSampleData(muxerTrackIndex, outputBuffer, bufferInfo)
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
-                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    if (isEndOfStream) {
                         return
                     }
                 }
@@ -319,8 +374,30 @@ class StreamingAacWriter private constructor(
 
                 drainOutput(endOfStream = true, deadlineNanos = deadlineNanos)
 
-                if (muxerStarted) {
+                if (forceMuxerAlreadyStoppedBeforeExplicitStopForTest && muxerStarted) {
                     muxer.stop()
+                }
+
+                if (muxerStarted) {
+                    try {
+                        muxer.stop()
+                    } catch (_: IllegalStateException) {
+                        // Issue #347: the drainOutput fix above (stripping BUFFER_FLAG_END_OF_STREAM
+                        // before it reaches the muxer) closes the known trigger going forward. This
+                        // catch is deliberately narrow defense-in-depth, not a blanket swallow:
+                        // finish() holds `lock` for its entire body and returns immediately if
+                        // already finished, and nothing else in this class calls muxer.stop() before
+                        // this line, so there is no path *in this class* that could reach "already
+                        // stopped" by racing or double-calling it. An IllegalStateException here can
+                        // therefore only mean the native muxer already ran its own stop/finalize
+                        // sequence outside of a call this class made -- and that native sequence only
+                        // completes after the container's `moov` atom has been written, since the
+                        // muxer's own stop() implementation transitions state only after nativeStop()
+                        // returns. The file on disk is therefore a complete, valid `.m4a`; only this
+                        // now-redundant call failed. Recorded on `recoveredFromAlreadyStoppedMuxer`
+                        // rather than silently disappearing, so a caller can audit it.
+                        recoveredFromAlreadyStoppedMuxer = true
+                    }
                     muxerStarted = false
                 }
                 if (codecStarted) {

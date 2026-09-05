@@ -229,6 +229,48 @@ class StreamingAacWriterTest {
     }
 
     @Test
+    fun finish_recoversWhenNativeMuxerAlreadyStoppedBeforeExplicitStop() {
+        // Issue #347 -- a live recording on the owner's Galaxy S25 failed at finish() with
+        // `MediaMuxer.stop()` throwing "muxer would have stopped already": a hardware AAC encoder
+        // sets BUFFER_FLAG_END_OF_STREAM on the buffer carrying its last real encoded frame
+        // (instead of a separate empty marker buffer, as MediaMuxer#writeSampleData documents),
+        // which makes the *native* muxer auto-finalize out from under this class's own
+        // `muxerStarted` flag; finish()'s own explicit `muxer.stop()` then races an
+        // already-stopped muxer and throws. That hardware quirk cannot be produced
+        // deterministically from the software encoder available here, so this test uses the
+        // dedicated seam (`forceMuxerAlreadyStoppedBeforeExplicitStopForTest`) to reproduce the
+        // resulting state mismatch -- an already-stopped muxer at the exact point finish() calls
+        // stop() -- against the real StreamingAacWriter/MediaCodec/MediaMuxer objects, rather than
+        // a hand-built fixture standing in for them.
+        val sampleRateHz = 16_000
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
+        val outFile = File.createTempFile("stream_aac_recover_", ".m4a", cacheDir)
+        try {
+            val writer = StreamingAacWriter(outFile, config)
+            writer.forceMuxerAlreadyStoppedBeforeExplicitStopForTest = true
+            val chunk = ToneGenerator.tone(1000.0, sampleRateHz, 500L)
+            writer.write(chunk)
+
+            writer.finish()
+
+            assertTrue("finish() must complete rather than throw", writer.isSessionFinished)
+            assertTrue(
+                "finish() must record that it recovered from the already-stopped muxer",
+                writer.recoveredFromMuxerAlreadyStopped,
+            )
+
+            // The recording must not be lost: the file on disk must be a complete, decodable
+            // container, not a truncated or header-less stub.
+            assertTrue("output file must be non-empty", outFile.length() > 0)
+            val decoded = AacDecodeSupport.decode(outFile)
+            assertEquals(sampleRateHz, decoded.sampleRateHz)
+            assertEquals(1, decoded.channelCount)
+        } finally {
+            outFile.delete()
+        }
+    }
+
+    @Test
     fun constructorFailure_releasesCodecWithoutLeak() {
         val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1)
         val invalidFile = File("/nonexistent_dir_12345/sub/test.m4a")
