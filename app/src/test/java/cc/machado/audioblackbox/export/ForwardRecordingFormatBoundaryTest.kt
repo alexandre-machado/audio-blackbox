@@ -15,7 +15,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
  * Regression tests for the forward-recording half of issue #322.
@@ -41,6 +43,9 @@ import org.junit.Test
  * rather than re-configuring an open encoder mid-file.
  */
 class ForwardRecordingFormatBoundaryTest {
+
+    @get:Rule
+    val tempDir = TemporaryFolder()
 
     private val voice = AudioConfig(sampleRateHz = 16_000, channelCount = 1, bufferDurationMinutes = 1)
     private val hiFi = AudioConfig(sampleRateHz = 44_100, channelCount = 2, bufferDurationMinutes = 1)
@@ -292,6 +297,112 @@ class ForwardRecordingFormatBoundaryTest {
     }
 
     @Test
+    fun `a tail dropped on clean stop is durably logged as TAIL_TRUNCATED`() {
+        // Issue #332 finding 3 (`@rev`/`@sec` on PR #323's last commit): the TAIL_TRUNCATED log is
+        // the only record of a silently-shortened tail, and nothing guarded it. This deterministically
+        // forces the *clean-stop* branch (as opposed to the live-loop branch, which errors instead of
+        // logging -- see the test above) by draining exactly one small, resolvable chunk live, then
+        // -- once the drain thread is parked waiting for more data -- swapping the segment record out
+        // from under it and appending a second chunk, so the clean-stop drain finds unresolvable
+        // bytes to log rather than racing for it.
+        //
+        // `@rev` round-2 finding 1 on PR #333: an earlier version of this test synchronized only on
+        // the first chunk reaching the writer, then raced the segment swap / second write / stop()
+        // against the live loop's own `wakeUpLatch.await(POLL_INTERVAL_MILLIS)` idle poll with no
+        // synchronization between them -- if that 50ms poll timed out on its own first, the live
+        // loop (not the clean-stop drain) would consume the second chunk and the test would assert
+        // over an `Error(CURSOR_LAPPED)` instead of a `Success`. A hook fired inside `stop()` itself
+        // turned out not to be enough either (caught in this test's own revision history): the
+        // clean-stop drain's first read is un-retried, so blocking only `stop()`'s `join()` still let
+        // the drain thread's clean-stop loop run its one read attempt -- and find nothing -- before
+        // the test thread got a chance to write the second chunk. `onEnteringCleanStopDrain` closes
+        // both windows at once: it fires on the drain thread exactly between the live loop's exit and
+        // the clean-stop loop's first read, so blocking there until the segment swap and second write
+        // are done makes it impossible -- not just unlikely -- for either loop to run before the
+        // right one can see it.
+        //
+        // Mutation check: commenting out the `logExportError(...)` call at the TAIL_TRUNCATED site
+        // makes this test fail (the log file stays empty); reverted after confirming.
+        val ring = RingBuffer(capacityBytes = 200_000, initialConfig = voice)
+        val firstChunk = ToneGenerator.tone(TONE_HZ, 16_000, 50, channelCount = 1)
+        ring.write(firstChunk)
+
+        val segments = java.util.concurrent.atomic.AtomicReference<List<FormatSegment>?>(
+            listOf(FormatSegment(startOffset = 0L, config = voice))
+        )
+        // Signalled only once the first chunk has actually reached the writer -- i.e. after
+        // `reconcile` has already resolved it against the *original* segment list -- not merely
+        // after `readSince` returned bytes, which races the segment swap below against
+        // `reconcile`'s own read of `segmentsProvider` (see this test's mutation history).
+        val firstWrite = CountDownLatch(1)
+        // Signalled from the drain thread the instant it has left the live loop for good and has
+        // not yet made the clean-stop drain's first `readSinceProvider` call.
+        val enteringCleanStop = CountDownLatch(1)
+        // Released by the test thread once the segment swap and second write are done, so the
+        // clean-stop drain's first read does not happen until after both have.
+        val secondChunkReady = CountDownLatch(1)
+        var writer: CapturingWriter? = null
+        val errorLogFile = tempDir.newFile("export_errors.log")
+        val engine = ForwardRecordingEngine(
+            config = voice,
+            configProvider = { voice },
+            readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = FakeSink(),
+            writerFactory = { _, cfg -> CapturingWriter(cfg) { firstWrite.countDown() }.also { writer = it } },
+            segmentsProvider = { segments.get() },
+            errorLogFile = errorLogFile,
+            onEnteringCleanStopDrain = {
+                enteringCleanStop.countDown()
+                assertTrue(
+                    "test thread never finished the segment swap / second write",
+                    secondChunkReady.await(5, TimeUnit.SECONDS),
+                )
+            },
+        )
+
+        assertTrue(engine.start("probe.m4a") is ForwardRecordingState.Recording)
+        assertTrue("drain thread never wrote the first chunk", firstWrite.await(5, TimeUnit.SECONDS))
+
+        var finalState: ForwardRecordingState? = null
+        val stopThread = Thread({ finalState = engine.stop() }, "test-stop-caller")
+        stopThread.start()
+        assertTrue(
+            "drain thread never reached the clean-stop drain entry point",
+            enteringCleanStop.await(5, TimeUnit.SECONDS),
+        )
+
+        // Now provably safe: the live loop has already exited for good (it cannot come back -- the
+        // hook above only fires once, after that exit), and the clean-stop loop is blocked before
+        // its first read. Simulate the segment describing new bytes being pruned out from under the
+        // drain, and give it a second chunk that only the clean-stop path can now ever see.
+        segments.set(listOf(FormatSegment(startOffset = LAPPED_PAST_BYTES, config = hiFi)))
+        ring.write(ToneGenerator.tone(TONE_HZ, 16_000, 50, channelCount = 1))
+        secondChunkReady.countDown()
+        stopThread.join(TimeUnit.SECONDS.toMillis(5))
+        assertTrue("stop() never returned", finalState != null)
+
+        assertTrue(
+            "the clean-stop path must still end in Success, tail dropped but file complete -- got $finalState",
+            finalState is ForwardRecordingState.Success,
+        )
+        assertEquals(
+            "only the first, resolvable chunk may reach the file",
+            firstChunk.size,
+            writer!!.out.size(),
+        )
+
+        flushErrorLogsForTest()
+        val logContent = errorLogFile.readText()
+        assertTrue(
+            "a silently dropped tail must be durably logged as TAIL_TRUNCATED, got: $logContent",
+            logContent.contains("TAIL_TRUNCATED"),
+        )
+    }
+
+    @Test
     fun `a null segment report is unresolvable, not a licence to pass bytes through`() {
         // `@rev` finding 2 on PR #323. AudioCaptureEngine.activeSegments() returns *null* when its
         // ring buffer is gone -- a rebuild between two drain iterations, say. The call sites used
@@ -351,14 +462,20 @@ class ForwardRecordingFormatBoundaryTest {
 
     /** Captures exactly the PCM the engine feeds a writer, alongside the format that writer was
      * configured with -- the two halves of the format-vs-content relationship under test. */
-    private class CapturingWriter(val config: AudioConfig) : StreamingAudioWriter {
+    private class CapturingWriter(
+        val config: AudioConfig,
+        private val onWrite: () -> Unit = {},
+    ) : StreamingAudioWriter {
         val out = ByteArrayOutputStream()
         private var finished = false
         private var closed = false
         override val totalBytesWritten: Long get() = out.size().toLong()
         override val isSessionFinished: Boolean get() = finished
         override val isSessionClosed: Boolean get() = closed
-        override fun write(pcmData: ByteArray, offset: Int, length: Int) = out.write(pcmData, offset, length)
+        override fun write(pcmData: ByteArray, offset: Int, length: Int) {
+            out.write(pcmData, offset, length)
+            onWrite()
+        }
         override fun writeGap(gapDurationMillis: Long) = Unit
         override fun finish() { finished = true }
         override fun close() { closed = true }

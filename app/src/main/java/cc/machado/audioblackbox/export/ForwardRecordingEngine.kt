@@ -102,6 +102,18 @@ class ForwardRecordingEngine(
     // and is not there (`AudioCaptureEngine.activeSegments()` does this once its ring buffer is
     // gone), which is an error rather than a licence to guess.
     private val segmentsProvider: (() -> List<FormatSegment>?)? = null,
+    // Test-only seam (issue #332, `@rev` round-2 finding 1 on PR #333): fired on the drain thread
+    // exactly once, at the instant the live loop has exited (`stopRequested`/`cancelRequested`
+    // observed true) and *before* the clean-stop drain's own read loop makes its first
+    // `readSinceProvider` call. Nothing in production wires this -- the default is a no-op -- so it
+    // changes no production behaviour. Without it, a test that wants shared state (e.g. the segment
+    // record, or bytes newly written to the ring) to be observed only by the clean-stop drain, never
+    // the live loop and never *missed* by an empty first clean-stop read either, has no way to make
+    // that true rather than merely likely against two independent timing windows: the live loop's
+    // own `wakeUpLatch.await(POLL_INTERVAL_MILLIS, ...)` poll, and the clean-stop loop's immediate,
+    // un-retried first read. Blocking inside this hook until the state mutation is complete closes
+    // both at once, since it runs strictly between them.
+    private val onEnteringCleanStopDrain: () -> Unit = {},
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -551,6 +563,7 @@ class ForwardRecordingEngine(
             }
 
             // Clean stop: drain any remaining audio up to the write head
+            onEnteringCleanStopDrain()
             var finalDrainDone = false
             val deadline = System.nanoTime() + FINAL_DRAIN_TIMEOUT_NANOS
             while (!finalDrainDone && System.nanoTime() < deadline) {

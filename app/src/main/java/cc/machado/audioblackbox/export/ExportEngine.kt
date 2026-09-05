@@ -265,13 +265,32 @@ class ExportEngine(
                 ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
 
             val gaps = gapsProvider()
-            val activeSegs = segmentsProvider?.invoke() ?: emptyList()
+            // Two levels of "no segments" here, and they must not collapse to the same thing
+            // (issue #332, `@rev`/`@sec` finding 2 on PR #323's last commit): no *provider* at all
+            // is the legacy single-format constructor, which never had a segment record to begin
+            // with -- `emptyList()` is the correct, safe input to
+            // [BoundedExportPlanner.plan]'s "whole window in [targetConfig]" fallback there. A
+            // provider that *returns* `null` means a segment record was expected
+            // ([AudioCaptureEngine.activeSegments] does this once its ring buffer is torn down) and
+            // is not there -- collapsing that into the same `emptyList()` used to make
+            // [BoundedExportPlanner.plan] synthesize "the entire window was recorded in
+            // targetConfig" from nothing, which is the #322 guess itself, just moved one frame
+            // inward from the call sites that were fixed. Mirrors
+            // `ForwardRecordingEngine.ForwardFormatReconciler.sourceAt`'s `NoRecord`/`Unresolvable`
+            // split, adapted to this class's whole-window planning instead of per-cursor lookups.
+            val activeSegs = if (segmentsProvider == null) {
+                emptyList()
+            } else {
+                segmentsProvider.invoke()
+                    ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, "capture is not running")
+            }
             // The last segment wins: the file declares the format the newest buffered audio was
             // recorded in, and everything older is converted up/down into it by
-            // [BoundedExportReader]. The fallback is only reachable if the ring buffer ever stops
-            // seeding a segment (it always does today, see RingBuffer's `segments` init), and it
-            // now reads the capture config fresh rather than a copy captured at construction
-            // (issue #322).
+            // [BoundedExportReader]. The fallback (empty list, from a legacy no-provider caller or
+            // a live provider that genuinely reports none yet) is only reachable if the ring buffer
+            // ever stops seeding a segment (it always does today, see RingBuffer's `segments`
+            // init), and it now reads the capture config fresh rather than a copy captured at
+            // construction (issue #322).
             val targetConfig = activeSegs.lastOrNull()?.config ?: configProvider?.invoke() ?: config
             val plan = BoundedExportPlanner.plan(
                 startCursor = oldestCursor,

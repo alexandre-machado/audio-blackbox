@@ -123,7 +123,7 @@ class CaptureFormatLabelTest {
             gapsProvider = { engine.gaps.value },
             sink = sink,
             payloadEncoder = WavPayloadEncoder,
-            segmentsProvider = { engine.activeSegments() ?: emptyList() },
+            segmentsProvider = { engine.activeSegments() },
         )
         val result = exporter.export(durationMillis = 400L, minutesLabel = 1)
         engine.stop()
