@@ -34,6 +34,10 @@ class ExportEngineTest {
 
     private val config = AudioConfig(sampleRateHz = 1000, channelCount = 1)
 
+    private companion object {
+        const val WAV_HEADER_BYTES = 44
+    }
+
     private class FakeTarget : ExportTarget {
         val buffer = ByteArrayOutputStream()
         var committed = false
@@ -115,6 +119,65 @@ class ExportEngineTest {
 
         assertTrue(result is ExportState.Error)
         assertEquals(ExportFailureReason.NO_AUDIO_BUFFERED, (result as ExportState.Error).reason)
+    }
+
+    @Test
+    fun `segmentsProvider reporting null surfaces NO_AUDIO_BUFFERED instead of guessing targetConfig`() {
+        // Issue #332 (`@rev`/`@sec` finding 2 on PR #323's last commit): a live `segmentsProvider`
+        // that reports null (its record is gone, e.g. `AudioCaptureEngine.activeSegments()` once
+        // the ring buffer is torn down mid-export) must not collapse to `emptyList()` the same way
+        // a legacy no-provider caller's absence-by-construction does -- that collapse is what let
+        // `BoundedExportPlanner.plan` synthesize "the whole window was recorded in targetConfig"
+        // out of nothing, the #322 guess itself, one frame inward from the sites already fixed.
+        // Mutation check: replacing the fix's `?: return Error(...)` with the old
+        // `?: emptyList()` makes this test fail (the export would succeed instead of erroring).
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val ring = ringWithBytes(1000)
+        val engine = ExportEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            payloadEncoder = WavPayloadEncoder,
+            segmentsProvider = { null },
+        )
+
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
+
+        assertTrue("expected an Error, got $result", result is ExportState.Error)
+        assertEquals(ExportFailureReason.NO_AUDIO_BUFFERED, (result as ExportState.Error).reason)
+        assertTrue("must not have opened a sink for a resolution failure", sink.openedWith == null)
+    }
+
+    @Test
+    fun `no segmentsProvider at all (legacy constructor) still exports single-format, byte-identical PCM`() {
+        // The other half of the same distinction: absence *by construction* (no provider) is not
+        // an error -- it is the legacy single-format contract, and must keep passing bytes through
+        // unconverted exactly as before.
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val fillValue: Byte = 42
+        val ring = ringWithBytes(1000, fillValue = fillValue)
+        val engine = ExportEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
+            writeCursorProvider = { ring.writeCursor() },
+            oldestCursorProvider = { ring.oldestCursor() },
+            estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            payloadEncoder = WavPayloadEncoder,
+        )
+
+        val result = engine.export(durationMillis = 1000, minutesLabel = 1)
+
+        assertTrue("expected Success, got $result", result is ExportState.Success)
+        val pcm = target.buffer.toByteArray().copyOfRange(WAV_HEADER_BYTES, target.buffer.size())
+        assertTrue("PCM must be byte-identical, single-format passthrough", pcm.all { it == fillValue })
     }
 
     @Test
