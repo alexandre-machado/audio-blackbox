@@ -41,6 +41,37 @@ class ExportErrorLogRoundTripHostileContentTest {
         assertTrue(entry.stackTrace!!.contains("stack\ntrace\twith\"quotes\"and\\backslashes\\"))
     }
 
+    /**
+     * The test above spells "controlchar" as literal text and exercises only `\n`, `\r` and `\t`,
+     * each of which [jsonEscape] handles in its own named branch. The generic sub-0x20 branch that
+     * emits `\u%04x` was therefore never reached (`@sec`'s non-blocking note on PR #350), leaving
+     * the writer's escaping and the reader's `\u` decoding untested against each other for every
+     * other control character -- including NUL, which is exactly the byte most likely to survive
+     * into a message from native or JNI code and most likely to break a hand-rolled parser.
+     */
+    @Test
+    fun roundTrip_everySubControlCharacterUsesTheGenericEscapeBranch() {
+        val file = tempDir.newFile("export_errors.log")
+        // Every character below 0x20 except the three with dedicated escapes, so a regression in
+        // either the writer's \u%04x formatting or the reader's \u decoding fails here.
+        val genericControlChars = (0x00..0x1F)
+            .filterNot { it == 0x09 || it == 0x0A || it == 0x0D }
+            .map { it.toChar() }
+            .joinToString("")
+        val message = "before${genericControlChars}after"
+
+        logExportError(file, { 1L }, "ExportEngine", "REASON", message, null)
+        flushErrorLogsForTest()
+
+        // The escaped form must actually be on disk -- a reader that happened to mirror a broken
+        // writer would round-trip a raw control character just as happily.
+        assertTrue(
+            "control characters must be written as \\u escapes, not raw bytes",
+            file.readText().contains("\\u0000") && file.readText().contains("\\u001f"),
+        )
+        assertEquals(message, readErrorLog(file).single().message)
+    }
+
     @Test
     fun roundTrip_nonAsciiAndEmoji() {
         val file = tempDir.newFile("export_errors.log")
