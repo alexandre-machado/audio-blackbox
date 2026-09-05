@@ -36,6 +36,7 @@ fun CaptureErrorReason.toUserMessageRes(): Int = when (this) {
     CaptureErrorReason.READ_UNKNOWN_ERROR -> R.string.capture_error_read_unknown_error
     CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED ->
         R.string.capture_error_foreground_service_promotion_refused
+    CaptureErrorReason.UNEXPECTED_CAPTURE_FAILURE -> R.string.capture_error_unexpected_capture_failure
 }
 
 /**

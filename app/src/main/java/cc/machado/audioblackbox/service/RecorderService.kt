@@ -133,6 +133,14 @@ class RecorderService : Service() {
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             configProvider = { captureConfig },
+            // Issue #344: lets a "capture is not running" export failure say whether capture was
+            // simply never started, or died unexpectedly mid-session (CaptureState.Error) --
+            // read fresh from the companion's engine, same "never a stale/bound reference across a
+            // retention-window rebuild" reasoning as every other provider above.
+            captureFailureDescriptionProvider = {
+                (engine.state.value as? CaptureState.Error)
+                    ?.let { "capture died unexpectedly (${it.reason}): ${it.message}" }
+            },
         )
     }
 
@@ -546,6 +554,10 @@ class RecorderService : Service() {
         capacityMinutes = captureConfig.bufferDurationMinutes,
         forwardRecordingState = forwardRecordingEngine.state.value,
         bytesPerSecond = captureConfig.bytesPerSecond,
+        // Read fresh (via the companion's qualityPreset getter) on every call, same reasoning as
+        // captureConfig/engine above (issue #322/#341): a preset switch mid-session must show up
+        // the next time this is rebuilt, not just at the next transition.
+        qualityPreset = qualityPreset,
     )
 
     private fun refreshNotification() {
