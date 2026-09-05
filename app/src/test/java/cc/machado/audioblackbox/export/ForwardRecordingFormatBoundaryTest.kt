@@ -306,6 +306,21 @@ class ForwardRecordingFormatBoundaryTest {
         // from under it and appending a second chunk, so the clean-stop drain finds unresolvable
         // bytes to log rather than racing for it.
         //
+        // `@rev` round-2 finding 1 on PR #333: an earlier version of this test synchronized only on
+        // the first chunk reaching the writer, then raced the segment swap / second write / stop()
+        // against the live loop's own `wakeUpLatch.await(POLL_INTERVAL_MILLIS)` idle poll with no
+        // synchronization between them -- if that 50ms poll timed out on its own first, the live
+        // loop (not the clean-stop drain) would consume the second chunk and the test would assert
+        // over an `Error(CURSOR_LAPPED)` instead of a `Success`. A hook fired inside `stop()` itself
+        // turned out not to be enough either (caught in this test's own revision history): the
+        // clean-stop drain's first read is un-retried, so blocking only `stop()`'s `join()` still let
+        // the drain thread's clean-stop loop run its one read attempt -- and find nothing -- before
+        // the test thread got a chance to write the second chunk. `onEnteringCleanStopDrain` closes
+        // both windows at once: it fires on the drain thread exactly between the live loop's exit and
+        // the clean-stop loop's first read, so blocking there until the segment swap and second write
+        // are done makes it impossible -- not just unlikely -- for either loop to run before the
+        // right one can see it.
+        //
         // Mutation check: commenting out the `logExportError(...)` call at the TAIL_TRUNCATED site
         // makes this test fail (the log file stays empty); reverted after confirming.
         val ring = RingBuffer(capacityBytes = 200_000, initialConfig = voice)
@@ -320,6 +335,12 @@ class ForwardRecordingFormatBoundaryTest {
         // after `readSince` returned bytes, which races the segment swap below against
         // `reconcile`'s own read of `segmentsProvider` (see this test's mutation history).
         val firstWrite = CountDownLatch(1)
+        // Signalled from the drain thread the instant it has left the live loop for good and has
+        // not yet made the clean-stop drain's first `readSinceProvider` call.
+        val enteringCleanStop = CountDownLatch(1)
+        // Released by the test thread once the segment swap and second write are done, so the
+        // clean-stop drain's first read does not happen until after both have.
+        val secondChunkReady = CountDownLatch(1)
         var writer: CapturingWriter? = null
         val errorLogFile = tempDir.newFile("export_errors.log")
         val engine = ForwardRecordingEngine(
@@ -333,17 +354,35 @@ class ForwardRecordingFormatBoundaryTest {
             writerFactory = { _, cfg -> CapturingWriter(cfg) { firstWrite.countDown() }.also { writer = it } },
             segmentsProvider = { segments.get() },
             errorLogFile = errorLogFile,
+            onEnteringCleanStopDrain = {
+                enteringCleanStop.countDown()
+                assertTrue(
+                    "test thread never finished the segment swap / second write",
+                    secondChunkReady.await(5, TimeUnit.SECONDS),
+                )
+            },
         )
 
         assertTrue(engine.start("probe.m4a") is ForwardRecordingState.Recording)
         assertTrue("drain thread never wrote the first chunk", firstWrite.await(5, TimeUnit.SECONDS))
 
-        // Simulate the segment describing new bytes being pruned out from under the drain, and give
-        // it a second chunk that only the clean-stop path will ever see.
+        var finalState: ForwardRecordingState? = null
+        val stopThread = Thread({ finalState = engine.stop() }, "test-stop-caller")
+        stopThread.start()
+        assertTrue(
+            "drain thread never reached the clean-stop drain entry point",
+            enteringCleanStop.await(5, TimeUnit.SECONDS),
+        )
+
+        // Now provably safe: the live loop has already exited for good (it cannot come back -- the
+        // hook above only fires once, after that exit), and the clean-stop loop is blocked before
+        // its first read. Simulate the segment describing new bytes being pruned out from under the
+        // drain, and give it a second chunk that only the clean-stop path can now ever see.
         segments.set(listOf(FormatSegment(startOffset = LAPPED_PAST_BYTES, config = hiFi)))
         ring.write(ToneGenerator.tone(TONE_HZ, 16_000, 50, channelCount = 1))
-
-        val finalState = engine.stop()
+        secondChunkReady.countDown()
+        stopThread.join(TimeUnit.SECONDS.toMillis(5))
+        assertTrue("stop() never returned", finalState != null)
 
         assertTrue(
             "the clean-stop path must still end in Success, tail dropped but file complete -- got $finalState",
