@@ -200,6 +200,18 @@
     <string name="dashboard_forward_error_title">Continuous recording failed</string>
     <string name="dashboard_forward_outcome_announcement">%1$s. %2$s</string>
 
+    <!-- Issue #335 design proposal: short panel labels for the aviation-panel button pair that
+         replaces the dashboard_save_button / dashboard_forward_start_button / dashboard_forward_stop_button
+         full-sentence CTAs above once they move inside the engine card. The long strings above are
+         kept as the buttons' accessibility content descriptions (dashboard_save_button_cd_full/
+         _partial already carry the buffer detail; dashboard_forward_stop_button doubles as the
+         stop button's content description). Not wired to any screen yet; the wiring is a dev
+         follow-up. -->
+    <string name="dashboard_panel_save_label">Save</string>
+    <string name="dashboard_panel_save_saving_label">Saving</string>
+    <string name="dashboard_panel_live_label">Live</string>
+    <string name="dashboard_panel_live_stop_label">Stop</string>
+
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Saved recordings</string>
     <string name="gallery_subtitle">Playback, share &amp; delete</string>

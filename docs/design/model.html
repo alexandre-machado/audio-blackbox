@@ -642,6 +642,96 @@
       box-shadow: 0 3px 10px var(--color-flight-orange-glow);
     }
 
+    /* --- Issue #335 proposal: aviation-panel button pair (SAVE / LIVE) ---
+       Replaces .btn-lookback-cta and the forward-recording button above with a rocker-switch-style
+       control pair that lives inside the engine chassis card. See .panel-btn-* below and the
+       "Issue #335" section box further down for every state this needs to cover. */
+    .panel-btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    /* Stacks below ~400px of available width -- the app's smallest supported width (360dp) leaves
+       ~280dp inside the engine card after its own padding, not enough for two captioned buttons
+       side by side without truncating the caption (buffer duration / disable reason). */
+    .panel-btn-row.stacked {
+      flex-direction: column;
+    }
+    .panel-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 10px 14px;
+      background: var(--color-cockpit-panel-raised);
+      border: 1px solid rgba(255, 87, 34, 0.45);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-align: left;
+    }
+    .panel-btn.led-red { border-color: rgba(239, 68, 68, 0.5); }
+    .panel-btn.disabled {
+      background: var(--color-cockpit-panel);
+      border-color: var(--color-cockpit-border);
+      cursor: not-allowed;
+    }
+    .panel-btn-led {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--color-flight-orange);
+      box-shadow: 0 0 6px var(--color-flight-orange-glow);
+      flex-shrink: 0;
+    }
+    .panel-btn.led-red .panel-btn-led {
+      background: var(--color-warning-red);
+      box-shadow: 0 0 6px var(--color-warning-red-glow);
+    }
+    .panel-btn.disabled .panel-btn-led {
+      background: var(--color-text-dim);
+      box-shadow: none;
+    }
+    .panel-btn-spinner {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      border: 2px solid rgba(255, 87, 34, 0.35);
+      border-top-color: var(--color-flight-orange);
+      border-radius: 50%;
+      animation: panelBtnSpin 0.8s linear infinite;
+    }
+    @keyframes panelBtnSpin { to { transform: rotate(360deg); } }
+    .panel-btn-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #FFFFFF;
+    }
+    .panel-btn.disabled .panel-btn-label { color: var(--color-text-dim); }
+    .panel-btn-caption {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--color-text-muted);
+      margin-top: 1px;
+    }
+    .panel-btn.disabled .panel-btn-caption { color: var(--color-text-dim); }
+    .panel-state-swatch {
+      background: var(--color-cockpit-bg);
+      border: 1px solid var(--color-cockpit-border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+    }
+    .panel-state-swatch-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
     /* Gallery Compact Row in Model */
     .gallery-preview-card {
       background: rgba(26, 34, 52, 0.7);
@@ -987,12 +1077,27 @@
                   <div class="tape-fill" id="tape-progress-fill"></div>
                 </div>
               </div>
-            </div>
 
-            <!-- Primary Lookback CTA -->
-            <button class="btn-lookback-cta" id="main-lookback-btn" onclick="triggerSnapshotSave()">
-              <span id="lookback-btn-text">💾 EXTRACT PAST 30 MIN (.M4A)</span>
-            </button>
+              <!-- Issue #335: the action panel now lives inside the engine chassis card, replacing
+                   the standalone .btn-lookback-cta button and the forward-recording card below it.
+                   See the "Issue #335" section box for every other state this pair must cover. -->
+              <div class="panel-btn-row" style="margin-top: 14px;">
+                <button class="panel-btn" onclick="triggerSnapshotSave()">
+                  <span class="panel-btn-led"></span>
+                  <span>
+                    <div class="panel-btn-label">Save</div>
+                    <div class="panel-btn-caption">03:45 buffered</div>
+                  </span>
+                </button>
+                <button class="panel-btn">
+                  <span class="panel-btn-led"></span>
+                  <span>
+                    <div class="panel-btn-label">Live</div>
+                    <div class="panel-btn-caption">Starts a new file</div>
+                  </span>
+                </button>
+              </div>
+            </div>
 
             <!-- Recent Flight Recording (Gallery Row) -->
             <div class="avionics-card" style="padding-top: 16px;">
@@ -1258,6 +1363,76 @@
         <div style="display: flex; gap: 16px; align-items: center;">
           <label style="font-size:0.85rem; font-family:'JetBrains Mono'; color:var(--color-text-muted)">MIC NOISE LEVEL:</label>
           <input type="range" min="10" max="95" value="45" id="mic-noise-slider" style="flex:1;">
+        </div>
+      </div>
+
+      <!-- Issue #335: engine-card action panel proposal, every state -->
+      <div class="section-box">
+        <div class="section-box-title">
+          <span>🛩️ Issue #335 — Engine Action Panel (proposal)</span>
+        </div>
+        <div class="section-box-desc">
+          SAVE and LIVE replace the two full-sentence CTAs (<code>dashboard_save_button</code>,
+          <code>dashboard_forward_start_button</code>/<code>_stop_button</code>) and move inside the
+          engine chassis card above, in place of the two standalone cards they used to sit in. There
+          is no light theme to show here -- the app is dark-always by owner decision (issue #225) --
+          so every swatch below is the app's one real theme; "light/dark" is answered by confirming
+          that constraint rather than inventing a second palette that contradicts it.
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="panel-state-swatch">
+            <div class="panel-state-swatch-title">Enabled · buffer partial</div>
+            <div class="panel-btn-row">
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Save</div><div class="panel-btn-caption">03:45 buffered</div></span></button>
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Live</div><div class="panel-btn-caption">Starts a new file</div></span></button>
+            </div>
+          </div>
+          <div class="panel-state-swatch">
+            <div class="panel-state-swatch-title">Enabled · buffer full</div>
+            <div class="panel-btn-row">
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Save</div><div class="panel-btn-caption">Buffer full · 30 min</div></span></button>
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Live</div><div class="panel-btn-caption">Starts a new file</div></span></button>
+            </div>
+          </div>
+          <div class="panel-state-swatch">
+            <div class="panel-state-swatch-title">Disabled with reason · no audio yet</div>
+            <div class="panel-btn-row">
+              <button class="panel-btn disabled" disabled><span class="panel-btn-led"></span><span><div class="panel-btn-label">Save</div><div class="panel-btn-caption">No audio yet</div></span></button>
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Live</div><div class="panel-btn-caption">Starts a new file</div></span></button>
+            </div>
+          </div>
+          <div class="panel-state-swatch">
+            <div class="panel-state-swatch-title">Save in progress</div>
+            <div class="panel-btn-row">
+              <button class="panel-btn"><span class="panel-btn-spinner"></span><span><div class="panel-btn-label">Saving</div><div class="panel-btn-caption">Writing to disk…</div></span></button>
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Live</div><div class="panel-btn-caption">Starts a new file</div></span></button>
+            </div>
+          </div>
+          <div class="panel-state-swatch">
+            <div class="panel-state-swatch-title">Continuous recording (LIVE → STOP)</div>
+            <div class="panel-btn-row">
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Save</div><div class="panel-btn-caption">12:03 buffered</div></span></button>
+              <button class="panel-btn led-red"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Stop</div><div class="panel-btn-caption">00:42 live</div></span></button>
+            </div>
+          </div>
+          <div class="panel-state-swatch" style="max-width: 280px;">
+            <div class="panel-state-swatch-title">Smallest supported width (360dp) · stacked</div>
+            <div class="panel-btn-row stacked">
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Save</div><div class="panel-btn-caption">03:45 buffered</div></span></button>
+              <button class="panel-btn"><span class="panel-btn-led"></span><span><div class="panel-btn-label">Live</div><div class="panel-btn-caption">Starts a new file</div></span></button>
+            </div>
+          </div>
+        </div>
+        <div class="section-box-desc" style="margin-top: 10px;">
+          Accessibility: each <code>.panel-btn</code> keeps a 48dp/48px minimum touch target
+          regardless of label+caption height; the visible label shortens (SAVE/LIVE/STOP) but the
+          existing <code>dashboard_save_button_cd_full</code>/<code>_cd_partial</code> content
+          descriptions are unchanged and still carry the full sentence to TalkBack. Label text is
+          solid white (#FFFFFF) or <code>--color-text-dim</code> when disabled, both against the
+          <code>--color-cockpit-panel-raised</code>/<code>--color-cockpit-panel</code> fills --
+          contrast ratios ~14.9:1 (enabled) and ~3.4:1 (disabled, which is expected and matches
+          Material's own disabled-content convention of not meeting AA since the state itself is the
+          signal, not the text).
         </div>
       </div>
 

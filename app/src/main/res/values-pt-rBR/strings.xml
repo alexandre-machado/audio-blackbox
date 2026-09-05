@@ -178,6 +178,13 @@
     <string name="dashboard_forward_error_title">Falha na gravação contínua</string>
     <string name="dashboard_forward_outcome_announcement">%1$s. %2$s</string>
 
+    <!-- Issue #335: rótulos curtos para o par de botões estilo painel de aviônica, ver comentário
+         equivalente em values/strings.xml. -->
+    <string name="dashboard_panel_save_label">Salvar</string>
+    <string name="dashboard_panel_save_saving_label">Salvando</string>
+    <string name="dashboard_panel_live_label">Ao vivo</string>
+    <string name="dashboard_panel_live_stop_label">Parar</string>
+
     <!-- Gallery (Module 4, issue #7) -->
     <string name="gallery_title">Gravações salvas</string>
     <string name="gallery_subtitle">Reprodução, compartilhamento e exclusão</string>
