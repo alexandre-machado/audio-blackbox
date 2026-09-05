@@ -46,6 +46,7 @@ import cc.machado.audioblackbox.BuildConfig
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.ui.ScreenHeader
+import cc.machado.audioblackbox.ui.specLabelRes
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
@@ -284,12 +285,9 @@ private fun QualityPresetSection(
     onSelectQualityPreset: (QualityPreset) -> Unit,
 ) {
     val selectedOption = presets.firstOrNull { it.isSelected }
-    val selectedTag = when (selectedOption?.preset) {
-        QualityPreset.VOICE -> "16 kHz · MONO"
-        QualityPreset.BALANCED -> "32 kHz · MONO"
-        QualityPreset.HIGH_FIDELITY -> "44.1 kHz · STEREO"
-        null -> ""
-    }
+    // Single source of truth for this label (issue #334): QualityPreset.specLabelRes(), the same
+    // mapping the per-option rows below use for their own spec line.
+    val selectedTag = selectedOption?.preset?.let { stringResource(it.specLabelRes()) } ?: ""
 
     AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
@@ -313,23 +311,15 @@ private fun QualityPresetSection(
 
             presets.forEach { option ->
                 val isSelected = option.isSelected
-                val (titleRes, specsRes, descRes) = when (option.preset) {
-                    QualityPreset.VOICE -> Triple(
-                        R.string.settings_preset_voice_title,
-                        R.string.settings_preset_voice_specs,
-                        R.string.settings_preset_voice_desc,
-                    )
-                    QualityPreset.BALANCED -> Triple(
-                        R.string.settings_preset_balanced_title,
-                        R.string.settings_preset_balanced_specs,
-                        R.string.settings_preset_balanced_desc,
-                    )
-                    QualityPreset.HIGH_FIDELITY -> Triple(
-                        R.string.settings_preset_high_fidelity_title,
-                        R.string.settings_preset_high_fidelity_specs,
-                        R.string.settings_preset_high_fidelity_desc,
-                    )
+                val (titleRes, descRes) = when (option.preset) {
+                    QualityPreset.VOICE -> R.string.settings_preset_voice_title to R.string.settings_preset_voice_desc
+                    QualityPreset.BALANCED -> R.string.settings_preset_balanced_title to R.string.settings_preset_balanced_desc
+                    QualityPreset.HIGH_FIDELITY ->
+                        R.string.settings_preset_high_fidelity_title to R.string.settings_preset_high_fidelity_desc
                 }
+                // specsRes: QualityPreset.specLabelRes() -- the same single source of truth the
+                // header tag above uses, rather than a second parallel mapping (issue #334).
+                val specsRes = option.preset.specLabelRes()
 
                 Surface(
                     shape = RoundedCornerShape(RADIUS_SM),

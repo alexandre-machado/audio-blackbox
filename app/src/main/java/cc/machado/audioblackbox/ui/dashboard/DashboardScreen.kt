@@ -75,6 +75,7 @@ import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
+import cc.machado.audioblackbox.ui.specLabelRes
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
@@ -388,7 +389,11 @@ private fun EngineChassisCard(
             AvionicsCardHeaderBar(
                 label = stringResource(R.string.dashboard_card_annunciator_label),
                 tag = {
-                    AvionicsTag(text = stringResource(R.string.dashboard_engine_sample_rate))
+                    // Derived from the active QualityPreset (issue #334) -- was a fixed
+                    // "16.0 kHz PCM" string that never changed with the selected preset. See
+                    // QualityPreset.specLabelRes() for the single source of truth this, and
+                    // Settings' own preset tag, now both read from.
+                    AvionicsTag(text = stringResource(uiState.qualityPreset.specLabelRes()))
                 },
             )
 
