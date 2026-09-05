@@ -322,23 +322,39 @@ jobs:
 
               HEAD_OID="$(git rev-parse "origin/${PR_HEAD_REF}")"
 
-              ADDITIONS="$(jq -n '[]')"
+              # Issue #334 follow-up: base64'd PNG screenshot bytes were previously threaded
+              # through jq as a `--arg`/`--argjson` command-line argument, both per-file and (worse)
+              # via an accumulator that concatenated every prior image's base64 on each loop
+              # iteration. Nine phone-screenshot-sized PNGs blew straight past the shell's ARG_MAX
+              # the first time this path actually had drift to commit ("jq: Argument list too
+              # long", exit 126) -- reproduced on PR #336's own screenshot-affecting change, the
+              # first PR in a while to exercise this branch at all, since drift here is normally
+              # rare. Every large payload below now flows through a file (`--rawfile`/
+              # `--slurpfile`), never argv, so this is immune to image size regardless of how many
+              # screenshots changed.
+              rm -rf /tmp/screenshot-additions
+              mkdir -p /tmp/screenshot-additions
+              i=0
               for path in "${SCREENSHOT_PATHS[@]}"; do
-                ADDITIONS="$(jq -n --argjson acc "$ADDITIONS" --arg path "$path" --arg content "$(base64 -w0 "$path")" \
-                  '$acc + [{path: $path, contents: $content}]')"
+                b64_file="/tmp/screenshot-additions/${i}.b64"
+                base64 -w0 "$path" > "$b64_file"
+                jq -n --arg path "$path" --rawfile content "$b64_file" \
+                  '{path: $path, contents: $content}' > "/tmp/screenshot-additions/${i}.json"
+                i=$((i + 1))
               done
+              jq -s '.' /tmp/screenshot-additions/*.json > /tmp/screenshot-additions.json
 
               jq -n \
                 --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid signature { isValid state } } } }' \
                 --arg repo "$REPO" \
                 --arg branch "$PR_HEAD_REF" \
                 --arg headline "chore(ci): refresh screenshots from capture run ${RUN_ID}" \
-                --argjson additions "$ADDITIONS" \
+                --slurpfile additions_wrap /tmp/screenshot-additions.json \
                 --arg oid "$HEAD_OID" \
                 '{query: $query, variables: {input: {
                     branch: {repositoryNameWithOwner: $repo, branchName: $branch},
                     message: {headline: $headline},
-                    fileChanges: {additions: $additions},
+                    fileChanges: {additions: $additions_wrap[0]},
                     expectedHeadOid: $oid
                 }}}' > /tmp/create-commit-body.json
 

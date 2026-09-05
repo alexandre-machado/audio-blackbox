@@ -74,7 +74,6 @@
 
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_app_subtitle">Gravador de Áudio Contínuo em Memória</string>
-    <string name="dashboard_engine_sample_rate">16.0 kHz PCM</string>
     <string name="dashboard_mic_level_label">Nível do microfone</string>
     <string name="dashboard_card_annunciator_label">STATUS DO SISTEMA // ANUNCIADOR</string>
     <string name="dashboard_annunciator_armed">GRAVADOR ARMADO &amp; ATIVO</string>

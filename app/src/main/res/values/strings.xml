@@ -88,7 +88,6 @@
 
     <!-- Dashboard (Module 4, issue #6) -->
     <string name="dashboard_app_subtitle">Continuous Memory Audio Recorder</string>
-    <string name="dashboard_engine_sample_rate">16.0 kHz PCM</string>
     <string name="dashboard_mic_level_label">Mic input level</string>
     <string name="dashboard_card_annunciator_label">SYS STATUS // ANNUNCIATOR</string>
     <string name="dashboard_annunciator_armed">RECORDER ARMED &amp; RUNNING</string>
