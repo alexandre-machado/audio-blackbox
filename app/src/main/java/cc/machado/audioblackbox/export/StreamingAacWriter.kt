@@ -358,11 +358,20 @@ class StreamingAacWriter private constructor(
                     }
                     val inputIndex = codec.dequeueInputBuffer(TIMEOUT_US)
                     if (inputIndex >= 0) {
+                        var queuedSize = 0
+                        if (totalBytesFed == 0L) {
+                            val inputBuffer = requireNotNull(codec.getInputBuffer(inputIndex))
+                            inputBuffer.clear()
+                            val silenceBytes = config.bytesPerFrame * 1024
+                            queuedSize = minOf(inputBuffer.remaining(), silenceBytes)
+                            inputBuffer.put(ByteArray(queuedSize))
+                            totalBytesFed += queuedSize
+                        }
                         val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / config.bytesPerSecond
                         codec.queueInputBuffer(
                             inputIndex,
                             0,
-                            0,
+                            queuedSize,
                             presentationTimeUs,
                             MediaCodec.BUFFER_FLAG_END_OF_STREAM,
                         )
