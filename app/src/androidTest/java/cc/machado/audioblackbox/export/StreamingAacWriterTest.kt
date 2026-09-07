@@ -372,4 +372,15 @@ class StreamingAacWriterTest {
         }
         throw AssertionError("never found a window with tone-present=$expectTone scanning from sample $fromSample")
     }
+
+
+    @Test(timeout = 10000L)
+    fun zeroBytes_doesNotDeadlock_StreamingAacWriter() {
+        val config = cc.machado.audioblackbox.audio.AudioConfig(sampleRateHz = 16000, channelCount = 1, encoding = cc.machado.audioblackbox.audio.AudioEncoding.PCM_16)
+        val outFile = File(cacheDir, "zero_bytes_test_streaming.m4a")
+        val writer = StreamingAacWriter(outFile, config)
+        writer.finish()
+        org.junit.Assert.assertTrue("output file must exist", outFile.exists())
+        org.junit.Assert.assertTrue("output file must be non-empty", outFile.length() > 0)
+    }
 }
