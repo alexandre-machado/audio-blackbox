@@ -148,14 +148,17 @@ class AacRoundTripTest {
         )
     }
 
+
     @Test(timeout = 10000L)
     fun zeroBytes_doesNotDeadlock_roundTripsThroughAacPayloadEncoder() {
-        val config = cc.machado.audioblackbox.audio.AudioConfig(sampleRateHz = 16000, channelCount = 1, encoding = cc.machado.audioblackbox.audio.AudioConfig.Encoding.PCM_16BIT)
+        val config = cc.machado.audioblackbox.audio.AudioConfig(sampleRateHz = 16000, channelCount = 1, encoding = cc.machado.audioblackbox.audio.AudioEncoding.PCM_16)
         val outFile = File(cacheDir, "zero_bytes_test.m4a")
         outFile.outputStream().use { out ->
             AacPayloadEncoder(cacheDir).encode(config, 0L, object : cc.machado.audioblackbox.export.PayloadChunkSource {
                 override fun nextChunk(): ByteArray? = null
             }, out, isCancelled = { false })
         }
+        org.junit.Assert.assertTrue("output file must exist", outFile.exists())
+        org.junit.Assert.assertTrue("output file must be non-empty", outFile.length() > 0)
     }
 }
