@@ -405,30 +405,20 @@ class StreamingAacWriter private constructor(
                         // verify the moov atom was actually written.
                         var valid = false
                         try {
+                            val extractor = android.media.MediaExtractor()
                             if (outputFile != null) {
-                                outputFile.inputStream().use { input ->
-                                    val header = ByteArray(8)
-                                    var bytesRead = 0L
-                                    val length = outputFile.length()
-                                    while (bytesRead < length) {
-                                        if (input.read(header) != 8) break
-                                        bytesRead += 8
-                                        val size = java.nio.ByteBuffer.wrap(header, 0, 4).order(java.nio.ByteOrder.BIG_ENDIAN).int
-                                        val type = String(header, 4, 4, Charsets.US_ASCII)
-                                        if (type == "moov") {
-                                            valid = true
-                                            break
-                                        }
-                                        if (size <= 0) break
-                                        val skip = size - 8L
-                                        input.skip(skip)
-                                        bytesRead += skip
-                                    }
-                                }
-                            } else {
-                                // For fileDescriptor, assume valid since we can't easily read it back
+                                extractor.setDataSource(outputFile.absolutePath)
+                            } else if (fileDescriptor != null) {
+                                // For Android versions before API 24, setDataSource(FileDescriptor) doesn't take offset/length
+                                // but we are on minSdk 29, so we can just use the standard one.
+                                // Actually, setDataSource(fileDescriptor) requires offset and length for safety sometimes, 
+                                // but simple fileDescriptor works if it's not a raw resource.
+                                extractor.setDataSource(fileDescriptor)
+                            }
+                            if (extractor.trackCount > 0) {
                                 valid = true
                             }
+                            extractor.release()
                         } catch (_: Exception) {}
 
                         if (valid) {
