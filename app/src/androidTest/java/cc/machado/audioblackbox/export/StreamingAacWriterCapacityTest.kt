@@ -29,9 +29,18 @@ class StreamingAacWriterCapacityTest {
             writer.finish()
             
             assertTrue(outFile.length() > 0)
-            // verify moov exists by decoding
-            val decoded = AacDecodeSupport.decode(outFile)
-            assertTrue(decoded.pcm.isNotEmpty())
+            
+            // Verify moov exists and file is valid by checking tracks with MediaExtractor
+            // instead of decoding everything into memory (which OOMs on 90min files).
+            val extractor = android.media.MediaExtractor()
+            extractor.setDataSource(outFile.absolutePath)
+            assertTrue("Expected at least 1 track", extractor.trackCount > 0)
+            
+            val format = extractor.getTrackFormat(0)
+            val durationUs = format.getLong(android.media.MediaFormat.KEY_DURATION)
+            assertTrue("Expected duration around 5433 seconds", durationUs > 5_400_000_000L)
+            
+            extractor.release()
         } finally {
             outFile.delete()
         }
