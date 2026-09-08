@@ -111,7 +111,7 @@ class CaptureFormatLabelTest {
         assertEquals(SwitchConfigResult.Applied, engine.switchConfig(hiFi))
 
         engine.start()
-        awaitBuffered(engine, 500)
+        awaitBuffered(engine, 1000)
 
         val sink = TestInMemorySink()
         val exporter = ExportEngine(
@@ -125,7 +125,7 @@ class CaptureFormatLabelTest {
             payloadEncoder = WavPayloadEncoder,
             segmentsProvider = { engine.activeSegments() },
         )
-        val result = exporter.export(durationMillis = 400L, minutesLabel = 1)
+        val result = exporter.export(durationMillis = 800L, minutesLabel = 1)
         engine.stop()
         assertTrue("export should succeed, got $result", result is ExportState.Success)
 
