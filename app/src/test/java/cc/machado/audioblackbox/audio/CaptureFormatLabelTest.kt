@@ -69,11 +69,12 @@ class CaptureFormatLabelTest {
         constructedWith: AudioConfig,
         toneHz: Double = 1_000.0,
         minBufferSizeProvider: (AudioConfig) -> Int = { 4_096 },
+        maxBytes: Int = Int.MAX_VALUE,
     ) = AudioCaptureEngine(
         config = constructedWith,
         audioRecordFactory = { cfg, _ ->
             synchronized(openedFormats) { openedFormats += cfg }
-            toneRecord(cfg, toneHz)
+            toneRecord(cfg, toneHz, maxBytes)
         },
         minBufferSizeProvider = minBufferSizeProvider,
     )
@@ -107,7 +108,7 @@ class CaptureFormatLabelTest {
 
     @Test
     fun `a 1kHz tone survives capture and export at the rate the exported file declares`() {
-        val engine = engineWith(constructedWith = voice, toneHz = 1_000.0)
+        val engine = engineWith(constructedWith = voice, toneHz = 1_000.0, maxBytes = hiFi.bytesPerSecond * 2)
         assertEquals(SwitchConfigResult.Applied, engine.switchConfig(hiFi))
 
         engine.start()
@@ -350,7 +351,7 @@ class CaptureFormatLabelTest {
      * which is what a real device does, and the property that makes a mislabel detectable at all.
      * Hands out only whole source frames so a chunk boundary never splits one.
      */
-    private fun toneRecord(config: AudioConfig, frequencyHz: Double): AudioRecord {
+    private fun toneRecord(config: AudioConfig, frequencyHz: Double, maxBytes: Int = Int.MAX_VALUE): AudioRecord {
         val record = mock<AudioRecord>()
         whenever(record.state).thenReturn(AudioRecord.STATE_INITIALIZED)
         whenever(record.recordingState).thenReturn(AudioRecord.RECORDSTATE_RECORDING)
@@ -362,15 +363,21 @@ class CaptureFormatLabelTest {
         )
         val position = AtomicInteger(0)
         whenever(record.read(any<ByteArray>(), any(), any())).thenAnswer { invocation ->
+            val currentPos = position.get()
+            if (currentPos >= maxBytes) {
+                return@thenAnswer 0
+            }
             val destination = invocation.getArgument<ByteArray>(0)
             val length = invocation.getArgument<Int>(2)
-            // Wraps rather than running dry, so a test can wait on an arbitrary number of
-            // further reads without the source silently freezing the counter. The frequency test
-            // exports far less than one pass, so it never sees the wrap discontinuity.
             val pos = position.get() % source.size
             val available = minOf(length, source.size - pos)
-            val take = available - (available % config.bytesPerFrame)
+            val maxAllowed = maxBytes - position.get()
+            val availableBounded = minOf(available, maxAllowed)
+            val take = availableBounded - (availableBounded % config.bytesPerFrame)
             if (take <= 0) {
+                if (position.get() >= maxBytes - config.bytesPerFrame) {
+                    return@thenAnswer 0
+                }
                 position.set(0)
                 return@thenAnswer 0
             }

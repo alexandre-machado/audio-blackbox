@@ -432,30 +432,6 @@ class BoundedExportReader(
         when (val result = readSinceProvider(cursor, length)) {
             null -> throw BoundedExportDrainException.CaptureStopped(cursor)
             is ReadSinceResult.Lapped -> {
-                // If we are at the start of the first raw segment when starting the drain,
-                // the live rolling buffer advanced slightly while opening the sink / encoder.
-                // Recover from the oldest available surviving audio cursor.
-                val segStart = segmentStart(plan.segments[segmentIndex])
-                if (cursorInSegment == segStart) {
-                    val lostBytes = result.lostBytes
-                    cursorInSegment = result.oldestAvailableCursor
-                    remainingInSegment = (remainingInSegment - lostBytes).coerceAtLeast(0L)
-                    if (remainingInSegment <= 0) return ByteArray(0)
-                    val retryLength = minOf(remainingInSegment, chunkSizeBytes.toLong()).toInt()
-                    return when (val retry = readSinceProvider(result.oldestAvailableCursor, retryLength)) {
-                        null -> throw BoundedExportDrainException.CaptureStopped(result.oldestAvailableCursor)
-                        is ReadSinceResult.Data -> retry.bytes
-                        is ReadSinceResult.Lapped -> throw BoundedExportDrainException.CursorLapped(
-                            retry.requestedCursor,
-                            retry.oldestAvailableCursor,
-                            retry.lostBytes,
-                        )
-                        is ReadSinceResult.StreamReset -> throw BoundedExportDrainException.StreamWasReset(
-                            retry.requestedCursor,
-                            retry.currentCursor,
-                        )
-                    }
-                }
                 throw BoundedExportDrainException.CursorLapped(
                     result.requestedCursor,
                     result.oldestAvailableCursor,

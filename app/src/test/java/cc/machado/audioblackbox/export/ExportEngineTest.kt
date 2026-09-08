@@ -453,7 +453,7 @@ class ExportEngineTest {
     }
 
     @Test
-    fun `export on saturated ring buffer recovers from leading edge lap when writer advances during sink open`() {
+    fun `export on saturated ring buffer fails loudly if leading edge is lapped during sink open`() {
         val target = FakeTarget()
         val ring = RingBuffer(capacityBytes = 10_000, bytesPerSecond = config.bytesPerSecond)
         // Saturated buffer: write 10_000 bytes so buffer is at full capacity
@@ -471,10 +471,8 @@ class ExportEngineTest {
         val engine = engineFor(ring, sink)
         val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
 
-        assertTrue("export should succeed, got $result", result is ExportState.Success)
-        assertTrue("target must be committed", target.committed)
-        assertFalse("target must not be aborted", target.aborted)
-        assertTrue("output must contain written data", target.buffer.size() > 0)
+        assertTrue("export should fail loudly when lapped, got $result", result is ExportState.Error)
+        assertEquals(ExportFailureReason.CURSOR_LAPPED, (result as ExportState.Error).reason)
     }
 
     @Test
