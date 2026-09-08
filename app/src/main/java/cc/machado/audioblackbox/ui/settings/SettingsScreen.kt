@@ -449,7 +449,7 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
                 label = stringResource(R.string.settings_card_telemetry_label),
                 tag = {
                     AvionicsTag(
-                        text = android.os.Build.MODEL,
+                        text = android.os.Build.MODEL.take(12),
                         color = AvionicsGreen,
                         containerColor = AvionicsGreen.copy(alpha = 0.15f),
                         borderColor = AvionicsGreen.copy(alpha = 0.4f),

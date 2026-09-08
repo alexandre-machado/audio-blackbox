@@ -100,7 +100,8 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.DASHBOARD,
                 onClick = { onSelect(Destination.DASHBOARD) },
-                icon = {
+                icon = {},
+                label = {
                     Text(
                         text = stringResource(R.string.nav_dashboard_label),
                         fontFamily = FontFamily.Monospace,
@@ -113,7 +114,8 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.GALLERY,
                 onClick = { onSelect(Destination.GALLERY) },
-                icon = {
+                icon = {},
+                label = {
                     Text(
                         text = stringResource(R.string.nav_gallery_label),
                         fontFamily = FontFamily.Monospace,
@@ -126,7 +128,8 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.SETTINGS,
                 onClick = { onSelect(Destination.SETTINGS) },
-                icon = {
+                icon = {},
+                label = {
                     Text(
                         text = stringResource(R.string.nav_settings_label),
                         fontFamily = FontFamily.Monospace,
