@@ -328,6 +328,16 @@ class StreamingAacWriter private constructor(
                             )
                         }
                         muxer.writeSampleData(muxerTrackIndex, outputBuffer, bufferInfo)
+                        
+                        if (isEndOfStream) {
+                            val emptyInfo = MediaCodec.BufferInfo()
+                            emptyInfo.set(0, 0, bufferInfo.presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            try {
+                                muxer.writeSampleData(muxerTrackIndex, java.nio.ByteBuffer.allocate(0), emptyInfo)
+                            } catch (e: Exception) {
+                                // Ignore if it auto-stops here
+                            }
+                        }
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
                     if (isEndOfStream) {
@@ -390,22 +400,32 @@ class StreamingAacWriter private constructor(
                 if (muxerStarted) {
                     try {
                         muxer.stop()
-                    } catch (_: IllegalStateException) {
-                        // Issue #347: the drainOutput fix above (stripping BUFFER_FLAG_END_OF_STREAM
-                        // before it reaches the muxer) closes the known trigger going forward. This
-                        // catch is deliberately narrow defense-in-depth, not a blanket swallow:
-                        // finish() holds `lock` for its entire body and returns immediately if
-                        // already finished, and nothing else in this class calls muxer.stop() before
-                        // this line, so there is no path *in this class* that could reach "already
-                        // stopped" by racing or double-calling it. An IllegalStateException here can
-                        // therefore only mean the native muxer already ran its own stop/finalize
-                        // sequence outside of a call this class made -- and that native sequence only
-                        // completes after the container's `moov` atom has been written, since the
-                        // muxer's own stop() implementation transitions state only after nativeStop()
-                        // returns. The file on disk is therefore a complete, valid `.m4a`; only this
-                        // now-redundant call failed. Recorded on `recoveredFromAlreadyStoppedMuxer`
-                        // rather than silently disappearing, so a caller can audit it.
-                        recoveredFromAlreadyStoppedMuxer = true
+                    } catch (e: IllegalStateException) {
+                        // Issue #347 / 357: to avoid swallowing genuine errors (e.g. disk full during stop),
+                        // verify the moov atom was actually written.
+                        var valid = false
+                        try {
+                            val extractor = android.media.MediaExtractor()
+                            if (outputFile != null) {
+                                extractor.setDataSource(outputFile.absolutePath)
+                            } else if (fileDescriptor != null) {
+                                // For Android versions before API 24, setDataSource(FileDescriptor) doesn't take offset/length
+                                // but we are on minSdk 29, so we can just use the standard one.
+                                // Actually, setDataSource(fileDescriptor) requires offset and length for safety sometimes, 
+                                // but simple fileDescriptor works if it's not a raw resource.
+                                extractor.setDataSource(fileDescriptor)
+                            }
+                            if (extractor.trackCount > 0) {
+                                valid = true
+                            }
+                            extractor.release()
+                        } catch (_: Exception) {}
+
+                        if (valid) {
+                            recoveredFromAlreadyStoppedMuxer = true
+                        } else {
+                            throw e
+                        }
                     }
                     muxerStarted = false
                 }
