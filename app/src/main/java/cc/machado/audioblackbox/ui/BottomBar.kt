@@ -3,11 +3,6 @@ package cc.machado.audioblackbox.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -105,8 +100,7 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.DASHBOARD,
                 onClick = { onSelect(Destination.DASHBOARD) },
-                icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = null) },
-                label = {
+                icon = {
                     Text(
                         text = stringResource(R.string.nav_dashboard_label),
                         fontFamily = FontFamily.Monospace,
@@ -119,8 +113,7 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.GALLERY,
                 onClick = { onSelect(Destination.GALLERY) },
-                icon = { Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null) },
-                label = {
+                icon = {
                     Text(
                         text = stringResource(R.string.nav_gallery_label),
                         fontFamily = FontFamily.Monospace,
@@ -133,8 +126,7 @@ fun FloatingBottomBar(
             NavigationBarItem(
                 selected = selected == Destination.SETTINGS,
                 onClick = { onSelect(Destination.SETTINGS) },
-                icon = { Icon(imageVector = Icons.Filled.Settings, contentDescription = null) },
-                label = {
+                icon = {
                     Text(
                         text = stringResource(R.string.nav_settings_label),
                         fontFamily = FontFamily.Monospace,

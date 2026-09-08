@@ -103,7 +103,7 @@
     <string name="onboarding_card_permissions_label">DECLARAÇÃO DE PERMISSÃO DO SISTEMA</string>
     <string name="settings_card_preset_label">PREDEFINIÇÃO DE QUALIDADE</string>
     <string name="settings_card_retention_label">JANELA DE RETENÇÃO</string>
-    <string name="settings_card_telemetry_label">⚡ TELEMETRIA DE ENERGIA E SISTEMA</string>
+    <string name="settings_card_telemetry_label">TELEMETRIA DE ENERGIA E SISTEMA</string>
     <string name="settings_card_specs_label">ESPECIFICAÇÕES DO MOTOR DE ÁUDIO</string>
     <string name="settings_card_privacy_label">PRIVACIDADE E PROCESSAMENTO LOCAL</string>
     <string name="settings_tag_default">PADRÃO</string>

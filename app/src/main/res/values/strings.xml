@@ -123,7 +123,7 @@
     <string name="onboarding_card_permissions_label">SYSTEM PERMISSION DISCLOSURE</string>
     <string name="settings_card_preset_label">AUDIO QUALITY PRESET</string>
     <string name="settings_card_retention_label">RETENTION WINDOW</string>
-    <string name="settings_card_telemetry_label">⚡ POWER &amp; SYSTEM TELEMETRY</string>
+    <string name="settings_card_telemetry_label">POWER &amp; SYSTEM TELEMETRY</string>
     <string name="settings_card_specs_label">AUDIO ENGINE SPECIFICATIONS</string>
     <string name="settings_card_privacy_label">PRIVACY &amp; LOCAL PROCESSING</string>
     <string name="settings_tag_default">DEFAULT</string>

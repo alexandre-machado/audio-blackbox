@@ -449,7 +449,7 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
                 label = stringResource(R.string.settings_card_telemetry_label),
                 tag = {
                     AvionicsTag(
-                        text = stringResource(R.string.settings_tag_live),
+                        text = android.os.Build.MODEL,
                         color = AvionicsGreen,
                         containerColor = AvionicsGreen.copy(alpha = 0.15f),
                         borderColor = AvionicsGreen.copy(alpha = 0.4f),
@@ -548,12 +548,11 @@ private fun PrivacySection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             HorizontalDivider(color = CockpitBorder)
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { uriHandler.openUri(productUrl) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = stringResource(R.string.settings_website_label),
@@ -569,10 +568,9 @@ private fun PrivacySection(
                 )
             }
             HorizontalDivider(color = CockpitBorder)
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = stringResource(R.string.settings_about_title),
