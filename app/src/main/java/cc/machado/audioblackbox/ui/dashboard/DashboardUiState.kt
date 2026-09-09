@@ -136,13 +136,16 @@ sealed interface ForwardRecordingUiState {
  * (see [DashboardViewModel]'s doc) on its own cadence, independent of the engine/export/forward
  * state this file's other types mirror.
  *
- * [entries] holds every parsed entry, newest first, both [ErrorLogSeverity.ERROR] and
- * [ErrorLogSeverity.AUDIT] -- see [cc.machado.audioblackbox.export.readErrorLog]'s doc for what
- * "newest first" means across the live file and its rotated `.old` generation. [hasVisibleErrors]
- * is the oracle for the card's "appears only when there is at least one error" acceptance
- * criterion, and counts [ErrorLogSeverity.ERROR] only -- an [ErrorLogSeverity.AUDIT]-only log
- * (e.g. only a `MUXER_STOP_RECOVERED` entry) must not make the card claim a recording failed when
- * it did not (issue #347's finding, folded into #346's schema).
+ * [entries] holds every parsed entry, newest first, [ErrorLogSeverity.ERROR],
+ * [ErrorLogSeverity.AUDIT], and (issue #371) [ErrorLogSeverity.CRASH] -- see
+ * [cc.machado.audioblackbox.export.readErrorLog]'s doc for what "newest first" means across the
+ * live file and its rotated `.old` generation, and for how a JVM-crash entry (its own sibling file
+ * on disk) gets merged in here. [hasVisibleErrors] is the oracle for the card's "appears only when
+ * there is at least one error" acceptance criterion, and counts [ErrorLogSeverity.ERROR] only -- an
+ * [ErrorLogSeverity.AUDIT]-only log (e.g. only a `MUXER_STOP_RECOVERED` entry) must not make the
+ * card claim a recording failed when it did not (issue #347's finding), and the same reasoning is
+ * why a crash entry is its own [ErrorLogSeverity.CRASH] rather than [ErrorLogSeverity.ERROR]: the
+ * app can crash on a screen with no export in flight at all.
  */
 data class ErrorLogUiState(
     val entries: List<ErrorLogEntry> = emptyList(),

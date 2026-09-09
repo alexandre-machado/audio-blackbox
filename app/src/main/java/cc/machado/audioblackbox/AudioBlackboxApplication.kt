@@ -1,7 +1,9 @@
 package cc.machado.audioblackbox
 
 import android.app.Application
+import android.os.Environment
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.export.writeCrashLogEntrySync
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
 import cc.machado.audioblackbox.widget.RecordingWidgetStateObserver
@@ -46,6 +48,86 @@ class AudioBlackboxApplication : Application() {
         // process start, mirrors `PreloadedRetentionWindow` above: a plain, `Application.onCreate`
         // -written holder is the only context-bearing thing guaranteed to run first.
         ErrorLogFileHolder.file = java.io.File(applicationContext.filesDir, "export_errors.log")
+
+        installCrashLogHandler()
+    }
+
+    /**
+     * Issue #371: the last line of defense for a JVM crash. Installs a global
+     * [Thread.setDefaultUncaughtExceptionHandler] that appends a durable, local entry to a sibling
+     * of `export_errors.log` (see [CrashLogFileHolder] and
+     * [cc.machado.audioblackbox.export.writeCrashLogEntrySync]'s doc for the file-placement and
+     * durability rationale) and then **always** invokes whatever handler was previously installed.
+     *
+     * ## Chaining, not replacing
+     * [previousHandler] is captured before this handler is installed and invoked unconditionally
+     * from a `finally` block -- including when the write itself throws. Android's own default
+     * handler (or another one already installed earlier in the process) is what kills the process
+     * and reports the crash to Play Console / Android vitals, which today is this app's *only*
+     * external crash backstop (no crash-reporting SDK is used, by product decision -- see #119).
+     * A handler that swallowed the exception instead of chaining would silently destroy that
+     * backstop while looking like an improvement.
+     *
+     * ## Coverage this does NOT provide (issue #371's explicit non-goals)
+     * - A process killed by a package replace/update (as in #370) never reaches this handler at
+     *   all -- there is no uncaught exception, the process is simply torn down. That is a
+     *   lifecycle-trail gap, not a crash gap, and is out of scope here.
+     * - A native crash (e.g. a `MediaCodec`/NDK `SIGSEGV`) is invisible to this handler entirely --
+     *   `Thread.setDefaultUncaughtExceptionHandler` is a JVM-only mechanism.
+     * - Nothing here is transmitted off-device; the entry is appended to local storage only.
+     */
+    private fun installCrashLogHandler() {
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        val crashFile = java.io.File(applicationContext.filesDir, "crash_log.log")
+        CrashLogFileHolder.file = crashFile
+
+        val (versionName, versionCode) = try {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            (info.versionName ?: "unknown") to info.longVersionCode
+        } catch (e: Exception) {
+            "unknown" to -1L
+        }
+
+        // Roots that must never appear verbatim in a crash entry (issue #371's "no paths under the
+        // user's media directories" requirement): this app's own private dirs and the device's
+        // shared external storage root. Recordings themselves are exported via `MediaStore`
+        // (`content://` URIs, not filesystem paths -- see `MediaStoreSink`), so this list exists as
+        // defense in depth against an incidental path showing up inside an exception message, not
+        // because a normal code path is expected to hand one to a crash.
+        val sensitiveRoots = listOfNotNull(
+            applicationContext.filesDir?.absolutePath,
+            applicationContext.cacheDir?.absolutePath,
+            applicationContext.getExternalFilesDir(null)?.absolutePath,
+            applicationContext.externalCacheDir?.absolutePath,
+            @Suppress("DEPRECATION") Environment.getExternalStorageDirectory()?.absolutePath,
+        )
+        val redact: (String) -> String = { raw ->
+            var result = raw
+            for (root in sensitiveRoots) {
+                if (root.isNotBlank()) {
+                    result = result.replace(root, "<redacted-path>")
+                }
+            }
+            result
+        }
+
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                writeCrashLogEntrySync(
+                    file = crashFile,
+                    timestampMillis = System.currentTimeMillis(),
+                    threadName = thread.name,
+                    throwable = throwable,
+                    versionName = versionName,
+                    versionCode = versionCode,
+                    sanitize = redact,
+                )
+            } catch (t: Throwable) {
+                // Never let a failure in the crash-logger itself block the platform's own handler.
+            } finally {
+                previousHandler?.uncaughtException(thread, throwable)
+            }
+        }
     }
 }
 
@@ -77,6 +159,20 @@ object PreloadedRetentionWindow {
  * [cc.machado.audioblackbox.export.readErrorLog]'s own docs.
  */
 object ErrorLogFileHolder {
+    @Volatile
+    var file: java.io.File? = null
+}
+
+/**
+ * Holds the crash log's file path (issue #371) -- a sibling of [ErrorLogFileHolder]'s file, same
+ * "plain top-level holder set once in `Application.onCreate`" shape and the same reason: the
+ * crash handler installed in [AudioBlackboxApplication.installCrashLogHandler] needs a
+ * `Context.filesDir`-derived path before any Activity/Service exists. `null` (the default) only in
+ * a plain JVM unit test that never runs [AudioBlackboxApplication]; [DashboardViewModel]'s reader
+ * already treats a `null` crash-log file as a safe no-op the same way it does for
+ * [ErrorLogFileHolder] -- see [cc.machado.audioblackbox.export.readErrorLog]'s doc.
+ */
+object CrashLogFileHolder {
     @Volatile
     var file: java.io.File? = null
 }

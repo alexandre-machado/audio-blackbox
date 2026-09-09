@@ -1307,7 +1307,10 @@ private fun ErrorLogModal(
 
 @Composable
 private fun ErrorLogEntryRow(entry: ErrorLogEntry) {
-    val severityColor = if (entry.severity == ErrorLogSeverity.ERROR) WarningRed else TelemetryCyan
+    // Issue #371: CRASH is rendered like ERROR (both are worth the owner's attention), AUDIT alone
+    // stays the quieter color -- this is presentation only and does not affect
+    // `ErrorLogUiState.hasVisibleErrors`, which counts ERROR alone (see `ErrorLogSeverity`'s doc).
+    val severityColor = if (entry.severity == ErrorLogSeverity.AUDIT) TelemetryCyan else WarningRed
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(RADIUS_SM),
