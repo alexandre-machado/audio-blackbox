@@ -21,7 +21,7 @@ val SCREEN_GUTTER = 24.dp
 val SECTION_SPACING = 16.dp
 
 /**
- * Corner radius scale from `docs/design/model.html:47-52` (the design system's source of truth,
+ * Corner radius scale from `docs/design/index.html:47-52` (the design system's source of truth,
  * not the Compose code) -- named after that file's own custom-property names so the mapping stays
  * auditable. Neither Dashboard/Settings' pre-#221 `20.dp` section-card radius nor Gallery's
  * pre-#221 `16.dp` card radius appears anywhere in this scale; both are replaced by [RADIUS_LG]

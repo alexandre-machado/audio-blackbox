@@ -74,7 +74,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 
 /**
- * An avionics chassis card matching `docs/design/model.html`'s `.avionics-card`:
+ * An avionics chassis card matching `docs/design/index.html`'s `.avionics-card`:
  * - Dark cockpit panel fill ([CockpitPanel])
  * - Translucent border ([CockpitBorderStrong])
  * - 14dp rounded corners ([CARD_SHAPE])
@@ -132,7 +132,7 @@ fun AvionicsCard(
 }
 
 /**
- * Top data plate header bar matching `docs/design/model.html`'s `.card-label-bar`:
+ * Top data plate header bar matching `docs/design/index.html`'s `.card-label-bar`:
  * Monospace uppercase label with optional trailing status tag.
  *
  * Issue #337: the trailing [tag] slot is wrapped in `Modifier.weight(1f, fill = false)`, so it is
@@ -183,7 +183,7 @@ fun AvionicsCardHeaderBar(
 }
 
 /**
- * Stencil tag / badge matching `docs/design/model.html`'s `.top-tag`.
+ * Stencil tag / badge matching `docs/design/index.html`'s `.top-tag`.
  */
 @Composable
 fun AvionicsTag(
@@ -494,7 +494,7 @@ private const val RBF_EXIT_DURATION_MS = 180
 private const val RBF_MAX_SWING_DEGREES = 7f
 
 /**
- * "REMOVE BEFORE FLIGHT" ribbon / tag banner matching `docs/design/model.html`'s `.rbf-tag`.
+ * "REMOVE BEFORE FLIGHT" ribbon / tag banner matching `docs/design/index.html`'s `.rbf-tag`.
  * Rendered when capture is idle / on standby.
  *
  * Pass [onRemove] to make it behave like the real thing: the tag can be dragged off the panel in
@@ -733,7 +733,7 @@ fun RemoveBeforeFlightTag(
 
 /**
  * Flight Data Recorder (FDR) Flight Tape / Buffer RAM progress ruler track
- * matching `docs/design/model.html`'s `.tape-ruler-track` and `.tape-fill`.
+ * matching `docs/design/index.html`'s `.tape-ruler-track` and `.tape-fill`.
  */
 @Composable
 fun FlightTapeRulerTrack(
@@ -797,7 +797,7 @@ fun FlightTapeRulerTrack(
 }
 
 /**
- * Dashed divider matching `docs/design/model.html`'s `1px dashed rgba(255, 255, 255, 0.1)`.
+ * Dashed divider matching `docs/design/index.html`'s `1px dashed rgba(255, 255, 255, 0.1)`.
  */
 @Composable
 fun DashedDivider(

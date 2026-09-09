@@ -8,7 +8,7 @@
   with state, never its color.
 
   Round per the owner's request (issue #275: "redondo, como o widget do recorder da samsung")  - 
-  an oval shape, not model.html's radius-lg rectangle token, matches  - radius-pill
+  an oval shape, not index.html's radius-lg rectangle token, matches  - radius-pill
   (AGENTS.md §5: the dedicated token for true capsule/circular hardware cutouts, as opposed to
    - radius-lg's deliberately-squared card corners). A <selector> pressed state uses
   widget_action_button_pressed (FlightOrangeDark-equivalent darken) since RemoteViews buttons get

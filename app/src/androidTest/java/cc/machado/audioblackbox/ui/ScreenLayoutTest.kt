@@ -791,7 +791,7 @@ class ScreenLayoutTest {
 
     /**
      * Regression test for issue #340: bottom-nav labels now read "Cockpit"/"Recordings"/"Avionics"
-     * (pt-BR: "Cockpit"/"Gravações"/"Aviônicos"), matching `docs/design/model.html`. "Recordings"
+     * (pt-BR: "Cockpit"/"Gravações"/"Aviônicos"), matching `docs/design/index.html`. "Recordings"
      * and "Gravações" are both longer than the "Gallery"/"Galeria" they replace -- the issue
      * explicitly warns against fixing #337's overflow only to ship a second one here.
      *

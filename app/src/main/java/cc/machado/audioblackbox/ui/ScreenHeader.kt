@@ -29,7 +29,7 @@ import cc.machado.audioblackbox.ui.theme.HEADER_BADGE_SIZE
 /**
  * The 44dp orange icon-badge header row shared by Dashboard, Gallery and Settings: a badge next to
  * a title/subtitle pair with an avionics data plate dashed divider at the bottom (matching
- * `docs/design/model.html`'s `.app-header-plate`).
+ * `docs/design/index.html`'s `.app-header-plate`).
  */
 @Composable
 fun ScreenHeader(

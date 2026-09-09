@@ -7,7 +7,7 @@
     <color name="ic_launcher_background">#141418</color>
 
     <!--
-      Cockpit ground (issue #225, model.html:37-41, color-cockpit-bg custom property). Used only
+      Cockpit ground (issue #225, index.html:37-41, color-cockpit-bg custom property). Used only
       as the pre-Compose android:windowBackground in themes.xml, so the window is already the
       fixed dark cockpit color for the single frame before AudioBlackboxTheme's Compose
       ColorScheme (ui/theme/Theme.kt) takes over; keep the two in sync if the cockpit ground
@@ -17,7 +17,7 @@
 
     <!--
       Widget colors (issue #275). RemoteViews layouts cannot reference the Compose ui/theme/Color.kt
-      tokens directly, so these are hand-mirrored from that file / model.html (AGENTS.md §5); keep
+      tokens directly, so these are hand-mirrored from that file / index.html (AGENTS.md §5); keep
       the two in sync if either changes.
       widget_panel_background/border: CockpitPanel/CockpitBorderStrong, a fully opaque panel (see
       widget_background.xml's doc on why this, not translucency, is how wallpaper contrast is

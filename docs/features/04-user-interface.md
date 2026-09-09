@@ -14,7 +14,7 @@ supersedes the original stock-Material-3-only decision in
 [#9](https://github.com/alexandre-machado/audio-blackbox/issues/9), which PR
 [#186](https://github.com/alexandre-machado/audio-blackbox/pull/186) shipped without
 updating this document. The design-system spec of record is the living prototype at
-[`docs/design/model.html`](../design/model.html); [`ui/theme/Color.kt`](../../app/src/main/java/cc/machado/audioblackbox/ui/theme/Color.kt)
+[`docs/design/index.html`](../design/index.html); [`ui/theme/Color.kt`](../../app/src/main/java/cc/machado/audioblackbox/ui/theme/Color.kt)
 is its Compose implementation, not the other way around, and it does not yet match
 the spec on every token (see `AGENTS.md` §5 for the known divergences). See
 `AGENTS.md` §5 for the semantic colour-role rules (green = OK/recording, amber =

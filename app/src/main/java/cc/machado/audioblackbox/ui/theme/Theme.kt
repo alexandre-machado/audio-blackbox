@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * The app's one and only [androidx.compose.material3.ColorScheme]: the fixed avionics/cockpit
- * palette from `docs/design/model.html`, always dark, never derived from the system wallpaper or
+ * palette from `docs/design/index.html`, always dark, never derived from the system wallpaper or
  * the system light/dark setting.
  *
  * Issue #225 (owner decision, 2026-08-29): **dark always.** Before this, [AudioBlackboxTheme] built
@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.Color
  * deleted, alongside this change.
  */
 private val CockpitColorScheme = darkColorScheme(
-    // Cockpit ground -- model.html:37-41.
+    // Cockpit ground -- index.html:37-41.
     background = CockpitSlate,
     onBackground = TextStencil,
     surface = CockpitPanel,
@@ -50,9 +50,9 @@ private val CockpitColorScheme = darkColorScheme(
     primaryContainer = FlightOrangeContainer,
     onPrimaryContainer = FlightOrange,
     inversePrimary = FlightOrangeDark,
-    // Secondary: no dedicated model.html role. Chosen here as the "active" accent for
+    // Secondary: no dedicated index.html role. Chosen here as the "active" accent for
     // low-emphasis selected state (e.g. FloatingBottomBar's selected-tab indicator), matching
-    // model.html's `.nav-tab-item.active { color: var(--color-flight-orange); }` -- ambiguous
+    // index.html's `.nav-tab-item.active { color: var(--color-flight-orange); }` -- ambiguous
     // call, flagged in the PR body.
     secondary = FlightOrangeLight,
     onSecondary = Color.White,
