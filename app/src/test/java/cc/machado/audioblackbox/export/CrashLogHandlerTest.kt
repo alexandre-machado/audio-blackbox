@@ -108,6 +108,17 @@ class CrashLogHandlerTest {
         // does in production) and lets the crashing `worker` thread below use that default rather
         // than a thread-specific one -- the original default handler is saved and restored so this
         // does not leak into any other test in the same JVM.
+        //
+        // `mirroredHandler` caps itself at one *recursive* re-entry (`dispatchCount`) rather than
+        // spawning an unbounded chain of writer threads on every recursive hit: without the fix,
+        // this handler being invoked at all for the writer thread's `Error` (installed as the
+        // still-current process default) would otherwise recurse into itself again on ITS OWN
+        // newly-spawned writer thread, and again, and again -- real, unbounded OS thread creation,
+        // not a simulation of it. That is a faithful demonstration of how bad the un-fixed defect
+        // really is, but it is unsafe and nondeterministic to let a unit test actually do -- it can
+        // take much longer than any reasonable `join` timeout to unwind, or exhaust real OS thread
+        // limits. Capping at one re-entry is enough to prove the property this test needs ("did the
+        // writer's `Error` reach the shared default handler at all") without that risk.
         val crashFile = File(tempDir.root, "crash_log.log")
         val previousHandlerInvocations = AtomicInteger(0)
         val previousHandlerThread = AtomicReference<Thread>()
@@ -121,8 +132,16 @@ class CrashLogHandlerTest {
             previousHandlerInvoked.countDown()
         }
 
+        val dispatchCount = AtomicInteger(0)
         lateinit var mirroredHandler: Thread.UncaughtExceptionHandler
         mirroredHandler = Thread.UncaughtExceptionHandler { thread, throwable ->
+            if (dispatchCount.incrementAndGet() > 1) {
+                // Reached only via recursion: the writer thread's own `Error` fell back to this
+                // same default handler. Record it and stop here -- do not spawn yet another writer
+                // thread, which is exactly the unbounded amplification described above.
+                previousHandler.uncaughtException(thread, throwable)
+                return@UncaughtExceptionHandler
+            }
             try {
                 val writerThread = Thread({
                     // The real writeCrashLogEntrySync(), forced to have an Error escape it via its
@@ -167,10 +186,13 @@ class CrashLogHandlerTest {
         }
 
         assertTrue(previousHandlerInvoked.await(5, TimeUnit.SECONDS))
-        // Give a would-be recursive second invocation time to land if the writer thread's own
-        // no-op handler were missing.
-        Thread.sleep(300)
-
+        // No wait needed here beyond the two joins above (`@rev` review on PR #372): `worker.join()`
+        // only returns once `worker`'s entire uncaught-exception dispatch -- `mirroredHandler`'s
+        // body, including its own `writerThread.join(2_000)` -- has completed, and any recursive
+        // re-entry into `mirroredHandler` (capped at one, per the doc above) happens synchronously
+        // within that same dispatch, on the writer thread, before the writer thread itself is
+        // considered terminated. So every `previousHandler` call this scenario can produce has
+        // already happened by the time `worker.join()` returns. Do not add a sleep or a poll loop.
         assertEquals(
             "previous handler must run exactly once -- not a second time for the writer's own Error",
             1,
