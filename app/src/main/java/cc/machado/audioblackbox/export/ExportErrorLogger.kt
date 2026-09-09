@@ -224,6 +224,85 @@ private fun buildJsonLine(
 }
 
 /**
+ * Baked-in, Android-path-shape patterns for [redactSensitivePaths] -- unlike [redactSensitivePaths]'s
+ * `sensitiveRoots` parameter (which is only as good as the exact directory strings a caller passes
+ * in), these match by *shape*, so they still redact a path that reaches a crash log via an alias or
+ * a directory this process's [android.content.Context] never itself resolved:
+ *
+ * - `/sdcard`, `/mnt/sdcard`, `/storage/self/primary` -- long-standing symlink aliases for primary
+ *   external storage that resolve to the same place as `Environment.getExternalStorageDirectory()`
+ *   / `Context.getExternalFilesDir(null)`'s parent chain, but as a *different string*, so a literal
+ *   substring match against only the resolved path would miss them (`@sec` review finding on PR
+ *   #372).
+ * - `/storage/emulated/<n>` -- the primary volume's real path, redundant with the exact roots
+ *   [AudioBlackboxApplication] passes in today, kept here too as a second, context-independent line
+ *   of defense.
+ * - `/storage/<uuid>` -- a *removable/secondary* volume (an SD card), addressed by its volume UUID.
+ *   `Context.getExternalFilesDir(null)` alone only resolves the primary volume; this catches a
+ *   second physical volume's path by its well-known shape even if nothing in this process ever
+ *   asked the platform to enumerate it.
+ */
+private val SENSITIVE_PATH_SHAPE_PATTERNS = listOf(
+    Regex("""/storage/emulated/\d+(/\S*)?"""),
+    Regex("""/storage/[0-9A-Za-z]{4}-[0-9A-Za-z]{4}(/\S*)?"""),
+    Regex("""/storage/self/primary(/\S*)?"""),
+    Regex("""(?i)/sdcard(/\S*)?"""),
+    Regex("""(?i)/mnt/sdcard(/\S*)?"""),
+)
+
+/**
+ * Redacts anything under a known-sensitive path out of [text] before it is allowed into a durable
+ * crash entry (issue #371's "no paths under the user's media directories" requirement) -- the exact
+ * function [AudioBlackboxApplication.installCrashLogHandler] wires into [writeCrashLogEntrySync]'s
+ * `sanitize` parameter in production, so a test that calls this function directly is exercising the
+ * real redactor, not a stand-in that merely resembles it (`@sec` review finding on PR #372: the
+ * original test asserted against a hand-written inline lambda instead).
+ *
+ * Two layers, applied together:
+ * 1. [sensitiveRoots] -- literal substring replacement against whatever directories the caller's
+ *    own [android.content.Context] resolved (`filesDir`, `cacheDir`, every volume
+ *    `getExternalFilesDirs(null)` returns -- not just the primary one -- `externalCacheDir`). Since
+ *    `String.replace` matches the root as a substring anywhere it occurs, this also redacts any
+ *    subpath under that root (e.g. `<filesDir>/recordings/x.raw`), not just the bare root itself.
+ * 2. [SENSITIVE_PATH_SHAPE_PATTERNS] -- context-independent, applied unconditionally, to catch a
+ *    path that reaches the log via an alias or a volume this process's `Context` never itself
+ *    resolved (a stale `/sdcard`-rooted message from a library, a second SD card, another Android
+ *    user profile's `/data/user/<n>/<pkg>`).
+ *
+ * [packageName], if given, also redacts this app's private directory under **any** Android user
+ * profile -- `/data/data/<packageName>` and `/data/user/<n>/<packageName>` -- not just the current
+ * profile's, which is all `Context.filesDir`/`cacheDir` themselves resolve to. Built from the
+ * caller's own package name (not a hardcoded constant) so it stays correct for the `.staging`
+ * `applicationIdSuffix` build variant too.
+ *
+ * ## Known, explicitly acknowledged gap
+ * A **relative** path (no leading `/`, e.g. a bare filename an exception happens to embed) cannot be
+ * distinguished here from an unrelated word or identifier with no reliable, low-false-positive rule
+ * -- this function does not attempt it. The layers above only redact *absolute* paths under a
+ * known-sensitive root or of a known-sensitive shape.
+ */
+internal fun redactSensitivePaths(
+    text: String,
+    sensitiveRoots: List<String> = emptyList(),
+    packageName: String? = null,
+): String {
+    var result = text
+    for (root in sensitiveRoots) {
+        if (root.isNotBlank()) {
+            result = result.replace(root, "<redacted-path>")
+        }
+    }
+    for (pattern in SENSITIVE_PATH_SHAPE_PATTERNS) {
+        result = pattern.replace(result, "<redacted-path>")
+    }
+    if (!packageName.isNullOrBlank()) {
+        val privateDirPattern = Regex("""/data/(data|user/\d+)/${Regex.escape(packageName)}(/\S*)?""")
+        result = privateDirPattern.replace(result, "<redacted-path>")
+    }
+    return result
+}
+
+/**
  * Writes one JVM crash entry (issue #371) to [file] -- a sibling of `export_errors.log`, never the
  * same file -- **synchronously, on the calling thread**, bypassing [errorChannel]/[loggerScope]
  * entirely.

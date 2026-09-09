@@ -117,9 +117,15 @@ class CrashLogHandlerTest {
     }
 
     @Test
-    fun writeCrashLogEntrySync_redactsSensitivePathsViaSanitizer() {
+    fun writeCrashLogEntrySync_wiredToTheRealRedactor_stripsAKnownRoot() {
+        // Exercises writeCrashLogEntrySync's `sanitize` parameter wired to the *actual* production
+        // function (`redactSensitivePaths`), the same way `AudioBlackboxApplication.
+        // installCrashLogHandler` wires it -- not a hand-written stand-in lambda (`@sec` review
+        // finding on PR #372: the original version of this test asserted against a lambda that only
+        // resembled production, so production's own redactor had zero coverage).
         val crashFile = File(tempDir.root, "crash_log.log")
-        val sensitivePath = "/data/data/cc.machado.audioblackbox/files/recordings/2026.raw"
+        val filesDirLike = "/data/user/0/cc.machado.audioblackbox/files"
+        val sensitivePath = "$filesDirLike/recordings/2026.raw"
         val throwable = RuntimeException("failed reading $sensitivePath")
 
         writeCrashLogEntrySync(
@@ -129,11 +135,11 @@ class CrashLogHandlerTest {
             throwable = throwable,
             versionName = "1.0",
             versionCode = 1L,
-            sanitize = { it.replace("/data/data/cc.machado.audioblackbox/files", "<redacted-path>") },
+            sanitize = { raw -> redactSensitivePaths(raw, sensitiveRoots = listOf(filesDirLike)) },
         )
 
         val raw = crashFile.readText()
-        assertFalse(raw.contains("/data/data/cc.machado.audioblackbox/files"))
+        assertFalse(raw.contains(filesDirLike))
         assertTrue(raw.contains("<redacted-path>"))
     }
 
@@ -181,5 +187,84 @@ class CrashLogHandlerTest {
 
         val rotated = File(tempDir.root, "crash_log.log.old")
         assertTrue("expected rotation once the crash log exceeds its stricter size cap", rotated.exists())
+    }
+}
+
+/**
+ * Proves [redactSensitivePaths] -- the exact function wired into production's `sanitize` parameter
+ * -- against the cases issue #371's `@sec` review called out as missed by a plain literal-substring
+ * match against a caller-supplied root list: a symlink alias, a secondary storage volume, and
+ * another Android user profile's private directory. Also proves the one gap left open on purpose
+ * (a relative path), so that limitation is asserted rather than merely claimed in a comment.
+ */
+class RedactSensitivePathsTest {
+
+    @Test
+    fun redactsAnExactCallerSuppliedRoot() {
+        val result = redactSensitivePaths(
+            "failed reading /data/user/0/cc.machado.audioblackbox/files/x.raw",
+            sensitiveRoots = listOf("/data/user/0/cc.machado.audioblackbox/files"),
+        )
+        assertFalse(result.contains("/data/user/0/cc.machado.audioblackbox/files"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsTheSdcardAlias_evenThoughItIsNotAmongTheCallerSuppliedRoots() {
+        // `/sdcard` is a symlink, not the resolved path any `Context` accessor returns -- a literal
+        // substring match against only the resolved roots would miss it entirely.
+        val result = redactSensitivePaths("could not open /sdcard/DCIM/clip.raw", sensitiveRoots = emptyList())
+        assertFalse(result.contains("/sdcard"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsASecondaryStorageVolume_bySdCardVolumeIdShape_notJustThePrimaryVolume() {
+        // `getExternalFilesDirs(null)` (plural) is what production now iterates, but this proves
+        // the *shape*-based fallback also independently catches a removable SD card path even if a
+        // caller only ever passed the primary volume's root.
+        val result = redactSensitivePaths(
+            "read failure on /storage/AB12-CD34/Recordings/clip.raw",
+            sensitiveRoots = emptyList(),
+        )
+        assertFalse(result.contains("/storage/AB12-CD34"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsAnotherUserProfilesPrivateDirectory_whenPackageNameIsGiven() {
+        val result = redactSensitivePaths(
+            "failed reading /data/user/10/cc.machado.audioblackbox/files/x.raw",
+            sensitiveRoots = emptyList(),
+            packageName = "cc.machado.audioblackbox",
+        )
+        assertFalse(result.contains("/data/user/10/cc.machado.audioblackbox"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsTheStagingBuildVariantsPackageName_becauseItIsPassedAtRuntime_notHardcoded() {
+        // The `.staging` `applicationIdSuffix` build variant's real package name is
+        // `cc.machado.audioblackbox.staging`. Since production passes `Context.packageName` (the
+        // real, running package name) rather than a hardcoded base id, this must redact correctly
+        // for that variant too.
+        val result = redactSensitivePaths(
+            "failed reading /data/user/0/cc.machado.audioblackbox.staging/files/x.raw",
+            sensitiveRoots = emptyList(),
+            packageName = "cc.machado.audioblackbox.staging",
+        )
+        assertFalse(result.contains("cc.machado.audioblackbox.staging/files"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun doesNotRedactARelativePath_theExplicitlyAcknowledgedGap() {
+        // No leading `/`: nothing here claims to catch this, and this test is what makes that a
+        // documented, verified limitation rather than an unstated one.
+        val result = redactSensitivePaths(
+            "failed reading recordings/2026.raw",
+            sensitiveRoots = listOf("/data/user/0/cc.machado.audioblackbox/files"),
+        )
+        assertTrue(result.contains("recordings/2026.raw"))
     }
 }

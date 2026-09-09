@@ -1,8 +1,8 @@
 package cc.machado.audioblackbox
 
 import android.app.Application
-import android.os.Environment
 import cc.machado.audioblackbox.audio.QualityPreset
+import cc.machado.audioblackbox.export.redactSensitivePaths
 import cc.machado.audioblackbox.export.writeCrashLogEntrySync
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
@@ -89,45 +89,71 @@ class AudioBlackboxApplication : Application() {
         }
 
         // Roots that must never appear verbatim in a crash entry (issue #371's "no paths under the
-        // user's media directories" requirement): this app's own private dirs and the device's
-        // shared external storage root. Recordings themselves are exported via `MediaStore`
-        // (`content://` URIs, not filesystem paths -- see `MediaStoreSink`), so this list exists as
-        // defense in depth against an incidental path showing up inside an exception message, not
-        // because a normal code path is expected to hand one to a crash.
-        val sensitiveRoots = listOfNotNull(
-            applicationContext.filesDir?.absolutePath,
-            applicationContext.cacheDir?.absolutePath,
-            applicationContext.getExternalFilesDir(null)?.absolutePath,
-            applicationContext.externalCacheDir?.absolutePath,
-            @Suppress("DEPRECATION") Environment.getExternalStorageDirectory()?.absolutePath,
-        )
-        val redact: (String) -> String = { raw ->
-            var result = raw
-            for (root in sensitiveRoots) {
-                if (root.isNotBlank()) {
-                    result = result.replace(root, "<redacted-path>")
-                }
+        // user's media directories" requirement): this app's own private dirs and *every* external
+        // storage volume this Context can resolve -- `getExternalFilesDirs` (plural), not
+        // `getExternalFilesDir` (singular), so a secondary volume (e.g. a removable SD card) is
+        // covered too, not just the primary one (`@sec` review finding on PR #372). Recordings
+        // themselves are exported via `MediaStore` (`content://` URIs, not filesystem paths -- see
+        // `MediaStoreSink`), so this list exists as defense in depth against an incidental path
+        // showing up inside an exception message, not because a normal code path is expected to
+        // hand one to a crash. [redactSensitivePaths] itself additionally covers path *shapes*
+        // (aliases, other volumes, other user profiles) this Context never resolves -- see its own
+        // doc for what is and is not covered.
+        val sensitiveRoots = buildList {
+            applicationContext.filesDir?.absolutePath?.let(::add)
+            applicationContext.cacheDir?.absolutePath?.let(::add)
+            applicationContext.externalCacheDir?.absolutePath?.let(::add)
+            applicationContext.getExternalFilesDirs(null)?.forEach { dir ->
+                dir?.absolutePath?.let(::add)
             }
-            result
+        }
+        val packageNameForRedaction = packageName
+        val redact: (String) -> String = { raw ->
+            redactSensitivePaths(raw, sensitiveRoots, packageNameForRedaction)
         }
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                writeCrashLogEntrySync(
-                    file = crashFile,
-                    timestampMillis = System.currentTimeMillis(),
-                    threadName = thread.name,
-                    throwable = throwable,
-                    versionName = versionName,
-                    versionCode = versionCode,
-                    sanitize = redact,
-                )
+                // Bounded wait, not an unbounded one (`@rev`/`@sec` review finding on PR #372):
+                // this write is synchronous I/O on whatever thread runs it, and a stalled/unhealthy
+                // filesystem could otherwise delay -- indefinitely -- the `finally` below that hands
+                // off to [previousHandler], which is what gets this crash into Play Console/Android
+                // vitals. Vitals reporting is this app's only *external* crash backstop and must not
+                // be held hostage by the on-device log succeeding. The write itself still runs on a
+                // fresh thread (not the crashing one) precisely so it can be abandoned via a timed
+                // `join` rather than needing its own internal cancellation plumbing; on the
+                // overwhelmingly common case (a healthy filesystem) this adds only the cost of one
+                // thread start and finishes well inside the timeout, so the crash entry is still
+                // written essentially every time -- the bound only matters in the rare stall case,
+                // where losing the entry is the accepted cost of not losing vitals reporting too.
+                val writerThread = Thread({
+                    writeCrashLogEntrySync(
+                        file = crashFile,
+                        timestampMillis = System.currentTimeMillis(),
+                        threadName = thread.name,
+                        throwable = throwable,
+                        versionName = versionName,
+                        versionCode = versionCode,
+                        sanitize = redact,
+                    )
+                }, "crash-log-writer")
+                writerThread.isDaemon = true
+                writerThread.start()
+                writerThread.join(CRASH_WRITE_TIMEOUT_MILLIS)
             } catch (t: Throwable) {
                 // Never let a failure in the crash-logger itself block the platform's own handler.
             } finally {
                 previousHandler?.uncaughtException(thread, throwable)
             }
         }
+    }
+
+    private companion object {
+        /** See the `Thread.setDefaultUncaughtExceptionHandler` block's own comment for why this
+         * bound exists at all: it trades "the write might not finish before the process is killed
+         * anyway" for "the previous handler -- and Play Console/Android vitals reporting -- is
+         * never held up by a stalled filesystem for longer than this." */
+        private const val CRASH_WRITE_TIMEOUT_MILLIS = 2_000L
     }
 }
 
