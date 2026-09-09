@@ -1,6 +1,6 @@
 <resources>
     <!--
-      Issue #225: the app is permanently dark on the model.html cockpit ground, so the
+      Issue #225: the app is permanently dark on the index.html cockpit ground, so the
       pre-Compose window theme is dark too: android:Theme.Material.NoActionBar (not
       .Light.NoActionBar), with android:windowBackground pinned to the same cockpit_bg the
       Compose ColorScheme (ui/theme/Theme.kt) uses for `background`. This is what's visible for
