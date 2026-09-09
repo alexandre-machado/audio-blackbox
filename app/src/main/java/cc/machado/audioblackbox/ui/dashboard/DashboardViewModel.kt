@@ -100,17 +100,26 @@ class DashboardViewModel(
     // still gets a correct, testable `null` (safe no-op, see `readErrorLog`'s doc) rather than a
     // value frozen from before the test's own `errorLogFileProvider` override took effect.
     private val errorLogFileProvider: () -> File? = { cc.machado.audioblackbox.ErrorLogFileHolder.file },
+    // Issue #371: the crash log is a sibling of the export error log, resolved lazily for the same
+    // reason as `errorLogFileProvider` above -- see `CrashLogFileHolder`'s doc.
+    private val crashLogFileProvider: () -> File? = { cc.machado.audioblackbox.CrashLogFileHolder.file },
     private val errorLogPollMillis: Long = ERROR_LOG_POLL_MILLIS,
     // Issue #346: the actual disk read, factored out from `errorLogFileProvider` above so a test
     // can drive `errorLogUiState` deterministically under a virtual-time `TestDispatcher` (no real
     // `Dispatchers.IO` thread hop to synchronize with) while production still gets the real
     // "parse the log off the main thread" behavior via the default here.
     private val errorLogReader: suspend () -> List<ErrorLogEntry> = {
-        withContext(Dispatchers.IO) { readErrorLog(errorLogFileProvider()) }
+        withContext(Dispatchers.IO) { readErrorLog(errorLogFileProvider(), crashLogFileProvider()) }
     },
     // Mirrors `errorLogReader`'s testability reasoning above, for the "Clear log" action's delete.
+    // Issue #371: clears both files -- the modal presents crash entries as part of the same list,
+    // so "Clear log" clearing only the export file while crash entries silently persisted would be
+    // a confusing half-clear.
     private val errorLogClearer: suspend () -> Unit = {
-        withContext(Dispatchers.IO) { clearErrorLog(errorLogFileProvider()) }
+        withContext(Dispatchers.IO) {
+            clearErrorLog(errorLogFileProvider())
+            clearErrorLog(crashLogFileProvider())
+        }
     },
 ) : ViewModel() {
 

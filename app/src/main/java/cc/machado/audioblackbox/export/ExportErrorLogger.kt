@@ -18,19 +18,32 @@ import kotlinx.coroutines.launch
 private const val MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024L // 5 MB
 private const val SCHEMA_VERSION = 1
 
+/** Size cap for the sibling crash log (issue #371) -- deliberately stricter than
+ * [MAX_LOG_SIZE_BYTES]: a crash entry carries a full stack trace (bigger than a typical export
+ * error line) and a crash *loop* is exactly the pathological case this cap exists to bound, so a
+ * smaller ceiling keeps worst-case on-disk growth tighter than the export log's. Same rotation
+ * shape as the export log (see [rotateIfOversized]): oldest generation (`.old`) is dropped, not
+ * appended to, so eviction is oldest-first. */
+private const val CRASH_LOG_MAX_SIZE_BYTES = 1 * 1024 * 1024L // 1 MB
+
 /**
- * Severity of one [ExportErrorLogEntry] (issue #346/#347).
+ * Severity of one [ExportErrorLogEntry] (issue #346/#347/#371).
  *
  * [ERROR] is a genuine failure -- the thing #346's dashboard card exists to surface. [AUDIT] is a
  * noteworthy-but-non-fatal event on a session that still completed successfully (e.g.
  * [ForwardRecordingEngine]'s `TAIL_TRUNCATED`/`MUXER_STOP_RECOVERED` entries): worth a durable,
  * reviewable trail, but must never make the dashboard's error card render as though a recording
- * failed when it did not. [DashboardViewModel]'s "does at least one error exist" check counts
- * [ERROR] only; the modal lists both.
+ * failed when it did not. [CRASH] (issue #371) is a JVM uncaught exception recorded by
+ * [writeCrashLogEntrySync] -- always shown in the modal, but deliberately its own value rather
+ * than [ERROR]: the app may have crashed on a screen with no export/recording in flight at all, so
+ * counting it toward "did this recording fail" would misreport exactly the way #347 already found
+ * for [AUDIT]. [DashboardViewModel]'s "does at least one error exist" check counts [ERROR] only;
+ * the modal lists all three.
  */
 enum class ErrorLogSeverity {
     ERROR,
     AUDIT,
+    CRASH,
 }
 
 /** Reasons that are known to describe a session that still completed successfully -- worth a
@@ -154,13 +167,7 @@ private fun writeEntrySync(entry: PendingWrite) {
         }
 
         val file = entry.file
-        if (file.exists() && file.length() > MAX_LOG_SIZE_BYTES) {
-            val rotatedFile = File(file.parent, file.name + ".old")
-            if (rotatedFile.exists()) {
-                rotatedFile.delete()
-            }
-            file.renameTo(rotatedFile)
-        }
+        rotateIfOversized(file, MAX_LOG_SIZE_BYTES)
 
         val line = buildJsonLine(
             timestampMillis = entry.timestamp,
@@ -177,6 +184,19 @@ private fun writeEntrySync(entry: PendingWrite) {
         // Suppress logging failures to avoid crashing the exporter
     } finally {
         entry.completionLatch?.countDown()
+    }
+}
+
+/** Rotates [file] to `file.old` (dropping any previous `.old` generation) once it exceeds
+ * [maxBytes] -- shared by [writeEntrySync] and [writeCrashLogEntrySync] so the two logs' size caps
+ * are enforced the same, oldest-first-eviction way (issue #371). */
+private fun rotateIfOversized(file: File, maxBytes: Long) {
+    if (file.exists() && file.length() > maxBytes) {
+        val rotatedFile = File(file.parent, file.name + ".old")
+        if (rotatedFile.exists()) {
+            rotatedFile.delete()
+        }
+        file.renameTo(rotatedFile)
     }
 }
 
@@ -201,6 +221,159 @@ private fun buildJsonLine(
     }
     sb.append("}")
     return sb.toString()
+}
+
+/**
+ * Baked-in, Android-path-shape patterns for [redactSensitivePaths] -- unlike [redactSensitivePaths]'s
+ * `sensitiveRoots` parameter (which is only as good as the exact directory strings a caller passes
+ * in), these match by *shape*, so they still redact a path that reaches a crash log via an alias or
+ * a directory this process's [android.content.Context] never itself resolved:
+ *
+ * - `/sdcard`, `/mnt/sdcard`, `/storage/self/primary` -- long-standing symlink aliases for primary
+ *   external storage that resolve to the same place as `Environment.getExternalStorageDirectory()`
+ *   / `Context.getExternalFilesDir(null)`'s parent chain, but as a *different string*, so a literal
+ *   substring match against only the resolved path would miss them (`@sec` review finding on PR
+ *   #372).
+ * - `/storage/emulated/<n>` -- the primary volume's real path, redundant with the exact roots
+ *   [AudioBlackboxApplication] passes in today, kept here too as a second, context-independent line
+ *   of defense.
+ * - `/storage/<uuid>` -- a *removable/secondary* volume (an SD card), addressed by its volume UUID.
+ *   `Context.getExternalFilesDir(null)` alone only resolves the primary volume; this catches a
+ *   second physical volume's path by its well-known shape even if nothing in this process ever
+ *   asked the platform to enumerate it.
+ */
+private val SENSITIVE_PATH_SHAPE_PATTERNS = listOf(
+    Regex("""/storage/emulated/\d+(/\S*)?"""),
+    Regex("""/storage/[0-9A-Za-z]{4}-[0-9A-Za-z]{4}(/\S*)?"""),
+    Regex("""/storage/self/primary(/\S*)?"""),
+    Regex("""(?i)/sdcard(/\S*)?"""),
+    Regex("""(?i)/mnt/sdcard(/\S*)?"""),
+)
+
+/**
+ * Redacts anything under a known-sensitive path out of [text] before it is allowed into a durable
+ * crash entry (issue #371's "no paths under the user's media directories" requirement) -- the exact
+ * function [AudioBlackboxApplication.installCrashLogHandler] wires into [writeCrashLogEntrySync]'s
+ * `sanitize` parameter in production, so a test that calls this function directly is exercising the
+ * real redactor, not a stand-in that merely resembles it (`@sec` review finding on PR #372: the
+ * original test asserted against a hand-written inline lambda instead).
+ *
+ * Two layers, applied together:
+ * 1. [sensitiveRoots] -- literal substring replacement against whatever directories the caller's
+ *    own [android.content.Context] resolved (`filesDir`, `cacheDir`, every volume
+ *    `getExternalFilesDirs(null)` returns -- not just the primary one -- `externalCacheDir`). Since
+ *    `String.replace` matches the root as a substring anywhere it occurs, this also redacts any
+ *    subpath under that root (e.g. `<filesDir>/recordings/x.raw`), not just the bare root itself.
+ * 2. [SENSITIVE_PATH_SHAPE_PATTERNS] -- context-independent, applied unconditionally, to catch a
+ *    path that reaches the log via an alias or a volume this process's `Context` never itself
+ *    resolved (a stale `/sdcard`-rooted message from a library, a second SD card, another Android
+ *    user profile's `/data/user/<n>/<pkg>`).
+ *
+ * [packageName], if given, also redacts this app's private directory under **any** Android user
+ * profile -- `/data/data/<packageName>` and `/data/user/<n>/<packageName>` -- not just the current
+ * profile's, which is all `Context.filesDir`/`cacheDir` themselves resolve to. Built from the
+ * caller's own package name (not a hardcoded constant) so it stays correct for the `.staging`
+ * `applicationIdSuffix` build variant too.
+ *
+ * ## Known, explicitly acknowledged gap
+ * A **relative** path (no leading `/`, e.g. a bare filename an exception happens to embed) cannot be
+ * distinguished here from an unrelated word or identifier with no reliable, low-false-positive rule
+ * -- this function does not attempt it. The layers above only redact *absolute* paths under a
+ * known-sensitive root or of a known-sensitive shape.
+ */
+internal fun redactSensitivePaths(
+    text: String,
+    sensitiveRoots: List<String> = emptyList(),
+    packageName: String? = null,
+): String {
+    var result = text
+    for (root in sensitiveRoots) {
+        if (root.isNotBlank()) {
+            result = result.replace(root, "<redacted-path>")
+        }
+    }
+    for (pattern in SENSITIVE_PATH_SHAPE_PATTERNS) {
+        result = pattern.replace(result, "<redacted-path>")
+    }
+    if (!packageName.isNullOrBlank()) {
+        val privateDirPattern = Regex("""/data/(data|user/\d+)/${Regex.escape(packageName)}(/\S*)?""")
+        result = privateDirPattern.replace(result, "<redacted-path>")
+    }
+    return result
+}
+
+/**
+ * Writes one JVM crash entry (issue #371) to [file] -- a sibling of `export_errors.log`, never the
+ * same file -- **synchronously, on the calling thread**, bypassing [errorChannel]/[loggerScope]
+ * entirely.
+ *
+ * ## Why synchronous, not the channel+coroutine path
+ * [logExportError] is fire-and-forget onto a `Dispatchers.IO` coroutine; that is fine for an export
+ * failure because the process keeps running afterward and will eventually drain the channel. It is
+ * the wrong shape for a crash: [Thread.setDefaultUncaughtExceptionHandler]'s contract is that the
+ * process is about to die (the platform's default handler kills it once this returns), so a write
+ * that depends on a *different* thread being scheduled before then is a coin flip -- worse, if the
+ * crash happened to originate from `Dispatchers.IO`'s own thread pool (or the pool is saturated,
+ * or the process is already in a low-memory crash spiral), that scheduling may never happen at
+ * all. [flushErrorLogsForTest]'s `CountDownLatch` solves a *different* problem (giving a **test**
+ * a deterministic point to assert after, while production keeps its normal async path); it does
+ * not solve "the write must physically be on disk before this function returns", which is the
+ * actual requirement here. So this function does its own bounded, direct
+ * open-write-flush-close on the crashing thread, with no dependency on any other thread or
+ * coroutine machinery being alive.
+ *
+ * ## Why a sibling file, not `export_errors.log`
+ * Sharing the export log would put crash entries under the same file the dashboard's "does at
+ * least one error exist" check reads. That check is documented (see [ErrorLogSeverity]) to count
+ * [ErrorLogSeverity.ERROR] only, specifically about *export* failures; a crash can happen on a
+ * screen with no export or recording in flight, so folding it into that check would misreport a
+ * healthy recording as failed (the exact #347 trap, just via a new source instead of `AUDIT`). A
+ * sibling file keeps the export log's rotation, size accounting, and "does an error exist" oracle
+ * completely undisturbed by crash volume, while [readErrorLog] still merges both for display.
+ *
+ * Returns `true` if the entry reached disk, `false` on any I/O failure -- swallowed here rather
+ * than propagated, because a throwing crash-logger must never prevent the caller
+ * ([AudioBlackboxApplication]'s handler) from still invoking the previous default handler.
+ */
+internal fun writeCrashLogEntrySync(
+    file: File?,
+    timestampMillis: Long,
+    threadName: String,
+    throwable: Throwable,
+    versionName: String,
+    versionCode: Long,
+    sanitize: (String) -> String = { it },
+): Boolean {
+    if (file == null) return false
+    return try {
+        val sw = StringWriter()
+        val pw = PrintWriter(sw)
+        pw.println("versionName=$versionName versionCode=$versionCode")
+        throwable.printStackTrace(pw)
+        val fullTrace = sanitize(sw.toString())
+
+        file.parentFile?.mkdirs()
+        rotateIfOversized(file, CRASH_LOG_MAX_SIZE_BYTES)
+
+        val line = buildJsonLine(
+            timestampMillis = timestampMillis,
+            component = sanitize(threadName),
+            reason = throwable.javaClass.name,
+            message = sanitize(throwable.message ?: ""),
+            stackTrace = fullTrace,
+            severity = ErrorLogSeverity.CRASH,
+        )
+        // `PrintWriter(fw).use { ... }` both flushes and closes `pw2`, which in turn closes the
+        // underlying `fw` -- so nothing further is done to `fw` after the block (a second
+        // flush/close on an already-closed stream throws `IOException: Stream closed`, caught by
+        // this same catch block and misreported as a write failure).
+        PrintWriter(FileWriter(file, true)).use { pw2 ->
+            pw2.println(line)
+        }
+        true
+    } catch (e: Exception) {
+        false
+    }
 }
 
 private fun jsonEscape(raw: String): String {
@@ -245,12 +418,32 @@ private fun jsonEscape(raw: String): String {
  * entry's [ErrorLogEntry.stackTrace] as an extra line. This is the owner's explicit "parsed
  * best-effort" choice among the three offered (rather than "shown as raw text" or "dropped") --
  * nothing the user had on-device before this change disappears from the list.
+ *
+ * ## [crashFile] (issue #371) -- merged in, chronologically, not just appended
+ * If [crashFile] is given, its entries (parsed the same way, `.old` generation included) are
+ * merged with [file]'s and the combined list is re-sorted newest-first by [ErrorLogEntry.timestampMillis].
+ * A plain concatenation (export entries first, crash entries after) would put every crash entry
+ * before or after the export entries regardless of when either actually happened, which is wrong
+ * for a merged "most recent event first" view. When [crashFile] is omitted (the default, and every
+ * existing call site's behavior), this degrades exactly to the pre-#371 single-file behavior above
+ * with no re-sort, so no existing caller or test observes any change.
  */
-internal fun readErrorLog(file: File?): List<ErrorLogEntry> {
-    if (file == null) return emptyList()
-    val current = parseLogFile(file)
-    val rotated = parseLogFile(File(file.parent, file.name + ".old"))
-    return current.asReversed() + rotated.asReversed()
+internal fun readErrorLog(file: File?, crashFile: File? = null): List<ErrorLogEntry> {
+    val exportEntries = if (file == null) {
+        emptyList()
+    } else {
+        val current = parseLogFile(file)
+        val rotated = parseLogFile(File(file.parent, file.name + ".old"))
+        current.asReversed() + rotated.asReversed()
+    }
+    if (crashFile == null) return exportEntries
+
+    val crashCurrent = parseLogFile(crashFile)
+    val crashRotated = parseLogFile(File(crashFile.parent, crashFile.name + ".old"))
+    val crashEntries = crashCurrent.asReversed() + crashRotated.asReversed()
+    if (crashEntries.isEmpty()) return exportEntries
+
+    return (exportEntries + crashEntries).sortedByDescending { it.timestampMillis }
 }
 
 private val legacyHeaderRegex = Regex("""^\[(.+?)\] \[(.+?)\] \[(.+?)\] (.*)$""")
@@ -338,6 +531,7 @@ private fun parseJsonEntry(line: String): ErrorLogEntry? {
     val message = fields["message"] ?: ""
     val severity = when (fields["severity"]) {
         "AUDIT" -> ErrorLogSeverity.AUDIT
+        "CRASH" -> ErrorLogSeverity.CRASH
         else -> ErrorLogSeverity.ERROR
     }
     return ErrorLogEntry(
