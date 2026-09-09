@@ -20,7 +20,7 @@
 
 ---
 
-**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio (**5 to 45 minutes**, in 5-minute steps) in device RAM and writes to storage **only when you explicitly ask it to**.
+**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio in device RAM (**at least 5 minutes, in 5-minute steps, with no fixed upper bound** -- the ceiling is sized automatically per device and per quality preset from how much memory it can safely hold) and writes to storage **only when you explicitly ask it to**.
 
 Nothing touches your disk or leaves your phone until you press save. You can capture important conversations, ideas, or unexpected events *after* they have already happened.
 
@@ -37,14 +37,16 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 ## ✨ Key Features
 
 - 🎯 **Two Primary Capture Modes**:
-  - **Save Recent Past (Lookback)**: Instantly snapshot everything currently buffered from the memory ring buffer into an AAC (`.m4a`) or lossless WAV file. One action, always the whole buffer -- the old 5/15/30 selector was retired in #121 because it promised windows the buffer might not hold.
+  - **Save Recent Past (Lookback)**: Instantly snapshot everything currently buffered from the memory ring buffer into an AAC (`.m4a`) file. One action, always the whole buffer -- the old 5/15/30 selector was retired in #121 because it promised windows the buffer might not hold.
   - **Continuous Live Recording**: Start a forward live recording that automatically preserves the preceding buffer timeline so nothing is lost.
-- 📊 **Real-time Live VU Meter**: 18-capsule reactive microphone input level indicator built on Material 3 components, styled with the app's avionics/cockpit brand theme (see `AGENTS.md` §5).
+- 🎚️ **Selectable Audio Quality**: Three presets in Settings -- Voice (16 kHz mono), Balanced (32 kHz mono), and High Fidelity (44.1 kHz stereo) -- each trading sample rate/channels for its own device-derived retention ceiling.
+- 📊 **Real-time Live VU Meter**: 20-capsule reactive microphone input level indicator built on Material 3 components, styled with the app's avionics/cockpit brand theme (see `AGENTS.md` §5).
 - 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).
+- 🏠 **Home-Screen Widget**: Start or stop capture straight from the launcher, no need to open the app first.
 - 🛡️ **100% Local, Zero-Network Privacy**:
   - **Zero Network Permissions**: The `android.permission.INTERNET` permission is completely absent from the merged release manifest.
   - **Zero Telemetry / Crash SDKs**: No Firebase, no analytics, no third-party trackers.
-  - **Local Persistence Only**: Files are saved directly to your device's standard `Recordings/Blackbox/` folder.
+  - **Local Persistence Only**: Files are saved directly to your device's standard music/recordings folder (`Recordings/Blackbox/` on Android 12+, `Music/Blackbox/` on Android 10-11).
 - ⚡ **Seamless Interruption Handling**: Pauses gracefully during phone calls or third-party audio focus grabs, preserving silence gaps to ensure exported timestamps remain perfectly synced.
 - 🔋 **Robust Background Survival**: Dedicated foreground capture service with persistent notifications and guided manufacturer battery-killer bypass.
 - 🎵 **Integrated Audio Player**: Playback, seek, manage, and share your recordings directly inside the app with native Android sharesheets.
@@ -56,10 +58,10 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 | Parameter | Specification | Details |
 | :--- | :--- | :--- |
 | **Internal Buffer** | 16-bit Linear PCM | Pre-allocated circular ring buffer in RAM |
-| **Sample Rate** | 16,000 Hz (Standard) / 44,100 Hz | Optimized for voice clarity and low memory footprint |
-| **Channel Config** | Mono (1 Channel) | Maximizes retention duration per megabyte |
-| **Export Formats** | AAC LC (`.m4a`) & Lossless WAV | Hardware-accelerated `MediaCodec` streaming encoder |
-| **Storage Destination** | `Recordings/Blackbox/` | Standard Android `MediaStore` collection |
+| **Sample Rate** | 16,000 Hz (Voice) / 32,000 Hz (Balanced) / 44,100 Hz (High Fidelity) | Optimized for voice clarity and low memory footprint |
+| **Channel Config** | Mono (Voice / Balanced) or Stereo (High Fidelity) | Maximizes retention duration per megabyte |
+| **Export Formats** | AAC LC (`.m4a`) | Hardware-accelerated `MediaCodec` streaming encoder |
+| **Storage Destination** | `Recordings/Blackbox/` (Android 12+) or `Music/Blackbox/` (Android 10-11) | Standard Android `MediaStore` collection |
 | **Thread Architecture** | Dedicated Single-Writer | Capture thread performs zero disk I/O and zero IPC |
 
 ---
@@ -96,7 +98,7 @@ Audio Blackbox is available in open beta via Google Play:
 
 1. **Join the Tester Group** $\rightarrow$ [Google Groups: ccmachadoaudioblackbox](https://groups.google.com/g/ccmachadoaudioblackbox)
 2. **Accept the Web Test Invitation** $\rightarrow$ [Play Store Testing Portal](https://play.google.com/apps/testing/cc.machado.audioblackbox)
-3. **Install on Device** $\rightarrow$ [Google Play Store](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)
+3. **Install on Device** $\rightarrow$ Once enrolled, install "Audio Blackbox" from the Play Store app on your device (no public listing yet -- internal/closed beta only).
 
 ---
 
