@@ -4,9 +4,11 @@ import cc.machado.audioblackbox.ui.dashboard.ErrorLogUiState
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -93,6 +95,89 @@ class CrashLogHandlerTest {
         assertTrue(entry.message.contains("boom on background thread"))
         assertTrue(entry.stackTrace!!.contains("IllegalStateException"))
         assertTrue(entry.stackTrace!!.contains("versionName=1.2.3 versionCode=42"))
+    }
+
+    @Test
+    fun errorEscapingTheWriterThread_doesNotRecurse_previousHandlerRunsExactlyOnceWithOriginalCrash() {
+        // Issue #373: the writer thread's own no-op `setUncaughtExceptionHandler` is what stops an
+        // `Error` (e.g. an `OutOfMemoryError`) that escapes `writeCrashLogEntrySync` -- which only
+        // catches `Exception`, deliberately -- from falling back to the *shared default* handler,
+        // i.e. recursing into the very handler that spawned the writer thread. To exercise that
+        // real fallback mechanism (not just "nothing escaped"), this test installs the mirrored
+        // handler as the actual JVM default (as `AudioBlackboxApplication.installCrashLogHandler`
+        // does in production) and lets the crashing `worker` thread below use that default rather
+        // than a thread-specific one -- the original default handler is saved and restored so this
+        // does not leak into any other test in the same JVM.
+        val crashFile = File(tempDir.root, "crash_log.log")
+        val previousHandlerInvocations = AtomicInteger(0)
+        val previousHandlerThread = AtomicReference<Thread>()
+        val previousHandlerThrowable = AtomicReference<Throwable>()
+        val previousHandlerInvoked = CountDownLatch(1)
+
+        val previousHandler = Thread.UncaughtExceptionHandler { thread, throwable ->
+            previousHandlerInvocations.incrementAndGet()
+            previousHandlerThread.set(thread)
+            previousHandlerThrowable.set(throwable)
+            previousHandlerInvoked.countDown()
+        }
+
+        lateinit var mirroredHandler: Thread.UncaughtExceptionHandler
+        mirroredHandler = Thread.UncaughtExceptionHandler { thread, throwable ->
+            try {
+                val writerThread = Thread({
+                    // The real writeCrashLogEntrySync(), forced to have an Error escape it via its
+                    // `sanitize` parameter -- a real, production-shaped injection point, not a
+                    // fabricated failure mode. `writeCrashLogEntrySync` only catches `Exception`,
+                    // so this `OutOfMemoryError` propagates out uncaught, exactly as issue #373
+                    // describes.
+                    writeCrashLogEntrySync(
+                        file = crashFile,
+                        timestampMillis = 1L,
+                        threadName = thread.name,
+                        throwable = throwable,
+                        versionName = "1.0",
+                        versionCode = 1L,
+                        sanitize = { throw OutOfMemoryError("simulated OOM inside the crash writer") },
+                    )
+                }, "crash-log-writer")
+                writerThread.isDaemon = true
+                // Issue #373's fix, under test: remove this line and the assertions below fail,
+                // because the OutOfMemoryError above then falls back to `mirroredHandler` (the
+                // process default) a second time.
+                writerThread.setUncaughtExceptionHandler { _, _ -> }
+                writerThread.start()
+                writerThread.join(2_000)
+            } catch (t: Throwable) {
+            } finally {
+                previousHandler.uncaughtException(thread, throwable)
+            }
+        }
+
+        val originalDefaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        val originalThrowable = IllegalStateException("original crash")
+        try {
+            Thread.setDefaultUncaughtExceptionHandler(mirroredHandler)
+            val worker = Thread({ throw originalThrowable }, "crash-test-worker-error-case")
+            // Deliberately no thread-specific handler on `worker` -- it must fall back to the
+            // process default, exactly like a real uncaught exception on an app thread would.
+            worker.start()
+            worker.join(5_000)
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(originalDefaultHandler)
+        }
+
+        assertTrue(previousHandlerInvoked.await(5, TimeUnit.SECONDS))
+        // Give a would-be recursive second invocation time to land if the writer thread's own
+        // no-op handler were missing.
+        Thread.sleep(300)
+
+        assertEquals(
+            "previous handler must run exactly once -- not a second time for the writer's own Error",
+            1,
+            previousHandlerInvocations.get(),
+        )
+        assertEquals("crash-test-worker-error-case", previousHandlerThread.get()?.name)
+        assertSame(originalThrowable, previousHandlerThrowable.get())
     }
 
     @Test
@@ -206,6 +291,37 @@ class RedactSensitivePathsTest {
             sensitiveRoots = listOf("/data/user/0/cc.machado.audioblackbox/files"),
         )
         assertFalse(result.contains("/data/user/0/cc.machado.audioblackbox/files"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsTheMntSdcardAlias() {
+        // `@rev` nit on PR #372: the `/sdcard` case was covered but its `/mnt/sdcard` sibling alias
+        // (same mechanism, same regex list) was not individually exercised.
+        val result = redactSensitivePaths("could not open /mnt/sdcard/DCIM/clip.raw", sensitiveRoots = emptyList())
+        assertFalse(result.contains("/mnt/sdcard"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsTheStorageSelfPrimaryAlias() {
+        val result = redactSensitivePaths(
+            "could not open /storage/self/primary/DCIM/clip.raw",
+            sensitiveRoots = emptyList(),
+        )
+        assertFalse(result.contains("/storage/self/primary"))
+        assertTrue(result.contains("<redacted-path>"))
+    }
+
+    @Test
+    fun redactsThePrimaryVolumesResolvedPath_byShape_evenWithNoCallerSuppliedRoot() {
+        // Redundant with the exact-root case today (production always supplies this root too), but
+        // proves the shape-based fallback covers it independently, the same as the other aliases.
+        val result = redactSensitivePaths(
+            "could not open /storage/emulated/0/DCIM/clip.raw",
+            sensitiveRoots = emptyList(),
+        )
+        assertFalse(result.contains("/storage/emulated/0"))
         assertTrue(result.contains("<redacted-path>"))
     }
 

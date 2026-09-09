@@ -138,6 +138,18 @@ class AudioBlackboxApplication : Application() {
                     )
                 }, "crash-log-writer")
                 writerThread.isDaemon = true
+                // Issue #373: `writeCrashLogEntrySync` catches `Throwable`, but something that
+                // still escapes it (an `Error` such as `OutOfMemoryError`/`StackOverflowError` --
+                // exactly what a crash-time write on an already-dying process can hit) would
+                // otherwise propagate to the *shared* default handler, i.e. back into this very
+                // handler, recursively. That would misattribute a second report to
+                // `previousHandler` (noise on the app's only external crash backstop, Play
+                // Console/Android vitals) describing the writer's failure instead of the original
+                // crash, and stack a second `CRASH_WRITE_TIMEOUT_MILLIS`-shaped delay before the
+                // original crash finally reports. This handler is deliberately a no-op -- do not
+                // "fix" it by logging or writing anything here, since doing either on this thread,
+                // for this failure, is the exact recursion this exists to stop.
+                writerThread.setUncaughtExceptionHandler { _, _ -> }
                 writerThread.start()
                 writerThread.join(CRASH_WRITE_TIMEOUT_MILLIS)
             } catch (t: Throwable) {
