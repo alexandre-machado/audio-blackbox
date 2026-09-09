@@ -94,7 +94,7 @@ This guarantees a **zero-risk recording loop**: the app never reallocates memory
 
 ## 📲 Download & Beta Testing
 
-Audio Blackbox is available in open beta via Google Play:
+Audio Blackbox is available in closed/internal beta via Google Play (no public listing yet):
 
 1. **Join the Tester Group** $\rightarrow$ [Google Groups: ccmachadoaudioblackbox](https://groups.google.com/g/ccmachadoaudioblackbox)
 2. **Accept the Web Test Invitation** $\rightarrow$ [Play Store Testing Portal](https://play.google.com/apps/testing/cc.machado.audioblackbox)
