@@ -615,6 +615,62 @@ class AudioCaptureEngineTest {
             engine.stop()
         }
 
+    // ---- issue #331: pruneExpiredGaps must weigh a *later* gap's own wall-clock duration back
+    // out before comparing elapsed time against the retention window -- retentionMillis bounds
+    // audio bytes, and no byte is written while paused, so treating the raw wall-clock delta as if
+    // it were all audio (the same class of bug as #328/#329) prunes a still-relevant gap too early. ----
+
+    @Test
+    fun `a gap survives a later long pause that consumed wall-clock time but wrote no audio`() =
+        withMinBufferSizeMocked {
+            val record = fakeAudioRecord()
+            whenever(record.read(any<ByteArray>(), any(), any())).thenReturn(0)
+            val clockMillis = AtomicLong(0L)
+            // fastConfig.bufferDurationMinutes == 1, so the retention window is 60_000ms of audio.
+            val engine = AudioCaptureEngine(
+                config = fastConfig,
+                clock = { clockMillis.get() },
+                audioRecordFactory = { _, _ -> record },
+            )
+
+            engine.start()
+            awaitState(engine, description = "Recording") { it is CaptureState.Recording }
+
+            engine.pause() // gap #1 start = 0
+            clockMillis.set(1_000L)
+            engine.resume() // gap #1 = [0, 1_000]
+            awaitState(engine, description = "Recording after gap #1") { it is CaptureState.Recording }
+
+            // 10s of real (non-gap) recording, well under the 60s retention window.
+            clockMillis.set(11_000L)
+            engine.pause() // gap #2 start = 11_000
+            // A 60s phone call: wall clock advances 60s, but the buffer never receives a byte for
+            // it, so it must not count against gap #1's 60s audio-time budget.
+            clockMillis.set(71_000L)
+            engine.resume() // gap #2 = [11_000, 71_000]
+            awaitState(engine, description = "Recording after gap #2") { it is CaptureState.Recording }
+
+            // 1s more of real recording, then a short third gap to trigger the next prune pass.
+            clockMillis.set(72_000L)
+            engine.pause() // gap #3 start = 72_000
+            clockMillis.set(73_000L)
+            engine.resume() // gap #3 = [72_000, 73_000]
+            awaitState(engine, description = "Recording after gap #3") { it is CaptureState.Recording }
+
+            // Only 11s of real audio has elapsed since gap #1 ended (10s before gap #2, 1s after
+            // it) -- well inside the 60s retention window -- so gap #1 must still be considered
+            // live even though 73s of raw wall clock separate it from `now`.
+            val gaps = engine.gaps.value
+            assertEquals(
+                "gap #1 must not be pruned: only 11s of real audio elapsed since it ended, not 73s",
+                3,
+                gaps.size,
+            )
+            assertEquals(0L, gaps.first().startTimestampMillis)
+
+            engine.stop()
+        }
+
     // ---- issue #21: a generated, known signal fed through the audioRecordFactory seam survives
     // capture intact -- proof that RingBuffer/AudioCaptureEngine do not corrupt, reorder, or
     // truncate real audio, using a signal precise enough to detect any of those defects. ----

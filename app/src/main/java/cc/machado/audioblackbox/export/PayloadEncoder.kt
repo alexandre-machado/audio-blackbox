@@ -23,8 +23,8 @@ fun interface PayloadChunkSource {
  * without a device) or [AacPayloadEncoder] (Android-only, `MediaCodec`/`MediaMuxer`, verified in
  * the instrumented tier -- see `docs/testing/tiers.md`).
  *
- * [ExportEngine] always passes the *already gap-filled* PCM payload (see [GapFiller]/
- * [BoundedExportPlanner]) -- gap filling happens once, before either encoder ever runs, so both
+ * [ExportEngine] always passes the *already gap-filled* PCM payload (see [BoundedExportPlanner])
+ * -- gap filling happens once, before either encoder ever runs, so both
  * formats see the same corrected timeline.
  */
 interface PayloadEncoder {
