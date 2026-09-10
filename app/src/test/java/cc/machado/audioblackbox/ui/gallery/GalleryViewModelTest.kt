@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.gallery
 
 import android.net.Uri
 import cc.machado.audioblackbox.export.RecordingRow
+import java.io.Closeable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -88,6 +89,76 @@ class GalleryViewModelTest {
             "a row MediaStore no longer has must not survive as a phantom list entry",
             viewModel.uiState.value.items.isEmpty(),
         )
+    }
+
+    // ---- issue #375 Part A: automatic invalidation, no manual refresh() call from the caller ----
+
+    /** Records the [onChanged] lambda [GalleryViewModel] registers, so the test can fire it
+     * directly to simulate a real `ContentObserver`/`MediaStore` notification without any Android
+     * framework dependency -- see [RecordingsChangeObserver]'s own doc for why a real
+     * `ContentObserver` is the production implementation this fake stands in for. */
+    private class FakeRecordingsChangeObserver : RecordingsChangeObserver {
+        var onChanged: (() -> Unit)? = null
+        var closed = false
+            private set
+
+        override fun observe(onChanged: () -> Unit): Closeable {
+            this.onChanged = onChanged
+            return Closeable { closed = true }
+        }
+
+        fun fireChange() = onChanged?.invoke()
+    }
+
+    @Test
+    fun `firing the change observer re-runs the query on its own, with no manual refresh() call`() = runTest {
+        val repository = FakeRecordingsRepository(listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a")))
+        val changeObserver = FakeRecordingsChangeObserver()
+        val viewModel = GalleryViewModel(
+            repository,
+            FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined,
+            changeObserver = changeObserver,
+        )
+        subscribe(viewModel)
+        assertEquals(1, viewModel.uiState.value.items.size)
+
+        // A save completing (or any other app's change) shows up as a second row, with nothing in
+        // this test ever calling viewModel.refresh() itself -- only the observer's callback does.
+        repository.rows = listOf(
+            row("blackbox_2026-01-01_00-00-00_5min.m4a"),
+            row("blackbox_2026-01-02_00-00-00_5min.m4a"),
+        )
+        changeObserver.fireChange()
+        runCurrent()
+
+        assertEquals(
+            "a change-observer notification must re-run the real query on its own -- this is the " +
+                "whole point of issue #375 Part A, not requiring the gallery screen to be reopened",
+            2,
+            viewModel.uiState.value.items.size,
+        )
+    }
+
+    @Test
+    fun `onCleared closes the change observer's subscription`() = runTest {
+        val repository = FakeRecordingsRepository(listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a")))
+        val changeObserver = FakeRecordingsChangeObserver()
+        val viewModel = GalleryViewModel(
+            repository,
+            FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined,
+            changeObserver = changeObserver,
+        )
+        subscribe(viewModel)
+
+        // ViewModel.onCleared() is protected -- routed through a real ViewModelStore instead,
+        // exactly as the Android framework tears a ViewModel down in production.
+        val store = androidx.lifecycle.ViewModelStore()
+        store.put("gallery", viewModel)
+        store.clear()
+
+        assertTrue("a cleared ViewModel must not leak its ContentObserver registration", changeObserver.closed)
     }
 
     @Test

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.export.RecordingRow
 import cc.machado.audioblackbox.export.RecordingsRepository
+import java.io.Closeable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -38,12 +39,20 @@ class GalleryViewModel(
     private val player: RecordingPlayer,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
+    // Issue #375: fires refresh() on every real MediaStore change -- a completed save (from either
+    // exporter, once its row is actually readable), a delete/add from another app, or this app's
+    // own periodic mid-recording re-finalize. Defaults to a no-op so every existing JVM test above
+    // this parameter's addition keeps constructing this class exactly as before; production wiring
+    // is [MediaStoreRecordingsObserver], supplied by [factory] below. See
+    // [RecordingsChangeObserver]'s doc for why this, and not an in-app signal, is the mechanism.
+    private val changeObserver: RecordingsChangeObserver = RecordingsChangeObserver { Closeable {} },
 ) : ViewModel() {
 
     // null means "the first query hasn't returned yet" -- see GalleryUiState.isLoading's doc.
     private val _recordings = MutableStateFlow<List<RecordingItem>?>(null)
     private val _pendingDelete = MutableStateFlow<RecordingItem?>(null)
     private val _deleteError = MutableStateFlow<RecordingItem?>(null)
+    private val _isRefreshing = MutableStateFlow(false)
 
     // Polled rather than observed for the same reason DashboardViewModel polls buffered duration:
     // MediaPlayer.getCurrentPosition() is a plain getter, not itself observable, and changes
@@ -56,7 +65,9 @@ class GalleryViewModel(
         }
     }
 
-    val uiState: StateFlow<GalleryUiState> = combine(
+    // combine() only has a direct overload up to 5 flows; _isRefreshing is folded in as a second
+    // stage rather than reaching for the Array<Any?> vararg overload for one extra boolean.
+    private val baseUiState = combine(
         _recordings,
         player.playback,
         positionTickFlow,
@@ -64,7 +75,12 @@ class GalleryViewModel(
         _deleteError,
     ) { recordings, playback, position, pendingDelete, deleteError ->
         buildUiState(recordings, playback, position, pendingDelete, deleteError)
-    }.stateIn(
+    }
+
+    val uiState: StateFlow<GalleryUiState> = combine(
+        baseUiState,
+        _isRefreshing,
+    ) { state, isRefreshing -> state.copy(isRefreshing = isRefreshing) }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
         initialValue = buildUiState(
@@ -73,19 +89,31 @@ class GalleryViewModel(
             0L,
             _pendingDelete.value,
             _deleteError.value,
-        ),
+        ).copy(isRefreshing = _isRefreshing.value),
     )
+
+    // Issue #375 Part A: the one registration for this ViewModel's lifetime. Closed in onCleared
+    // so a recreated ViewModel (e.g. after process death) doesn't leak a second registration on
+    // top of this one.
+    private val changeSubscription: Closeable = changeObserver.observe { refresh() }
 
     init {
         refresh()
     }
 
-    /** Re-runs the real `MediaStore` query. Called on init and can be re-invoked (e.g. pull to
-     * refresh, or after a delete) so the list never drifts from what is actually on disk. */
+    /** Re-runs the real `MediaStore` query. Called on init, re-invoked automatically by
+     * [changeObserver] on every real change (issue #375 Part A), and can be invoked directly (pull
+     * to refresh -- issue #375 Part B, or after a delete) so the list never drifts from what is
+     * actually on disk. */
     fun refresh() {
         viewModelScope.launch {
-            val rows = withContext(ioDispatcher) { repository.queryRecordings() }
-            _recordings.value = mapRowsToItems(rows)
+            _isRefreshing.value = true
+            try {
+                val rows = withContext(ioDispatcher) { repository.queryRecordings() }
+                _recordings.value = mapRowsToItems(rows)
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 
@@ -158,6 +186,7 @@ class GalleryViewModel(
     }
 
     override fun onCleared() {
+        changeSubscription.close()
         player.release()
     }
 
@@ -248,7 +277,7 @@ class GalleryViewModel(
                     val repository = MediaStoreSink(appContext)
                     val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     val player = AndroidRecordingPlayer(appContext, audioManager)
-                    GalleryViewModel(repository, player)
+                    GalleryViewModel(repository, player, changeObserver = MediaStoreRecordingsObserver(appContext))
                 }
             }
         }

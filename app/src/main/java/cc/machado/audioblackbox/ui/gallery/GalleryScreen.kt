@@ -33,6 +33,8 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -90,9 +92,12 @@ import cc.machado.audioblackbox.ui.theme.WarningRed
 fun GalleryRoute(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val viewModel: GalleryViewModel = viewModel(factory = GalleryViewModel.factory(context))
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        viewModel.refresh()
-    }
+    // No LaunchedEffect(Unit)/refresh() here anymore (issue #375): GalleryViewModel.init already
+    // runs the first query, and its RecordingsChangeObserver (registered for this ViewModel's
+    // whole lifetime, not once per composition) now keeps the list current on its own -- see
+    // GalleryViewModel's class-level wiring and RecordingsChangeObserver's doc for why a one-shot
+    // effect here was never enough to catch a save completing while this screen is already on
+    // screen.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     GalleryScreen(
         uiState = uiState,
@@ -103,6 +108,7 @@ fun GalleryRoute(modifier: Modifier = Modifier) {
         onDeleteConfirmed = viewModel::onDeleteConfirmed,
         onDeleteCancelled = viewModel::onDeleteCancelled,
         onDeleteErrorDismissed = viewModel::onDeleteErrorDismissed,
+        onRefresh = viewModel::refresh,
         modifier = modifier,
     )
 }
@@ -142,6 +148,9 @@ fun GalleryScreen(
     onDeleteConfirmed: () -> Unit,
     onDeleteCancelled: () -> Unit,
     onDeleteErrorDismissed: () -> Unit,
+    // No-op default (matches every other callback's previewability here): issue #375 Part B.
+    // Real wiring is GalleryRoute -> GalleryViewModel::refresh.
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -151,8 +160,19 @@ fun GalleryScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
-        GalleryHeader()
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        GalleryHeader(onRefreshClicked = onRefresh)
+        // PullToRefreshBox is the gesture path (issue #375 Part B); GalleryHeader's refresh button
+        // above is the non-gesture path -- required so a TalkBack user or a keyboard-only user (no
+        // drag gesture available to either) is never stranded without a way to force a refresh,
+        // matching this repo's existing rule that a displayed affordance must have a real,
+        // non-gesture-only trigger (see AGENTS.md 5's "never fake a signal" neighborhood and the
+        // existing icon-button contentDescription convention already used for
+        // play/pause/share/delete below).
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        ) {
             when {
                 uiState.isLoading -> LoadingState()
                 uiState.items.isEmpty() -> EmptyState()
@@ -182,12 +202,31 @@ fun GalleryScreen(
 }
 
 @Composable
-private fun GalleryHeader() {
-    ScreenHeader(
-        icon = painterResource(R.drawable.ic_gallery_folder),
-        title = stringResource(R.string.gallery_title),
-        subtitle = stringResource(R.string.gallery_subtitle),
-    )
+private fun GalleryHeader(onRefreshClicked: () -> Unit) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        ScreenHeader(
+            icon = painterResource(R.drawable.ic_gallery_folder),
+            title = stringResource(R.string.gallery_title),
+            subtitle = stringResource(R.string.gallery_subtitle),
+        )
+        // The non-gesture path for issue #375 Part B: PullToRefreshBox's drag gesture has no
+        // TalkBack or keyboard-only equivalent, so this real, always-present button is what keeps
+        // "refresh the list" reachable for those users too, matching the existing per-item
+        // icon-button + contentDescription convention (play/pause/share/delete in RecordingCard).
+        val refreshCd = stringResource(R.string.gallery_refresh_cd)
+        IconButton(
+            onClick = onRefreshClicked,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .semantics { contentDescription = refreshCd },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = null,
+                tint = FlightOrange,
+            )
+        }
+    }
 }
 
 @Composable

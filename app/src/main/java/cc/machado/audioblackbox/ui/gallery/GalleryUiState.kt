@@ -55,4 +55,12 @@ data class GalleryUiState(
     // visible error, never a silent no-op or an optimistic removal of a row still sitting on disk
     // (issue #29's rule, PR #61 review finding). Dismissed the same way pendingDelete is resolved.
     val deleteError: RecordingItem? = null,
+    // Drives the pull-to-refresh indicator (issue #375 Part B). Distinct from [isLoading]: this is
+    // true for *every* GalleryViewModel.refresh() call (the initial one, an automatic
+    // change-observer-driven one, or a user pull), whereas [isLoading] only ever describes "the
+    // first query has not returned yet" and stays false forever after that -- see [isLoading]'s own
+    // doc. Reusing [isLoading] for the indicator would flash the full-screen loading state on top
+    // of an already-visible list on every automatic refresh, which is exactly the flicker issue
+    // #375 says to avoid.
+    val isRefreshing: Boolean = false,
 )
