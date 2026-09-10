@@ -506,9 +506,21 @@ class AudioCaptureEngine(
         // constructed with -- dropping still-relevant gaps after the window grew, or keeping dead
         // ones after it shrank. Not audio corruption, but the gap list feeds export's silence
         // placement, so it is the same "one source of truth for the live format" rule.
+        // retentionMillis bounds the ring buffer's AUDIO-byte capacity, not wall-clock time: no
+        // byte is written into it while paused. So comparing it directly against a raw wall-clock
+        // delta (issue #331, same class as #328/#329) double-counts every later gap's own silence
+        // as if it were audio consuming that capacity, making the cutoff too recent and pruning a
+        // gap while its surrounding audio is still buffered. For each gap, only the *audio* time
+        // recorded since it ended -- wall-clock elapsed minus any later gaps' duration, which wrote
+        // no bytes either -- can be compared against retentionMillis.
         val retentionMillis = activeConfig.bufferDurationMinutes.toLong() * MILLIS_PER_MINUTE
-        val cutoff = now - retentionMillis
-        return gaps.filter { it.endTimestampMillis > cutoff }
+        return gaps.filter { gap ->
+            val laterGapMillis = gaps
+                .filter { later -> later.startTimestampMillis >= gap.endTimestampMillis }
+                .sumOf { it.durationMillis }
+            val audioMillisSinceGapEnded = (now - gap.endTimestampMillis) - laterGapMillis
+            audioMillisSinceGapEnded < retentionMillis
+        }
     }
 
     private fun captureLoop(

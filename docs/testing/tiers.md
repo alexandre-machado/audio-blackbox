@@ -113,10 +113,11 @@ PR #35):** it proves a real interruption is detected, that exactly two `PauseGap
 in the correct order with no overlap, and that the subsequent export commits a non-pending
 MediaStore row with a declared duration matching the expected recording window. It does **not** prove the exported audio is
 correctly spliced — a mis-ordering or mis-placement of segments that still adds up to the same
-total length would satisfy every assertion here unnoticed. That byte-level placement claim is
-`GapFillerTest`'s job (a JVM unit test with a synthetic multi-gap fixture it can assert exact
-segment content against); this tier cannot make the same claim about real captured audio because
-the headless CI emulator has no host audio backend behind its virtual microphone (see the
+total length would satisfy every assertion here unnoticed. That placement claim is
+`BoundedExportGapWindowTest`'s job (a JVM unit test whose multi-gap case asserts the exact ordered
+list of planned `Raw` byte ranges and `Silence` segments `BoundedExportPlanner` produces, not just
+their count or total length); this tier cannot make the same claim about real captured audio
+because the headless CI emulator has no host audio backend behind its virtual microphone (see the
 mic-injection finding above), so there is no distinguishable content here to check placement
 against in the first place.
 

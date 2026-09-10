@@ -54,12 +54,12 @@ import java.io.OutputStream
  *    rather than accumulating drift proportional to the recording length.
  * 2. **The priming delay is not free: it shows up as 2048 samples of quiet, transient content
  *    prepended to the decoded audio**, not as a timeline shift of everything after it. Confirmed
- *    by `AacGapOffsetTest`: a gap-filled PCM payload with a silent region in the middle still
+ *    by `InterruptionSpliceTest`: a gap-filled PCM payload with a silent region in the middle still
  *    decodes with that silence at the same *relative* offset from the start (within a documented
  *    2048-sample tolerance for this fixed priming delay plus encoder frame quantization -- neither
  *    is a bug), because gap filling happens once on the whole PCM payload before encoding ever
- *    starts (see [ExportEngine]/[GapFiller]) -- there is only one priming delay for the entire
- *    export, at the very front, not one per gap. 128ms of extra content at the very start of a
+ *    starts (see [ExportEngine]/[BoundedExportPlanner]) -- there is only one priming delay for the
+ *    entire export, at the very front, not one per gap. 128ms of extra content at the very start of a
  *    multi-minute ambient recording is the accepted cost of this
  *    codec property for this product; there is no `MediaMuxer` API to write an edit list
  *    (`elst`/gapless-playback metadata) to trim it, and hand-rolling one was judged not worth the
