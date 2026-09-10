@@ -239,47 +239,87 @@ object BoundedExportPlanner {
         )
     }
 
+    /**
+     * Trims a plan down to fit `targetDurationMillis` by discarding [excessMillis] worth of
+     * content, oldest first -- but silence goes before audio (issue #330).
+     *
+     * Before #330 this dropped strictly chronologically, oldest segment first, with no regard for
+     * whether a segment was real audio or planned silence. That is safe when the plan is mostly
+     * audio, but a long interruption (e.g. a 30-minute call) followed by a short resume can leave a
+     * bounded export's plan dominated by [PlanSegment.Silence]: chronological-only trimming then
+     * drops whatever real audio happens to sit at the head first and leaves the enormous gap's
+     * silence almost untouched, so the file the user saved plays as near-total silence even though
+     * real audio existed and fit easily inside the requested duration.
+     *
+     * This does NOT reintroduce the end-side clamp #329 removed. That clamp acted earlier and
+     * differently: it capped a [cc.machado.audioblackbox.audio.PauseGap]'s contribution to the
+     * window's wall-clock arithmetic (`windowEnd`) *before* a gap was ever assessed against
+     * `targetDurationMillis`, so a real interruption past the (wrongly short) computed end was
+     * discarded from the plan outright, unconditionally, regardless of how short the requested
+     * export was. Nothing here touches that arithmetic: every gap that #329's fix put in
+     * `relevantGaps`/`windowEnd` still lands in `rawSegments` at full length, exactly as before this
+     * function ever runs. This only changes which *already fully-planned* content this fitting step
+     * removes -- silence is discarded ahead of audio, but only up to how much silence exists; real
+     * audio is trimmed too, exactly as before, once there is no more silence left to give up, so a
+     * plan that is legitimately mostly audio is trimmed exactly as it always was.
+     */
     private fun dropLeadingDuration(
         segments: List<PlanSegment>,
         excessMillis: Long,
         targetConfig: AudioConfig,
     ): List<PlanSegment> {
-        var remainingMsToDrop = excessMillis
-        val result = mutableListOf<PlanSegment>()
-        for (segment in segments) {
-            if (remainingMsToDrop <= 0L) {
-                result += segment
-                continue
-            }
-            val segMs = when (segment) {
-                is PlanSegment.Raw -> millisFor(segment.length, segment.config.bytesPerSecond)
-                is PlanSegment.Silence -> millisFor(segment.length, targetConfig.bytesPerSecond)
-            }
-            if (segMs <= remainingMsToDrop) {
-                remainingMsToDrop -= segMs
-                continue
-            }
-            val keptMs = segMs - remainingMsToDrop
-            remainingMsToDrop = 0L
-            result += when (segment) {
-                is PlanSegment.Raw -> {
-                    val keptBytes = alignDown(
-                        bytesFor(keptMs, segment.config.bytesPerSecond),
-                        segment.config.bytesPerFrame,
-                    )
-                    val dropBytes = segment.length - keptBytes
-                    PlanSegment.Raw(segment.cursorStart + dropBytes, keptBytes, segment.config)
-                }
-                is PlanSegment.Silence -> {
-                    val keptBytes = alignDown(
-                        bytesFor(keptMs, targetConfig.bytesPerSecond),
-                        targetConfig.bytesPerFrame,
-                    )
-                    PlanSegment.Silence(keptBytes)
-                }
-            }
+        if (excessMillis <= 0L) return segments
+
+        fun segMillis(segment: PlanSegment): Long = when (segment) {
+            is PlanSegment.Raw -> millisFor(segment.length, segment.config.bytesPerSecond)
+            is PlanSegment.Silence -> millisFor(segment.length, targetConfig.bytesPerSecond)
         }
-        return result
+
+        fun dropFrom(input: List<PlanSegment>, onlySilence: Boolean, toDrop: Long): Pair<List<PlanSegment>, Long> {
+            var remaining = toDrop
+            val kept = mutableListOf<PlanSegment>()
+            for (segment in input) {
+                val eligible = !onlySilence || segment is PlanSegment.Silence
+                if (remaining <= 0L || !eligible) {
+                    kept += segment
+                    continue
+                }
+                val segMs = segMillis(segment)
+                if (segMs <= remaining) {
+                    remaining -= segMs
+                    continue
+                }
+                val keptMs = segMs - remaining
+                remaining = 0L
+                kept += when (segment) {
+                    is PlanSegment.Raw -> {
+                        val keptBytes = alignDown(
+                            bytesFor(keptMs, segment.config.bytesPerSecond),
+                            segment.config.bytesPerFrame,
+                        )
+                        val dropBytes = segment.length - keptBytes
+                        PlanSegment.Raw(segment.cursorStart + dropBytes, keptBytes, segment.config)
+                    }
+                    is PlanSegment.Silence -> {
+                        val keptBytes = alignDown(
+                            bytesFor(keptMs, targetConfig.bytesPerSecond),
+                            targetConfig.bytesPerFrame,
+                        )
+                        PlanSegment.Silence(keptBytes)
+                    }
+                }
+            }
+            return kept to remaining
+        }
+
+        // Pass 1: give up silence, oldest first, up to the whole excess.
+        val (afterSilence, remainingAfterSilence) = dropFrom(segments, onlySilence = true, toDrop = excessMillis)
+        if (remainingAfterSilence <= 0L) return afterSilence
+
+        // Pass 2: silence alone could not cover the excess (the plan is mostly real audio); fall
+        // back to the original oldest-first trim across whatever is left.
+        val (afterAudio, _) = dropFrom(afterSilence, onlySilence = false, toDrop = remainingAfterSilence)
+        return afterAudio
     }
 
     private fun bytesFor(millis: Long, bytesPerSecond: Int): Long =

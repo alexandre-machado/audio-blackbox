@@ -260,9 +260,13 @@ class BoundedExportGapWindowTest {
         assertEquals(2_000L, plannedDurationMillis(plan))
     }
 
-    /** Trimming to the requested duration still drops from the head, silence included. */
+    /**
+     * Trimming to the requested duration still drops from the head overall, but silence goes
+     * before audio (issue #330): of the 20s window's 8s of interruption, only as much survives as
+     * is needed to reach the requested 15s once the full 12s of real audio is kept.
+     */
     @Test
-    fun `a window longer than the requested duration is trimmed from the head`() {
+    fun `a window longer than the requested duration drops silence before audio`() {
         val windowStart = 1_000_000L
         val gaps = listOf(
             PauseGap(windowStart + 6_000L, windowStart + 10_000L),
@@ -284,10 +288,51 @@ class BoundedExportGapWindowTest {
             plannedDurationMillis(plan),
         )
         assertEquals(
-            "trimming drops the oldest 5s, which is audio, leaving both interruptions",
-            8_000L,
+            "all 12s of real audio survives; only 3s of the 8s of interruption is kept, oldest " +
+                "gap dropped first (issue #330)",
+            3_000L,
             plannedSilenceMillis(plan),
         )
+    }
+
+    /**
+     * Regression for issue #330: a long interruption (30 min call) followed by a short resume,
+     * exported at a bounded duration much shorter than the interruption. Before #330,
+     * `dropLeadingDuration` dropped strictly oldest-first with no regard for content type: the
+     * pre-call audio (chronologically first) was dropped entirely, but the 30-minute gap's silence
+     * -- chronologically next, and untouched by anything #329 changed -- absorbed almost none of
+     * the trim, so the saved file was a 5-minute clip that was 80% silence despite 660s of real
+     * audio existing and fitting easily inside the request.
+     *
+     * This does not reintroduce #329's clamp: every millisecond of the 30-minute gap still enters
+     * `relevantGaps`/`windowEnd` (see the window-arithmetic tests above) and is planned as silence
+     * in full before this trimming step ever runs. The fix only changes which already-planned
+     * content this step discards to fit the requested duration.
+     */
+    @Test
+    fun `a long interruption plus a short resume trimmed to a bounded duration keeps audio over silence`() {
+        val windowStart = 1_000_000L
+        // 10 min of real audio, a 30 min interruption, then 1 min of resume audio -- 41 min raw
+        // window, exported at 5 min.
+        val gaps = listOf(PauseGap(windowStart + 600_000L, windowStart + 2_400_000L))
+
+        val plan = BoundedExportPlanner.plan(
+            startCursor = 0L,
+            rawLength = bytesForMillis(660_000L), // 10 min pre-call + 1 min resume, real audio
+            windowStart = windowStart,
+            gaps = gaps,
+            config = config,
+            targetDurationMillis = 300_000L, // last 5 minutes requested
+        )
+
+        assertEquals(
+            "the 30-minute interruption dwarfs the 5-minute request, but 660s of real audio " +
+                "also exists in the window and none of it may be evicted in favor of silence " +
+                "(issue #330)",
+            0L,
+            plannedSilenceMillis(plan),
+        )
+        assertEquals(300_000L, plannedDurationMillis(plan))
     }
 
     private fun plannedDurationMillis(plan: BoundedExportPlan): Long = plan.segments.sumOf { seg ->
