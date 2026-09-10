@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.service.RecorderService
 import org.junit.After
@@ -97,7 +98,6 @@ class InterruptionSpliceTest {
             "capture never reached Recording",
             pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Recording },
         )
-        val recordingStartMillis = System.currentTimeMillis()
 
         // Sync point for scripts/ci/run-interruption-scenario.sh: it waits for this exact line
         // before starting its adb-emu gsm-call schedule. Everything from here on is driven
@@ -124,25 +124,78 @@ class InterruptionSpliceTest {
         assertTrue("gap 1 duration must be positive (found $gaps)", gaps[0].durationMillis > 0)
         assertTrue("gap 2 duration must be positive (found $gaps)", gaps[1].durationMillis > 0)
 
-        val requestSaveMillis = System.currentTimeMillis()
+        // issue #328's restructured oracle (corrected on PR #376 round 2) assumes a 16 kHz
+        // capture rate for the encoder-priming tolerance computed below (2048 samples / 16 kHz =
+        // 128ms). Assert the config this session is actually running under matches, so a future
+        // preset change cannot silently invalidate that constant.
+        val engine = RecorderService.engine
+        assertEquals(
+            "encoderPrimingToleranceMillis below assumes AudioConfig.DEFAULT_SAMPLE_RATE_HZ's " +
+                "16 kHz rate; this session's actual capture config must match it",
+            16_000,
+            engine.activeConfig.sampleRateHz,
+        )
+
+        // The recording window's start/end are taken from the engine's own timeline, not from
+        // this test's own System.currentTimeMillis() calls (issue #328, corrected on PR #376
+        // round 2). RingBuffer.estimateTimestamp interpolates from real wall-clock markers the
+        // capture thread stamps at the moment each chunk is actually written into the buffer --
+        // the same mechanism BoundedExportPlan/ExportEngine already use to compute a bounded
+        // export's windowStart (estimateTimestamp(oldestCursor())). Anchoring both ends of this
+        // comparison to that timeline instead of the test thread's own clock cancels AudioRecord
+        // init latency and test-side polling/scheduling jitter from both sides of the subtraction
+        // below: those are exactly what the old 7500ms tolerance existed to cover (documented
+        // there as a 4-6s discrepancy on busy CI runners), and they act on any comparison whose
+        // right-hand side is externally-measured elapsed wall clock -- which is why that budget
+        // could not simply be cut down to the encoder-priming component alone (round 1 of this
+        // restructure tried exactly that, and CI failed on unmutated content at 545a9d4:
+        // "declared duration 24704ms must equal ... 24564ms ... within 128ms"). What remains after
+        // anchoring to the engine's own timeline is real AAC encoder-priming quantization, not
+        // scheduling noise.
+        val sessionStartCursor = checkNotNull(engine.oldestCursor()) {
+            "engine has no live ring buffer to derive a session-start cursor from"
+        }
+        val sessionStartMillis = checkNotNull(engine.estimateTimestamp(sessionStartCursor)) {
+            "engine has no live ring buffer to derive a session-start timestamp from"
+        }
+
         context.startService(RecorderService.saveIntent(context))
+
+        val sessionEndCursor = checkNotNull(engine.writeCursor()) {
+            "engine has no live ring buffer to derive a session-end cursor from"
+        }
+        val sessionEndMillis = checkNotNull(engine.estimateTimestamp(sessionEndCursor)) {
+            "engine has no live ring buffer to derive a session-end timestamp from"
+        }
 
         val row = pollForExportedRow(sinceMillis = testStartMillis, timeoutMillis = 30_000)
         assertNotNull("export never landed a committed MediaStore row", row)
         checkNotNull(row)
         assertEquals("IS_PENDING must be cleared once export commits", 0, row.isPending)
 
-        // The recording window spans from when we entered Recording until we issued saveIntent.
-        // If interruptions were mis-spliced and dropped instead of filled with silence (issue #36),
-        // the file will be significantly shorter than this elapsed window (missing ~8-10s of simulated calls).
-        // We allow 7.5 seconds of tolerance to accommodate for AudioRecord initialization latency, emulator
-        // buffer scheduling, start/stop jitter, and polling latency (which can create a 4-6s discrepancy on busy CI runners).
-        val expectedDuration = requestSaveMillis - recordingStartMillis
-        val tolerance = 7500L
+        // expectedDurationMillis == audioOnlyMillis + totalGapMillis by construction: every gap
+        // this test detected and asserted above (ordered, positive, non-overlapping) happens
+        // strictly inside [sessionStartMillis, sessionEndMillis], and that window's own span --
+        // engine timeline, not test wall clock, see above -- is exactly the audio time it contains
+        // plus the gap time it contains.
+        val totalGapMillis = gaps.sumOf { it.durationMillis }
+        val expectedDurationMillis = sessionEndMillis - sessionStartMillis
+        // The one tolerance kept, and not a scheduling fudge factor by another name: AAC-LC's
+        // MDCT look-ahead gives the encoder a *measured* (not assumed) priming delay of exactly
+        // 2048 samples -- see AacPayloadEncoder's kdoc and AacRoundTripTest.
+        // measureAndBoundLeadingPrimingSamples -- which at this test's 16kHz mono capture config
+        // (asserted above) is 2048 / 16000 = 128ms. That is a real, cited codec property biasing
+        // the container's declared duration against the true input duration by up to that amount,
+        // independent of wall-clock measurement precision on either side of this comparison --
+        // unlike the old tolerance, this one is not standing in for AudioRecord/scheduling jitter,
+        // which this assertion no longer needs a budget for at all.
+        val encoderPrimingToleranceMillis = 2048L * 1000L / AudioConfig.DEFAULT_SAMPLE_RATE_HZ
         assertTrue(
-            "declared duration ${row.durationMillis}ms must match the elapsed recording window " +
-                "of ${expectedDuration}ms within a ${tolerance}ms tolerance",
-            kotlin.math.abs(row.durationMillis - expectedDuration) <= tolerance
+            "declared duration ${row.durationMillis}ms must equal the engine-timeline recording " +
+                "window of ${expectedDurationMillis}ms (of which ${totalGapMillis}ms across " +
+                "${gaps.size} detected gap(s) must be filled with silence) within the AAC " +
+                "encoder's documented ${encoderPrimingToleranceMillis}ms priming-delay quantization",
+            kotlin.math.abs(row.durationMillis - expectedDurationMillis) <= encoderPrimingToleranceMillis,
         )
         // This tier runs at API 30 (see scripts/ci/avd.env) -- below the API 31 floor
         // MediaStoreSink requires for the top-level `Recordings/` root (issue #33) -- so this is
