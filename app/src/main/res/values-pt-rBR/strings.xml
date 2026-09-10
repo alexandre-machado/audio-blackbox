@@ -224,6 +224,8 @@
     <string name="gallery_delete_error_title">Não foi possível excluir</string>
     <string name="gallery_delete_error_body">Esta gravação não pôde ser excluída. Isso pode acontecer com gravações antigas após reinstalar o aplicativo.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
+    <string name="gallery_refresh_cd">Atualizar lista de gravações</string>
+    <string name="gallery_recording_badge">Gravando</string>
     <!-- Barra flutuante inferior -->
     <!-- Issue #340: owner-approved pt-BR set, decided 2026-09-05. "Cockpit" stays untranslated
          deliberately (aviation vocabulary that reads natively in pt-BR); the other two are

@@ -7,9 +7,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.export.RecordingRow
 import cc.machado.audioblackbox.export.RecordingsRepository
+import cc.machado.audioblackbox.service.RecorderService
+import java.io.Closeable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -38,12 +41,35 @@ class GalleryViewModel(
     private val player: RecordingPlayer,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val tickMillis: Long = DEFAULT_TICK_MILLIS,
+    // Issue #375: fires refresh() on every real MediaStore change -- a completed save (from either
+    // exporter, once its row is actually readable), a delete/add from another app, or this app's
+    // own periodic mid-recording re-finalize. Defaults to a no-op so every existing JVM test above
+    // this parameter's addition keeps constructing this class exactly as before; production wiring
+    // is [MediaStoreRecordingsObserver], supplied by [factory] below. See
+    // [RecordingsChangeObserver]'s doc for why this, and not an in-app signal, is the mechanism.
+    private val changeObserver: RecordingsChangeObserver = RecordingsChangeObserver { Closeable {} },
+    // `@rev` PR #377 finding (medium): a live forward recording's row is visible in MediaStore
+    // from the instant it starts (issue #53's early commit) with a stale/zero duration that
+    // self-corrects one or more times while recording continues -- with no invalidation delay to
+    // hide that anymore (issue #375 Part A), that provisional row now appears immediately instead
+    // of rarely. Rather than filtering it out of the query (there is no reliable "not finished
+    // yet" signal to filter on -- IS_PENDING is already cleared early by the same issue #53) or
+    // debouncing the refresh (the exact fixed-delay anti-pattern #375 rules out, just relocated),
+    // this marks it: the app already knows its own in-progress session
+    // ([RecorderService.forwardRecordingState], the same companion-object `StateFlow` source
+    // [cc.machado.audioblackbox.ui.dashboard.DashboardViewModel] already reads from), so
+    // [buildUiState] below cross-references it by [ForwardRecordingState.Recording.displayName]
+    // and marks the matching item [RecordingListItem.isInProgress] -- see that property's doc for
+    // how the UI renders it. Defaults to the real, process-lifetime companion flow; tests inject a
+    // fake the same way every other constructor parameter here already does.
+    private val forwardRecordingState: StateFlow<ForwardRecordingState> = RecorderService.forwardRecordingState,
 ) : ViewModel() {
 
     // null means "the first query hasn't returned yet" -- see GalleryUiState.isLoading's doc.
     private val _recordings = MutableStateFlow<List<RecordingItem>?>(null)
     private val _pendingDelete = MutableStateFlow<RecordingItem?>(null)
     private val _deleteError = MutableStateFlow<RecordingItem?>(null)
+    private val _isRefreshing = MutableStateFlow(false)
 
     // Polled rather than observed for the same reason DashboardViewModel polls buffered duration:
     // MediaPlayer.getCurrentPosition() is a plain getter, not itself observable, and changes
@@ -56,7 +82,9 @@ class GalleryViewModel(
         }
     }
 
-    val uiState: StateFlow<GalleryUiState> = combine(
+    // combine() only has a direct overload up to 5 flows; _isRefreshing/forwardRecordingState are
+    // folded in as a second stage rather than reaching for the Array<Any?> vararg overload.
+    private val baseUiState = combine(
         _recordings,
         player.playback,
         positionTickFlow,
@@ -64,28 +92,52 @@ class GalleryViewModel(
         _deleteError,
     ) { recordings, playback, position, pendingDelete, deleteError ->
         buildUiState(recordings, playback, position, pendingDelete, deleteError)
+    }
+
+    val uiState: StateFlow<GalleryUiState> = combine(
+        baseUiState,
+        _isRefreshing,
+        forwardRecordingState,
+    ) { state, isRefreshing, forwardState ->
+        applyRefreshAndInProgressState(state, isRefreshing, forwardState)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-        initialValue = buildUiState(
-            _recordings.value,
-            player.playback.value,
-            0L,
-            _pendingDelete.value,
-            _deleteError.value,
+        initialValue = applyRefreshAndInProgressState(
+            buildUiState(
+                _recordings.value,
+                player.playback.value,
+                0L,
+                _pendingDelete.value,
+                _deleteError.value,
+            ),
+            _isRefreshing.value,
+            forwardRecordingState.value,
         ),
     )
+
+    // Issue #375 Part A: the one registration for this ViewModel's lifetime. Closed in onCleared
+    // so a recreated ViewModel (e.g. after process death) doesn't leak a second registration on
+    // top of this one.
+    private val changeSubscription: Closeable = changeObserver.observe { refresh() }
 
     init {
         refresh()
     }
 
-    /** Re-runs the real `MediaStore` query. Called on init and can be re-invoked (e.g. pull to
-     * refresh, or after a delete) so the list never drifts from what is actually on disk. */
+    /** Re-runs the real `MediaStore` query. Called on init, re-invoked automatically by
+     * [changeObserver] on every real change (issue #375 Part A), and can be invoked directly (pull
+     * to refresh -- issue #375 Part B, or after a delete) so the list never drifts from what is
+     * actually on disk. */
     fun refresh() {
         viewModelScope.launch {
-            val rows = withContext(ioDispatcher) { repository.queryRecordings() }
-            _recordings.value = mapRowsToItems(rows)
+            _isRefreshing.value = true
+            try {
+                val rows = withContext(ioDispatcher) { repository.queryRecordings() }
+                _recordings.value = mapRowsToItems(rows)
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 
@@ -158,6 +210,7 @@ class GalleryViewModel(
     }
 
     override fun onCleared() {
+        changeSubscription.close()
         player.release()
     }
 
@@ -234,6 +287,34 @@ class GalleryViewModel(
             )
         }
 
+        /** Folds [isRefreshing] and the in-progress marker (issue #375, `@rev` PR #377 medium
+         * finding) onto an already-built [GalleryUiState]. Split out from [buildUiState] itself so
+         * the five-flow `combine` above it can stay within `combine`'s direct-overload arity;
+         * these two additional flows update independently of recordings/playback/pending-delete
+         * and don't change how any of that is derived.
+         *
+         * The oracle for [RecordingListItem.isInProgress]: exactly the item whose
+         * [RecordingItem.displayName] matches [ForwardRecordingState.Recording.displayName] --
+         * `MediaStoreSink`/`ForwardRecordingEngine` write both from the exact same generated name
+         * (see [ForwardRecordingEngine.generateDisplayName]), so this is an exact match, never a
+         * heuristic. Every other [ForwardRecordingState] (Idle/Success/Error) marks nothing --
+         * once a session ends, its row stops being "in progress" the very next time this recomputes,
+         * which is driven by the same `combine` recomputing on [forwardRecordingState]'s own next
+         * emission, not by a delay. */
+        fun applyRefreshAndInProgressState(
+            state: GalleryUiState,
+            isRefreshing: Boolean,
+            forwardState: ForwardRecordingState,
+        ): GalleryUiState {
+            val activeDisplayName = (forwardState as? ForwardRecordingState.Recording)?.displayName
+            return state.copy(
+                isRefreshing = isRefreshing,
+                items = state.items.map { item ->
+                    item.copy(isInProgress = activeDisplayName != null && item.recording.displayName == activeDisplayName)
+                },
+            )
+        }
+
         /** Standard [ViewModelProvider.Factory] wiring for
          * [cc.machado.audioblackbox.ui.MainActivity]/[GalleryRoute]'s `viewModel(factory = ...)`
          * call -- this class's constructor parameters all have defaults for testability, which
@@ -248,7 +329,7 @@ class GalleryViewModel(
                     val repository = MediaStoreSink(appContext)
                     val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
                     val player = AndroidRecordingPlayer(appContext, audioManager)
-                    GalleryViewModel(repository, player)
+                    GalleryViewModel(repository, player, changeObserver = MediaStoreRecordingsObserver(appContext))
                 }
             }
         }

@@ -262,6 +262,8 @@
     <string name="gallery_delete_error_title">Couldn\'t delete</string>
     <string name="gallery_delete_error_body">This recording couldn\'t be deleted. This can happen with older recordings after reinstalling the app.</string>
     <string name="gallery_delete_error_dismiss">OK</string>
+    <string name="gallery_refresh_cd">Refresh recordings list</string>
+    <string name="gallery_recording_badge">Recording</string>
     <!-- Floating bottom bar -->
     <!-- Issue #340: names match docs/design/index.html's .phone-bottom-nav labels exactly.
          Resource names are unchanged, only the values move to the design-system wording. -->
