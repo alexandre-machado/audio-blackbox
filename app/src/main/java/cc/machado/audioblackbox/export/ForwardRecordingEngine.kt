@@ -684,7 +684,18 @@ class ForwardRecordingEngine(
         private const val POLL_INTERVAL_MILLIS = 50L
         private const val FINAL_DRAIN_TIMEOUT_NANOS = 5_000_000_000L // 5 seconds
 
-        /** Throttle for periodic mid-recording MediaStore re-finalization (issue #140). */
+        /** Throttle for periodic mid-recording MediaStore re-finalization (issue #140).
+         *
+         * Coupled to gallery query volume (`@rev` PR #377 low finding, issue #375): each
+         * re-finalize's `MediaScannerConnection.scanFile` triggers a `ContentObserver` notification
+         * (see [cc.machado.audioblackbox.ui.gallery.RecordingsChangeObserver]'s doc), and every
+         * such notification re-runs a full `GalleryViewModel.refresh()` while a live forward
+         * recording and the gallery screen are both active at once. Narrowing this interval
+         * therefore also raises gallery query load, not just MediaStore freshness -- the two are
+         * the same knob. At the current 5s throttle this is one bounded `MediaStore` query per 5
+         * seconds of active recording, which is judged acceptable (a plain content-provider query
+         * over a handful of rows, not a full-file read); this is not re-measured here, only
+         * recorded so a future interval change is a deliberate tradeoff instead of a silent one. */
         private const val REFINALIZE_INTERVAL_NANOS = 5_000_000_000L // 5 seconds
 
         fun generateDisplayName(date: Date, extension: String = StreamingAacWriter.FILE_EXTENSION): String {

@@ -33,10 +33,25 @@ sealed interface ItemPlaybackState {
     data class Paused(val positionMillis: Long, val durationMillis: Long) : ItemPlaybackState
 }
 
-/** One row [GalleryScreen] renders: the static [recording] plus its current [playback] state. */
+/** One row [GalleryScreen] renders: the static [recording] plus its current [playback] state.
+ *
+ * [isInProgress] (issue #375, `@rev` PR #377 review): true exactly while this row is the live
+ * forward recording `RecorderService`'s own `forwardRecordingState` currently reports --
+ * see [cc.machado.audioblackbox.ui.gallery.GalleryViewModel.applyRefreshAndInProgressState]'s doc
+ * for the oracle. Issue #53's early commit means this row is visible in `MediaStore` (and, since
+ * issue #375 Part A, in this list) from the instant recording starts, with a duration that reads
+ * stale/zero and silently corrects itself one or more times before the session ends -- without
+ * this flag that self-correction has no visible explanation, which is exactly what PR #377 review
+ * flagged: "observable" (issue #375's own requirement) means the user can tell *why* the number is
+ * moving, not just that it eventually settles. [GalleryScreen] renders this as a distinct
+ * "Recording" badge (`AvionicsGreen`, matching this app's documented recording-state color, see
+ * `AGENTS.md` 5's semantic colour-role rule) rather than changing how the duration itself is shown,
+ * so a real, still-accruing number next to an explicit "still recording" label reads as exactly
+ * what it is. */
 data class RecordingListItem(
     val recording: RecordingItem,
     val playback: ItemPlaybackState,
+    val isInProgress: Boolean = false,
 )
 
 /**

@@ -37,7 +37,16 @@ import java.io.Closeable
  * `MediaStore` itself converges to it: a genuinely provisional first appearance (e.g. duration
  * still 0 mid-recording) self-corrects on the very next notification instead of silently drifting
  * or requiring a fixed delay tuned to "long enough" -- the anti-pattern this issue explicitly rules
- * out.
+ * out. A provisional row's *appearance* while it self-corrects is a separate concern -- see
+ * [GalleryViewModel.applyRefreshAndInProgressState]/[RecordingListItem.isInProgress].
+ *
+ * ## Query-volume coupling (`@rev` PR #377 low finding)
+ * [cc.machado.audioblackbox.export.ForwardRecordingEngine]'s periodic mid-recording re-finalize
+ * (see its own `REFINALIZE_INTERVAL_NANOS` doc) is the notification source that fires most often
+ * while a live recording and the gallery screen are both active -- each such re-finalize's
+ * `scanFile` call triggers exactly one `onChange` here, i.e. one `GalleryViewModel.refresh()`. The
+ * two constants are the same knob from opposite ends; see that throttle's own doc for why the
+ * current cadence is judged acceptable.
  */
 fun interface RecordingsChangeObserver {
     /**

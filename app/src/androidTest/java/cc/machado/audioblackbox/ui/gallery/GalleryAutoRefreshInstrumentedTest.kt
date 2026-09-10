@@ -82,6 +82,13 @@ private class NoOpRecordingPlayer : RecordingPlayer {
  * 3 seconds actually recorded. If invalidation is broken (no `ContentObserver` wired, or nothing
  * ever calls [ForwardRecordingEngine]'s refinalize), this test times out rather than passing
  * vacuously.
+ *
+ * Also asserts the presentation half (`@rev` PR #377 medium finding): while the session is still
+ * genuinely recording, the matching row must already be marked [RecordingListItem.isInProgress] --
+ * not just eventually correct -- and that mark must be gone again once [ForwardRecordingEngine.stop]
+ * has actually returned [ForwardRecordingState.Success]. [ForwardRecordingEngine.state] is passed
+ * directly as this test's `forwardRecordingState`, the same shape
+ * [cc.machado.audioblackbox.service.RecorderService.forwardRecordingState] forwards in production.
  */
 @RunWith(AndroidJUnit4::class)
 class GalleryAutoRefreshInstrumentedTest {
@@ -115,11 +122,24 @@ class GalleryAutoRefreshInstrumentedTest {
         val buffer = RingBuffer(capacityBytes = 200_000, bytesPerSecond = config.bytesPerSecond)
         val name = "blackbox_${runId}_gallery_autorefresh.m4a"
 
+        val engine = ForwardRecordingEngine(
+            config = config,
+            readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
+            writeCursorProvider = { buffer.writeCursor() },
+            oldestCursorProvider = { buffer.oldestCursor() },
+            gapsProvider = { emptyList() },
+            sink = sink,
+        )
+
         val vm = GalleryViewModel(
             repository = sink,
             player = NoOpRecordingPlayer(),
             ioDispatcher = Dispatchers.IO,
             changeObserver = MediaStoreRecordingsObserver(context),
+            // The real signal `RecorderService.forwardRecordingState` would forward in production
+            // (see GalleryViewModel's own doc on that parameter) -- engine.state here is the exact
+            // same StateFlow shape, just not routed through the Service in this test.
+            forwardRecordingState = engine.state,
         )
         viewModelStore.put("gallery", vm)
 
@@ -132,17 +152,24 @@ class GalleryAutoRefreshInstrumentedTest {
         }
 
         try {
-            val engine = ForwardRecordingEngine(
-                config = config,
-                readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
-                writeCursorProvider = { buffer.writeCursor() },
-                oldestCursorProvider = { buffer.oldestCursor() },
-                gapsProvider = { emptyList() },
-                sink = sink,
-            )
-
             val startResult = engine.start(customDisplayName = name)
             assertTrue("start should succeed: $startResult", startResult is ForwardRecordingState.Recording)
+
+            // `@rev` PR #377 medium finding: the row must be legible as still-recording, not just
+            // eventually correct. Waits (state-based, no sleep/fixed delay) for the row to show up
+            // *and* be marked isInProgress -- this is the presentation half of the fix, not the
+            // duration-correctness half asserted after stop() below. If the marking is broken, this
+            // times out instead of silently passing on the later convergence check.
+            val whileRecording = withTimeout(CONVERGE_TIMEOUT_MILLIS) {
+                vm.uiState.first { state ->
+                    state.items.any { it.recording.displayName == name && it.isInProgress }
+                }
+            }
+            assertTrue(
+                "a row for the still-recording session must be marked isInProgress while it is " +
+                    "actually recording",
+                whileRecording.items.single { it.recording.displayName == name }.isInProgress,
+            )
 
             // Feed a known 3 seconds of PCM, same shape as
             // ForwardRecordingEngineTest.forwardRecording_mediaStoreRowMatchesFinishedFileAfterStop.
@@ -161,7 +188,9 @@ class GalleryAutoRefreshInstrumentedTest {
             }
 
             // Blocks until the drain thread's finally{} block (the authoritative final refinalize,
-            // issue #140) has already run -- see ForwardRecordingEngine.stop's doc.
+            // issue #140) has already run -- see ForwardRecordingEngine.stop's doc. engine.state is
+            // Success by the time this returns, which is also what forwardRecordingState above
+            // reflects on its very next emission -- no separate wait needed for the badge to clear.
             val stopResult = engine.stop()
             assertTrue("stop should succeed: $stopResult", stopResult is ForwardRecordingState.Success)
 
@@ -184,6 +213,12 @@ class GalleryAutoRefreshInstrumentedTest {
                 true,
                 item.recording.durationMillis in
                     (totalMillis - DURATION_TOLERANCE_MILLIS)..(totalMillis + DURATION_TOLERANCE_MILLIS),
+            )
+            assertEquals(
+                "once the session has actually finished, the row must no longer be marked " +
+                    "isInProgress -- no lingering \"Recording\" badge on a completed file",
+                false,
+                item.isInProgress,
             )
         } finally {
             collectorJob.cancel()

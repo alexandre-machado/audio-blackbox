@@ -1,9 +1,11 @@
 package cc.machado.audioblackbox.ui.gallery
 
 import android.net.Uri
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.RecordingRow
 import java.io.Closeable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -159,6 +161,72 @@ class GalleryViewModelTest {
         store.clear()
 
         assertTrue("a cleared ViewModel must not leak its ContentObserver registration", changeObserver.closed)
+    }
+
+    // ---- `@rev` PR #377 medium finding: an in-progress recording must be legible as such, not
+    // just eventually correct -- see RecordingListItem.isInProgress's doc ----
+
+    @Test
+    fun `the row matching the active forward recording's displayName is marked isInProgress`() = runTest {
+        val liveName = "blackbox_2026-01-03_00-00-00_forward.m4a"
+        val repository = FakeRecordingsRepository(
+            listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a"), row(liveName)),
+        )
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(
+            ForwardRecordingState.Recording(displayName = liveName, bytesWritten = 4_096L),
+        )
+        val viewModel = GalleryViewModel(
+            repository,
+            FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined,
+            forwardRecordingState = forwardRecordingState,
+        )
+        subscribe(viewModel)
+
+        val items = viewModel.uiState.value.items
+        assertTrue(
+            "the row whose displayName matches the active forward recording must be marked in-progress",
+            items.single { it.recording.displayName == liveName }.isInProgress,
+        )
+        assertFalse(
+            "an unrelated row must never be marked in-progress",
+            items.single { it.recording.displayName != liveName }.isInProgress,
+        )
+    }
+
+    @Test
+    fun `a row stops being marked isInProgress once the forward recording is no longer Recording`() = runTest {
+        val liveName = "blackbox_2026-01-03_00-00-00_forward.m4a"
+        val repository = FakeRecordingsRepository(listOf(row(liveName)))
+        val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(
+            ForwardRecordingState.Recording(displayName = liveName, bytesWritten = 4_096L),
+        )
+        val viewModel = GalleryViewModel(
+            repository,
+            FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined,
+            forwardRecordingState = forwardRecordingState,
+        )
+        subscribe(viewModel)
+        assertTrue(viewModel.uiState.value.items.single().isInProgress)
+
+        forwardRecordingState.value = ForwardRecordingState.Success(liveName, bytesWritten = 48_000L)
+        runCurrent()
+
+        assertFalse(
+            "once the session's own state is no longer Recording, the row must stop being marked " +
+                "in-progress on the very next recomposition -- no lingering badge after finish()",
+            viewModel.uiState.value.items.single().isInProgress,
+        )
+    }
+
+    @Test
+    fun `no active forward recording means nothing is marked isInProgress`() = runTest {
+        val repository = FakeRecordingsRepository(listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a")))
+        val viewModel = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(viewModel)
+
+        assertFalse(viewModel.uiState.value.items.single().isInProgress)
     }
 
     @Test

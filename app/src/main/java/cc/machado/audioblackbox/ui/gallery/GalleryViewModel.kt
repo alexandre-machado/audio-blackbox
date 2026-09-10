@@ -7,9 +7,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.export.RecordingRow
 import cc.machado.audioblackbox.export.RecordingsRepository
+import cc.machado.audioblackbox.service.RecorderService
 import java.io.Closeable
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -46,6 +48,21 @@ class GalleryViewModel(
     // is [MediaStoreRecordingsObserver], supplied by [factory] below. See
     // [RecordingsChangeObserver]'s doc for why this, and not an in-app signal, is the mechanism.
     private val changeObserver: RecordingsChangeObserver = RecordingsChangeObserver { Closeable {} },
+    // `@rev` PR #377 finding (medium): a live forward recording's row is visible in MediaStore
+    // from the instant it starts (issue #53's early commit) with a stale/zero duration that
+    // self-corrects one or more times while recording continues -- with no invalidation delay to
+    // hide that anymore (issue #375 Part A), that provisional row now appears immediately instead
+    // of rarely. Rather than filtering it out of the query (there is no reliable "not finished
+    // yet" signal to filter on -- IS_PENDING is already cleared early by the same issue #53) or
+    // debouncing the refresh (the exact fixed-delay anti-pattern #375 rules out, just relocated),
+    // this marks it: the app already knows its own in-progress session
+    // ([RecorderService.forwardRecordingState], the same companion-object `StateFlow` source
+    // [cc.machado.audioblackbox.ui.dashboard.DashboardViewModel] already reads from), so
+    // [buildUiState] below cross-references it by [ForwardRecordingState.Recording.displayName]
+    // and marks the matching item [RecordingListItem.isInProgress] -- see that property's doc for
+    // how the UI renders it. Defaults to the real, process-lifetime companion flow; tests inject a
+    // fake the same way every other constructor parameter here already does.
+    private val forwardRecordingState: StateFlow<ForwardRecordingState> = RecorderService.forwardRecordingState,
 ) : ViewModel() {
 
     // null means "the first query hasn't returned yet" -- see GalleryUiState.isLoading's doc.
@@ -65,8 +82,8 @@ class GalleryViewModel(
         }
     }
 
-    // combine() only has a direct overload up to 5 flows; _isRefreshing is folded in as a second
-    // stage rather than reaching for the Array<Any?> vararg overload for one extra boolean.
+    // combine() only has a direct overload up to 5 flows; _isRefreshing/forwardRecordingState are
+    // folded in as a second stage rather than reaching for the Array<Any?> vararg overload.
     private val baseUiState = combine(
         _recordings,
         player.playback,
@@ -80,16 +97,23 @@ class GalleryViewModel(
     val uiState: StateFlow<GalleryUiState> = combine(
         baseUiState,
         _isRefreshing,
-    ) { state, isRefreshing -> state.copy(isRefreshing = isRefreshing) }.stateIn(
+        forwardRecordingState,
+    ) { state, isRefreshing, forwardState ->
+        applyRefreshAndInProgressState(state, isRefreshing, forwardState)
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-        initialValue = buildUiState(
-            _recordings.value,
-            player.playback.value,
-            0L,
-            _pendingDelete.value,
-            _deleteError.value,
-        ).copy(isRefreshing = _isRefreshing.value),
+        initialValue = applyRefreshAndInProgressState(
+            buildUiState(
+                _recordings.value,
+                player.playback.value,
+                0L,
+                _pendingDelete.value,
+                _deleteError.value,
+            ),
+            _isRefreshing.value,
+            forwardRecordingState.value,
+        ),
     )
 
     // Issue #375 Part A: the one registration for this ViewModel's lifetime. Closed in onCleared
@@ -260,6 +284,34 @@ class GalleryViewModel(
                 items = items,
                 pendingDelete = pendingDelete,
                 deleteError = deleteError,
+            )
+        }
+
+        /** Folds [isRefreshing] and the in-progress marker (issue #375, `@rev` PR #377 medium
+         * finding) onto an already-built [GalleryUiState]. Split out from [buildUiState] itself so
+         * the five-flow `combine` above it can stay within `combine`'s direct-overload arity;
+         * these two additional flows update independently of recordings/playback/pending-delete
+         * and don't change how any of that is derived.
+         *
+         * The oracle for [RecordingListItem.isInProgress]: exactly the item whose
+         * [RecordingItem.displayName] matches [ForwardRecordingState.Recording.displayName] --
+         * `MediaStoreSink`/`ForwardRecordingEngine` write both from the exact same generated name
+         * (see [ForwardRecordingEngine.generateDisplayName]), so this is an exact match, never a
+         * heuristic. Every other [ForwardRecordingState] (Idle/Success/Error) marks nothing --
+         * once a session ends, its row stops being "in progress" the very next time this recomputes,
+         * which is driven by the same `combine` recomputing on [forwardRecordingState]'s own next
+         * emission, not by a delay. */
+        fun applyRefreshAndInProgressState(
+            state: GalleryUiState,
+            isRefreshing: Boolean,
+            forwardState: ForwardRecordingState,
+        ): GalleryUiState {
+            val activeDisplayName = (forwardState as? ForwardRecordingState.Recording)?.displayName
+            return state.copy(
+                isRefreshing = isRefreshing,
+                items = state.items.map { item ->
+                    item.copy(isInProgress = activeDisplayName != null && item.recording.displayName == activeDisplayName)
+                },
             )
         }
 
