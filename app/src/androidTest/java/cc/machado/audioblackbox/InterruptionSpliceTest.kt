@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.service.RecorderService
 import org.junit.After
@@ -133,16 +134,36 @@ class InterruptionSpliceTest {
         assertEquals("IS_PENDING must be cleared once export commits", 0, row.isPending)
 
         // The recording window spans from when we entered Recording until we issued saveIntent.
-        // If interruptions were mis-spliced and dropped instead of filled with silence (issue #36),
-        // the file will be significantly shorter than this elapsed window (missing ~8-10s of simulated calls).
-        // We allow 7.5 seconds of tolerance to accommodate for AudioRecord initialization latency, emulator
-        // buffer scheduling, start/stop jitter, and polling latency (which can create a 4-6s discrepancy on busy CI runners).
-        val expectedDuration = requestSaveMillis - recordingStartMillis
-        val tolerance = 7500L
+        // Its declared duration must equal the audio actually captured plus the silence that must
+        // be filled in for every interruption this test already detected and asserted above
+        // (ordered, positive, non-overlapping) -- both terms are already in hand:
+        //   elapsedWallClockMillis (recordingStartMillis..requestSaveMillis) == audioOnlyMillis + totalGapMillis
+        // by construction, since every gap happens strictly inside that window. Comparing against
+        // a quantity the test itself measured this way needs no tolerance for scheduling noise
+        // (issue #328; AGENTS.md's zero-tolerance rule on delay/tolerance-based flake escapes
+        // points the same way) -- unlike the previous 7500ms fudge factor, which was wide enough to
+        // also swallow a single dropped ~4s interruption (issue #329's ordinary failure shape, not
+        // just its all-gaps-dropped worst case) and so passed green on exactly the defect this test
+        // exists to catch.
+        val totalGapMillis = gaps.sumOf { it.durationMillis }
+        val elapsedWallClockMillis = requestSaveMillis - recordingStartMillis
+        val expectedDurationMillis = elapsedWallClockMillis
+        // The one tolerance kept, and it is not a scheduling fudge factor by another name: AAC-LC's
+        // MDCT look-ahead gives the encoder a *measured* (not assumed) priming delay of exactly
+        // 2048 samples -- see AacPayloadEncoder's kdoc and AacRoundTripTest.
+        // measureAndBoundLeadingPrimingSamples -- which at this test's 16kHz mono capture config
+        // (AudioConfig.DEFAULT_SAMPLE_RATE_HZ) is 2048 / 16000 = 128ms. That is a real, cited codec
+        // property biasing the container's declared duration against the true input duration by up
+        // to that amount regardless of how precisely the test measures its own wall clock; it is
+        // not standing in for AudioRecord/scheduling jitter, which this assertion no longer needs a
+        // budget for at all.
+        val encoderPrimingToleranceMillis = 2048L * 1000L / AudioConfig.DEFAULT_SAMPLE_RATE_HZ
         assertTrue(
-            "declared duration ${row.durationMillis}ms must match the elapsed recording window " +
-                "of ${expectedDuration}ms within a ${tolerance}ms tolerance",
-            kotlin.math.abs(row.durationMillis - expectedDuration) <= tolerance
+            "declared duration ${row.durationMillis}ms must equal the elapsed recording window " +
+                "of ${expectedDurationMillis}ms (of which ${totalGapMillis}ms across ${gaps.size} " +
+                "detected gap(s) must be filled with silence) within the AAC encoder's documented " +
+                "${encoderPrimingToleranceMillis}ms priming-delay quantization",
+            kotlin.math.abs(row.durationMillis - expectedDurationMillis) <= encoderPrimingToleranceMillis,
         )
         // This tier runs at API 30 (see scripts/ci/avd.env) -- below the API 31 floor
         // MediaStoreSink requires for the top-level `Recordings/` root (issue #33) -- so this is
