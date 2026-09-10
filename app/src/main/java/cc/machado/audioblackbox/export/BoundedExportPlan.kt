@@ -115,7 +115,7 @@ object BoundedExportPlanner {
         // two from disagreeing again. Gaps do not overlap, so accepting one only ever pushes the
         // end later: a single ascending pass is enough, and the result does not depend on the order
         // the caller supplied.
-        var windowEnd = windowStart + totalRawDurationMillis
+        val windowEnd = windowStart + totalRawDurationMillis
         val relevantGaps = mutableListOf<PauseGap>()
         for (gap in gaps.sortedBy { it.startTimestampMillis }) {
             // Past the end, the gap postdates the newest buffered sample entirely, so there is no
@@ -130,7 +130,6 @@ object BoundedExportPlanner {
             val clippedStart = maxOf(gap.startTimestampMillis, windowStart)
             if (gap.endTimestampMillis <= clippedStart) continue
             relevantGaps += PauseGap(clippedStart, gap.endTimestampMillis)
-            windowEnd += gap.endTimestampMillis - clippedStart
         }
 
         val rawSegments = mutableListOf<PlanSegment>()
