@@ -429,6 +429,28 @@ class ForwardRecordingEngine(
         var lastRefinalizeAtNanos = System.nanoTime()
         val reconciler = ForwardFormatReconciler(sessionConfig, segmentsProvider)
 
+        // Issue #374: a gap that started before this session but ended after it must only
+        // contribute its in-session portion to this file -- the file covers the session, not
+        // whatever preceded it. Before this fix, `writer.writeGap(gap)` used the gap's full,
+        // unclipped `durationMillis`, so a straddling gap wrote (sessionStartMillis -
+        // gap.startTimestampMillis) milliseconds of silence that predate the session into a file
+        // that should not contain it.
+        //
+        // This clips the *wall-clock start* of an already-included gap's window, which is a
+        // different operation from #328/#329: #329 removed an *end-side* clamp that discarded
+        // whole gaps -- derived from an audio-duration window -- that belonged in the retro
+        // export's plan. Here, the decision of *which* gaps are included is untouched (still the
+        // `gap.endTimestampMillis >= sessionStartMillis` wall-clock filter above/below, unchanged),
+        // and no gap is dropped: this only shortens how much of an included, straddling gap's
+        // silence lands in the file, on the wall-clock axis the forward path already reasons in.
+        // A gap that does not straddle the boundary (fully before -> excluded by the filter,
+        // fully inside -> clippedStartMillis == gap.startTimestampMillis) is unaffected, so total
+        // planned silence for those cases is exactly what it was before this change.
+        fun writeClippedGap(gap: PauseGap) {
+            val clippedStartMillis = maxOf(gap.startTimestampMillis, sessionStartMillis)
+            writer.writeGap(gap.endTimestampMillis - clippedStartMillis)
+        }
+
         // Writes `bytes` (already in sessionConfig) and keeps the reported byte count in step with
         // what actually reached the file, not with how much raw PCM was read -- those differ by the
         // conversion ratio whenever a segment predates the session's format.
@@ -455,7 +477,7 @@ class ForwardRecordingEngine(
                 val currentGaps = gapsProvider()
                 for (gap in currentGaps) {
                     if (gap.endTimestampMillis >= sessionStartMillis && handledGaps.add(gap)) {
-                        writer.writeGap(gap)
+                        writeClippedGap(gap)
                     }
                 }
 
@@ -571,7 +593,7 @@ class ForwardRecordingEngine(
                 val currentGaps = gapsProvider()
                 for (gap in currentGaps) {
                     if (gap.endTimestampMillis >= sessionStartMillis && handledGaps.add(gap)) {
-                        writer.writeGap(gap)
+                        writeClippedGap(gap)
                     }
                 }
 
