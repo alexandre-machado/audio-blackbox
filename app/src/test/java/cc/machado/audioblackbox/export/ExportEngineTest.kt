@@ -92,7 +92,16 @@ class ExportEngineTest {
         payloadEncoder = payloadEncoder,
     )
 
-    private fun ringWithBytes(byteCount: Int, fillValue: Byte = 7, capacityBytes: Int = maxOf(byteCount, 1)): RingBuffer {
+    // `@rev` review on PR #386 (issue #385): defaulting this to `capacityBytes = byteCount` would
+    // silently saturate every call site that doesn't override it -- through `engineFor`'s real
+    // `capacityBytesProvider`, that means ExportEngine's issue #385 startup headroom would kick in
+    // and quietly discard some of the oldest written bytes on every test that doesn't ask for
+    // saturation on purpose, exactly the "saturation masking an undercount" trap AGENTS.md §2
+    // documents. Defaulting well above `byteCount` instead keeps every existing call site
+    // genuinely unsaturated (byte-exact) unless it explicitly asks otherwise, the way the three
+    // headroom-specific tests below already do (they build their own saturated `RingBuffer`
+    // directly instead of going through this helper).
+    private fun ringWithBytes(byteCount: Int, fillValue: Byte = 7, capacityBytes: Int = maxOf(byteCount * 10, 1)): RingBuffer {
         val ring = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = config.bytesPerSecond)
         if (byteCount > 0) ring.write(ByteArray(byteCount) { fillValue })
         return ring
