@@ -6,6 +6,9 @@ import cc.machado.audioblackbox.audio.RingBuffer
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -80,13 +83,14 @@ class ExportEngineTest {
         // issue #385: wired to the real ring by default, same as the other cursor providers above,
         // so tests exercise the same saturated-vs-not distinction production wiring does.
         capacityBytesProvider: () -> Int? = { ring.capacityBytes },
+        estimateTimestampProvider: (Long) -> Long? = { offset -> ring.estimateTimestamp(offset) },
     ): ExportEngine = ExportEngine(
         config = config,
         readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
         writeCursorProvider = writeCursorProvider,
         oldestCursorProvider = { ring.oldestCursor() },
         capacityBytesProvider = capacityBytesProvider,
-        estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
+        estimateTimestampProvider = estimateTimestampProvider,
         gapsProvider = gapsProvider,
         sink = sink,
         payloadEncoder = payloadEncoder,
@@ -555,6 +559,72 @@ class ExportEngineTest {
         assertTrue(result is ExportState.Success)
         val payloadBytes = target.buffer.toByteArray().size - WavWriter.HEADER_SIZE_BYTES
         assertEquals("no margin should be applied to an unsaturated buffer", 2000, payloadBytes)
+    }
+
+    /** Same pattern/locale `ExportEngine.filenameFor` uses (its `FILENAME_TIMESTAMP_PATTERN` is
+     * private) -- formats a known epoch into the filename's timestamp segment so a test can prove
+     * *which* instant the filename was anchored on, at the only resolution the public filename
+     * exposes (whole seconds). Standard `SimpleDateFormat` formatting of an independently-chosen
+     * constant, not a recomputation of the margin arithmetic under test. */
+    private fun filenameTimestamp(epochMillis: Long): String =
+        SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date(epochMillis))
+
+    @Test
+    fun `filename timestamp is re-anchored by the margin's own duration when estimateTimestampProvider can't resolve the shifted startCursor`() {
+        // `@sec` review on PR #386 (issue #385): estimateTimestampProvider(startCursor) returning
+        // null (only possible if capture stops concurrently, but must still be handled) used to
+        // silently fall back to the pre-margin windowStart -- pointing the filename up to
+        // marginBytes' worth of time *before* the first byte this export actually reads. It must
+        // instead fall back to windowStart advanced by exactly the margin's own duration.
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val ring = RingBuffer(capacityBytes = 10_000, bytesPerSecond = config.bytesPerSecond)
+        ring.write(ByteArray(10_000) { 1 }) // saturated: rawLength == capacityBytes, margin applies
+
+        // Chosen so the margin's duration (500 bytes at this config's 2000 B/s = 250ms) crosses a
+        // whole-second boundary: base ends in .750, +250ms lands exactly on the next second, so
+        // the filename's seconds digit (its only visible resolution) proves which value won.
+        val base = 1_700_000_000_750L
+        val engine = engineFor(
+            ring,
+            sink,
+            estimateTimestampProvider = { cursor -> if (cursor == ring.oldestCursor()) base else null },
+        )
+
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue("expected Success, got $result", result is ExportState.Success)
+        val expectedTimestamp = filenameTimestamp(base + 250L)
+        val actualName = requireNotNull(sink.openedWith)
+        assertTrue(
+            "expected filename anchored at base + margin duration ($expectedTimestamp), got $actualName",
+            actualName.contains(expectedTimestamp),
+        )
+    }
+
+    @Test
+    fun `filename timestamp is unaffected by the margin fallback when the buffer is unsaturated`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        // Unsaturated: no margin is applied, so estimateTimestampProvider is only ever consulted
+        // once, for oldestCursor -- the shifted-startCursor fallback path is never reached at all.
+        val ring = ringWithBytes(byteCount = 2000, capacityBytes = 100_000)
+        val base = 1_700_000_000_750L
+        val engine = engineFor(
+            ring,
+            sink,
+            estimateTimestampProvider = { cursor -> if (cursor == ring.oldestCursor()) base else null },
+        )
+
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue("expected Success, got $result", result is ExportState.Success)
+        val expectedTimestamp = filenameTimestamp(base)
+        val actualName = requireNotNull(sink.openedWith)
+        assertTrue(
+            "expected filename anchored at the original base, unchanged ($expectedTimestamp), got $actualName",
+            actualName.contains(expectedTimestamp),
+        )
     }
 
     @Test

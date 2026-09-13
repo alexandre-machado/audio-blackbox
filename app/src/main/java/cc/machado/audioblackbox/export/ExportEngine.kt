@@ -340,8 +340,21 @@ class ExportEngine(
             // Re-anchor the window's wall-clock start on the actual first byte being read, not
             // the discarded margin -- otherwise the plan's gap/duration bookkeeping below would
             // measure elapsed audio time from a byte that is never read.
+            //
+            // `@sec` review on PR #386 (issue #385): `estimateTimestampProvider(startCursor)` can
+            // only return null if capture stopped concurrently between fixing the cursor window
+            // above and this call -- vanishingly rare, but falling back to the *original*
+            // `windowStart` here would silently point the filename/metadata timestamp up to
+            // `marginBytes` worth of time *before* the first byte this export actually reads,
+            // even though `startCursor`/`adjustedRawLength` below are still the shifted ones. Fall
+            // back to `windowStart` advanced by exactly the margin's own duration instead (via
+            // `marginMillisFor`, the same bytesPerSecond conversion `startCursorMarginBytes` used
+            // to create `marginBytes` in the first place, so the two can't drift apart) -- this
+            // keeps the filename's start time consistent with the plan's actual first byte even
+            // in that edge case, without special-casing millisecond-perfect accuracy the provider
+            // itself couldn't answer.
             val adjustedWindowStart = if (marginBytes > 0L) {
-                estimateTimestampProvider(startCursor) ?: windowStart
+                estimateTimestampProvider(startCursor) ?: (windowStart + marginMillisFor(marginBytes, targetConfig))
             } else {
                 windowStart
             }
@@ -480,6 +493,16 @@ class ExportEngine(
         // Frame-align so the reader never starts mid-sample.
         return if (bytesPerFrame > 0L) rawMarginBytes - (rawMarginBytes % bytesPerFrame) else rawMarginBytes
     }
+
+    /**
+     * Inverse of [startCursorMarginBytes]: how much wall-clock time [marginBytes] represents in
+     * [targetConfig] -- the same `bytesPerSecond` conversion, in the other direction, so the two
+     * cannot independently drift apart. Used only by `adjustedWindowStart`'s fallback in
+     * [runExport] (issue #385 / `@sec` review on PR #386), for the rare case
+     * `estimateTimestampProvider` cannot re-derive the shifted window's start directly.
+     */
+    private fun marginMillisFor(marginBytes: Long, targetConfig: AudioConfig): Long =
+        if (targetConfig.bytesPerSecond > 0) (marginBytes * MILLIS_PER_SECOND) / targetConfig.bytesPerSecond else 0L
 
     private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int, secondsLabel: Int?): String {
         val formatter = SimpleDateFormat(FILENAME_TIMESTAMP_PATTERN, Locale.US)
