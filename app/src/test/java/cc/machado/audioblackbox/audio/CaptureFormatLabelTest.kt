@@ -120,6 +120,10 @@ class CaptureFormatLabelTest {
             readSinceProvider = { c, n -> engine.readSince(c, n) },
             writeCursorProvider = { engine.writeCursor() },
             oldestCursorProvider = { engine.oldestCursor() },
+            // issue #385: preserved as `{ null }` here so this test's assertions (which predate
+            // #385 and are not about the saturated-buffer startup headroom) keep their exact
+            // pre-existing byte-count behavior.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { engine.estimateTimestamp(it) },
             gapsProvider = { engine.gaps.value },
             sink = sink,

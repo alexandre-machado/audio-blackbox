@@ -68,6 +68,9 @@ class BoundedExportAllocationTest {
             },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test measures per-chunk allocation bounds, not the startup
+            // headroom's byte-count effect -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = RecordingSink(),

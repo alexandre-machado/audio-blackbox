@@ -47,6 +47,10 @@ class BoundedExportToneRoundTripTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about tone/format round-tripping across a segment
+            // boundary, not the saturated-buffer startup headroom -- `{ null }` keeps its
+            // pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { ring.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = sink,

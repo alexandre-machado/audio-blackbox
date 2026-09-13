@@ -72,6 +72,10 @@ class WindowedSaveExportTest {
         readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
         writeCursorProvider = { ring.writeCursor() },
         oldestCursorProvider = { ring.oldestCursor() },
+        // issue #385: this test is about windowed/trimmed export duration math, not the
+        // saturated-buffer startup headroom (one case below happens to buffer exactly 30 of 30
+        // minutes) -- `{ null }` keeps its pre-#385 behavior exactly.
+        capacityBytesProvider = { null },
         estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
         gapsProvider = { emptyList() },
         sink = FakeSink(target),

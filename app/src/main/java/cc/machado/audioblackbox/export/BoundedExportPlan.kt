@@ -300,11 +300,31 @@ sealed class BoundedExportDrainException(
     message: String,
 ) : IOException(message) {
 
-    class CursorLapped(requestedCursor: Long, oldestAvailableCursor: Long, lostBytes: Long) :
-        BoundedExportDrainException(
+    /**
+     * [segmentIndex]/[drainOffsetBytes]/[elapsedMillisSinceDrainStart] (issue #385) let a lap that
+     * still occurs after [ExportEngine]'s startup headroom be told apart from one it was never
+     * meant to catch: a low [segmentIndex]/[drainOffsetBytes]/[elapsedMillisSinceDrainStart] (the
+     * very first chunk(s) of the drain) points at the same leading-edge race the headroom exists
+     * for -- meaning the headroom itself needs to be bigger -- while a lap deep into the drain (a
+     * high [drainOffsetBytes]/[elapsedMillisSinceDrainStart], possibly a later [segmentIndex])
+     * points at something new: the encoder or writer falling behind mid-export, a different
+     * problem the headroom cannot fix by construction. Before this, every lap produced the exact
+     * same log line regardless of which of these it was (issue #385's field evidence could not
+     * distinguish them after the fact).
+     */
+    class CursorLapped(
+        requestedCursor: Long,
+        oldestAvailableCursor: Long,
+        lostBytes: Long,
+        val segmentIndex: Int,
+        val drainOffsetBytes: Long,
+        val elapsedMillisSinceDrainStart: Long,
+    ) : BoundedExportDrainException(
             ExportFailureReason.CURSOR_LAPPED,
             "bounded export drain fell behind: cursor $requestedCursor lapped, " +
-                "$lostBytes bytes lost, oldest available is now $oldestAvailableCursor",
+                "$lostBytes bytes lost, oldest available is now $oldestAvailableCursor " +
+                "(segmentIndex=$segmentIndex, drainOffsetBytes=$drainOffsetBytes, " +
+                "elapsedMillisSinceDrainStart=$elapsedMillisSinceDrainStart)",
         )
 
     class StreamWasReset(requestedCursor: Long, currentCursor: Long) :
@@ -330,6 +350,10 @@ class BoundedExportReader(
     private val plan: BoundedExportPlan,
     private val readSinceProvider: (cursor: Long, maxBytes: Int) -> ReadSinceResult?,
     private val chunkSizeBytes: Int,
+    // Issue #385: only consulted to time-stamp a CursorLapped exception's
+    // elapsedMillisSinceDrainStart, so a fake clock in tests never needs to be wired unless a test
+    // actually asserts on that field.
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : PayloadChunkSource {
 
     private var segmentIndex = 0
@@ -339,6 +363,10 @@ class BoundedExportReader(
     private var currentConverter: PcmAudioConverter? = null
     private var lastSegmentIndex = -1
     private var pendingFlushedBytes: ByteArray? = null
+    private val drainStartMillis: Long = clock()
+    // Cumulative bytes successfully read from the ring buffer across the whole drain so far (not
+    // reset per segment) -- see CursorLapped's doc for why this is tracked.
+    private var drainOffsetBytes: Long = 0L
 
     init {
         require(chunkSizeBytes > 0) { "chunkSizeBytes must be positive, was $chunkSizeBytes" }
@@ -433,9 +461,12 @@ class BoundedExportReader(
             null -> throw BoundedExportDrainException.CaptureStopped(cursor)
             is ReadSinceResult.Lapped -> {
                 throw BoundedExportDrainException.CursorLapped(
-                    result.requestedCursor,
-                    result.oldestAvailableCursor,
-                    result.lostBytes,
+                    requestedCursor = result.requestedCursor,
+                    oldestAvailableCursor = result.oldestAvailableCursor,
+                    lostBytes = result.lostBytes,
+                    segmentIndex = segmentIndex,
+                    drainOffsetBytes = drainOffsetBytes,
+                    elapsedMillisSinceDrainStart = clock() - drainStartMillis,
                 )
             }
             is ReadSinceResult.StreamReset -> throw BoundedExportDrainException.StreamWasReset(
@@ -443,6 +474,7 @@ class BoundedExportReader(
                 result.currentCursor,
             )
             is ReadSinceResult.Data -> {
+                drainOffsetBytes += result.bytes.size
                 return result.bytes
             }
         }

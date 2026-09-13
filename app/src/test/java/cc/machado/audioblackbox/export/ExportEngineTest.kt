@@ -6,6 +6,9 @@ import cc.machado.audioblackbox.audio.RingBuffer
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -77,18 +80,32 @@ class ExportEngineTest {
         payloadEncoder: PayloadEncoder = WavPayloadEncoder,
         writeCursorProvider: () -> Long? = { ring.writeCursor() },
         gapsProvider: () -> List<PauseGap> = { emptyList() },
+        // issue #385: wired to the real ring by default, same as the other cursor providers above,
+        // so tests exercise the same saturated-vs-not distinction production wiring does.
+        capacityBytesProvider: () -> Int? = { ring.capacityBytes },
+        estimateTimestampProvider: (Long) -> Long? = { offset -> ring.estimateTimestamp(offset) },
     ): ExportEngine = ExportEngine(
         config = config,
         readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
         writeCursorProvider = writeCursorProvider,
         oldestCursorProvider = { ring.oldestCursor() },
-        estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
+        capacityBytesProvider = capacityBytesProvider,
+        estimateTimestampProvider = estimateTimestampProvider,
         gapsProvider = gapsProvider,
         sink = sink,
         payloadEncoder = payloadEncoder,
     )
 
-    private fun ringWithBytes(byteCount: Int, fillValue: Byte = 7, capacityBytes: Int = maxOf(byteCount, 1)): RingBuffer {
+    // `@rev` review on PR #386 (issue #385): defaulting this to `capacityBytes = byteCount` would
+    // silently saturate every call site that doesn't override it -- through `engineFor`'s real
+    // `capacityBytesProvider`, that means ExportEngine's issue #385 startup headroom would kick in
+    // and quietly discard some of the oldest written bytes on every test that doesn't ask for
+    // saturation on purpose, exactly the "saturation masking an undercount" trap AGENTS.md §2
+    // documents. Defaulting well above `byteCount` instead keeps every existing call site
+    // genuinely unsaturated (byte-exact) unless it explicitly asks otherwise, the way the three
+    // headroom-specific tests below already do (they build their own saturated `RingBuffer`
+    // directly instead of going through this helper).
+    private fun ringWithBytes(byteCount: Int, fillValue: Byte = 7, capacityBytes: Int = maxOf(byteCount * 10, 1)): RingBuffer {
         val ring = RingBuffer(capacityBytes = capacityBytes, bytesPerSecond = config.bytesPerSecond)
         if (byteCount > 0) ring.write(ByteArray(byteCount) { fillValue })
         return ring
@@ -139,6 +156,9 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about the segmentsProvider-null distinction, not the
+            // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = sink,
@@ -167,6 +187,9 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about the legacy no-segmentsProvider passthrough, not the
+            // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = sink,
@@ -198,7 +221,11 @@ class ExportEngineTest {
     fun `successful export writes header plus payload and commits, never aborts`() {
         val target = FakeTarget()
         val sink = FakeSink(target)
-        val ring = ringWithBytes(1000)
+        // Capacity well above what's written: this test is about the header/commit/filename
+        // shape of a plain successful export, not about the saturated-buffer startup headroom
+        // (issue #385, covered by its own tests below) -- an unsaturated buffer keeps the byte
+        // count below exact and untouched by that margin.
+        val ring = ringWithBytes(1000, capacityBytes = 10_000)
         val engine = engineFor(ring, sink)
 
         val result = engine.export(durationMillis = 1000, minutesLabel = 1)
@@ -394,6 +421,10 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about gap backfill, not the saturated-buffer startup
+            // headroom -- `{ null }` keeps its pre-#385 behavior exactly (the ring here is built
+            // saturated on purpose, for unrelated reasons -- see the comment above).
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { 0L },
             gapsProvider = { gaps },
             sink = sink,
@@ -452,17 +483,35 @@ class ExportEngineTest {
         assertTrue("expected the injected encoder's extension, got $name", name.endsWith("_5min.fake"))
     }
 
+    // issue #385: this trio replaces the old
+    // `export on saturated ring buffer fails loudly if leading edge is lapped during sink open`,
+    // which asserted the exact regression this issue fixes. That test was not deleted silently --
+    // #351 (`0ce3a28`/`ff26751`) had deliberately removed #204's leading-edge lap recovery because
+    // it could return a zero-byte payload / corrupt WAV, and its replacement test asserted the
+    // resulting failure as the intended behavior. The fix here does not resurrect that recovery
+    // path (no retry/partial-read branch is reintroduced anywhere in the drain): it removes the
+    // race at its source by giving the drain a fixed, real headroom before the first byte is ever
+    // read, so a small lap during sink/encoder open simply never reaches `readSince` in the first
+    // place. A lap big enough to exceed that headroom -- a genuinely different problem, e.g. a
+    // stalled encoder -- still has no recovery path and still fails loud
+    // (`still fails loudly when the lap exceeds startup headroom` below), so #351's guarantee is
+    // unchanged.
+
     @Test
-    fun `export on saturated ring buffer fails loudly if leading edge is lapped during sink open`() {
+    fun `export on saturated ring buffer survives a lap within startup headroom during sink open`() {
         val target = FakeTarget()
         val ring = RingBuffer(capacityBytes = 10_000, bytesPerSecond = config.bytesPerSecond)
-        // Saturated buffer: write 10_000 bytes so buffer is at full capacity
+        // Saturated buffer: buffered bytes == capacity, so oldestCursor is live and can be evicted
+        // as new audio arrives -- issue #385's precondition for the race to exist at all.
         ring.write(ByteArray(10_000) { 1 })
 
         val sink = object : ExportSink {
             override fun open(displayName: String, mimeType: String): ExportTarget {
-                // Simulate capture thread writing into saturated buffer while sink is opening:
-                // Advances oldestCursor by 100 bytes so initial plan cursor is lapped!
+                // Simulate the capture thread writing into the saturated buffer while the sink is
+                // opening: advances oldestCursor by 100 bytes -- well inside ExportEngine's
+                // 500-byte (250ms at this config's 2000 B/s) startup headroom. Without the fix,
+                // this alone lapped the plan's startCursor and failed the whole Save (this test
+                // used to assert exactly that failure -- see the comment above).
                 ring.write(ByteArray(100) { 2 })
                 return target
             }
@@ -471,8 +520,121 @@ class ExportEngineTest {
         val engine = engineFor(ring, sink)
         val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
 
-        assertTrue("export should fail loudly when lapped, got $result", result is ExportState.Error)
+        assertTrue(
+            "export must survive a lap the startup headroom is sized to absorb, got $result",
+            result is ExportState.Success,
+        )
+        val payloadBytes = target.buffer.toByteArray().size - WavWriter.HEADER_SIZE_BYTES
+        assertTrue("must have written real audio, not an empty/corrupt payload", payloadBytes > 0)
+    }
+
+    @Test
+    fun `export on saturated ring buffer still fails loudly when the lap exceeds startup headroom`() {
+        val target = FakeTarget()
+        val ring = RingBuffer(capacityBytes = 10_000, bytesPerSecond = config.bytesPerSecond)
+        ring.write(ByteArray(10_000) { 1 })
+
+        val sink = object : ExportSink {
+            override fun open(displayName: String, mimeType: String): ExportTarget {
+                // 600 bytes: more than the 500-byte startup headroom can absorb. This must still
+                // fail loud -- #385's headroom only removes the leading-edge race the sink/encoder
+                // open causes, it is not a general lap recovery, and #351's guarantee (never a
+                // silent zero-byte/corrupt file on a genuine lap) must hold regardless.
+                ring.write(ByteArray(600) { 2 })
+                return target
+            }
+        }
+
+        val engine = engineFor(ring, sink)
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue("export should still fail loudly when the lap exceeds headroom, got $result", result is ExportState.Error)
         assertEquals(ExportFailureReason.CURSOR_LAPPED, (result as ExportState.Error).reason)
+        assertFalse("must never commit a partial/corrupt file", target.committed)
+        assertTrue("must abort the pending sink row", target.aborted)
+    }
+
+    @Test
+    fun `export from an unsaturated buffer discards no audio to startup headroom`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        // Capacity well above what's written: oldestCursor is pinned at the session start and
+        // cannot move during this drain, so there is no race to guard against, and the fix must
+        // not discard any audio to a margin that has nothing to protect (issue #385 refinement 1).
+        val ring = ringWithBytes(byteCount = 2000, capacityBytes = 100_000)
+        val engine = engineFor(ring, sink)
+
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue(result is ExportState.Success)
+        val payloadBytes = target.buffer.toByteArray().size - WavWriter.HEADER_SIZE_BYTES
+        assertEquals("no margin should be applied to an unsaturated buffer", 2000, payloadBytes)
+    }
+
+    /** Same pattern/locale `ExportEngine.filenameFor` uses (its `FILENAME_TIMESTAMP_PATTERN` is
+     * private) -- formats a known epoch into the filename's timestamp segment so a test can prove
+     * *which* instant the filename was anchored on, at the only resolution the public filename
+     * exposes (whole seconds). Standard `SimpleDateFormat` formatting of an independently-chosen
+     * constant, not a recomputation of the margin arithmetic under test. */
+    private fun filenameTimestamp(epochMillis: Long): String =
+        SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date(epochMillis))
+
+    @Test
+    fun `filename timestamp is re-anchored by the margin's own duration when estimateTimestampProvider can't resolve the shifted startCursor`() {
+        // `@sec` review on PR #386 (issue #385): estimateTimestampProvider(startCursor) returning
+        // null (only possible if capture stops concurrently, but must still be handled) used to
+        // silently fall back to the pre-margin windowStart -- pointing the filename up to
+        // marginBytes' worth of time *before* the first byte this export actually reads. It must
+        // instead fall back to windowStart advanced by exactly the margin's own duration.
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        val ring = RingBuffer(capacityBytes = 10_000, bytesPerSecond = config.bytesPerSecond)
+        ring.write(ByteArray(10_000) { 1 }) // saturated: rawLength == capacityBytes, margin applies
+
+        // Chosen so the margin's duration (500 bytes at this config's 2000 B/s = 250ms) crosses a
+        // whole-second boundary: base ends in .750, +250ms lands exactly on the next second, so
+        // the filename's seconds digit (its only visible resolution) proves which value won.
+        val base = 1_700_000_000_750L
+        val engine = engineFor(
+            ring,
+            sink,
+            estimateTimestampProvider = { cursor -> if (cursor == ring.oldestCursor()) base else null },
+        )
+
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue("expected Success, got $result", result is ExportState.Success)
+        val expectedTimestamp = filenameTimestamp(base + 250L)
+        val actualName = requireNotNull(sink.openedWith)
+        assertTrue(
+            "expected filename anchored at base + margin duration ($expectedTimestamp), got $actualName",
+            actualName.contains(expectedTimestamp),
+        )
+    }
+
+    @Test
+    fun `filename timestamp is unaffected by the margin fallback when the buffer is unsaturated`() {
+        val target = FakeTarget()
+        val sink = FakeSink(target)
+        // Unsaturated: no margin is applied, so estimateTimestampProvider is only ever consulted
+        // once, for oldestCursor -- the shifted-startCursor fallback path is never reached at all.
+        val ring = ringWithBytes(byteCount = 2000, capacityBytes = 100_000)
+        val base = 1_700_000_000_750L
+        val engine = engineFor(
+            ring,
+            sink,
+            estimateTimestampProvider = { cursor -> if (cursor == ring.oldestCursor()) base else null },
+        )
+
+        val result = engine.export(durationMillis = 10_000, minutesLabel = 1)
+
+        assertTrue("expected Success, got $result", result is ExportState.Success)
+        val expectedTimestamp = filenameTimestamp(base)
+        val actualName = requireNotNull(sink.openedWith)
+        assertTrue(
+            "expected filename anchored at the original base, unchanged ($expectedTimestamp), got $actualName",
+            actualName.contains(expectedTimestamp),
+        )
     }
 
     @Test
@@ -485,6 +647,9 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about minExportDurationMillis timing, not the
+            // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { ring.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = sink,

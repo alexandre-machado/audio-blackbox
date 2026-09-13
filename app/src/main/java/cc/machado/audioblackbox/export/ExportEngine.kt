@@ -101,6 +101,20 @@ class ExportEngine(
     private val readSinceProvider: (cursor: Long, maxBytes: Int) -> ReadSinceResult?,
     private val writeCursorProvider: () -> Long?,
     private val oldestCursorProvider: () -> Long?,
+    // Issue #385: lets runExport tell a saturated ring buffer (oldest byte actively being evicted
+    // as new audio arrives -- a slow sink/encoder open can race the writer past it) from one that
+    // has not wrapped yet (nothing evicted, no race possible). A provider that always returns
+    // `null` disables the startup headroom below entirely.
+    //
+    // Deliberately **no default value** (`@rev` BLOCK review on PR #386): this parameter used to
+    // default to `{ null }`, and `RecorderService`'s production `exportEngine` -- which calls this
+    // primary constructor directly, not the secondary `constructor(engine: AudioCaptureEngine, ...)`
+    // below that already wired this correctly -- silently kept that default, so the #385 fix never
+    // actually ran on a real device despite shipping with green tests and CI. A missing default
+    // here means the compiler rejects any future primary-constructor call site (production or
+    // test) that forgets this the same way it already rejects one that forgets `sink` or
+    // `payloadEncoder` -- see `buildExportEngine` in `RecorderService.kt` for the fixed call site.
+    private val capacityBytesProvider: () -> Int?,
     private val estimateTimestampProvider: (Long) -> Long?,
     private val gapsProvider: () -> List<PauseGap>,
     private val sink: ExportSink,
@@ -137,6 +151,7 @@ class ExportEngine(
         readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
         writeCursorProvider = { engine.writeCursor() },
         oldestCursorProvider = { engine.oldestCursor() },
+        capacityBytesProvider = { engine.capacityBytes() },
         estimateTimestampProvider = { offset -> engine.estimateTimestamp(offset) },
         gapsProvider = { engine.gaps.value },
         sink = sink,
@@ -312,16 +327,56 @@ class ExportEngine(
             // init), and it now reads the capture config fresh rather than a copy captured at
             // construction (issue #322).
             val targetConfig = activeSegs.lastOrNull()?.config ?: configProvider?.invoke() ?: config
+
+            // Issue #385: only a *saturated* buffer can race a slow sink/encoder open -- if
+            // capture has not written a full capacity's worth of bytes yet, `oldestCursor` is
+            // pinned at the session's true start and cannot advance out from under this drain
+            // no matter how long the drain takes, so there is nothing to guard against and no
+            // audio should be sacrificed (see startCursorMarginBytes's doc for why the margin
+            // itself is sized the way it is).
+            val capacityBytes = capacityBytesProvider()
+            val marginBytes = if (capacityBytes != null && rawLength >= capacityBytes) {
+                // Never discard the whole window: this is a defensive backstop for a
+                // pathological capacity smaller than the headroom itself, not something expected
+                // to trigger on any real device (the ring buffer is sized for minutes of audio).
+                minOf(startCursorMarginBytes(targetConfig), maxOf(rawLength - 1L, 0L))
+            } else {
+                0L
+            }
+            val startCursor = oldestCursor + marginBytes
+            val adjustedRawLength = rawLength - marginBytes
+            // Re-anchor the window's wall-clock start on the actual first byte being read, not
+            // the discarded margin -- otherwise the plan's gap/duration bookkeeping below would
+            // measure elapsed audio time from a byte that is never read.
+            //
+            // `@sec` review on PR #386 (issue #385): `estimateTimestampProvider(startCursor)` can
+            // only return null if capture stopped concurrently between fixing the cursor window
+            // above and this call -- vanishingly rare, but falling back to the *original*
+            // `windowStart` here would silently point the filename/metadata timestamp up to
+            // `marginBytes` worth of time *before* the first byte this export actually reads,
+            // even though `startCursor`/`adjustedRawLength` below are still the shifted ones. Fall
+            // back to `windowStart` advanced by exactly the margin's own duration instead (via
+            // `marginMillisFor`, the same bytesPerSecond conversion `startCursorMarginBytes` used
+            // to create `marginBytes` in the first place, so the two can't drift apart) -- this
+            // keeps the filename's start time consistent with the plan's actual first byte even
+            // in that edge case, without special-casing millisecond-perfect accuracy the provider
+            // itself couldn't answer.
+            val adjustedWindowStart = if (marginBytes > 0L) {
+                estimateTimestampProvider(startCursor) ?: (windowStart + marginMillisFor(marginBytes, targetConfig))
+            } else {
+                windowStart
+            }
+
             val plan = BoundedExportPlanner.plan(
-                startCursor = oldestCursor,
-                rawLength = rawLength,
-                windowStart = windowStart,
+                startCursor = startCursor,
+                rawLength = adjustedRawLength,
+                windowStart = adjustedWindowStart,
                 gaps = gaps,
                 segments = activeSegs,
                 targetConfig = targetConfig,
                 targetDurationMillis = durationMillis,
             )
-            val displayName = filenameFor(windowStart, minutesLabel, secondsLabel)
+            val displayName = filenameFor(adjustedWindowStart, minutesLabel, secondsLabel)
 
             val target = try {
                 sink.open(displayName, payloadEncoder.mimeType)
@@ -415,6 +470,48 @@ class ExportEngine(
      * [cc.machado.audioblackbox.service.RecorderService.resolveSavedSeconds]'s doc) -- this method
      * does not re-derive that condition itself, it only trusts what it is given.
      */
+    /**
+     * Startup headroom, in bytes of [targetConfig], to add to `oldestCursor` before draining a
+     * *saturated* buffer (issue #385).
+     *
+     * Zero headroom is what caused #385 in the field: `runExport` used to start the bounded drain
+     * exactly at `oldestCursor`, so once `sink.open()` (MediaStore insert) plus the encoder's own
+     * startup took any time at all, the capture writer's continuing advance evicted that exact
+     * byte before the drain's very first read reached it, and the whole Save failed with
+     * `CURSOR_LAPPED` -- for the loss of only a few writer batches (issue's field evidence: 7168 B
+     * writer batches, worst case 21504 B / 122 ms). The same race caused #204 (measured 20-50 ms of
+     * sink-open latency there).
+     *
+     * [STARTUP_HEADROOM_MILLIS] is a deliberate, named sacrifice of that much of the *oldest*
+     * buffered audio on every Save from a saturated buffer -- not a recovery path (see #351: a
+     * recovery that retried/returned partial data after a lap is exactly what produced corrupt/
+     * zero-byte payloads there, and is not reintroduced by this fix). It is picked at roughly 2x
+     * the worst latency actually observed in the field (122 ms) and comfortably above the #204
+     * range (20-50 ms), so it survives both data points with margin to spare, while still being
+     * negligible against the multi-minute retention windows this app exports.
+     *
+     * Expressed in time and converted through [targetConfig]'s own `bytesPerSecond` rather than a
+     * fixed byte count -- a fixed byte count would silently mean a different amount of *time*
+     * whenever sample rate/channel count changes (mono vs. stereo, 16 kHz vs. 44.1 kHz, ...), which
+     * would defeat the whole point of sizing this against a measured latency.
+     */
+    private fun startCursorMarginBytes(targetConfig: AudioConfig): Long {
+        val rawMarginBytes = (targetConfig.bytesPerSecond.toLong() * STARTUP_HEADROOM_MILLIS) / MILLIS_PER_SECOND
+        val bytesPerFrame = targetConfig.bytesPerFrame.toLong()
+        // Frame-align so the reader never starts mid-sample.
+        return if (bytesPerFrame > 0L) rawMarginBytes - (rawMarginBytes % bytesPerFrame) else rawMarginBytes
+    }
+
+    /**
+     * Inverse of [startCursorMarginBytes]: how much wall-clock time [marginBytes] represents in
+     * [targetConfig] -- the same `bytesPerSecond` conversion, in the other direction, so the two
+     * cannot independently drift apart. Used only by `adjustedWindowStart`'s fallback in
+     * [runExport] (issue #385 / `@sec` review on PR #386), for the rare case
+     * `estimateTimestampProvider` cannot re-derive the shifted window's start directly.
+     */
+    private fun marginMillisFor(marginBytes: Long, targetConfig: AudioConfig): Long =
+        if (targetConfig.bytesPerSecond > 0) (marginBytes * MILLIS_PER_SECOND) / targetConfig.bytesPerSecond else 0L
+
     private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int, secondsLabel: Int?): String {
         val formatter = SimpleDateFormat(FILENAME_TIMESTAMP_PATTERN, Locale.US)
         val timestamp = formatter.format(Date(startTimestampMillis))
@@ -429,5 +526,10 @@ class ExportEngine(
         // the same bound keeps this class's drain chunking behaviorally identical to the live-drain
         // primitive it borrows from (issue #72), not a second tuned-independently value.
         const val DEFAULT_DRAIN_CHUNK_SIZE_BYTES = 4096
+
+        // See startCursorMarginBytes's doc for the full rationale (issue #385).
+        const val STARTUP_HEADROOM_MILLIS = 250L
+
+        const val MILLIS_PER_SECOND = 1000L
     }
 }
