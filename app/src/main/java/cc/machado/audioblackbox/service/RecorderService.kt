@@ -21,9 +21,11 @@ import cc.machado.audioblackbox.audio.SwitchConfigResult
 import cc.machado.audioblackbox.telemetry.PowerTelemetry
 import cc.machado.audioblackbox.export.AacPayloadEncoder
 import cc.machado.audioblackbox.export.ExportEngine
+import cc.machado.audioblackbox.export.ExportSink
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingEngine
 import cc.machado.audioblackbox.export.ForwardRecordingState
+import cc.machado.audioblackbox.export.PayloadEncoder
 import cc.machado.audioblackbox.export.StreamingAacWriter
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.PreloadedRetentionWindow
@@ -120,27 +122,14 @@ class RecorderService : Service() {
     // see issue #32's device evidence for why (176 audio files on the target device, zero WAV).
     // WavPayloadEncoder stays available for a future user-facing lossless setting.
     private val exportEngine by lazy {
-        ExportEngine(
+        buildExportEngine(
+            engine = engine,
             config = captureConfig,
-            readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
-            writeCursorProvider = { engine.writeCursor() },
-            oldestCursorProvider = { engine.oldestCursor() },
-            estimateTimestampProvider = { offset -> engine.estimateTimestamp(offset) },
-            gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
-            segmentsProvider = { engine.activeSegments() },
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             configProvider = { captureConfig },
-            // Issue #344: lets a "capture is not running" export failure say whether capture was
-            // simply never started, or died unexpectedly mid-session (CaptureState.Error) --
-            // read fresh from the companion's engine, same "never a stale/bound reference across a
-            // retention-window rebuild" reasoning as every other provider above.
-            captureFailureDescriptionProvider = {
-                (engine.state.value as? CaptureState.Error)
-                    ?.let { "capture died unexpectedly (${it.reason}): ${it.message}" }
-            },
         )
     }
 
@@ -1036,3 +1025,53 @@ class RecorderService : Service() {
         }
     }
 }
+
+/**
+ * Builds the [ExportEngine] [RecorderService.exportEngine] uses, wiring every cursor/format
+ * provider to [engine] fresh on every call -- see `exportEngine`'s own doc comment for why that
+ * matters across a retention-window rebuild.
+ *
+ * Extracted out of [RecorderService.exportEngine]'s `by lazy` block into its own top-level
+ * function (issue #385 / `@rev` BLOCK review on PR #386) specifically so this exact production
+ * wiring is reachable from a JVM unit test without instantiating [RecorderService] itself (a
+ * `Service`, which needs Android framework support this module's test tier does not have -- see
+ * `docs/testing/tiers.md`). Before this, [ExportEngine] was only ever constructed here via its
+ * primary constructor directly (needed for [configProvider], which the secondary
+ * `constructor(engine: AudioCaptureEngine, ...)` does not expose) -- and every test in this repo
+ * exercised [ExportEngine] either through that secondary constructor or by calling the primary one
+ * itself, never through *this* call site. That gap is exactly how [RecorderService] shipped
+ * without `capacityBytesProvider` wired for one whole review round of issue #385: nothing else in
+ * the test suite could have caught it, because nothing else in the test suite went through this
+ * function.
+ */
+internal fun buildExportEngine(
+    engine: AudioCaptureEngine,
+    config: AudioConfig,
+    sink: ExportSink,
+    payloadEncoder: PayloadEncoder,
+    minExportDurationMillis: Long,
+    errorLogFile: java.io.File?,
+    configProvider: () -> AudioConfig,
+): ExportEngine = ExportEngine(
+    config = config,
+    readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
+    writeCursorProvider = { engine.writeCursor() },
+    oldestCursorProvider = { engine.oldestCursor() },
+    capacityBytesProvider = { engine.capacityBytes() },
+    estimateTimestampProvider = { offset -> engine.estimateTimestamp(offset) },
+    gapsProvider = { engine.gaps.value },
+    sink = sink,
+    payloadEncoder = payloadEncoder,
+    segmentsProvider = { engine.activeSegments() },
+    minExportDurationMillis = minExportDurationMillis,
+    errorLogFile = errorLogFile,
+    configProvider = configProvider,
+    // Issue #344: lets a "capture is not running" export failure say whether capture was
+    // simply never started, or died unexpectedly mid-session (CaptureState.Error) --
+    // read fresh from the companion's engine, same "never a stale/bound reference across a
+    // retention-window rebuild" reasoning as every other provider above.
+    captureFailureDescriptionProvider = {
+        (engine.state.value as? CaptureState.Error)
+            ?.let { "capture died unexpectedly (${it.reason}): ${it.message}" }
+    },
+)

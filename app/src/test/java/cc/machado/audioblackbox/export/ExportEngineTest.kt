@@ -156,6 +156,9 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about the segmentsProvider-null distinction, not the
+            // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = sink,
@@ -184,6 +187,9 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about the legacy no-segmentsProvider passthrough, not the
+            // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = sink,
@@ -415,6 +421,10 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about gap backfill, not the saturated-buffer startup
+            // headroom -- `{ null }` keeps its pre-#385 behavior exactly (the ring here is built
+            // saturated on purpose, for unrelated reasons -- see the comment above).
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { 0L },
             gapsProvider = { gaps },
             sink = sink,
@@ -637,6 +647,9 @@ class ExportEngineTest {
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
             writeCursorProvider = { ring.writeCursor() },
             oldestCursorProvider = { ring.oldestCursor() },
+            // issue #385: this test is about minExportDurationMillis timing, not the
+            // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { ring.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = sink,

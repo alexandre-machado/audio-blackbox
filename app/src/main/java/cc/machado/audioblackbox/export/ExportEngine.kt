@@ -103,10 +103,18 @@ class ExportEngine(
     private val oldestCursorProvider: () -> Long?,
     // Issue #385: lets runExport tell a saturated ring buffer (oldest byte actively being evicted
     // as new audio arrives -- a slow sink/encoder open can race the writer past it) from one that
-    // has not wrapped yet (nothing evicted, no race possible). `null` (the default, and every
-    // caller that predates #385) disables the startup headroom below entirely -- see
-    // `startCursorFor`'s doc.
-    private val capacityBytesProvider: () -> Int? = { null },
+    // has not wrapped yet (nothing evicted, no race possible). A provider that always returns
+    // `null` disables the startup headroom below entirely.
+    //
+    // Deliberately **no default value** (`@rev` BLOCK review on PR #386): this parameter used to
+    // default to `{ null }`, and `RecorderService`'s production `exportEngine` -- which calls this
+    // primary constructor directly, not the secondary `constructor(engine: AudioCaptureEngine, ...)`
+    // below that already wired this correctly -- silently kept that default, so the #385 fix never
+    // actually ran on a real device despite shipping with green tests and CI. A missing default
+    // here means the compiler rejects any future primary-constructor call site (production or
+    // test) that forgets this the same way it already rejects one that forgets `sink` or
+    // `payloadEncoder` -- see `buildExportEngine` in `RecorderService.kt` for the fixed call site.
+    private val capacityBytesProvider: () -> Int?,
     private val estimateTimestampProvider: (Long) -> Long?,
     private val gapsProvider: () -> List<PauseGap>,
     private val sink: ExportSink,

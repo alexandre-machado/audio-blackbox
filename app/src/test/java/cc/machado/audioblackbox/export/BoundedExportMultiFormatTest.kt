@@ -99,6 +99,9 @@ class BoundedExportMultiFormatTest {
             readSinceProvider = { cursor, maxBytes -> ringBuffer.readSince(cursor, maxBytes) },
             writeCursorProvider = { ringBuffer.writeCursor() },
             oldestCursorProvider = { ringBuffer.oldestCursor() },
+            // issue #385: this test is about multi-format PCM conversion, not the saturated-buffer
+            // startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+            capacityBytesProvider = { null },
             estimateTimestampProvider = { ringBuffer.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = capturedSink,

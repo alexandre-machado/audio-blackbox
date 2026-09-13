@@ -131,6 +131,9 @@ class RetentionCeilingMeasurementTest {
                 readSinceProvider = { cursor, maxBytes -> buffer!!.readSince(cursor, maxBytes) },
                 writeCursorProvider = { buffer!!.writeCursor() },
                 oldestCursorProvider = { buffer!!.oldestCursor() },
+                // issue #385: this measurement is about peak memory, not the saturated-buffer
+                // startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
+                capacityBytesProvider = { null },
                 estimateTimestampProvider = { offset -> buffer!!.estimateTimestamp(offset) },
                 gapsProvider = { emptyList() },
                 sink = sink,
