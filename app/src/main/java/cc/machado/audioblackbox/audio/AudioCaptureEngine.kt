@@ -199,6 +199,13 @@ class AudioCaptureEngine(
     /** Stream offset of the oldest byte still buffered, or `null` before the first [start] or after [stop]. */
     fun oldestCursor(): Long? = ringBuffer?.oldestCursor()
 
+    /** The live buffer's fixed capacity in bytes, or `null` before the first [start] or after
+     * [stop]. Lets a caller (see [cc.machado.audioblackbox.export.ExportEngine]) tell a saturated
+     * buffer (where the oldest byte is being evicted as new audio arrives, so a slow reader can
+     * race the writer) from one that has not wrapped yet (where nothing is being evicted and no
+     * race is possible) -- issue #385. */
+    fun capacityBytes(): Int? = ringBuffer?.capacityBytes
+
     /**
      * Incremental drain read from the live buffer, or `null` before the first [start] or after [stop].
      */
