@@ -123,7 +123,11 @@ class RecorderService : Service() {
     // WavPayloadEncoder stays available for a future user-facing lossless setting.
     private val exportEngine by lazy {
         buildExportEngine(
-            engine = engine,
+            // `{ engine }` re-reads the companion's `engine` getter on every call, not a bound
+            // reference to whatever `engine` resolves to right now -- see buildExportEngine's own
+            // doc for why capturing the AudioCaptureEngine instance itself (rather than a provider
+            // that re-fetches it) is exactly the regression `@sec`'s BLOCK review caught here.
+            engineProvider = { engine },
             config = captureConfig,
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
@@ -1028,8 +1032,14 @@ class RecorderService : Service() {
 
 /**
  * Builds the [ExportEngine] [RecorderService.exportEngine] uses, wiring every cursor/format
- * provider to [engine] fresh on every call -- see `exportEngine`'s own doc comment for why that
- * matters across a retention-window rebuild.
+ * provider to read [engineProvider] fresh on *every individual call*, never capturing the
+ * `AudioCaptureEngine` it returns into a local -- see `exportEngine`'s own doc comment for why
+ * that matters across a retention-window rebuild ([rebuildEngineIfIdleAt] replaces the companion's
+ * `_engine` wholesale; a provider that captured the engine once, at this function's own call time,
+ * would keep reading the old, abandoned engine forever after such a rebuild, silently exporting
+ * from a capture session that no longer exists -- `@sec` BLOCK review on PR #386, the exact
+ * regression this shape of bug reintroduces if any lambda below is ever changed to close over a
+ * `val engine = engineProvider()` instead of calling `engineProvider()` at the point of use).
  *
  * Extracted out of [RecorderService.exportEngine]'s `by lazy` block into its own top-level
  * function (issue #385 / `@rev` BLOCK review on PR #386) specifically so this exact production
@@ -1040,12 +1050,13 @@ class RecorderService : Service() {
  * `constructor(engine: AudioCaptureEngine, ...)` does not expose) -- and every test in this repo
  * exercised [ExportEngine] either through that secondary constructor or by calling the primary one
  * itself, never through *this* call site. That gap is exactly how [RecorderService] shipped
- * without `capacityBytesProvider` wired for one whole review round of issue #385: nothing else in
- * the test suite could have caught it, because nothing else in the test suite went through this
- * function.
+ * without `capacityBytesProvider` wired for one whole review round of issue #385, and then how it
+ * shipped bound to a single, capturable `AudioCaptureEngine` instance for a second round: nothing
+ * else in the test suite could have caught either, because nothing else in the test suite went
+ * through this function.
  */
 internal fun buildExportEngine(
-    engine: AudioCaptureEngine,
+    engineProvider: () -> AudioCaptureEngine,
     config: AudioConfig,
     sink: ExportSink,
     payloadEncoder: PayloadEncoder,
@@ -1054,24 +1065,24 @@ internal fun buildExportEngine(
     configProvider: () -> AudioConfig,
 ): ExportEngine = ExportEngine(
     config = config,
-    readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
-    writeCursorProvider = { engine.writeCursor() },
-    oldestCursorProvider = { engine.oldestCursor() },
-    capacityBytesProvider = { engine.capacityBytes() },
-    estimateTimestampProvider = { offset -> engine.estimateTimestamp(offset) },
-    gapsProvider = { engine.gaps.value },
+    readSinceProvider = { cursor, maxBytes -> engineProvider().readSince(cursor, maxBytes) },
+    writeCursorProvider = { engineProvider().writeCursor() },
+    oldestCursorProvider = { engineProvider().oldestCursor() },
+    capacityBytesProvider = { engineProvider().capacityBytes() },
+    estimateTimestampProvider = { offset -> engineProvider().estimateTimestamp(offset) },
+    gapsProvider = { engineProvider().gaps.value },
     sink = sink,
     payloadEncoder = payloadEncoder,
-    segmentsProvider = { engine.activeSegments() },
+    segmentsProvider = { engineProvider().activeSegments() },
     minExportDurationMillis = minExportDurationMillis,
     errorLogFile = errorLogFile,
     configProvider = configProvider,
     // Issue #344: lets a "capture is not running" export failure say whether capture was
     // simply never started, or died unexpectedly mid-session (CaptureState.Error) --
-    // read fresh from the companion's engine, same "never a stale/bound reference across a
+    // read fresh from `engineProvider()`, same "never a stale/bound reference across a
     // retention-window rebuild" reasoning as every other provider above.
     captureFailureDescriptionProvider = {
-        (engine.state.value as? CaptureState.Error)
+        (engineProvider().state.value as? CaptureState.Error)
             ?.let { "capture died unexpectedly (${it.reason}): ${it.message}" }
     },
 )

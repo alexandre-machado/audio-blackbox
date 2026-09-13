@@ -55,7 +55,7 @@ class BuildExportEngineWiringTest {
         override fun abort() {}
     }
 
-    private class FakeSink(private val target: FakeTarget) : ExportSink {
+    private class FakeSink(var target: FakeTarget) : ExportSink {
         override fun open(displayName: String, mimeType: String): ExportTarget = target
     }
 
@@ -89,6 +89,28 @@ class BuildExportEngineWiringTest {
         fail("timed out waiting for writeCursor >= $target, last value was ${engine.writeCursor()}")
     }
 
+    /** A real, started [AudioCaptureEngine] whose real [cc.machado.audioblackbox.audio.RingBuffer]
+     * is saturated to exactly [cfg]'s [AudioConfig.totalBufferBytes] and then frozen (further
+     * `AudioRecord.read()` calls return 0, a normal idle poll -- no further writes, no race left
+     * to wait out). Requires [withMinBufferSizeMocked] with the same [minBufferSizeValue] already
+     * active (the static `AudioRecord.getMinBufferSize` mock is shared across every engine built
+     * this way in one test). */
+    private fun buildSaturatedEngine(cfg: AudioConfig, minBufferSizeValue: Int): AudioCaptureEngine {
+        val capacity = cfg.totalBufferBytes.toInt()
+        val reads = AtomicInteger(0)
+        val readsNeeded = capacity / minBufferSizeValue
+        val record = mock<AudioRecord>()
+        whenever(record.state).thenReturn(AudioRecord.STATE_INITIALIZED)
+        whenever(record.recordingState).thenReturn(AudioRecord.RECORDSTATE_RECORDING)
+        whenever(record.read(any<ByteArray>(), any(), any())).thenAnswer {
+            if (reads.getAndIncrement() < readsNeeded) minBufferSizeValue else 0
+        }
+        val engine = AudioCaptureEngine(config = cfg, audioRecordFactory = { _, _ -> record })
+        engine.start()
+        awaitWriteCursorAtLeast(engine, capacity.toLong())
+        return engine
+    }
+
     @Test
     fun `RecorderService's real ExportEngine wiring applies the issue 385 startup headroom on a saturated buffer`() =
         withMinBufferSizeMocked(minBufferSize) {
@@ -116,7 +138,7 @@ class BuildExportEngineWiringTest {
 
                 val target = FakeTarget()
                 val exportEngine = buildExportEngine(
-                    engine = engine,
+                    engineProvider = { engine },
                     config = config,
                     sink = FakeSink(target),
                     payloadEncoder = WavPayloadEncoder,
@@ -141,6 +163,61 @@ class BuildExportEngineWiringTest {
                 )
             } finally {
                 engine.stop()
+            }
+        }
+
+    @Test
+    fun `buildExportEngine reads engineProvider fresh on every call, not the engine captured at build time`() =
+        withMinBufferSizeMocked(minBufferSize) {
+            // `@sec` BLOCK review on PR #386 (issue #385): buildExportEngine used to take a plain
+            // `engine: AudioCaptureEngine` parameter, captured once into every provider lambda --
+            // exactly the shape RecorderService.rebuildEngineIfIdleAt's engine-replacement (issue
+            // #45) needs every one of these providers to NOT do, since a retention-window change
+            // swaps the companion's `_engine` out from under this already-built ExportEngine for
+            // the rest of the Service instance's lifetime.
+            //
+            // configB has a different bufferDurationMinutes (hence a different capacityBytes, and
+            // so a different expected exported payload size) from `config`, purely so the second
+            // export()'s byte count can only match if it genuinely read from engineB, not engineA.
+            val configB = config.copy(bufferDurationMinutes = 2) // capacityBytes = 200 * 120 = 24_000
+            val engineA = buildSaturatedEngine(config, minBufferSize)
+            val engineB = buildSaturatedEngine(configB, minBufferSize)
+            try {
+                var currentEngine: AudioCaptureEngine = engineA
+                val sink = FakeSink(FakeTarget())
+                val exportEngine = buildExportEngine(
+                    engineProvider = { currentEngine },
+                    config = config,
+                    sink = sink,
+                    payloadEncoder = WavPayloadEncoder,
+                    minExportDurationMillis = 0L,
+                    errorLogFile = null,
+                    configProvider = { config },
+                )
+
+                val resultA = exportEngine.export(durationMillis = 60_000L, minutesLabel = 1)
+                assertTrue("expected Success from engineA, got $resultA", resultA is ExportState.Success)
+                val payloadA = sink.target.buffer.toByteArray().size - WavWriter.HEADER_SIZE_BYTES
+                assertEquals("expected engineA's capacity (12_000) minus its margin (50)", 11_950, payloadA)
+
+                // Swap the provider's target -- the same `rebuildEngineIfIdleAt` shape -- without
+                // rebuilding `exportEngine` itself, then export again on the SAME instance. A fresh
+                // sink target so the second export's payload isn't measured on top of the first's.
+                currentEngine = engineB
+                sink.target = FakeTarget()
+
+                val resultB = exportEngine.export(durationMillis = 240_000L, minutesLabel = 4)
+                assertTrue("expected Success from engineB, got $resultB", resultB is ExportState.Success)
+                val payloadB = sink.target.buffer.toByteArray().size - WavWriter.HEADER_SIZE_BYTES
+                assertEquals(
+                    "expected the SECOND export to read engineB's capacity (24_000) minus its " +
+                        "margin (50), not engineA's -- a stale captured engine would repeat 11_950",
+                    23_950,
+                    payloadB,
+                )
+            } finally {
+                engineA.stop()
+                engineB.stop()
             }
         }
 }
