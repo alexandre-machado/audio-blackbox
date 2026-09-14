@@ -18,10 +18,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -92,6 +95,7 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     SettingsScreen(
         uiState = uiState,
         onSelectQualityPreset = viewModel::selectQualityPreset,
@@ -99,6 +103,13 @@ fun SettingsRoute(
         onIncrement = viewModel::incrementPending,
         onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
         onDismissResizeError = viewModel::dismissResizeError,
+        onExportDiagnosticLog = {
+            cc.machado.audioblackbox.export.exportFullDiagnosticLog(
+                context = context,
+                preset = uiState.selectedPreset,
+                retentionMinutes = uiState.retentionStepper.committedMinutes,
+            )
+        },
         modifier = modifier,
     )
 }
@@ -111,6 +122,7 @@ fun SettingsScreen(
     onIncrement: () -> Unit,
     onAcknowledgeClampNotice: () -> Unit,
     onDismissResizeError: () -> Unit = {},
+    onExportDiagnosticLog: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
 ) {
@@ -130,6 +142,7 @@ fun SettingsScreen(
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
+        DiagnosticsSection(onExportDiagnosticLog = onExportDiagnosticLog)
         PrivacySection(versionName = versionName)
     }
     uiState.clampNotice?.let { notice ->
@@ -521,6 +534,47 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
                 value = stringResource(R.string.settings_consumption_io_value),
                 isMonospace = true,
             )
+        }
+    }
+}
+
+/**
+ * Issue #388: the one, always-reachable action for exporting the *entire* on-disk diagnostic log
+ * (`export_errors.log` + its rotated `.old` generation, and `crash_log.log` + its own `.old`) --
+ * unlike the dashboard's `ErrorLogModal`, this card is not gated behind an `ERROR` entry existing;
+ * it renders unconditionally in Settings. Tapping the button hands off to
+ * [cc.machado.audioblackbox.export.exportFullDiagnosticLog] via [onExportDiagnosticLog], which
+ * itself shows a toast instead of sharing when the underlying log is empty (see that function's
+ * doc) -- this composable stays a plain, stateless trigger.
+ */
+@Composable
+private fun DiagnosticsSection(onExportDiagnosticLog: () -> Unit) {
+    AvionicsCard(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            AvionicsCardHeaderBar(
+                label = stringResource(R.string.settings_card_diagnostics_label),
+            )
+            Text(
+                text = stringResource(R.string.settings_diagnostics_explanation),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = onExportDiagnosticLog,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(text = stringResource(R.string.settings_diagnostics_export_action))
+            }
         }
     }
 }

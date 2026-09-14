@@ -375,6 +375,14 @@
     <string name="settings_website_label">Product website</string>
     <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox</string>
 
+    <!-- Full Diagnostic Log export (issue #388) -->
+    <string name="settings_card_diagnostics_label">DIAGNOSTIC LOG</string>
+    <string name="settings_diagnostics_explanation">Exports the complete on-device diagnostic log (error, audit, and crash entries) as one file, for sharing with support. Nothing is sent automatically; this only opens the standard share sheet.</string>
+    <string name="settings_diagnostics_export_action">Export diagnostic log</string>
+    <string name="settings_diagnostics_export_empty_toast">Diagnostic log is empty, nothing to export</string>
+    <string name="settings_diagnostics_export_subject">Audio Blackbox Diagnostic Log</string>
+    <string name="settings_diagnostics_export_chooser_title">Export Diagnostic Log</string>
+
     <!-- Incident Diagnostics / Error Telemetry (issue #206) -->
     <string name="dashboard_error_telemetry_title">Incident Diagnostics</string>
     <string name="dashboard_error_telemetry_code">Code: %1$s</string>

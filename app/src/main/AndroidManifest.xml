@@ -104,6 +104,26 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/recording_widget_info" />
         </receiver>
+
+        <!--
+          Issue #388: exposes only the single generated full-diagnostic-log file (written to a
+          dedicated `diagnostics/` subdirectory of `cacheDir`, see
+          `cc.machado.audioblackbox.export.exportFullDiagnosticLog`) to the app the user picks in
+          the share sheet, never `filesDir` (where the live export_errors.log/crash_log.log
+          actually live), never the recordings directory. exported="false": only this app's own
+          share Intent (with FLAG_GRANT_READ_URI_PERMISSION, see exportFullDiagnosticLog) ever
+          resolves a uri through this provider; grantUriPermissions="true" is what lets that
+          temporary grant work at all for a non-exported provider.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_file_paths" />
+        </provider>
     </application>
 
 </manifest>

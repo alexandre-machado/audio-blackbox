@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Issue #388: FileProvider path spec for the full diagnostic log export. Exposes exactly one
+  cache-path subdirectory ("diagnostics/", see cc.machado.audioblackbox.export.exportFullDiagnosticLog),
+  not the app's own cacheDir root, not filesDir, not any external/media path, so a share Intent
+  built from this provider can only ever resolve a uri under that one dedicated directory.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="diagnostics" path="diagnostics/" />
+</paths>

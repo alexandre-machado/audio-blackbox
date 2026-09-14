@@ -3,6 +3,7 @@ package cc.machado.audioblackbox
 import android.app.Application
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.redactSensitivePaths
+import cc.machado.audioblackbox.export.sensitiveRootsFor
 import cc.machado.audioblackbox.export.writeCrashLogEntrySync
 import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
@@ -99,14 +100,12 @@ class AudioBlackboxApplication : Application() {
         // hand one to a crash. [redactSensitivePaths] itself additionally covers path *shapes*
         // (aliases, other volumes, other user profiles) this Context never resolves -- see its own
         // doc for what is and is not covered.
-        val sensitiveRoots = buildList {
-            applicationContext.filesDir?.absolutePath?.let(::add)
-            applicationContext.cacheDir?.absolutePath?.let(::add)
-            applicationContext.externalCacheDir?.absolutePath?.let(::add)
-            applicationContext.getExternalFilesDirs(null)?.forEach { dir ->
-                dir?.absolutePath?.let(::add)
-            }
-        }
+        val sensitiveRoots = sensitiveRootsFor(
+            filesDir = applicationContext.filesDir,
+            cacheDir = applicationContext.cacheDir,
+            externalCacheDir = applicationContext.externalCacheDir,
+            externalFilesDirs = applicationContext.getExternalFilesDirs(null)?.toList().orEmpty(),
+        )
         val packageNameForRedaction = packageName
         val redact: (String) -> String = { raw ->
             redactSensitivePaths(raw, sensitiveRoots, packageNameForRedaction)
