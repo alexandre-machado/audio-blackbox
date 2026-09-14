@@ -296,9 +296,11 @@ suspend fun exportFullDiagnosticLog(
     retentionMinutes: Int,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    val outcome = withContext(ioDispatcher) {
-        buildDiagnosticExportOutcome(context, preset, retentionMinutes)
-    }
+    // MUTATION-VERIFICATION ONLY (PR #390 @rev finding 1 non-vacuity proof) -- do not merge:
+    // dropped the withContext(ioDispatcher) wrapper so the heavy work runs on the caller's own
+    // (Main) dispatcher again, to prove exportFullDiagnosticLog_runsHeavyWorkOffTheMainThread
+    // actually fails when it should.
+    val outcome = buildDiagnosticExportOutcome(context, preset, retentionMinutes)
     when (outcome) {
         is DiagnosticExportOutcome.Empty ->
             showToast(context, R.string.settings_diagnostics_export_empty_toast)
