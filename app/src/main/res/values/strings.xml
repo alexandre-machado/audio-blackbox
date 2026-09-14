@@ -373,7 +373,7 @@
     <string name="settings_version_label">Version %1$s</string>
     <string name="settings_version_with_date_label">Version %1$s (%2$s)</string>
     <string name="settings_website_label">Product website</string>
-    <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox</string>
+    <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
 
     <!-- Full Diagnostic Log export (issue #388) -->
     <string name="settings_card_diagnostics_label">DIAGNOSTIC LOG</string>
