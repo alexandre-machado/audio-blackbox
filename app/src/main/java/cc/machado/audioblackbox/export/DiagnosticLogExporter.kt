@@ -3,9 +3,8 @@ package cc.machado.audioblackbox.export
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.core.content.FileProvider
 import cc.machado.audioblackbox.CrashLogFileHolder
 import cc.machado.audioblackbox.ErrorLogFileHolder
@@ -15,6 +14,9 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Issue #388: exports the *entire* on-disk diagnostic log (not just the current page the
@@ -48,20 +50,48 @@ import java.util.Locale
  * [cc.machado.audioblackbox.ui.gallery.GalleryScreen]'s `shareRecording` already uses for its own
  * `MediaStore` uri) so the receiving app can read the one granted file without this provider ever
  * being reachable by an arbitrary external app.
+ *
+ * ## Off the main thread (PR #390 `@rev` finding 1)
+ * Reading up to ~12 MB across four generations, redacting every one with
+ * [redactSensitivePaths]'s regex passes, and writing the assembled report back to disk are real
+ * I/O + CPU work -- exactly the kind [readErrorLog]'s own doc already warns callers to dispatch off
+ * the calling thread themselves. [exportFullDiagnosticLog] is `suspend` and does that work inside
+ * [withContext] on [ioDispatcher] (`Dispatchers.IO` by default); only the final `startActivity`/
+ * `Toast` happens back on the caller's original dispatcher (Main, for every real UI call site).
+ * [ioDispatcher] is a parameter -- not merely hardcoded -- so a test can substitute a dispatcher
+ * that observes which thread the heavy work actually lands on, proving this claim rather than
+ * merely asserting it (see `DiagnosticLogExporterInstrumentedTest`'s off-main-thread test).
  */
 private const val DIAGNOSTICS_CACHE_SUBDIR = "diagnostics"
 private const val DIAGNOSTICS_REPORT_FILENAME = "audio_blackbox_diagnostic_log.txt"
 
 /**
+ * One on-disk log generation's read outcome (PR #390 `@rev` finding 5): distinguishes a file that
+ * genuinely does not exist ([Absent]) from one that exists but could not be read
+ * ([ReadFailed] -- a transient I/O error, a torn write racing a rotation, etc.) from a real,
+ * successfully-read (and already redacted) [Content]. Before this, both [Absent] and [ReadFailed]
+ * collapsed to the same `null`/"(not present)" rendering, which could hide from support the fact
+ * that a device actually had entries a transient failure just couldn't surface this one time.
+ * [ReadFailed] carries only the exception's simple class name, never [Throwable.message] --
+ * an exception message could itself contain an unredacted path or other raw content this whole
+ * export exists to avoid leaking.
+ */
+internal sealed class LogGenerationRead {
+    internal object Absent : LogGenerationRead()
+    internal data class Content(val text: String) : LogGenerationRead()
+    internal data class ReadFailed(val exceptionClassName: String) : LogGenerationRead()
+}
+
+/**
  * Builds the full diagnostic report text: a triage header followed by every generation of both
- * on-disk logs, in a fixed order -- [exportLogText] (`export_errors.log`), then
- * [exportLogOldText] (`export_errors.log.old`), then [crashLogText] (`crash_log.log`), then
- * [crashLogOldText] (`crash_log.log.old`). A missing/absent generation is rendered as an explicit
- * `(not present)` marker rather than a silently-skipped section, so a reader (or a test) can always
- * tell "this generation does not exist on this device" apart from "this generation exists and is
- * blank".
+ * on-disk logs, in a fixed order -- [exportLogRead] (`export_errors.log`), then
+ * [exportLogOldRead] (`export_errors.log.old`), then [crashLogRead] (`crash_log.log`), then
+ * [crashLogOldRead] (`crash_log.log.old`). Each generation renders as its real content, an explicit
+ * `(not present)` marker for [LogGenerationRead.Absent], or `(read failed: <ExceptionClass>)` for
+ * [LogGenerationRead.ReadFailed] -- never a silently-skipped section, so a reader (or a test) can
+ * always tell these three states apart.
  *
- * Deliberately takes only primitives/pre-read [String] content and no [File]/[Context] at all, so
+ * Deliberately takes only primitives/[LogGenerationRead] values and no [File]/[Context] at all, so
  * it is testable on the plain JVM (per this repo's "no Robolectric" constraint) -- the caller
  * ([exportFullDiagnosticLog]) does the actual file reads and redaction and passes the results in.
  */
@@ -72,10 +102,10 @@ internal fun buildFullDiagnosticReport(
     androidVersion: String,
     preset: QualityPreset,
     retentionMinutes: Int,
-    exportLogText: String?,
-    exportLogOldText: String?,
-    crashLogText: String?,
-    crashLogOldText: String?,
+    exportLogRead: LogGenerationRead,
+    exportLogOldRead: LogGenerationRead,
+    crashLogRead: LogGenerationRead,
+    crashLogOldRead: LogGenerationRead,
     timestampMillis: Long = System.currentTimeMillis(),
 ): String {
     val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(timestampMillis))
@@ -91,74 +121,86 @@ internal fun buildFullDiagnosticReport(
         )
         appendLine("Retention Window: $retentionMinutes min")
         appendLine("===========================================")
-        appendDiagnosticSection("export_errors.log", exportLogText)
-        appendDiagnosticSection("export_errors.log.old", exportLogOldText)
-        appendDiagnosticSection("crash_log.log", crashLogText)
-        appendDiagnosticSection("crash_log.log.old", crashLogOldText)
+        appendDiagnosticSection("export_errors.log", exportLogRead)
+        appendDiagnosticSection("export_errors.log.old", exportLogOldRead)
+        appendDiagnosticSection("crash_log.log", crashLogRead)
+        appendDiagnosticSection("crash_log.log.old", crashLogOldRead)
     }
 }
 
-private fun StringBuilder.appendDiagnosticSection(name: String, content: String?) {
+private fun StringBuilder.appendDiagnosticSection(name: String, read: LogGenerationRead) {
     appendLine()
     appendLine("--- $name ---")
-    if (content.isNullOrEmpty()) {
-        appendLine("(not present)")
-    } else {
-        append(content)
-        if (!content.endsWith("\n")) appendLine()
+    when (read) {
+        is LogGenerationRead.Absent -> appendLine("(not present)")
+        is LogGenerationRead.ReadFailed -> appendLine("(read failed: ${read.exceptionClassName})")
+        is LogGenerationRead.Content -> {
+            append(read.text)
+            if (!read.text.endsWith("\n")) appendLine()
+        }
     }
 }
 
 /**
- * `true` when every generation of both logs is missing or blank -- the exact condition under which
- * [exportFullDiagnosticLog] must show a clear "nothing to export" toast instead of opening the share
- * sheet with a report that is header-only (issue #388's acceptance criterion 2: an empty log must
- * not be shared without warning).
+ * `true` when none of the four generations has real, non-blank content -- the exact condition
+ * under which [exportFullDiagnosticLog] must show a clear "nothing to export" toast instead of
+ * opening the share sheet with a report that is header-only (issue #388's acceptance criterion 2:
+ * an empty log must not be shared without warning). [LogGenerationRead.Absent] and
+ * [LogGenerationRead.ReadFailed] both count as "no content" here, same as before PR #390's finding
+ * 5 introduced the distinction -- only the *rendering* changed, not this emptiness rule.
  */
-internal fun isDiagnosticReportEmpty(
-    exportLogText: String?,
-    exportLogOldText: String?,
-    crashLogText: String?,
-    crashLogOldText: String?,
-): Boolean =
-    exportLogText.isNullOrBlank() &&
-        exportLogOldText.isNullOrBlank() &&
-        crashLogText.isNullOrBlank() &&
-        crashLogOldText.isNullOrBlank()
+internal fun isDiagnosticReportEmpty(vararg reads: LogGenerationRead): Boolean =
+    reads.all { it !is LogGenerationRead.Content || it.text.isBlank() }
 
-/** Reads [file] (and its `.old` rotation sibling), redacting each through [redact] -- `null` when
- * the file does not exist or fails to read, so [isDiagnosticReportEmpty] can tell "absent" apart
- * from "present but empty" as cleanly as [buildFullDiagnosticReport] renders it. */
-private fun readRedacted(file: File?, redact: (String) -> String): String? {
-    if (file == null || !file.exists() || !file.isFile) return null
+/** Reads [file] (and its `.old` rotation sibling), redacting each through [redact] --
+ * distinguishes "file does not exist" ([LogGenerationRead.Absent]) from "file exists but could not
+ * be read" ([LogGenerationRead.ReadFailed]), per PR #390 `@rev` finding 5. */
+private fun readRedacted(file: File?, redact: (String) -> String): LogGenerationRead {
+    if (file == null || !file.exists() || !file.isFile) return LogGenerationRead.Absent
     return try {
-        redact(file.readText())
+        LogGenerationRead.Content(redact(file.readText()))
     } catch (e: Exception) {
-        null
+        LogGenerationRead.ReadFailed(e.javaClass.simpleName)
     }
 }
 
 private fun oldGenerationOf(file: File?): File? =
     file?.let { File(it.parent, it.name + ".old") }
 
+/** Outcome of the (potentially heavy) read/redact/assemble/write work in
+ * [buildDiagnosticExportOutcome] -- resolved entirely off the main thread, then interpreted by
+ * [exportFullDiagnosticLog] back on the caller's own dispatcher to actually show a [Toast] or start
+ * an [Intent]. [Failed] carries only the exception's simple class name (never [Throwable.message]),
+ * same rationale as [LogGenerationRead.ReadFailed]. */
+internal sealed class DiagnosticExportOutcome {
+    internal object Empty : DiagnosticExportOutcome()
+    internal data class Ready(val chooserIntent: Intent) : DiagnosticExportOutcome()
+    internal data class Failed(val exceptionClassName: String) : DiagnosticExportOutcome()
+}
+
 /**
- * The single UI-reachable action for issue #388: reads both on-disk logs (and their `.old`
- * generations), redacts sensitive paths through the same [redactSensitivePaths] logic
+ * Does all the heavy lifting: reads both on-disk logs and their `.old` generations, redacts
+ * sensitive paths through the same [redactSensitivePaths] logic
  * [cc.machado.audioblackbox.AudioBlackboxApplication]'s crash handler already uses, assembles the
  * full report via [buildFullDiagnosticReport], writes it to a dedicated cache subdirectory, and
- * opens the standard Android share sheet (`ACTION_SEND`) for it via [FileProvider] -- see this
- * file's class-level doc for the `FileProvider`-vs-`EXTRA_TEXT` decision and the exposed-surface
- * rationale.
+ * builds (but does not launch) the share [Intent] via [FileProvider].
  *
- * Reachable with no `ERROR` entries at all (wired from Settings, not the dashboard's error card),
- * and with an empty log: [isDiagnosticReportEmpty] is checked first, and an empty result shows
- * [R.string.settings_diagnostics_export_empty_toast] instead of sharing a near-blank file silently.
+ * Deliberately a plain, non-suspend function containing only blocking calls -- [exportFullDiagnosticLog]
+ * is the one responsible for making sure this runs off the main thread, via [withContext]. Keeping
+ * this function itself dispatcher-agnostic (rather than baking in its own `withContext`) is what
+ * lets a test invoke it directly, synchronously, without any coroutine machinery, while production
+ * still only ever calls it from inside [withContext].
+ *
+ * PR #390 `@rev` finding 4: [reportFile.writeText], [FileProvider.getUriForFile], and building the
+ * chooser [Intent] are wrapped in a single `try`/`catch` -- an `IOException` (e.g. disk full) or a
+ * `FileProvider` failure now becomes [DiagnosticExportOutcome.Failed] instead of an uncaught
+ * exception that would otherwise crash the process from inside a diagnostics *export* attempt.
  */
-fun exportFullDiagnosticLog(
+private fun buildDiagnosticExportOutcome(
     context: Context,
     preset: QualityPreset,
     retentionMinutes: Int,
-) {
+): DiagnosticExportOutcome {
     val errorLogFile = ErrorLogFileHolder.file
     val crashLogFile = CrashLogFileHolder.file
 
@@ -171,63 +213,103 @@ fun exportFullDiagnosticLog(
     val packageName = context.packageName
     val redact: (String) -> String = { raw -> redactSensitivePaths(raw, sensitiveRoots, packageName) }
 
-    val exportText = readRedacted(errorLogFile, redact)
-    val exportOldText = readRedacted(oldGenerationOf(errorLogFile), redact)
-    val crashText = readRedacted(crashLogFile, redact)
-    val crashOldText = readRedacted(oldGenerationOf(crashLogFile), redact)
+    val exportRead = readRedacted(errorLogFile, redact)
+    val exportOldRead = readRedacted(oldGenerationOf(errorLogFile), redact)
+    val crashRead = readRedacted(crashLogFile, redact)
+    val crashOldRead = readRedacted(oldGenerationOf(crashLogFile), redact)
 
-    if (isDiagnosticReportEmpty(exportText, exportOldText, crashText, crashOldText)) {
-        // Toast requires a thread with a prepared Looper. Every real UI caller (the Settings
-        // button, see SettingsScreen.kt) is already on the main thread, but posting explicitly to
-        // Looper.getMainLooper() makes this function itself thread-safe to call from anywhere
-        // (e.g. a test calling it directly off the instrumentation thread, which has no prepared
-        // Looper of its own) instead of silently depending on the caller's thread.
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(
-                context,
-                context.getString(R.string.settings_diagnostics_export_empty_toast),
-                Toast.LENGTH_SHORT,
-            ).show()
+    if (isDiagnosticReportEmpty(exportRead, exportOldRead, crashRead, crashOldRead)) {
+        return DiagnosticExportOutcome.Empty
+    }
+
+    return try {
+        val (versionName, versionCode) = try {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            (info.versionName ?: "unknown") to info.longVersionCode
+        } catch (e: Exception) {
+            "unknown" to -1L
         }
-        return
-    }
 
-    val (versionName, versionCode) = try {
-        val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        (info.versionName ?: "unknown") to info.longVersionCode
+        val report = buildFullDiagnosticReport(
+            versionName = versionName,
+            versionCode = versionCode,
+            deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+            androidVersion = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            preset = preset,
+            retentionMinutes = retentionMinutes,
+            exportLogRead = exportRead,
+            exportLogOldRead = exportOldRead,
+            crashLogRead = crashRead,
+            crashLogOldRead = crashOldRead,
+        )
+
+        val diagnosticsCacheDir = File(context.cacheDir, DIAGNOSTICS_CACHE_SUBDIR).apply { mkdirs() }
+        val reportFile = File(diagnosticsCacheDir, DIAGNOSTICS_REPORT_FILENAME)
+        reportFile.writeText(report)
+
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", reportFile)
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.settings_diagnostics_export_subject))
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(
+            sendIntent,
+            context.getString(R.string.settings_diagnostics_export_chooser_title),
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        DiagnosticExportOutcome.Ready(chooser)
     } catch (e: Exception) {
-        "unknown" to -1L
+        DiagnosticExportOutcome.Failed(e.javaClass.simpleName)
     }
+}
 
-    val report = buildFullDiagnosticReport(
-        versionName = versionName,
-        versionCode = versionCode,
-        deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
-        androidVersion = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
-        preset = preset,
-        retentionMinutes = retentionMinutes,
-        exportLogText = exportText,
-        exportLogOldText = exportOldText,
-        crashLogText = crashText,
-        crashLogOldText = crashOldText,
-    )
+private fun showToast(context: Context, @StringRes resId: Int) {
+    Toast.makeText(context, context.getString(resId), Toast.LENGTH_SHORT).show()
+}
 
-    val diagnosticsCacheDir = File(context.cacheDir, DIAGNOSTICS_CACHE_SUBDIR).apply { mkdirs() }
-    val reportFile = File(diagnosticsCacheDir, DIAGNOSTICS_REPORT_FILENAME)
-    reportFile.writeText(report)
-
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", reportFile)
-    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.settings_diagnostics_export_subject))
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+/**
+ * The single UI-reachable action for issue #388: reads both on-disk logs (and their `.old`
+ * generations), redacts sensitive paths, assembles the full report, writes it to a dedicated cache
+ * subdirectory, and opens the standard Android share sheet (`ACTION_SEND`) for it via [FileProvider]
+ * -- see this file's class-level doc for the `FileProvider`-vs-`EXTRA_TEXT` decision, the
+ * exposed-surface rationale, and the off-main-thread rationale (PR #390 `@rev` finding 1).
+ *
+ * `suspend`: the actual read/redact/assemble/write work ([buildDiagnosticExportOutcome]) runs
+ * inside [withContext] on [ioDispatcher] (`Dispatchers.IO` by default, overridable for tests);
+ * `startActivity`/`Toast` happen after [withContext] returns, i.e. back on the caller's own
+ * dispatcher -- Main, for every real call site (see `SettingsScreen.kt`'s
+ * `rememberCoroutineScope().launch { ... }` wiring).
+ *
+ * Reachable with no `ERROR` entries at all (wired from Settings, not the dashboard's error card),
+ * and with an empty log: an empty result shows [R.string.settings_diagnostics_export_empty_toast]
+ * instead of sharing a near-blank file silently. A write/`FileProvider`/chooser-build failure (PR
+ * #390 `@rev` finding 4) shows [R.string.settings_diagnostics_export_error_toast] instead of
+ * propagating and crashing the process; likewise, if `startActivity` itself throws (e.g. no
+ * activity can handle the chooser), the same generic error toast is shown rather than crashing.
+ */
+suspend fun exportFullDiagnosticLog(
+    context: Context,
+    preset: QualityPreset,
+    retentionMinutes: Int,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
+    val outcome = withContext(ioDispatcher) {
+        buildDiagnosticExportOutcome(context, preset, retentionMinutes)
     }
-    val chooser = Intent.createChooser(
-        sendIntent,
-        context.getString(R.string.settings_diagnostics_export_chooser_title),
-    ).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    when (outcome) {
+        is DiagnosticExportOutcome.Empty ->
+            showToast(context, R.string.settings_diagnostics_export_empty_toast)
+        is DiagnosticExportOutcome.Failed ->
+            showToast(context, R.string.settings_diagnostics_export_error_toast)
+        is DiagnosticExportOutcome.Ready -> {
+            try {
+                context.startActivity(outcome.chooserIntent)
+            } catch (e: Exception) {
+                showToast(context, R.string.settings_diagnostics_export_error_toast)
+            }
+        }
     }
-    context.startActivity(chooser)
 }

@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -74,6 +75,7 @@ import cc.machado.audioblackbox.ui.theme.TextMuted
 import cc.machado.audioblackbox.ui.theme.WarningRed
 import androidx.compose.foundation.clickable
 import cc.machado.audioblackbox.audio.QualityPreset
+import kotlinx.coroutines.launch
 
 /**
  * Hosts [SettingsViewModel] and renders [SettingsScreen] against its live state -- same
@@ -96,6 +98,13 @@ fun SettingsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    // Issue #388 / PR #390 `@rev` finding 1: guards against a double-tap launching two concurrent
+    // exports (each doing its own ~12 MB-worst-case read+redact+write) while one is already
+    // in flight -- the button itself is disabled via this same flag (see DiagnosticsSection).
+    var isExportingDiagnosticLog by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
     SettingsScreen(
         uiState = uiState,
         onSelectQualityPreset = viewModel::selectQualityPreset,
@@ -104,12 +113,22 @@ fun SettingsRoute(
         onAcknowledgeClampNotice = viewModel::acknowledgeClampNotice,
         onDismissResizeError = viewModel::dismissResizeError,
         onExportDiagnosticLog = {
-            cc.machado.audioblackbox.export.exportFullDiagnosticLog(
-                context = context,
-                preset = uiState.selectedPreset,
-                retentionMinutes = uiState.retentionStepper.committedMinutes,
-            )
+            if (!isExportingDiagnosticLog) {
+                isExportingDiagnosticLog = true
+                coroutineScope.launch {
+                    try {
+                        cc.machado.audioblackbox.export.exportFullDiagnosticLog(
+                            context = context,
+                            preset = uiState.selectedPreset,
+                            retentionMinutes = uiState.retentionStepper.committedMinutes,
+                        )
+                    } finally {
+                        isExportingDiagnosticLog = false
+                    }
+                }
+            }
         },
+        isExportingDiagnosticLog = isExportingDiagnosticLog,
         modifier = modifier,
     )
 }
@@ -123,6 +142,7 @@ fun SettingsScreen(
     onAcknowledgeClampNotice: () -> Unit,
     onDismissResizeError: () -> Unit = {},
     onExportDiagnosticLog: () -> Unit = {},
+    isExportingDiagnosticLog: Boolean = false,
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
 ) {
@@ -142,7 +162,10 @@ fun SettingsScreen(
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
-        DiagnosticsSection(onExportDiagnosticLog = onExportDiagnosticLog)
+        DiagnosticsSection(
+            onExportDiagnosticLog = onExportDiagnosticLog,
+            isExporting = isExportingDiagnosticLog,
+        )
         PrivacySection(versionName = versionName)
     }
     uiState.clampNotice?.let { notice ->
@@ -548,7 +571,10 @@ private fun ConsumptionTelemetrySection(telemetry: PowerTelemetryUiState) {
  * doc) -- this composable stays a plain, stateless trigger.
  */
 @Composable
-private fun DiagnosticsSection(onExportDiagnosticLog: () -> Unit) {
+private fun DiagnosticsSection(
+    onExportDiagnosticLog: () -> Unit,
+    isExporting: Boolean = false,
+) {
     AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -565,6 +591,7 @@ private fun DiagnosticsSection(onExportDiagnosticLog: () -> Unit) {
             )
             OutlinedButton(
                 onClick = onExportDiagnosticLog,
+                enabled = !isExporting,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(

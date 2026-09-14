@@ -380,6 +380,7 @@
     <string name="settings_diagnostics_explanation">Exports the complete on-device diagnostic log (error, audit, and crash entries) as one file, for sharing with support. Nothing is sent automatically; this only opens the standard share sheet.</string>
     <string name="settings_diagnostics_export_action">Export diagnostic log</string>
     <string name="settings_diagnostics_export_empty_toast">Diagnostic log is empty, nothing to export</string>
+    <string name="settings_diagnostics_export_error_toast">Could not export the diagnostic log</string>
     <string name="settings_diagnostics_export_subject">Audio Blackbox Diagnostic Log</string>
     <string name="settings_diagnostics_export_chooser_title">Export Diagnostic Log</string>
 

@@ -338,6 +338,7 @@
     <string name="settings_diagnostics_explanation">Exporta o log de diagnóstico completo do aparelho (entradas de erro, auditoria e falha) em um único arquivo, para compartilhar com o suporte. Nada é enviado automaticamente; isso apenas abre o compartilhamento padrão do Android.</string>
     <string name="settings_diagnostics_export_action">Exportar log de diagnóstico</string>
     <string name="settings_diagnostics_export_empty_toast">O log de diagnóstico está vazio, nada para exportar</string>
+    <string name="settings_diagnostics_export_error_toast">Não foi possível exportar o log de diagnóstico</string>
     <string name="settings_diagnostics_export_subject">Log de Diagnóstico do Audio Blackbox</string>
     <string name="settings_diagnostics_export_chooser_title">Exportar Log de Diagnóstico</string>
 
