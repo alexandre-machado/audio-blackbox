@@ -192,9 +192,10 @@ fun DashboardScreen(
             // mid-drag. Nothing moves: zIndex only reorders drawing and hit-testing.
             modifier = Modifier.zIndex(1f),
         )
-        if (errorLogUiState.hasVisibleErrors) {
+        if (errorLogUiState.hasCrashOrErrorEntries) {
             DurableErrorLogCard(
-                errorCount = errorLogUiState.entries.count { it.severity == ErrorLogSeverity.ERROR },
+                errorCount = errorLogUiState.errorCount,
+                crashCount = errorLogUiState.crashCount,
                 onClick = onOpenErrorLog,
             )
         }
@@ -1139,19 +1140,41 @@ private fun ForwardOutcomeNotice(
 
 /**
  * Durable error-list card (issue #346) -- rendered by [DashboardScreen] only when
- * [ErrorLogUiState.hasVisibleErrors] is `true` (see that property's doc for why an
- * [ErrorLogSeverity.AUDIT]-only log does not trigger this). Tapping anywhere on the card opens
- * [ErrorLogModal]. No empty state exists for this card -- it simply is not composed when there is
- * nothing to show, per the acceptance criterion.
+ * [ErrorLogUiState.hasCrashOrErrorEntries] is `true` (see that property's doc for why an
+ * [ErrorLogSeverity.AUDIT]-only log does not trigger this, and why -- issue #387 -- a
+ * [ErrorLogSeverity.CRASH]-only log does). Tapping anywhere on the card opens [ErrorLogModal]. No
+ * empty state exists for this card -- it simply is not composed when there is nothing to show, per
+ * the acceptance criterion.
+ *
+ * [errorCount] and [crashCount] are reported and displayed separately (issue #387's acceptance
+ * criterion 2): an app crash is never folded into "recording errors" wording or counted by
+ * [ErrorLogUiState.errorCount], so the card never claims a recording failed when only a
+ * [ErrorLogSeverity.CRASH] entry exists, and a mixed log states both counts rather than one
+ * combined number.
  */
 @Composable
 private fun DurableErrorLogCard(
     errorCount: Int,
+    crashCount: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val countLabel = errorCount.coerceAtMost(99).toString()
-    val description = stringResource(R.string.dashboard_error_log_card_content_description, errorCount)
+    val hasError = errorCount > 0
+    val hasCrash = crashCount > 0
+    val bodyRes = when {
+        hasError && hasCrash -> R.string.dashboard_error_log_card_body_mixed
+        hasCrash -> R.string.dashboard_error_log_card_body_crash_only
+        else -> R.string.dashboard_error_log_card_body
+    }
+    val description = when {
+        hasError && hasCrash -> stringResource(
+            R.string.dashboard_error_log_card_content_description_mixed,
+            errorCount,
+            crashCount,
+        )
+        hasCrash -> stringResource(R.string.dashboard_error_log_card_content_description_crash_only, crashCount)
+        else -> stringResource(R.string.dashboard_error_log_card_content_description, errorCount)
+    }
     AvionicsCard(
         modifier = modifier
             .fillMaxWidth()
@@ -1162,10 +1185,30 @@ private fun DurableErrorLogCard(
     ) {
         AvionicsCardHeaderBar(
             label = stringResource(R.string.dashboard_card_error_log_label),
-            tag = { AvionicsTag(text = countLabel, color = WarningRed, containerColor = WarningRedGlow) },
+            tag = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (hasError) {
+                        AvionicsTag(
+                            text = errorCount.coerceAtMost(99).toString(),
+                            color = WarningRed,
+                            containerColor = WarningRedGlow,
+                        )
+                    }
+                    if (hasCrash) {
+                        AvionicsTag(
+                            text = stringResource(
+                                R.string.dashboard_error_log_card_crash_tag,
+                                crashCount.coerceAtMost(99),
+                            ),
+                            color = WarningRed,
+                            containerColor = WarningRedGlow,
+                        )
+                    }
+                }
+            },
         )
         Text(
-            text = stringResource(R.string.dashboard_error_log_card_body),
+            text = stringResource(bodyRes),
             style = MaterialTheme.typography.bodySmall,
             color = TextMuted,
         )
@@ -1309,7 +1352,9 @@ private fun ErrorLogModal(
 private fun ErrorLogEntryRow(entry: ErrorLogEntry) {
     // Issue #371: CRASH is rendered like ERROR (both are worth the owner's attention), AUDIT alone
     // stays the quieter color -- this is presentation only and does not affect
-    // `ErrorLogUiState.hasVisibleErrors`, which counts ERROR alone (see `ErrorLogSeverity`'s doc).
+    // `ErrorLogUiState.hasVisibleErrors` (counts ERROR alone -- "did a recording fail") nor
+    // `ErrorLogUiState.hasCrashOrErrorEntries` (issue #387; counts ERROR or CRASH -- "does the card
+    // have anything to show"), see `ErrorLogSeverity`'s doc.
     val severityColor = if (entry.severity == ErrorLogSeverity.AUDIT) TelemetryCyan else WarningRed
     Surface(
         modifier = Modifier.fillMaxWidth(),

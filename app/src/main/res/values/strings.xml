@@ -389,7 +389,12 @@
     <!-- Durable Error Log card + modal (issue #346) -->
     <string name="dashboard_card_error_log_label">Error log</string>
     <string name="dashboard_error_log_card_body">Recording errors were logged. Tap to review.</string>
+    <string name="dashboard_error_log_card_body_crash_only">App crashes were logged. No recording failures. Tap to review.</string>
+    <string name="dashboard_error_log_card_body_mixed">Recording errors and app crashes were logged. Tap to review.</string>
     <string name="dashboard_error_log_card_content_description">%1$d recording error(s) logged. Tap to view the error log.</string>
+    <string name="dashboard_error_log_card_content_description_crash_only">%1$d app crash(es) logged. No recording failures. Tap to view the error log.</string>
+    <string name="dashboard_error_log_card_content_description_mixed">%1$d recording error(s) and %2$d app crash(es) logged. Tap to view the error log.</string>
+    <string name="dashboard_error_log_card_crash_tag">C%1$d</string>
     <string name="dashboard_error_log_modal_title">Error log</string>
     <string name="dashboard_error_log_modal_empty">No errors logged.</string>
     <string name="dashboard_error_log_page_previous">Previous</string>

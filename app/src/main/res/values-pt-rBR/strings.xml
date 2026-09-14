@@ -347,7 +347,12 @@
     <!-- Cartão + modal de log de erros durável (issue #346) -->
     <string name="dashboard_card_error_log_label">Log de erros</string>
     <string name="dashboard_error_log_card_body">Erros de gravação foram registrados. Toque para revisar.</string>
+    <string name="dashboard_error_log_card_body_crash_only">Falhas do app foram registradas. Nenhum erro de gravação. Toque para revisar.</string>
+    <string name="dashboard_error_log_card_body_mixed">Erros de gravação e falhas do app foram registrados. Toque para revisar.</string>
     <string name="dashboard_error_log_card_content_description">%1$d erro(s) de gravação registrado(s). Toque para ver o log de erros.</string>
+    <string name="dashboard_error_log_card_content_description_crash_only">%1$d falha(s) do app registrada(s). Nenhum erro de gravação. Toque para ver o log de erros.</string>
+    <string name="dashboard_error_log_card_content_description_mixed">%1$d erro(s) de gravação e %2$d falha(s) do app registrado(s). Toque para ver o log de erros.</string>
+    <string name="dashboard_error_log_card_crash_tag">C%1$d</string>
     <string name="dashboard_error_log_modal_title">Log de erros</string>
     <string name="dashboard_error_log_modal_empty">Nenhum erro registrado.</string>
     <string name="dashboard_error_log_page_previous">Anterior</string>

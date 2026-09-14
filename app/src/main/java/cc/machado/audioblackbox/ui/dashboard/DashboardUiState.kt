@@ -140,12 +140,24 @@ sealed interface ForwardRecordingUiState {
  * [ErrorLogSeverity.AUDIT], and (issue #371) [ErrorLogSeverity.CRASH] -- see
  * [cc.machado.audioblackbox.export.readErrorLog]'s doc for what "newest first" means across the
  * live file and its rotated `.old` generation, and for how a JVM-crash entry (its own sibling file
- * on disk) gets merged in here. [hasVisibleErrors] is the oracle for the card's "appears only when
- * there is at least one error" acceptance criterion, and counts [ErrorLogSeverity.ERROR] only -- an
- * [ErrorLogSeverity.AUDIT]-only log (e.g. only a `MUXER_STOP_RECOVERED` entry) must not make the
- * card claim a recording failed when it did not (issue #347's finding), and the same reasoning is
- * why a crash entry is its own [ErrorLogSeverity.CRASH] rather than [ErrorLogSeverity.ERROR]: the
- * app can crash on a screen with no export in flight at all.
+ * on disk) gets merged in here.
+ *
+ * [hasVisibleErrors] answers "did a recording/export actually fail" and counts
+ * [ErrorLogSeverity.ERROR] only -- an [ErrorLogSeverity.AUDIT]-only log (e.g. only a
+ * `MUXER_STOP_RECOVERED` entry) must not make the card claim a recording failed when it did not
+ * (issue #347's finding), and the same reasoning is why a crash entry is its own
+ * [ErrorLogSeverity.CRASH] rather than [ErrorLogSeverity.ERROR]: the app can crash on a screen with
+ * no export in flight at all. This property's semantics are unchanged by issue #387.
+ *
+ * [hasCrashOrErrorEntries] answers a different question -- "is there anything worth surfacing the
+ * card for at all" -- and is `true` for [ErrorLogSeverity.ERROR] *or* [ErrorLogSeverity.CRASH],
+ * never [ErrorLogSeverity.AUDIT] alone. Issue #387: before this property existed,
+ * [DashboardScreen][cc.machado.audioblackbox.ui.dashboard.DashboardScreen] gated the card (and
+ * therefore the only entry point into [ErrorLogModal][cc.machado.audioblackbox.ui.dashboard.DashboardScreen]
+ * listing every severity) on [hasVisibleErrors], so a log with [ErrorLogSeverity.CRASH] entries and
+ * no [ErrorLogSeverity.ERROR] was recorded to disk but unreachable from the UI. This is a distinct,
+ * explicitly-named oracle rather than a silent reinterpretation of [hasVisibleErrors], which keeps
+ * meaning "a recording/export failed".
  */
 data class ErrorLogUiState(
     val entries: List<ErrorLogEntry> = emptyList(),
@@ -155,6 +167,11 @@ data class ErrorLogUiState(
     val isClearConfirmVisible: Boolean = false,
 ) {
     val hasVisibleErrors: Boolean get() = entries.any { it.severity == ErrorLogSeverity.ERROR }
+    val hasCrashOrErrorEntries: Boolean get() = entries.any {
+        it.severity == ErrorLogSeverity.ERROR || it.severity == ErrorLogSeverity.CRASH
+    }
+    val errorCount: Int get() = entries.count { it.severity == ErrorLogSeverity.ERROR }
+    val crashCount: Int get() = entries.count { it.severity == ErrorLogSeverity.CRASH }
     val pageCount: Int get() = errorLogPageCount(entries.size, pageSize)
     val pageEntries: List<ErrorLogEntry> get() = paginate(entries, page, pageSize)
 }

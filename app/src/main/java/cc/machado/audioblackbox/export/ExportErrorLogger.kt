@@ -37,8 +37,16 @@ private const val CRASH_LOG_MAX_SIZE_BYTES = 1 * 1024 * 1024L // 1 MB
  * [writeCrashLogEntrySync] -- always shown in the modal, but deliberately its own value rather
  * than [ERROR]: the app may have crashed on a screen with no export/recording in flight at all, so
  * counting it toward "did this recording fail" would misreport exactly the way #347 already found
- * for [AUDIT]. [DashboardViewModel]'s "does at least one error exist" check counts [ERROR] only;
- * the modal lists all three.
+ * for [AUDIT]. That is why [cc.machado.audioblackbox.ui.dashboard.ErrorLogUiState.hasVisibleErrors]
+ * ("did a recording/export actually fail") counts [ERROR] only -- unchanged by issue #387.
+ *
+ * Issue #387: [CRASH] must still reach the user even when no [ERROR] exists in the log --
+ * [hasVisibleErrors] being `ERROR`-only was, before #387, also gating the dashboard's *only* entry
+ * point into the modal that lists [CRASH] entries, so a [CRASH]-only log was recorded to disk but
+ * unreachable from the UI. [cc.machado.audioblackbox.ui.dashboard.ErrorLogUiState.hasCrashOrErrorEntries]
+ * is the separate, explicitly-named oracle added for that: "is there anything worth surfacing the
+ * card for at all", true for [ERROR] or [CRASH] (never [AUDIT] alone). The modal itself always
+ * lists all three severities, unchanged.
  */
 enum class ErrorLogSeverity {
     ERROR,
