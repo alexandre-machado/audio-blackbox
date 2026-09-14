@@ -11,11 +11,11 @@
   <a href="docs/release/privacy-policy.md"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
   <a href="https://m3.material.io"><img src="https://img.shields.io/badge/Design-Material%203-6750A4.svg" alt="Material 3"></a>
   <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Beta_Testing-01875F.svg?logo=googleplay&logoColor=white" alt="Google Play Beta"></a>
-  <a href="https://alexandre.machado.cc/audio-blackbox"><img src="https://img.shields.io/badge/Project_Site-alexandre.machado.cc-FF5722.svg" alt="Project Site"></a>
+  <a href="https://alexandre.machado.cc/audio-blackbox/"><img src="https://img.shields.io/badge/Project_Site-alexandre.machado.cc-FF5722.svg" alt="Project Site"></a>
 </p>
 
 <p align="center">
-  <b><a href="https://alexandre.machado.cc/audio-blackbox">alexandre.machado.cc/audio-blackbox</a></b>
+  <b><a href="https://alexandre.machado.cc/audio-blackbox/">alexandre.machado.cc/audio-blackbox</a></b>
 </p>
 
 ---
