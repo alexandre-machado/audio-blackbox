@@ -3,6 +3,8 @@ package cc.machado.audioblackbox.export
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import cc.machado.audioblackbox.CrashLogFileHolder
@@ -175,11 +177,18 @@ fun exportFullDiagnosticLog(
     val crashOldText = readRedacted(oldGenerationOf(crashLogFile), redact)
 
     if (isDiagnosticReportEmpty(exportText, exportOldText, crashText, crashOldText)) {
-        Toast.makeText(
-            context,
-            context.getString(R.string.settings_diagnostics_export_empty_toast),
-            Toast.LENGTH_SHORT,
-        ).show()
+        // Toast requires a thread with a prepared Looper. Every real UI caller (the Settings
+        // button, see SettingsScreen.kt) is already on the main thread, but posting explicitly to
+        // Looper.getMainLooper() makes this function itself thread-safe to call from anywhere
+        // (e.g. a test calling it directly off the instrumentation thread, which has no prepared
+        // Looper of its own) instead of silently depending on the caller's thread.
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(
+                context,
+                context.getString(R.string.settings_diagnostics_export_empty_toast),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
         return
     }
 
