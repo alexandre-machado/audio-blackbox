@@ -289,6 +289,29 @@ private val SENSITIVE_PATH_SHAPE_PATTERNS = listOf(
  * -- this function does not attempt it. The layers above only redact *absolute* paths under a
  * known-sensitive root or of a known-sensitive shape.
  */
+/**
+ * Computes the exact set of on-device roots that must never appear verbatim in an exported log
+ * (issue #371's original "no paths under the user's media directories" requirement, reused as-is
+ * for issue #388's full diagnostic export so both callers redact identically instead of each
+ * keeping its own, potentially drifting, list). Takes plain [File]s/paths rather than a
+ * [android.content.Context] so this stays callable from a plain JVM unit test without any Android
+ * framework dependency -- the caller ([cc.machado.audioblackbox.AudioBlackboxApplication],
+ * [cc.machado.audioblackbox.export.exportFullDiagnosticLog]) resolves the actual `Context` methods
+ * (`filesDir`, `cacheDir`, `externalCacheDir`, `getExternalFilesDirs(null)`) and passes the results
+ * in.
+ */
+internal fun sensitiveRootsFor(
+    filesDir: File?,
+    cacheDir: File?,
+    externalCacheDir: File?,
+    externalFilesDirs: List<File?>,
+): List<String> = buildList {
+    filesDir?.absolutePath?.let(::add)
+    cacheDir?.absolutePath?.let(::add)
+    externalCacheDir?.absolutePath?.let(::add)
+    externalFilesDirs.forEach { dir -> dir?.absolutePath?.let(::add) }
+}
+
 internal fun redactSensitivePaths(
     text: String,
     sensitiveRoots: List<String> = emptyList(),
