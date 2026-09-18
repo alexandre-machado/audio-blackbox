@@ -1,9 +1,11 @@
 # Privacy Policy for Audio Blackbox
 
-**Effective Date:** August 26, 2026  
-**App:** Audio Blackbox (`cc.machado.audioblackbox`)
+**Effective Date:** September 18, 2026  
+**App:** Audio Blackbox (`cc.machado.audioblackbox`)  
+**Developer / Publisher:** Alexandre Machado  
+**Contact:** alexandre@machado.cc
 
-Audio Blackbox was built with a fundamental commitment to privacy: **your audio never leaves your device**. This Privacy Policy explains how Audio Blackbox handles data when you use the app.
+Audio Blackbox is developed and published by Alexandre Machado. Audio Blackbox was built with a fundamental commitment to privacy: **your audio never leaves your device**. This Privacy Policy explains how Audio Blackbox handles data when you use the app.
 
 ---
 
@@ -58,6 +60,8 @@ If this Privacy Policy is updated, the revised version will be published in this
 
 ## 7. Contact & Source Code
 
+For privacy questions or concerns, contact the developer, Alexandre Machado, at [alexandre@machado.cc](mailto:alexandre@machado.cc).
+
 Audio Blackbox is open source. You can inspect the code and verify our privacy guarantees at:  
 [https://github.com/alexandre-machado/audio-blackbox](https://github.com/alexandre-machado/audio-blackbox)
 
@@ -65,10 +69,12 @@ Audio Blackbox is open source. You can inspect the code and verify our privacy g
 
 # Política de Privacidade do Audio Blackbox (pt-BR)
 
-**Data de Vigência:** 26 de agosto de 2026  
-**Aplicativo:** Audio Blackbox (`cc.machado.audioblackbox`)
+**Data de Vigência:** 18 de setembro de 2026  
+**Aplicativo:** Audio Blackbox (`cc.machado.audioblackbox`)  
+**Desenvolvedor / Publicador:** Alexandre Machado  
+**Contato:** alexandre@machado.cc
 
-O Audio Blackbox foi desenvolvido com um compromisso fundamental com a privacidade: **seu áudio nunca sai do seu dispositivo**. Esta Política de Privacidade explica como o Audio Blackbox trata os dados quando você usa o aplicativo.
+O Audio Blackbox é desenvolvido e publicado por Alexandre Machado. O Audio Blackbox foi desenvolvido com um compromisso fundamental com a privacidade: **seu áudio nunca sai do seu dispositivo**. Esta Política de Privacidade explica como o Audio Blackbox trata os dados quando você usa o aplicativo.
 
 ---
 
@@ -122,6 +128,8 @@ Se esta Política de Privacidade for atualizada, a versão revisada será public
 ---
 
 ## 7. Contato e Código-Fonte
+
+Para questões ou dúvidas sobre privacidade, entre em contato com o desenvolvedor, Alexandre Machado, em [alexandre@machado.cc](mailto:alexandre@machado.cc).
 
 O Audio Blackbox é de código aberto. Você pode inspecionar o código e verificar nossas garantias de privacidade em:  
 [https://github.com/alexandre-machado/audio-blackbox](https://github.com/alexandre-machado/audio-blackbox)

@@ -613,6 +613,7 @@ private fun PrivacySection(
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val productUrl = stringResource(R.string.settings_website_url)
+    val privacyPolicyUrl = stringResource(R.string.settings_privacy_policy_url)
 
     AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
@@ -642,6 +643,31 @@ private fun PrivacySection(
                 )
                 Text(
                     text = "alexandre.machado.cc/audio-blackbox",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
+                    color = FlightOrange,
+                )
+            }
+            HorizontalDivider(color = CockpitBorder)
+            // Issue #394: Play requires a privacy-policy link or text reachable from inside the
+            // app, not just declared in Play Console -- the onboarding consent screen already had
+            // one, but a user past onboarding had no way back to it. Reuses the same clickable-row
+            // + LocalUriHandler.openUri mechanism as the website row above rather than inventing a
+            // second navigation path.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { uriHandler.openUri(privacyPolicyUrl) },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_privacy_policy_label),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "alexandre.machado.cc/audio-blackbox/release/privacy-policy",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
