@@ -1,8 +1,20 @@
 name: CI
 
+# Issue #399: this workflow used to be push[main]+pull_request[main] only, with the Play Store
+# release living in a separate, independent playstore.yml that fired on the same push[main] event
+# with no dependency between the two -- a merge to main could reach the store before `build` or
+# `instrumented-tests` ever ran, because the single self-hosted runner just serialized whichever
+# job the queue happened to hand it next. The `deploy-playstore` job below is that release, folded
+# into this workflow with `needs: [build, instrumented-tests]` so the queue-order hazard is gone by
+# construction instead of by luck. Tag pushes (`v*`) and `workflow_dispatch` are added here as
+# triggers for exactly that job's sake; see the job's own comment for the deliberate, documented
+# behavior change on tags (they now run `build`/`instrumented-tests` too, which they did not
+# before this issue).
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths-ignore:
       - 'docs/**'
       - '**.md'
@@ -23,6 +35,33 @@ on:
       - '.gitattributes'
       - '.agents/**'
       - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Google Play track to publish to (internal, alpha, beta, production)"
+        required: true
+        default: "internal"
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      status:
+        description: "Release status (completed, draft, inProgress, halted)"
+        required: true
+        default: "completed"
+        type: choice
+        options:
+          - completed
+          - draft
+          - inProgress
+          - halted
+      sync_only:
+        description: "Sync metadata only (skip AAB build/upload)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -33,8 +72,11 @@ env:
 jobs:
   build:
     runs-on: self-hosted
-    # Security guard: never execute external fork PRs on self-hosted runner
-    if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    # Security guard: never execute external fork PRs on self-hosted runner. Issue #399: also
+    # skip on a workflow_dispatch requesting sync_only (metadata-only Play Store sync) -- there is
+    # no code change to build or test on that path, so gating it behind a ~5 minute emulator boot
+    # would only add latency without validating anything.
+    if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && !(github.event_name == 'workflow_dispatch' && inputs.sync_only)
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -127,8 +169,9 @@ jobs:
   # restored snapshot actually boots reliably on this runner pool.
   instrumented-tests:
     runs-on: self-hosted
-    # Security guard: never execute external fork PRs on self-hosted runner
-    if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    # Security guard: never execute external fork PRs on self-hosted runner. Issue #399: also
+    # skip on a workflow_dispatch requesting sync_only, same reasoning as the `build` job above.
+    if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && !(github.event_name == 'workflow_dispatch' && inputs.sync_only)
     timeout-minutes: 30
     # Scoped to this job only -- ci.yml:9-10 keeps contents: read at workflow level for every
     # other job. Needed here, and only here, so the "commit refreshed screenshots" step below
@@ -486,3 +529,126 @@ jobs:
           name: screen-captures
           path: build/screen-captures/
           if-no-files-found: ignore
+
+  # Issue #399: this job used to live in its own playstore.yml, triggered independently by the
+  # same push[main] event as `build`/`instrumented-tests` above, with no `needs:` between them --
+  # on the single self-hosted runner all three jobs just serialized in whatever order the queue
+  # handed them out, so a merge to main could reach the Play Store internal track before the tests
+  # for that same commit had even started, let alone passed. Folding this job into ci.yml with
+  # `needs: [build, instrumented-tests]` makes that ordering a hard dependency instead of a queue
+  # accident: this job cannot start until both finish, and it will not run at all if either fails.
+  #
+  # Kept as its own job, not merged into `build`/`instrumented-tests`, and guarded below to
+  # explicitly exclude pull_request: the keystore decode, the signing secrets, and the Google Play
+  # service account credentials must never become reachable from a job that can run in PR context,
+  # fork or not. A fork PR is already blocked from `build`/`instrumented-tests` by their own guard
+  # above; this job's guard is independent of that and blocks pull_request outright regardless.
+  #
+  # Trigger behavior change, called out explicitly per issue #399: `ci.yml` previously did not run
+  # on tag pushes at all (`playstore.yml` had its own `tags: ['v*']` push filter with no test gate
+  # behind it). Tags now flow through the same push trigger as main and are therefore gated by
+  # `build`/`instrumented-tests` exactly like a push to main -- a tag reaching this job with
+  # untested code is exactly the hole this issue closes, so this is deliberate, not incidental.
+  deploy-playstore:
+    needs: [build, instrumented-tests]
+    runs-on: self-hosted
+    # github.repository guard preserved from playstore.yml. Deploy only follows push (main or a
+    # v* tag, both already filtered by the workflow's own `on.push` above) or an explicit manual
+    # workflow_dispatch -- never pull_request, fork or same-repo. needs.*.result is checked
+    # explicitly (bracket syntax for the hyphenated job id, since a bare `.` after a hyphen would
+    # otherwise parse as subtraction) rather than relying on the implicit default `if: success()`,
+    # because `build`/`instrumented-tests` are legitimately skipped (not run) on a sync_only
+    # workflow_dispatch -- 'skipped' must count as "does not block deploy" there, while 'failure'
+    # or 'cancelled' must still block it on every other trigger.
+    if: >-
+      github.repository == 'alexandre-machado/audio-blackbox' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs['instrumented-tests'].result == 'success' || needs['instrumented-tests'].result == 'skipped')
+    # Preserved from playstore.yml: only one Play Store upload in flight at a time. Deliberately
+    # job-level, not workflow-level -- a workflow-level concurrency group here would also serialize
+    # and cancel-in-progress unrelated `build`/`instrumented-tests` runs (e.g. two open PRs' CI),
+    # which playstore.yml's separation never did and which this merge must not introduce either.
+    concurrency:
+      group: playstore-release
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up JDK 17
+        if: ${{ !inputs.sync_only }}
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # packages: platform-tools (issue #397): explicit, not the action's default
+      # ("tools platform-tools"). The legacy `tools` package is deprecated and no longer
+      # resolves against the current Google repository XML (sdkmanager here errors with
+      # "Failed to find package 'tools'"), killing this step before any build code runs.
+      # Nothing downstream needs `tools` -- the next step installs the real platform and
+      # build-tools this job depends on. Do not drop this back to the bare action default.
+      - name: Set up Android SDK
+        if: ${{ !inputs.sync_only }}
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: "platform-tools"
+
+      # The installed platform minor here must satisfy app/build.gradle.kts' compileSdk major
+      # (currently 37); Google versions platforms as e.g. 37.0/37.1 and there is no bare
+      # "android-37" package. When compileSdk's major bumps, bump the minor installed here too.
+      - name: Install SDK platform and build-tools
+        if: ${{ !inputs.sync_only }}
+        run: sdkmanager "platforms;android-37.1" "build-tools;37.0.0"
+
+      - name: Set up Gradle
+        if: ${{ !inputs.sync_only }}
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Grant execute permission for gradlew
+        if: ${{ !inputs.sync_only }}
+        run: chmod +x gradlew
+
+      - name: Decode Keystore
+        if: ${{ !inputs.sync_only }}
+        run: |
+          mkdir -p /tmp/keystore
+          echo "${{ secrets.PLAY_KEYSTORE_BASE64 }}" | base64 -d > /tmp/keystore/upload-keystore.jks
+
+      - name: Build Release Bundle
+        if: ${{ !inputs.sync_only }}
+        env:
+          PLAY_KEYSTORE_PATH: /tmp/keystore/upload-keystore.jks
+          PLAY_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+          PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+          PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Upload to Google Play
+        if: ${{ !inputs.sync_only }}
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          packageName: cc.machado.audioblackbox
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: ${{ github.event.inputs.track || (startsWith(github.ref, 'refs/tags/v') && 'alpha' || 'internal') }}
+          status: ${{ github.event.inputs.status || 'completed' }}
+          whatsNewDirectory: distribution/whatsnew
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync Store Listing Metadata
+        env:
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          PACKAGE_NAME: cc.machado.audioblackbox
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 scripts/ci/sync-play-store-metadata.py
+
+      - name: Clean up Keystore
+        if: always()
+        run: rm -rf /tmp/keystore
