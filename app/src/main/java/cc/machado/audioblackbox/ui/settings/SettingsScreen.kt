@@ -614,6 +614,10 @@ private fun PrivacySection(
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val productUrl = stringResource(R.string.settings_website_url)
     val privacyPolicyUrl = stringResource(R.string.settings_privacy_policy_url)
+    // `@sec` review on PR #396: derive the displayed label from the same resource the click opens
+    // (only strip the scheme for the compact on-screen form) rather than a second hand-copied
+    // literal, so the two can never silently drift apart.
+    val privacyPolicyDisplayUrl = privacyPolicyUrl.removePrefix("https://")
 
     AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
@@ -667,7 +671,7 @@ private fun PrivacySection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+                    text = privacyPolicyDisplayUrl,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
