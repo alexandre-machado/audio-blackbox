@@ -8,7 +8,7 @@
   <a href="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml"><img src="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
   <a href="https://developer.android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-3DDC84.svg?logo=android&logoColor=white" alt="Android Platform"></a>
-  <a href="docs/release/privacy-policy.md"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
+  <a href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
   <a href="https://m3.material.io"><img src="https://img.shields.io/badge/Design-Material%203-6750A4.svg" alt="Material 3"></a>
   <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Beta_Testing-01875F.svg?logo=googleplay&logoColor=white" alt="Google Play Beta"></a>
   <a href="https://alexandre.machado.cc/audio-blackbox/"><img src="https://img.shields.io/badge/Project_Site-alexandre.machado.cc-FF5722.svg" alt="Project Site"></a>
