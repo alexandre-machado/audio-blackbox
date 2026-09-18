@@ -68,9 +68,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # packages: platform-tools (issue #397): explicit, not the action's default
+      # ("tools platform-tools"). The legacy `tools` package is deprecated and no longer
+      # resolves against the current Google repository XML (sdkmanager here errors with
+      # "Failed to find package 'tools'"), killing this step before any build code runs.
+      # Nothing downstream needs `tools` -- the next step installs the real platform and
+      # build-tools this job depends on. Do not drop this back to the bare action default.
       - name: Set up Android SDK
         if: ${{ !inputs.sync_only }}
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: "platform-tools"
 
       # The installed platform minor here must satisfy app/build.gradle.kts' compileSdk major
       # (currently 37); Google versions platforms as e.g. 37.0/37.1 and there is no bare
