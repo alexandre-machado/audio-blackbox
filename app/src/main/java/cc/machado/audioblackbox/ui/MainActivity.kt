@@ -340,8 +340,9 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         // Issue #394: this is the canonical URL declared in Play Console's App content ->
-        // Privacy policy field (GitHub Pages, served from docs/release/privacy-policy.md via
-        // Jekyll). The consent screen's link and the Settings screen's PrivacySection link
+        // Privacy policy field (GitHub Pages, served from docs/release/privacy-policy.html,
+        // a hand-authored page matching the site's design -- issue #395). The consent screen's
+        // link and the Settings screen's PrivacySection link
         // (SettingsScreen.kt) must point at the same target; previously this pointed at a GitHub
         // blob mirror instead of the declared listing URL, which is part of what Play's "app or
         // developer details don't match" rejection was about.

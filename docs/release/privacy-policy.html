@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Audio Blackbox</title>
+  <meta name="description" content="Audio Blackbox privacy policy: zero network egress, zero remote servers, 100% on-device audio handling. English and Portuguese (Brazil).">
+  <link rel="icon" type="image/png" href="../assets/icon.png">
+  <link rel="canonical" href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy">
+  <link rel="sitemap" type="application/xml" href="../sitemap.xml">
+
+  <!-- Open Graph / Meta -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy">
+  <meta property="og:site_name" content="Audio Blackbox">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="Privacy Policy — Audio Blackbox">
+  <meta property="og:description" content="Audio Blackbox privacy policy: zero network egress, zero remote servers, 100% on-device audio handling. English and Portuguese (Brazil).">
+  <meta property="og:image" content="https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png">
+  <meta property="og:image:width" content="1024">
+  <meta property="og:image:height" content="500">
+  <meta property="og:image:alt" content="Audio Blackbox: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel.">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Privacy Policy — Audio Blackbox">
+  <meta name="twitter:description" content="Zero network egress, zero remote servers, 100% on-device audio handling.">
+  <meta name="twitter:image" content="https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png">
+
+  <!--
+    No remote webfonts, no CDN, no framework (issue #395 constraint). This page reuses the
+    same aviation/cockpit design tokens as docs/index.html and docs/design/index.html
+    (source of truth: app/src/main/java/cc/machado/audioblackbox/ui/theme/Color.kt) but
+    falls back to the system UI font stack instead of loading Inter/JetBrains Mono from
+    fonts.googleapis.com, since this page has no landing-page hero copy that needs the
+    display weights those webfonts exist for.
+  -->
+  <style>
+    :root {
+      /* Aviation / Cockpit Design Tokens -- copied verbatim from docs/design/index.html :root */
+      --color-flight-orange: #FF5722;
+      --color-flight-orange-hover: #F4511E;
+      --color-flight-orange-light: #FF8A50;
+      --color-flight-orange-dark: #BF360C;
+      --color-flight-orange-glow: rgba(255, 87, 34, 0.35);
+
+      --color-nvis-green: #10B981;
+      --color-nvis-green-glow: rgba(16, 185, 129, 0.4);
+      --color-nvis-green-dim: #064E3B;
+
+      --color-caution-amber: #F59E0B;
+      --color-caution-amber-glow: rgba(245, 158, 11, 0.4);
+
+      --color-warning-red: #EF4444;
+      --color-warning-red-glow: rgba(239, 68, 68, 0.4);
+
+      --color-telemetry-cyan: #06B6D4;
+      --color-telemetry-cyan-glow: rgba(6, 182, 212, 0.3);
+
+      --color-cockpit-bg: #0A0E17;
+      --color-cockpit-panel: #111827;
+      --color-cockpit-panel-raised: #1A2234;
+      --color-cockpit-border: rgba(255, 255, 255, 0.08);
+      --color-cockpit-border-strong: rgba(255, 255, 255, 0.16);
+
+      --color-text-stencil: #F8FAFC;
+      --color-text-muted: #94A3B8;
+      --color-text-dim: #64748B;
+
+      --radius-rivet: 4px;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 14px;
+      --radius-full: 4px;
+      --radius-pill: 9999px;
+
+      /* Hotsite-style aliases, matching docs/index.html's naming so the CSS below reads the same */
+      --bg-dark: var(--color-cockpit-bg);
+      --border-color: var(--color-cockpit-border);
+      --border-color-strong: var(--color-cockpit-border-strong);
+      --primary: var(--color-flight-orange);
+      --primary-hover: var(--color-flight-orange-hover);
+      --primary-dark: var(--color-flight-orange-dark);
+      --primary-glow: var(--color-flight-orange-glow);
+      --text-main: var(--color-text-stencil);
+      --text-muted: var(--color-text-muted);
+      --text-dim: var(--color-text-dim);
+      --stencil: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image:
+        radial-gradient(at 20% 15%, rgba(255, 87, 34, 0.07) 0px, transparent 50%),
+        radial-gradient(at 80% 30%, rgba(6, 182, 212, 0.05) 0px, transparent 50%);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navigation -- mirrored from docs/index.html (keep the two <nav> blocks in sync, #361) */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(10, 14, 23, 0.88);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 0;
+    }
+
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+
+    .nav-logo img {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 15px rgba(255, 87, 34, 0.3);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-full);
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .nav-hamburger {
+      display: none;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      cursor: pointer;
+      width: 42px;
+      height: 42px;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .nav-hamburger:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--primary);
+    }
+
+    .hamburger-line {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background-color: var(--text-main);
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+
+    .nav-hamburger.active .hamburger-line:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+    .nav-hamburger.active .hamburger-line:nth-child(2) { opacity: 0; }
+    .nav-hamburger.active .hamburger-line:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+    /* Document header */
+    .policy-hero {
+      padding: 48px 0 8px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: var(--radius-full);
+      background: rgba(255, 87, 34, 0.1);
+      border: 1px solid rgba(255, 87, 34, 0.3);
+      color: var(--primary);
+      font-family: var(--stencil);
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .policy-hero h1 {
+      font-size: 2.1rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+
+    .policy-hero p.lead {
+      color: var(--text-muted);
+      max-width: 620px;
+      margin-bottom: 8px;
+    }
+
+    /* Language switcher */
+    .lang-switch {
+      position: sticky;
+      top: 73px;
+      z-index: 90;
+      display: flex;
+      gap: 8px;
+      padding: 12px 0;
+      background: linear-gradient(var(--bg-dark) 78%, transparent);
+      margin-bottom: 8px;
+    }
+
+    .lang-switch button {
+      font-family: var(--stencil);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .lang-switch button:hover {
+      border-color: var(--border-color-strong);
+      color: var(--text-main);
+    }
+
+    .lang-switch button[aria-current="true"] {
+      background: rgba(255, 87, 34, 0.12);
+      border-color: rgba(255, 87, 34, 0.4);
+      color: var(--primary);
+    }
+
+    /* Document body */
+    .policy-doc {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 8px 0 80px;
+    }
+
+    .policy-section {
+      background: var(--color-cockpit-panel);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 40px clamp(20px, 4vw, 56px) 56px;
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0px, rgba(255, 255, 255, 0) 1px);
+    }
+
+    .policy-section + .policy-section {
+      margin-top: 28px;
+    }
+
+    .policy-section[hidden] {
+      display: none;
+    }
+
+    .policy-doc h1 {
+      font-size: 1.65rem;
+      font-weight: 800;
+      margin-bottom: 18px;
+      color: var(--text-main);
+    }
+
+    .policy-doc h2 {
+      font-size: 1.18rem;
+      font-weight: 700;
+      margin: 34px 0 14px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border-color);
+      color: var(--text-main);
+    }
+
+    .policy-doc h2:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .policy-doc p {
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      max-width: 68ch;
+    }
+
+    .policy-doc ul, .policy-doc ol {
+      color: var(--text-muted);
+      margin: 0 0 14px 1.3em;
+    }
+
+    .policy-doc li {
+      margin-bottom: 10px;
+      max-width: 66ch;
+    }
+
+    .policy-doc li::marker {
+      color: var(--primary);
+    }
+
+    .policy-doc strong {
+      color: var(--text-main);
+      font-weight: 700;
+    }
+
+    .policy-doc code {
+      font-family: var(--stencil);
+      font-size: 0.86em;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: var(--color-telemetry-cyan);
+    }
+
+    .policy-doc a {
+      color: var(--color-telemetry-cyan);
+      text-decoration: underline;
+      text-decoration-color: rgba(6, 182, 212, 0.4);
+    }
+
+    .policy-doc a:hover {
+      text-decoration-color: var(--color-telemetry-cyan);
+    }
+
+    .policy-meta {
+      font-family: var(--stencil);
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      margin-bottom: 28px;
+      line-height: 1.8;
+    }
+
+    .policy-doc em {
+      color: var(--text-dim);
+    }
+
+    /* Footer -- mirrored from docs/index.html */
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 48px 0 40px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .footer-bottom {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    .footer-bottom a {
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 900px) {
+      .nav-hamburger { display: flex; }
+
+      .nav-links {
+        position: fixed;
+        top: 73px;
+        left: 0;
+        right: 0;
+        background: rgba(10, 14, 23, 0.98);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color-strong);
+        flex-direction: column;
+        padding: 24px;
+        gap: 16px;
+        align-items: stretch;
+        transform: translateY(-130%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+      }
+
+      .nav-links.active {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .nav-links a { font-size: 1.05rem; padding: 10px 14px; border-radius: var(--radius-sm); display: block; }
+      .nav-links a:hover { background: rgba(255, 255, 255, 0.05); }
+      .nav-links .btn { text-align: center; justify-content: center; width: 100%; }
+    }
+
+    @media (max-width: 480px) {
+      .container { padding: 0 16px; }
+      .policy-hero h1 { font-size: 1.65rem; }
+      .policy-section { padding: 28px 18px 36px; }
+      .footer-bottom { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation (mirrored from docs/index.html -- keep the two <nav> blocks in sync, #361) -->
+  <nav>
+    <div class="container nav-inner">
+      <a href="../" class="nav-logo">
+        <img src="../assets/icon.png" alt="Audio Blackbox Logo">
+        <span>Audio Blackbox</span>
+      </a>
+      <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="../#what-is">What is it</a></li>
+        <li><a href="../#features">Features</a></li>
+        <li><a href="../#privacy">Privacy</a></li>
+        <li><a href="../design/">Design Model</a></li>
+        <li><a href="./" aria-current="page" style="color:var(--primary); font-weight:600;">Privacy Policy</a></li>
+        <li><a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <header class="policy-hero">
+    <div class="container">
+      <span class="badge-pill">Legal // Data Handling</span>
+      <h1>Privacy Policy</h1>
+      <p class="lead">Audio Blackbox is built for zero network egress: no remote servers, no accounts, no analytics SDKs. This document explains exactly how the app handles data, in English and Portuguese (Brazil).</p>
+    </div>
+  </header>
+
+  <!-- Language switcher: anchor links work with no JS (both sections render); the buttons
+       below also toggle visibility via JS for a cleaner single-language reading view. -->
+  <nav class="lang-switch" aria-label="Language">
+    <div class="container" style="display:flex; gap:8px;">
+      <a href="#en" id="lang-btn-en" aria-current="true">English</a>
+      <a href="#pt-br" id="lang-btn-pt">Português (BR)</a>
+    </div>
+  </nav>
+
+  <main class="policy-doc container">
+
+    <section id="en" class="policy-section" lang="en">
+      <h1>Privacy Policy for Audio Blackbox</h1>
+
+      <div class="policy-meta">
+        Effective Date: September 18, 2026<br>
+        App: Audio Blackbox (<code>cc.machado.audioblackbox</code>)<br>
+        Developer / Publisher: Alexandre Machado<br>
+        Contact: <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>
+      </div>
+
+      <p>Audio Blackbox is developed and published by Alexandre Machado. Audio Blackbox was built with a fundamental commitment to privacy: <strong>your audio never leaves your device</strong>. This Privacy Policy explains how Audio Blackbox handles data when you use the app.</p>
+
+      <h2>1. Summary: Zero Network Egress &amp; 100% On-Device</h2>
+      <ul>
+        <li><strong>No Remote Servers:</strong> Audio Blackbox contains no network code, no remote servers, and no third-party analytics SDKs.</li>
+        <li><strong>No Internet Access:</strong> The application does not request the <code>android.permission.INTERNET</code> permission. It is physically impossible for the app to send data over the network.</li>
+        <li><strong>No User Accounts:</strong> You do not need to create an account, log in, or provide any personal details (such as your name, email address, or phone number) to use Audio Blackbox.</li>
+      </ul>
+
+      <h2>2. Information Handled by the App</h2>
+      <p><strong>Audio Data (Microphone)</strong></p>
+      <ul>
+        <li><strong>Purpose:</strong> The core function of Audio Blackbox is to maintain a temporary rolling buffer of recent ambient sound in memory (RAM), operating like a dashcam for audio.</li>
+        <li><strong>In-Memory Retention:</strong> Captured audio is held strictly in temporary RAM. As new sound is recorded, older sound is automatically overwritten.</li>
+        <li><strong>Local Storage:</strong> Audio is only written to device storage (as an <code>.m4a</code> / AAC file in your device's Recordings or Music directory) when you explicitly tap the save action or initiate forward recording.</li>
+        <li><strong>Third-Party Access:</strong> Audio Blackbox never shares, sells, or transmits your audio recordings to any third party.</li>
+      </ul>
+
+      <h2>3. Permissions Requested</h2>
+      <ol>
+        <li><code>RECORD_AUDIO</code>: Required to capture ambient audio into the rolling buffer.</li>
+        <li><code>POST_NOTIFICATIONS</code>: Required on Android 13+ to display a persistent foreground service notification while recording is actively running, ensuring you always know when audio capture is in progress.</li>
+        <li><code>FOREGROUND_SERVICE</code> / <code>FOREGROUND_SERVICE_MICROPHONE</code>: Required on modern Android versions to allow the rolling buffer to remain active in RAM while using other apps or with the screen turned off.</li>
+        <li><code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code>: Lets the app ask the system not to suspend or throttle the background recording service to save battery, so the rolling buffer keeps running reliably while the app is not in the foreground.</li>
+        <li><code>RECEIVE_BOOT_COMPLETED</code>: Lets the app detect a device restart or app update. Audio Blackbox does <strong>not</strong> automatically resume recording on boot; it only posts a notification prompting you to tap and resume recording if it was active before the restart. Capture never starts without that explicit tap.</li>
+      </ol>
+
+      <h2>4. Data Storage and Deletion</h2>
+      <ul>
+        <li><strong>Buffer Deletion:</strong> Stopping the recording engine or closing the application immediately purges the in-memory rolling audio buffer.</li>
+        <li><strong>Saved Recordings:</strong> Audio files that you explicitly save remain in your device storage until you choose to delete them. You can delete recordings at any time using the in-app Gallery or your device's built-in file manager.</li>
+        <li><strong>Recordings Survive Uninstallation:</strong> Saved recordings are your files, stored on your device, and Android does not delete them when Audio Blackbox is uninstalled. If you later uninstall and then reinstall the app, however, Audio Blackbox may no longer be able to list those previously saved recordings in its in-app Gallery. This is because the app does not request the <code>READ_MEDIA_AUDIO</code> (Android 13+) or <code>READ_EXTERNAL_STORAGE</code> (Android 10-12) permission that would be needed to regain visibility into files it no longer has ownership attribution over after a reinstall. The files themselves are not deleted or hidden by this &mdash; they remain on your device and are reachable through your device's file manager or the system's media picker, even if the app's own Gallery does not show them. <em>(This mechanism is documented by Android's own storage guidance; the app's own permission set corroborates it. A deliberate on-device uninstall/reinstall reproduction is still pending &mdash; see issue <a href="https://github.com/alexandre-machado/audio-blackbox/issues/59" target="_blank" rel="noopener noreferrer">#59</a> &mdash; so treat this as the documented, not yet hardware-confirmed, explanation.)</em></li>
+        <li><strong>Uninstalling:</strong> Uninstalling Audio Blackbox discards all application preferences.</li>
+      </ul>
+
+      <h2>5. Children's Privacy</h2>
+      <p>Audio Blackbox does not collect, store, or transmit personal data from anyone, including children under the age of 13.</p>
+
+      <h2>6. Changes to this Policy</h2>
+      <p>If this Privacy Policy is updated, the revised version will be published in this repository with an updated effective date.</p>
+
+      <h2>7. Contact &amp; Source Code</h2>
+      <p>For privacy questions or concerns, contact the developer, Alexandre Machado, at <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>.</p>
+      <p>Audio Blackbox is open source. You can inspect the code and verify our privacy guarantees at: <a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank" rel="noopener noreferrer">https://github.com/alexandre-machado/audio-blackbox</a></p>
+    </section>
+
+    <section id="pt-br" class="policy-section" lang="pt-BR">
+      <h1>Política de Privacidade do Audio Blackbox</h1>
+
+      <div class="policy-meta">
+        Data de Vigência: 18 de setembro de 2026<br>
+        Aplicativo: Audio Blackbox (<code>cc.machado.audioblackbox</code>)<br>
+        Desenvolvedor / Publicador: Alexandre Machado<br>
+        Contato: <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>
+      </div>
+
+      <p>O Audio Blackbox é desenvolvido e publicado por Alexandre Machado. O Audio Blackbox foi desenvolvido com um compromisso fundamental com a privacidade: <strong>seu áudio nunca sai do seu dispositivo</strong>. Esta Política de Privacidade explica como o Audio Blackbox trata os dados quando você usa o aplicativo.</p>
+
+      <h2>1. Resumo: Zero Tráfego de Rede e 100% no Dispositivo</h2>
+      <ul>
+        <li><strong>Sem Servidores Remotos:</strong> O Audio Blackbox não contém código de rede, servidores remotos, nem SDKs de análise de terceiros.</li>
+        <li><strong>Sem Acesso à Internet:</strong> O aplicativo não solicita a permissão <code>android.permission.INTERNET</code>. É fisicamente impossível para o app enviar dados pela rede.</li>
+        <li><strong>Sem Contas de Usuário:</strong> Você não precisa criar uma conta, fazer login, ou fornecer qualquer dado pessoal (como nome, e-mail ou telefone) para usar o Audio Blackbox.</li>
+      </ul>
+
+      <h2>2. Informações Tratadas pelo Aplicativo</h2>
+      <p><strong>Dados de Áudio (Microfone)</strong></p>
+      <ul>
+        <li><strong>Finalidade:</strong> A função principal do Audio Blackbox é manter um buffer circular temporário do som ambiente recente na memória (RAM), funcionando como uma câmera veicular (dashcam) para áudio.</li>
+        <li><strong>Retenção em Memória:</strong> O áudio capturado é mantido estritamente na memória RAM temporária. Conforme novo som é gravado, o som mais antigo é automaticamente sobrescrito.</li>
+        <li><strong>Armazenamento Local:</strong> O áudio só é gravado no armazenamento do dispositivo (como um arquivo <code>.m4a</code> / AAC no diretório Recordings ou Music do seu dispositivo) quando você toca explicitamente na ação de salvar ou inicia a gravação contínua para frente.</li>
+        <li><strong>Acesso de Terceiros:</strong> O Audio Blackbox nunca compartilha, vende ou transmite suas gravações de áudio a terceiros.</li>
+      </ul>
+
+      <h2>3. Permissões Solicitadas</h2>
+      <ol>
+        <li><code>RECORD_AUDIO</code>: Necessária para capturar o áudio ambiente no buffer circular.</li>
+        <li><code>POST_NOTIFICATIONS</code>: Necessária no Android 13+ para exibir uma notificação persistente de serviço em primeiro plano enquanto a gravação está ativa, garantindo que você sempre saiba quando a captura de áudio está em andamento.</li>
+        <li><code>FOREGROUND_SERVICE</code> / <code>FOREGROUND_SERVICE_MICROPHONE</code>: Necessária nas versões modernas do Android para permitir que o buffer circular permaneça ativo na RAM enquanto você usa outros aplicativos ou com a tela desligada.</li>
+        <li><code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code>: Permite que o app solicite ao sistema que não suspenda nem limite o serviço de gravação em segundo plano para economizar bateria, mantendo o buffer circular funcionando de forma confiável enquanto o app não está em primeiro plano.</li>
+        <li><code>RECEIVE_BOOT_COMPLETED</code>: Permite que o app detecte uma reinicialização do dispositivo ou uma atualização do aplicativo. O Audio Blackbox <strong>não</strong> retoma a gravação automaticamente ao reiniciar; ele apenas exibe uma notificação convidando você a tocar para retomar a gravação, caso ela estivesse ativa antes da reinicialização. A captura nunca é iniciada sem esse toque explícito.</li>
+      </ol>
+
+      <h2>4. Armazenamento e Exclusão de Dados</h2>
+      <ul>
+        <li><strong>Exclusão do Buffer:</strong> Interromper o motor de gravação ou fechar o aplicativo purga imediatamente o buffer circular de áudio em memória.</li>
+        <li><strong>Gravações Salvas:</strong> Os arquivos de áudio que você salva explicitamente permanecem no armazenamento do seu dispositivo até que você decida excluí-los. Você pode excluir gravações a qualquer momento pela Galeria do aplicativo ou pelo gerenciador de arquivos nativo do seu dispositivo.</li>
+        <li><strong>As Gravações Sobrevivem à Desinstalação:</strong> As gravações salvas são seus arquivos, armazenados no seu dispositivo, e o Android não as exclui quando o Audio Blackbox é desinstalado. Porém, se você desinstalar e depois reinstalar o aplicativo, o Audio Blackbox pode não conseguir mais listar essas gravações salvas anteriormente na Galeria do app. Isso acontece porque o aplicativo não solicita a permissão <code>READ_MEDIA_AUDIO</code> (Android 13+) ou <code>READ_EXTERNAL_STORAGE</code> (Android 10-12), que seria necessária para recuperar a visibilidade sobre arquivos cuja atribuição de propriedade ele perdeu após a reinstalação. Isso não exclui nem oculta os arquivos: eles permanecem no seu dispositivo e continuam acessíveis pelo gerenciador de arquivos ou pelo seletor de mídia do sistema, mesmo que a Galeria do próprio app não os exiba. <em>(Esse mecanismo está documentado na orientação oficial de armazenamento do Android; o conjunto de permissões do app corrobora isso. Uma reprodução deliberada de desinstalação/reinstalação em um dispositivo físico ainda está pendente &mdash; veja a issue <a href="https://github.com/alexandre-machado/audio-blackbox/issues/59" target="_blank" rel="noopener noreferrer">#59</a> &mdash; portanto, trate isso como a explicação documentada, ainda não confirmada em hardware.)</em></li>
+        <li><strong>Desinstalação:</strong> Desinstalar o Audio Blackbox descarta todas as preferências do aplicativo.</li>
+      </ul>
+
+      <h2>5. Privacidade Infantil</h2>
+      <p>O Audio Blackbox não coleta, armazena ou transmite dados pessoais de ninguém, incluindo crianças menores de 13 anos.</p>
+
+      <h2>6. Alterações a Esta Política</h2>
+      <p>Se esta Política de Privacidade for atualizada, a versão revisada será publicada neste repositório com uma data de vigência atualizada.</p>
+
+      <h2>7. Contato e Código-Fonte</h2>
+      <p>Para questões ou dúvidas sobre privacidade, entre em contato com o desenvolvedor, Alexandre Machado, em <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>.</p>
+      <p>O Audio Blackbox é de código aberto. Você pode inspecionar o código e verificar nossas garantias de privacidade em: <a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank" rel="noopener noreferrer">https://github.com/alexandre-machado/audio-blackbox</a></p>
+    </section>
+
+  </main>
+
+  <!-- Footer (trimmed from docs/index.html's footer -- this page is a document, not a landing page) -->
+  <footer>
+    <div class="container">
+      <div class="footer-bottom">
+        <div>&copy; 2026 Alexandre Machado. Licensed under GNU GPL v3.0.</div>
+        <div><a href="../">Audio Blackbox</a> &middot; <a href="https://github.com/alexandre-machado/audio-blackbox" target="_blank" rel="noopener noreferrer">Source on GitHub</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Mobile hamburger nav (same behavior as docs/index.html).
+    const navHamburger = document.getElementById('nav-hamburger');
+    const navLinks = document.getElementById('nav-links');
+    if (navHamburger && navLinks) {
+      navHamburger.addEventListener('click', () => {
+        const isOpen = navLinks.classList.toggle('active');
+        navHamburger.classList.toggle('active');
+        navHamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+      navLinks.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          navLinks.classList.remove('active');
+          navHamburger.classList.remove('active');
+          navHamburger.setAttribute('aria-expanded', 'false');
+        });
+      });
+      document.addEventListener('click', (e) => {
+        if (!navLinks.contains(e.target) && !navHamburger.contains(e.target) && navLinks.classList.contains('active')) {
+          navLinks.classList.remove('active');
+          navHamburger.classList.remove('active');
+          navHamburger.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
+    // Language toggle: both <section lang="..."> render by default (so a no-JS visitor,
+    // a search crawler, or the identity-locking Kotlin test all still see full EN + pt-BR
+    // text). With JS, clicking a language button hides the other section for a cleaner
+    // single-language read; the anchor href keeps working as a plain in-page jump either way.
+    const enSection = document.getElementById('en');
+    const ptSection = document.getElementById('pt-br');
+    const btnEn = document.getElementById('lang-btn-en');
+    const btnPt = document.getElementById('lang-btn-pt');
+
+    function showLanguage(lang) {
+      const showEn = lang !== 'pt-br';
+      enSection.hidden = !showEn;
+      ptSection.hidden = showEn;
+      btnEn.setAttribute('aria-current', String(showEn));
+      btnPt.setAttribute('aria-current', String(!showEn));
+    }
+
+    if (enSection && ptSection && btnEn && btnPt) {
+      btnEn.addEventListener('click', (e) => { e.preventDefault(); showLanguage('en'); history.replaceState(null, '', '#en'); });
+      btnPt.addEventListener('click', (e) => { e.preventDefault(); showLanguage('pt-br'); history.replaceState(null, '', '#pt-br'); });
+      showLanguage(window.location.hash === '#pt-br' ? 'pt-br' : 'en');
+    }
+  </script>
+</body>
+</html>

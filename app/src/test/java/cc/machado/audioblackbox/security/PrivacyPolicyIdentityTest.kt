@@ -11,6 +11,11 @@ import java.io.File
  * named the developer or a contact channel. This test locks the four identifiers Play's reviewer
  * cross-checks against the Play Console listing, in both published language versions, so a future
  * edit cannot silently drop them again.
+ *
+ * Issue #395 replaced the plain-markdown `docs/release/privacy-policy.md` with a hand-authored
+ * `docs/release/privacy-policy.html` carrying the site's avionics identity (the public URL itself
+ * did not change). This test was repointed at the new file with the same read-and-scan approach;
+ * none of the assertions below were weakened.
  */
 class PrivacyPolicyIdentityTest {
 
@@ -41,7 +46,7 @@ class PrivacyPolicyIdentityTest {
             val (label, body) = section
             for (identifier in requiredIdentifiers) {
                 assertTrue(
-                    "$label section of docs/release/privacy-policy.md must contain \"$identifier\" " +
+                    "$label section of docs/release/privacy-policy.html must contain \"$identifier\" " +
                         "(Play's rejection was exactly this: developer/app identity missing from " +
                         "the published policy)",
                     body.contains(identifier),
@@ -52,12 +57,12 @@ class PrivacyPolicyIdentityTest {
 
     private fun resolvePrivacyPolicyFile(): File {
         val candidates = listOf(
-            File("../docs/release/privacy-policy.md"),
-            File("docs/release/privacy-policy.md"),
+            File("../docs/release/privacy-policy.html"),
+            File("docs/release/privacy-policy.html"),
         )
         return candidates.firstOrNull { it.exists() }
             ?: throw AssertionError(
-                "docs/release/privacy-policy.md not found! Checked: ${candidates.map { it.absolutePath }}",
+                "docs/release/privacy-policy.html not found! Checked: ${candidates.map { it.absolutePath }}",
             )
     }
 }
