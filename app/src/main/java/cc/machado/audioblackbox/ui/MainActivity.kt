@@ -339,13 +339,14 @@ class MainActivity : ComponentActivity() {
         }
 
     private companion object {
-        // Issue #213 / docs/release/play-store.md section F item 6: the real hosting location
-        // and URL for the privacy policy is an owner decision not yet made. Pointing at the
-        // repository's rendered privacy-policy.md keeps the consent screen's link functional
-        // (and the actual policy text truthful) in the meantime; revisit once that decision
-        // lands.
+        // Issue #394: this is the canonical URL declared in Play Console's App content ->
+        // Privacy policy field (GitHub Pages, served from docs/release/privacy-policy.md via
+        // Jekyll). The consent screen's link and the Settings screen's PrivacySection link
+        // (SettingsScreen.kt) must point at the same target; previously this pointed at a GitHub
+        // blob mirror instead of the declared listing URL, which is part of what Play's "app or
+        // developer details don't match" rejection was about.
         const val PRIVACY_POLICY_URL =
-            "https://github.com/alexandre-machado/audio-blackbox/blob/main/docs/release/privacy-policy.md"
+            "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"
     }
 
     /**
