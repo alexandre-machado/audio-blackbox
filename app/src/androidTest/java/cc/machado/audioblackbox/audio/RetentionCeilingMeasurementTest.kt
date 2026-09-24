@@ -1,6 +1,9 @@
 package cc.machado.audioblackbox.audio
 
+import android.os.Bundle
+import android.os.Debug
 import android.util.Log
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.machado.audioblackbox.export.ExportEngine
 import cc.machado.audioblackbox.export.ExportSink
@@ -89,8 +92,23 @@ class RetentionCeilingMeasurementTest {
         return runtime.totalMemory() - runtime.freeMemory()
     }
 
-    /** What one window's run cost: peak used heap, and the ring buffer's own backing array. */
-    private data class Measurement(val peakBytes: Long, val backingBytes: Long) {
+    /**
+     * What one window's run cost: peak used heap, and the ring buffer's own backing array.
+     *
+     * [retainedBytes] and [gcsDuringExport] are diagnostics only (PR #411 investigation), never
+     * asserted on. [peakBytes] is sampled right after the export *without* a GC, so it counts the
+     * drain's short-lived chunk garbage that the collector has not reclaimed yet. [retainedBytes]
+     * is sampled after an explicit GC with the buffer still live, i.e. what is genuinely still
+     * reachable; [gcsDuringExport] is how many collections ART ran while the export drained. A
+     * high [peakBytes] with [retainedBytes] close to [backingBytes] and few GCs means uncollected
+     * garbage, not a retained second copy.
+     */
+    private data class Measurement(
+        val peakBytes: Long,
+        val backingBytes: Long,
+        val retainedBytes: Long = -1L,
+        val gcsDuringExport: Long = -1L,
+    ) {
         /** Peak relative to the buffer itself. ~1.15 for a bounded drain; ~2.0 if the export
          * materialises the whole window again, which is issue #72's regression. */
         val peakToBacking: Float get() = peakBytes.toFloat() / backingBytes.toFloat()
@@ -126,6 +144,7 @@ class RetentionCeilingMeasurementTest {
             }
 
             val sink = CountingSink()
+            val gcsBefore = gcCount()
             val engine = ExportEngine(
                 config = config,
                 readSinceProvider = { cursor, maxBytes -> buffer!!.readSince(cursor, maxBytes) },
@@ -146,12 +165,21 @@ class RetentionCeilingMeasurementTest {
                 minutesLabel = minutes,
             )
             val peak = usedHeapBytes() - before
+            val gcsDuringExport = if (gcsBefore >= 0L) gcCount() - gcsBefore else -1L
+            // Diagnostic only: taken after `peak`, so it cannot change what is asserted.
+            Runtime.getRuntime().gc()
+            val retained = usedHeapBytes() - before
             if (result !is ExportState.Success) {
                 Log.w(TAG, "$minutes min: export did not succeed: $result")
                 return null
             }
             assertTrue("$minutes min: export wrote nothing", sink.committedBytes > 0)
-            Measurement(peakBytes = peak, backingBytes = capacityBytes.toLong())
+            Measurement(
+                peakBytes = peak,
+                backingBytes = capacityBytes.toLong(),
+                retainedBytes = retained,
+                gcsDuringExport = gcsDuringExport,
+            )
         } catch (e: OutOfMemoryError) {
             Log.w(TAG, "$minutes min: OOM -- ${e.message}")
             null
@@ -188,6 +216,8 @@ class RetentionCeilingMeasurementTest {
             "shipped max $minutes min -> backing ${measurement.backingBytes / MB} MB, " +
                 "peak ${measurement.peakBytes / MB} MB, ratio ${measurement.peakToBacking}",
         )
+        // Before the assertion, so passing runs record a baseline too.
+        reportToTranscript("shipped max $minutes min", measurement)
 
         // THE assertion that actually guards issue #72, and the reason "it exported without
         // throwing" is not enough on its own.
@@ -231,6 +261,7 @@ class RetentionCeilingMeasurementTest {
                 break
             }
             largestOk = minutes
+            reportToTranscript("ceiling walk $minutes min", measurement)
             Log.i(
                 TAG,
                 String.format(
@@ -250,8 +281,36 @@ class RetentionCeilingMeasurementTest {
         )
     }
 
+    /**
+     * Writes [measurement] into the `am instrument` transcript itself, not just logcat, so every CI
+     * run -- passing or failing -- records the ratio (PR #411). A status bundle's `stream` value is
+     * what non-raw `am instrument -w` prints verbatim, the same channel the JUnit dots use. The
+     * status code is outside AndroidJUnitRunner's own reserved codes (-4..1).
+     */
+    private fun reportToTranscript(label: String, measurement: Measurement) {
+        val line = String.format(
+            java.util.Locale.US,
+            "\n[RetentionCeiling] %s: ratio=%.3f peak=%d MB retainedAfterGc=%d MB backing=%d MB gcsDuringExport=%d\n",
+            label,
+            measurement.peakToBacking,
+            measurement.peakBytes / MB,
+            measurement.retainedBytes / MB,
+            measurement.backingBytes / MB,
+            measurement.gcsDuringExport,
+        )
+        Log.i(TAG, line.trim())
+        InstrumentationRegistry.getInstrumentation().sendStatus(
+            TRANSCRIPT_STATUS_CODE,
+            Bundle().apply { putString("stream", line) },
+        )
+    }
+
+    /** ART's cumulative GC count, or -1 if this runtime does not expose it. */
+    private fun gcCount(): Long = Debug.getRuntimeStat("art.gc.gc-count")?.toLongOrNull() ?: -1L
+
     private companion object {
         const val TAG = "RetentionCeiling"
+        const val TRANSCRIPT_STATUS_CODE = 2
         const val MB = 1024L * 1024L
 
         /**
