@@ -8,109 +8,99 @@ on:
       - 'docs/**'
       - '.github/workflows/pages.yml'
       - 'scripts/ci/check-site-rendered.sh'
+      - 'scripts/ci/setup-jekyll-ruby.sh'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Minimum by default; each job widens only what it needs.
+permissions: {}
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
+# Self-hosted, like every other job in this repo (#171/#172). Safe here without the head-repo
+# fork guard the CI jobs carry, because this workflow has no `pull_request` trigger at all -- it
+# runs only on a push to main and on manual dispatch, neither of which a fork can cause. The
+# repository guard on each job still blocks it in a fork.
+#
+# Two jobs (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
+# read-only token and no Pages/OIDC credentials. `deploy` holds pages: write + id-token: write
+# and runs only first-party actions plus the IndexNow curl.
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    # Self-hosted, like every other job in this repo (#171/#172). Safe here without the
-    # head-repo fork guard the CI jobs carry, because this workflow has no `pull_request`
-    # trigger at all -- it runs only on a push to main and on manual dispatch, neither of
-    # which a fork can cause. The repository guard below still blocks it in a fork.
+  build:
     runs-on: self-hosted
     if: github.repository == 'alexandre-machado/audio-blackbox'
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
-
       # docs/ is Jekyll source (front matter, layouts, Liquid analytics blocks), so it must be
       # rendered before upload (#414). Uploading raw docs/ once shipped `--- ---` and
-      # `{% if ... %}` as visible text on the live site.
-      #
-      # Toolchain: this job runs on the self-hosted WSL runner, which has no Docker daemon
-      # (so actions/jekyll-build-pages, a Docker action, cannot run) and no sudo. ruby/setup-ruby
-      # needs a writable /opt/hostedtoolcache or a Ruby pre-installed into the tool cache by
-      # hand, and a relocated ruby-builder tarball cannot find its own stdlib. conda-forge's
-      # Ruby is relocatable and brings its own C toolchain for native gems, so a pinned,
-      # checksum-verified micromamba installs it into the runner tool cache with no host
-      # changes. The env is keyed by its spec and reused once complete.
+      # `{% if ... %}` as visible text on the live site. See the script header for why the
+      # toolchain is conda-forge Ruby via micromamba rather than jekyll-build-pages/setup-ruby,
+      # and how the cached env is verified before reuse.
       - name: Set up Ruby (micromamba, conda-forge)
-        env:
-          MICROMAMBA_VERSION: 2.9.0-0
-          MICROMAMBA_SHA256: 366cd9cd8be14df1ab8ed50352a82111082a36686b2d389fdb79a92c3fafb3e3
-          RUBY_ENV_SPEC: ruby=3.3.6 c-compiler=2.0.0 cxx-compiler=2.0.0 make=4.4.1
-          RUBY_ENV_KEY: ruby-3.3.6-cc-2.0.0-v1
         run: |
           set -euo pipefail
-          tool_root="${RUNNER_TOOL_CACHE}/jekyll-ruby"
-          mm_dir="${tool_root}/micromamba-${MICROMAMBA_VERSION}"
-          mm="${mm_dir}/micromamba"
-          if ! { [ -x "$mm" ] && echo "${MICROMAMBA_SHA256}  ${mm}" | sha256sum -c --quiet -; }; then
-            mkdir -p "$mm_dir"
-            curl -fsSL -o "${mm}.tmp" \
-              "https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-linux-64"
-            echo "${MICROMAMBA_SHA256}  ${mm}.tmp" | sha256sum -c -
-            chmod +x "${mm}.tmp"
-            mv "${mm}.tmp" "$mm"
-          fi
-          env_dir="${tool_root}/${RUBY_ENV_KEY}"
-          if [ ! -f "${env_dir}/.complete" ]; then
-            rm -rf "$env_dir"
-            # shellcheck disable=SC2086 # RUBY_ENV_SPEC is a deliberate word-split package list
-            MAMBA_ROOT_PREFIX="${tool_root}/mamba-root" \
-              "$mm" create -y -q -p "$env_dir" -c conda-forge --override-channels ${RUBY_ENV_SPEC}
-            touch "${env_dir}/.complete"
-          fi
-          echo "${env_dir}/bin" >> "$GITHUB_PATH"
-          echo "BUNDLE_PATH=${tool_root}/bundle-${RUBY_ENV_KEY}" >> "$GITHUB_ENV"
+          bin_dir="$(bash scripts/ci/setup-jekyll-ruby.sh "${RUNNER_TOOL_CACHE}/jekyll-ruby" | tail -n 1)"
+          echo "$bin_dir" >> "$GITHUB_PATH"
 
       - name: Build site with Jekyll
         working-directory: docs
         env:
           # production turns on the GA4/Clarity blocks in _layouts/default.html and friends.
           JEKYLL_ENV: production
+          # Gems are installed fresh per run under RUNNER_TEMP (wiped by the runner), so no
+          # persistent gem cache is trusted. The lockfile pins every version.
           BUNDLE_FROZEN: 'true'
-          JEKYLL_GITHUB_TOKEN: ${{ github.token }}
+          # No token at all: jekyll-github-metadata only calls the API lazily when a page reads
+          # site.github, which none do (url/baseurl are set in _config.yml). NO_NETRC stops it
+          # from picking up host credentials from ~/.netrc.
+          NO_NETRC: '1'
           PAGES_REPO_NWO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          export BUNDLE_PATH="${RUNNER_TEMP}/jekyll-bundle"
           ruby -v
           bundle install --jobs 4
+          bundle check
           bundle exec jekyll build --source . --destination ../_site
 
-      # Regression guard for #414: fail the deploy if the artifact still carries Liquid or
-      # front matter, and if the production analytics block did not render on the index.
+      # Regression guard for #414: fail before upload if the artifact still carries Liquid or
+      # front matter, or if the production analytics tags are missing on the analytics pages.
       - name: Guard against unrendered Liquid
-        run: |
-          set -euo pipefail
-          bash scripts/ci/check-site-rendered.sh _site
-          if ! grep -q 'googletagmanager.com/gtag/js' _site/index.html; then
-            echo "::error file=_site/index.html::GA4 tag missing; was JEKYLL_ENV=production set?"
-            exit 1
-          fi
+        run: bash scripts/ci/check-site-rendered.sh _site
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: '_site'
 
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    if: github.repository == 'alexandre-machado/audio-blackbox'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+      # IndexNow reads docs/sitemap.xml and the key file from the source tree.
+      - name: Checkout
+        if: success() && github.event_name == 'push'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Post-deploy, best-effort ping to IndexNow (Bing/Yandex share the index) so a
       # docs/** push is actively submitted instead of waiting to be crawled. Only runs
