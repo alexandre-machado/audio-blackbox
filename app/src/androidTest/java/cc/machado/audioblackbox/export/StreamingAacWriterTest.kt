@@ -236,7 +236,9 @@ class StreamingAacWriterTest {
         // #347's premise: AOSP's muxer does not auto-stop on an EOS-flagged data buffer, and the
         // S25 failure matches a malformed track (see MuxerTimestampSanitizer), which this seam does
         // not model. That case is covered by
-        // finish_finalFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile.
+        // finish_laterFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile (writer path)
+        // and bareMuxer_finalSamplePtsRegression_stopThrows_probeRejects_sanitizedSequenceIsAccepted
+        // (the exact production artifact).
         val sampleRateHz = 16_000
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val outFile = File.createTempFile("stream_aac_recover_", ".m4a", cacheDir)
@@ -309,6 +311,15 @@ class StreamingAacWriterTest {
                 writer.overriddenSamplesForTest >= 1,
             )
             assertTrue("the regressing timestamps must have been rewritten", writer.timestampCorrections >= 1)
+            // @sec PR #415 info: the audit entry must name the encoder, so the S25's is identifiable.
+            assertTrue(
+                "encoder name must be recorded, got '${writer.encoderName}'",
+                writer.encoderName.isNotBlank() && writer.encoderName != StreamingAacWriter.UNKNOWN_CODEC_NAME,
+            )
+            assertTrue(
+                "diagnostics must carry the encoder name even after finish() released the codec: ${writer.diagnostics()}",
+                writer.diagnostics().contains("codec=${writer.encoderName}]"),
+            )
             assertFalse(
                 "stop() must succeed outright, not via the recovery path: ${writer.diagnostics()}",
                 writer.recoveredFromMuxerAlreadyStopped,
@@ -341,6 +352,10 @@ class StreamingAacWriterTest {
         val truncated = File.createTempFile("stream_aac_probe_trunc_", ".m4a", cacheDir)
         val zeros = File.createTempFile("stream_aac_probe_zero_", ".m4a", cacheDir)
         val stopError = IllegalStateException("simulated stop() failure")
+        // 3 s at 16 kHz is ~47 frames of 64 ms. A conservative written span (a few frames short
+        // of 3 s) so this checks the probe, not the encoder's exact frame count.
+        val frameUs = 64_000L
+        val writtenSpanUs = 2_800_000L
         try {
             StreamingAacWriter(good, config).use { writer ->
                 writeToneChunks(writer, config, 1000.0, durationMillis = 3_000L, chunkMillis = 40L)
@@ -350,11 +365,11 @@ class StreamingAacWriterTest {
             java.io.RandomAccessFile(good, "rw").use { raf ->
                 raf.seek(raf.length()) // where a muxer's dup() of the descriptor would leave it
                 val probe = Mp4OutputProbe.probe(outputFile = null, fileDescriptor = raf.fd)
-                assertTrue("valid file via fd must probe decodable, got $probe", probe is OutputProbeResult.Decodable)
+                assertTrue("valid file via fd must probe indexed, got $probe", probe is OutputProbeResult.Indexed)
                 assertEquals(
-                    "a complete file must be accepted",
+                    "a complete file must be accepted, probe said $probe",
                     null,
-                    MuxerStopFailurePolicy.resolve(stopError, probe, minimumDurationUs = 2_900_000L, diagnostics = ""),
+                    MuxerStopFailurePolicy.resolve(stopError, probe, writtenSpanUs, frameUs, diagnostics = ""),
                 )
             }
 
@@ -364,13 +379,13 @@ class StreamingAacWriterTest {
                 val probe = Mp4OutputProbe.probe(outputFile = null, fileDescriptor = raf.fd)
                 assertTrue(
                     "a half-truncated file must not be accepted, probe said $probe",
-                    MuxerStopFailurePolicy.resolve(stopError, probe, minimumDurationUs = 2_900_000L, diagnostics = "") != null,
+                    MuxerStopFailurePolicy.resolve(stopError, probe, writtenSpanUs, frameUs, diagnostics = "") != null,
                 )
             }
 
             zeros.writeBytes(ByteArray(bytes.size))
             val zeroProbe = Mp4OutputProbe.probe(outputFile = zeros, fileDescriptor = null)
-            assertTrue("a zero-filled file must probe not decodable, got $zeroProbe", zeroProbe is OutputProbeResult.NotDecodable)
+            assertTrue("a zero-filled file must probe not indexed, got $zeroProbe", zeroProbe is OutputProbeResult.NotIndexed)
         } finally {
             good.delete()
             truncated.delete()

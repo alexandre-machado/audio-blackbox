@@ -35,6 +35,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       # docs/ is Jekyll source (front matter, layouts, Liquid analytics blocks), so it must be
       # rendered before upload (#414). Uploading raw docs/ once shipped `--- ---` and

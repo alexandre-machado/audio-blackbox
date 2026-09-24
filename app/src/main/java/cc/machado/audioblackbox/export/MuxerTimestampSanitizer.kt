@@ -18,11 +18,12 @@ package cc.machado.audioblackbox.export
  * from AOSP source; that a non-advancing timestamp is what the S25's encoder emits is inferred,
  * not observed, and is what the `MUXER_TIMESTAMP_CORRECTED` audit entry exists to confirm.
  *
- * A malformation on any sample *before* the last one would make the very next
- * `writeSampleData` throw instead ("writeSampleData returned an error"), not `stop()`. The only
+ * A malformation well before the end would make a following `writeSampleData` throw instead ("writeSampleData returned an error"), not `stop()`. The only
  * write whose failure `StreamingAacWriter` used to swallow is the empty end-of-stream marker that
- * follows the last real sample, so a `stop()`-time failure points at the final sample: the one
- * the S25's encoder emits with `BUFFER_FLAG_END_OF_STREAM` set on it (issue #347).
+ * follows the last real sample, so a `stop()`-time failure points at the tail of the stream (the
+ * last sample or two: a write can race the track thread's malformed check and still return OK,
+ * moving the visible failure one write later), where the S25's encoder emits the frame with
+ * `BUFFER_FLAG_END_OF_STREAM` set on it (issue #347).
  *
  * ## Why rewriting the timestamp is correct, not a cover-up
  * Every AAC-LC access unit decodes to exactly [samplesPerFrame] samples, so the time between two

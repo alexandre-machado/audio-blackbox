@@ -24,13 +24,13 @@ internal object Mp4OutputProbe {
                 outputFile != null -> extractor.setDataSource(outputFile.absolutePath)
                 fileDescriptor != null -> {
                     val length = Os.fstat(fileDescriptor).st_size
-                    if (length <= 0L) return OutputProbeResult.NotDecodable("output is empty ($length bytes)")
+                    if (length <= 0L) return OutputProbeResult.NotIndexed("output is empty ($length bytes)")
                     extractor.setDataSource(fileDescriptor, 0L, length)
                 }
-                else -> return OutputProbeResult.NotDecodable("no output to probe")
+                else -> return OutputProbeResult.NotIndexed("no output to probe")
             }
             if (extractor.trackCount <= 0) {
-                return OutputProbeResult.NotDecodable("container has no usable track")
+                return OutputProbeResult.NotIndexed("container has no usable track")
             }
             val format = extractor.getTrackFormat(0)
             val mime = format.getString(MediaFormat.KEY_MIME) ?: "unknown"
@@ -45,14 +45,17 @@ internal object Mp4OutputProbe {
             // The tail too: an index that points past the data actually on disk (a truncated
             // file) still has a readable first sample.
             var lastSampleBytes = firstSampleBytes
+            var lastSampleTimeUs = extractor.sampleTime
             if (durationUs > 0) {
                 extractor.seekTo(durationUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
                 buffer.clear()
                 lastSampleBytes = extractor.readSampleData(buffer, 0)
+                // Where the seek landed, so the policy can tell "the last frame" from "some frame".
+                lastSampleTimeUs = extractor.sampleTime
             }
-            OutputProbeResult.Decodable(mime, durationUs, firstSampleBytes, lastSampleBytes)
+            OutputProbeResult.Indexed(mime, durationUs, firstSampleBytes, lastSampleBytes, lastSampleTimeUs)
         } catch (e: Exception) {
-            OutputProbeResult.NotDecodable("re-read failed: ${e.javaClass.simpleName}: ${e.message}")
+            OutputProbeResult.NotIndexed("re-read failed: ${e.javaClass.simpleName}: ${e.message}")
         } finally {
             extractor.release()
         }

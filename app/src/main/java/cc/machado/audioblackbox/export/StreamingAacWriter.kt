@@ -104,7 +104,7 @@ class StreamingAacWriter private constructor(
     private var finalDrainSamples = 0
     private var inFinalDrain = false
     private var overriddenSamples = 0
-    private var codecName: String = "?"
+    private var codecName: String = UNKNOWN_CODEC_NAME
 
     /** Total PCM bytes (audio + injected silence) fed into the encoder so far. */
     override val totalBytesWritten: Long
@@ -130,6 +130,15 @@ class StreamingAacWriter private constructor(
     /** How many encoder timestamps had to be rewritten before reaching the muxer (issue #378). */
     val timestampCorrections: Int
         get() = synchronized(lock) { timestamps.corrections }
+
+    /**
+     * The encoder's component name (e.g. `c2.android.aac.encoder`), captured once the codec is
+     * configured and started. It identifies the S25's encoder in the `MUXER_TIMESTAMP_CORRECTED`
+     * audit entry (issue #378). Captured at construction, not read from the codec later, because
+     * `diagnostics()` is also called after [finish] has released the codec.
+     */
+    val encoderName: String
+        get() = synchronized(lock) { codecName }
 
     /** Description of the first rewritten timestamp, or null if none was (issue #378). */
     val firstTimestampCorrection: String?
@@ -211,7 +220,9 @@ class StreamingAacWriter private constructor(
 
             this.codec = createdCodec
             this.muxer = muxerInstance
-            this.codecName = runCatching { createdCodec.name }.getOrDefault("?")
+            this.codecName = runCatching { createdCodec.name }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: runCatching { createdCodec.codecInfo.name }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: UNKNOWN_CODEC_NAME
             this.codecStarted = true
         } catch (t: Throwable) {
             if (startedCodec) runCatching { createdCodec.stop() }
@@ -470,7 +481,7 @@ class StreamingAacWriter private constructor(
                         // an empty sample table. Only an independent re-read that finds a
                         // readable, complete audio track may turn this into success.
                         muxerStarted = false
-                        val minimumDurationUs = if (timestamps.samples > 0) {
+                        val writtenSpanUs = if (timestamps.samples > 0) {
                             timestamps.lastPtsUs - timestamps.firstPtsUs
                         } else {
                             0L
@@ -478,7 +489,8 @@ class StreamingAacWriter private constructor(
                         val failure = MuxerStopFailurePolicy.resolve(
                             stopError = e,
                             probe = Mp4OutputProbe.probe(outputFile, fileDescriptor),
-                            minimumDurationUs = minimumDurationUs,
+                            writtenSpanUs = writtenSpanUs,
+                            frameDurationUs = timestamps.frameDurationUs,
                             diagnostics = diagnostics(),
                         )
                         if (failure != null) throw failure
@@ -544,6 +556,9 @@ class StreamingAacWriter private constructor(
         private const val OP_TIMEOUT_MILLIS = 30_000L
         private const val FINISH_DEADLINE_MILLIS = 60_000L
         private const val ZERO_BUFFER_SIZE = 4096
+
+        /** Placeholder for [encoderName] when the platform reports no codec name at all. */
+        internal const val UNKNOWN_CODEC_NAME = "?"
 
         /** Default ~64 kbps per audio channel for AAC-LC. */
         const val BIT_RATE_PER_CHANNEL_BPS = 64_000
