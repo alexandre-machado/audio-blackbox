@@ -196,8 +196,23 @@ class AudioCaptureEngine(
     /** Stream offset of the write head, or `null` before the first [start] or after [stop]. */
     fun writeCursor(): Long? = ringBuffer?.writeCursor()
 
-    /** Stream offset of the oldest byte still buffered, or `null` before the first [start] or after [stop]. */
+    /** Stream offset of the oldest byte a save may contain (the later of the oldest byte still
+     * buffered and the export floor, issue #410), or `null` before the first [start] or after [stop]. */
     fun oldestCursor(): Long? = ringBuffer?.oldestCursor()
+
+    /**
+     * Issue #410: returns a function that advances the export floor of the ring buffer that is
+     * live *right now*, or `null` before the first [start] or after [stop]. Bound to the buffer
+     * instance on purpose: a save fixes its window against one session's buffer, and if that
+     * session is replaced (stop/start, retention rebuild) before the save commits, the advance must
+     * land on the old, abandoned buffer (a harmless no-op) rather than on the new session's, whose
+     * stream offsets mean something else entirely. Call it when the window is fixed, invoke it only
+     * after the sink commit succeeded.
+     */
+    fun exportFloorAdvancer(): ((Long) -> Unit)? {
+        val buffer = ringBuffer ?: return null
+        return { cursor -> buffer.advanceExportFloor(cursor) }
+    }
 
     /** The live buffer's fixed capacity in bytes, or `null` before the first [start] or after
      * [stop]. Lets a caller (see [cc.machado.audioblackbox.export.ExportEngine]) tell a saturated

@@ -134,6 +134,7 @@ class RetentionCeilingMeasurementTest {
                 // issue #385: this measurement is about peak memory, not the saturated-buffer
                 // startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
                 capacityBytesProvider = { null },
+                exportFloorAdvancerProvider = { null },
                 estimateTimestampProvider = { offset -> buffer!!.estimateTimestamp(offset) },
                 gapsProvider = { emptyList() },
                 sink = sink,

@@ -124,6 +124,7 @@ class CaptureFormatLabelTest {
             // #385 and are not about the saturated-buffer startup headroom) keep their exact
             // pre-existing byte-count behavior.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { engine.estimateTimestamp(it) },
             gapsProvider = { engine.gaps.value },
             sink = sink,

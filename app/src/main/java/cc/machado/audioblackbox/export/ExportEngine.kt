@@ -25,7 +25,10 @@ sealed interface ExportState {
 /** Why an export failed, so a caller can decide what to show/whether retrying makes sense. */
 enum class ExportFailureReason {
     /** Capture is not running ([ExportEngine]'s cursor providers returned `null`), or nothing is
-     * buffered yet (zero bytes between the oldest and write cursor). */
+     * buffered yet (zero bytes between the oldest and write cursor). Since issue #410 this also
+     * covers "nothing new since the last successful save": the oldest cursor honours the export
+     * floor, so a save repeated before any new audio arrives lands here instead of writing an
+     * empty file. */
     NO_AUDIO_BUFFERED,
 
     /** [ExportSink.open] threw, e.g. MediaStore insert rejected, no space, permission denied. */
@@ -115,6 +118,15 @@ class ExportEngine(
     // test) that forgets this the same way it already rejects one that forgets `sink` or
     // `payloadEncoder` -- see `buildExportEngine` in `RecorderService.kt` for the fixed call site.
     private val capacityBytesProvider: () -> Int?,
+    // Issue #410: after a *successful* save, the next save starts where this one's window ended.
+    // Called once when the window is fixed (so the advance is bound to the buffer that window was
+    // read from, see AudioCaptureEngine.exportFloorAdvancer), and the returned function is invoked
+    // with that window's end cursor only after the sink commit returned. A provider returning
+    // `null` disables the floor for that export (e.g. capture not running).
+    //
+    // No default value, for the same reason as `capacityBytesProvider` above: a forgotten wiring
+    // at a primary-constructor call site must be a compile error, not a silent no-op (issue #385).
+    private val exportFloorAdvancerProvider: () -> ((Long) -> Unit)?,
     private val estimateTimestampProvider: (Long) -> Long?,
     private val gapsProvider: () -> List<PauseGap>,
     private val sink: ExportSink,
@@ -152,6 +164,7 @@ class ExportEngine(
         writeCursorProvider = { engine.writeCursor() },
         oldestCursorProvider = { engine.oldestCursor() },
         capacityBytesProvider = { engine.capacityBytes() },
+        exportFloorAdvancerProvider = { engine.exportFloorAdvancer() },
         estimateTimestampProvider = { offset -> engine.estimateTimestamp(offset) },
         gapsProvider = { engine.gaps.value },
         sink = sink,
@@ -288,6 +301,11 @@ class ExportEngine(
             // to implement via `snapshot(durationMillis + paddingMillis)`, just expressed as "use
             // the whole buffered window" instead of "ask for a padded duration", since a
             // [BoundedExportPlan] costs nothing to compute over cursors alone.
+            //
+            // Issue #410: `oldestCursor` already honours the export floor, so this window starts
+            // where the last successful save ended. The advancer is bound *before* the cursors are
+            // read so it targets the same buffer they come from.
+            val floorAdvancer = exportFloorAdvancerProvider()
             val writeCursor = writeCursorProvider()
                 ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
             val oldestCursor = oldestCursorProvider()
@@ -385,7 +403,17 @@ class ExportEngine(
             }
 
             val reader = BoundedExportReader(plan, readSinceProvider, drainChunkSizeBytes)
-            writeAndFinish(target, plan, reader, displayName)
+            val outcome = writeAndFinish(target, plan, reader, displayName)
+            // Issue #410: only a committed file moves the floor, and it moves to the end of the
+            // window that file actually contains (`writeCursor` as fixed above), not to wherever
+            // the writer has got to by now -- audio captured while this save was encoding is still
+            // unsaved and stays available to the next one. Every failure/cancel path above returns
+            // an Error and never reaches this. Done before `export()` publishes Success, so the
+            // notification/UI refresh that Success triggers already sees the reduced buffer.
+            if (outcome is ExportState.Success) {
+                floorAdvancer?.invoke(writeCursor)
+            }
+            outcome
         } catch (e: CancellationException) {
             throw e // preserve normal coroutine cancellation semantics, don't swallow it as a failure
         } catch (e: Throwable) {

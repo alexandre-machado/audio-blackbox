@@ -143,6 +143,9 @@ class RecorderService : Service() {
             readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
             writeCursorProvider = { engine.writeCursor() },
             oldestCursorProvider = { engine.oldestCursor() },
+            // Issue #410: a successfully finished forward recording advances the export floor to
+            // the last byte it persisted, same rule as a "save the past".
+            exportFloorAdvancerProvider = { engine.exportFloorAdvancer() },
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             writerFactory = { target, cfg -> StreamingAacWriter(target, cfg) },
@@ -1069,6 +1072,9 @@ internal fun buildExportEngine(
     writeCursorProvider = { engineProvider().writeCursor() },
     oldestCursorProvider = { engineProvider().oldestCursor() },
     capacityBytesProvider = { engineProvider().capacityBytes() },
+    // Issue #410: a successful save advances the live buffer's export floor, so the next save
+    // (and the buffered duration the UI/notification show) starts where this one ended.
+    exportFloorAdvancerProvider = { engineProvider().exportFloorAdvancer() },
     estimateTimestampProvider = { offset -> engineProvider().estimateTimestamp(offset) },
     gapsProvider = { engineProvider().gaps.value },
     sink = sink,

@@ -80,6 +80,12 @@ class ForwardRecordingEngine(
     private val readSinceProvider: (cursor: Long, maxBytes: Int) -> ReadSinceResult?,
     private val writeCursorProvider: () -> Long?,
     private val oldestCursorProvider: () -> Long? = { null },
+    // Issue #410: same rule as ExportEngine's `exportFloorAdvancerProvider`. Bound in [start]
+    // (against the buffer the session's start cursor comes from) and invoked only after a clean
+    // stop has finished the file, with the cursor just past the last byte that file actually
+    // contains. Cancel/error paths never invoke it. No default value, so a call site that forgets
+    // to wire it is a compile error rather than a silent no-op (the issue #385 lesson).
+    private val exportFloorAdvancerProvider: () -> ((Long) -> Unit)?,
     private val gapsProvider: () -> List<PauseGap>,
     private val sink: StreamingExportSink,
     private val writerFactory: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter = { target, cfg ->
@@ -128,6 +134,7 @@ class ForwardRecordingEngine(
         readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
         writeCursorProvider = { engine.writeCursor() },
         oldestCursorProvider = { engine.oldestCursor() },
+        exportFloorAdvancerProvider = { engine.exportFloorAdvancer() },
         gapsProvider = { engine.gaps.value },
         sink = sink,
         writerFactory = writerFactory,
@@ -184,6 +191,8 @@ class ForwardRecordingEngine(
                 )
             }
 
+            // Bound before the start cursor is read so both refer to the same buffer (issue #410).
+            val floorAdvancer = exportFloorAdvancerProvider()
             val startCursor = oldestCursorProvider() ?: writeCursorProvider()
 
             if (startCursor == null) {
@@ -235,7 +244,7 @@ class ForwardRecordingEngine(
                 // `currentConfig` is the format the writer above was configured with, i.e. the
                 // format this file declares -- so it is also the format every drained chunk must
                 // be converted into (issue #322).
-                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig)
+                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer)
             }, "ForwardRecordingDrain")
             drainThread.isDaemon = true
             activeDrainThread = drainThread
@@ -422,6 +431,7 @@ class ForwardRecordingEngine(
         sessionStartMillis: Long,
         initialGaps: List<PauseGap>,
         sessionConfig: AudioConfig,
+        floorAdvancer: ((Long) -> Unit)?,
     ) {
         var cursor = initialCursor
         var totalBytesDrained = 0L
@@ -669,6 +679,13 @@ class ForwardRecordingEngine(
                 )
             }
             target.finish()
+
+            // Issue #410: the file is finished, so the next save starts after the last byte it
+            // contains. `cursor` is exactly that: it only ever advances past bytes that were
+            // emitted into the writer (a TAIL_TRUNCATED stop above leaves it before the dropped
+            // tail, so those bytes stay available to the next save). Before Success is published,
+            // so the UI refresh that Success triggers already sees the reduced buffer.
+            floorAdvancer?.invoke(cursor)
 
             synchronized(lock) {
                 stateValue = ForwardRecordingState.Success(displayName, totalBytesDrained)

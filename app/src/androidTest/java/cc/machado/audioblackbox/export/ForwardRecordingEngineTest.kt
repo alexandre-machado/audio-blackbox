@@ -68,6 +68,7 @@ class ForwardRecordingEngineTest {
 
         val name = "blackbox_${runId}_goertzel_test.m4a"
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = config,
             readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
             writeCursorProvider = { buffer.writeCursor() },
@@ -139,6 +140,7 @@ class ForwardRecordingEngineTest {
         val name = "blackbox_${runId}_gap_test.m4a"
 
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = config,
             readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
             writeCursorProvider = { buffer.writeCursor() },
@@ -210,6 +212,7 @@ class ForwardRecordingEngineTest {
 
         val name = "blackbox_${runId}_concurrent_snap.m4a"
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = config,
             readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
             writeCursorProvider = { buffer.writeCursor() },
@@ -275,6 +278,7 @@ class ForwardRecordingEngineTest {
 
         val name = "blackbox_${runId}_refinalize_test.m4a"
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = config,
             readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
             writeCursorProvider = { buffer.writeCursor() },
@@ -360,6 +364,7 @@ class ForwardRecordingEngineTest {
         repeat(3) { sessionIndex ->
             val name = "blackbox_${runId}_seq_${sessionIndex}.m4a"
             val engine = ForwardRecordingEngine(
+                exportFloorAdvancerProvider = { null },
                 config = config,
                 readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
                 writeCursorProvider = { buffer.writeCursor() },

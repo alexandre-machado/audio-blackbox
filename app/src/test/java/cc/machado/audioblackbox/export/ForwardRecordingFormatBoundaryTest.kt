@@ -62,6 +62,7 @@ class ForwardRecordingFormatBoundaryTest {
 
         var writer: CapturingWriter? = null
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = hiFi,
             configProvider = { hiFi },
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
@@ -117,6 +118,7 @@ class ForwardRecordingFormatBoundaryTest {
 
         var writer: CapturingWriter? = null
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = voice,
             configProvider = { voice },
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
@@ -205,6 +207,7 @@ class ForwardRecordingFormatBoundaryTest {
         val firstRead = CountDownLatch(1)
         var writer: CapturingWriter? = null
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = hiFi,
             configProvider = { hiFi },
             readSinceProvider = { cursor, maxBytes ->
@@ -263,6 +266,7 @@ class ForwardRecordingFormatBoundaryTest {
 
         var writer: CapturingWriter? = null
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = hiFi,
             configProvider = { hiFi },
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
@@ -344,6 +348,7 @@ class ForwardRecordingFormatBoundaryTest {
         var writer: CapturingWriter? = null
         val errorLogFile = tempDir.newFile("export_errors.log")
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = voice,
             configProvider = { voice },
             readSinceProvider = { cursor, maxBytes -> ring.readSince(cursor, maxBytes) },
@@ -417,6 +422,7 @@ class ForwardRecordingFormatBoundaryTest {
         val firstRead = CountDownLatch(1)
         var writer: CapturingWriter? = null
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = hiFi,
             configProvider = { hiFi },
             readSinceProvider = { cursor, maxBytes ->
