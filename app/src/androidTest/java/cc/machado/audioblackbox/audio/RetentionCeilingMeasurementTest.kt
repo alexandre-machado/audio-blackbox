@@ -108,6 +108,9 @@ class RetentionCeilingMeasurementTest {
         val backingBytes: Long,
         val retainedBytes: Long = -1L,
         val gcsDuringExport: Long = -1L,
+        /** Used heap after the pre-measurement GC: what earlier tests left live in this process. */
+        val baselineBytes: Long = -1L,
+        val maxHeapBytes: Long = Runtime.getRuntime().maxMemory(),
     ) {
         /** Peak relative to the buffer itself. ~1.15 for a bounded drain; ~2.0 if the export
          * materialises the whole window again, which is issue #72's regression. */
@@ -179,6 +182,7 @@ class RetentionCeilingMeasurementTest {
                 backingBytes = capacityBytes.toLong(),
                 retainedBytes = retained,
                 gcsDuringExport = gcsDuringExport,
+                baselineBytes = before,
             )
         } catch (e: OutOfMemoryError) {
             Log.w(TAG, "$minutes min: OOM -- ${e.message}")
@@ -290,13 +294,15 @@ class RetentionCeilingMeasurementTest {
     private fun reportToTranscript(label: String, measurement: Measurement) {
         val line = String.format(
             java.util.Locale.US,
-            "\n[RetentionCeiling] %s: ratio=%.3f peak=%d MB retainedAfterGc=%d MB backing=%d MB gcsDuringExport=%d\n",
+            "\n[RetentionCeiling] %s: ratio=%.3f peak=%d MB retainedAfterGc=%d MB backing=%d MB gcsDuringExport=%d baselineBeforeRun=%d MB maxHeap=%d MB\n",
             label,
             measurement.peakToBacking,
             measurement.peakBytes / MB,
             measurement.retainedBytes / MB,
             measurement.backingBytes / MB,
             measurement.gcsDuringExport,
+            measurement.baselineBytes / MB,
+            measurement.maxHeapBytes / MB,
         )
         Log.i(TAG, line.trim())
         InstrumentationRegistry.getInstrumentation().sendStatus(
