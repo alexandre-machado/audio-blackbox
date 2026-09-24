@@ -266,16 +266,21 @@ class StreamingAacWriterTest {
     }
 
     @Test
-    fun finish_finalFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile() {
+    fun finish_laterFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile() {
         // Issue #378. AOSP MPEG4Writer marks a track malformed when a sample's timestamp goes
         // backwards; stop() then fails with "muxer would have stopped already" and the moov is
-        // written with an empty sample table, i.e. an unplayable file. The seam stamps every
-        // frame the encoder flushes after end-of-stream with pts 0, the extreme form of an
-        // encoder whose final frames are stamped earlier than the ones before them.
+        // written with an empty sample table, i.e. an unplayable file. After most of the audio
+        // has been written, the seam stamps every further frame with pts 0: an encoder whose
+        // later frames are stamped earlier than the ones before them.
         //
-        // Oracle: with the writer's timestamp sanitizer in place stop() succeeds on its own (no
-        // recovery path) and the file decodes to the full duration. With the sanitizer removed,
-        // finish() throws (mutation noted in the PR; this tier only runs on CI's emulator).
+        // (A first version applied the override only to frames flushed after end-of-stream, but
+        // CI's software encoder emits none -- the precondition below caught that on run
+        // 36063434655 -- so the override now starts at a point the test controls.)
+        //
+        // Oracle: with the writer's timestamp sanitizer in place every write and stop() succeed
+        // (no recovery path) and the file decodes to the full duration. With the sanitizer
+        // removed, the first regressing sample malforms the track and the next writeSampleData
+        // or stop() throws.
         //
         // What this does NOT prove: the emulator's software encoder is not the S25's encoder. It
         // proves the writer survives this input on AOSP's muxer, not that this input is what the
@@ -285,21 +290,23 @@ class StreamingAacWriterTest {
         val channelCount = 2
         val toneHz = 1000.0
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = channelCount)
-        // Not a multiple of 1024 samples, so a partial frame is guaranteed to stay inside the
-        // encoder until end-of-stream and come out during finish()'s final drain.
-        val durationMillis = 2_010L
+        val firstPartMillis = 1_500L
+        val secondPartMillis = 500L
+        val durationMillis = firstPartMillis + secondPartMillis
         val outFile = File.createTempFile("stream_aac_pts_regress_", ".m4a", cacheDir)
         try {
             val writer = StreamingAacWriter(outFile, config)
-            writer.finalDrainCodecPtsOverrideForTest = { 0L }
-            writeToneChunks(writer, config, toneHz, durationMillis = durationMillis, chunkMillis = 50L)
+            writeToneChunks(writer, config, toneHz, durationMillis = firstPartMillis, chunkMillis = 50L)
+            writer.codecPtsOverrideForTest = { 0L }
+            // ~21 frames of input after the override is armed, far more than any AAC encoder's
+            // internal buffering, so frames must come out under it.
+            writeToneChunks(writer, config, toneHz, durationMillis = secondPartMillis, chunkMillis = 50L)
 
             writer.finish()
 
             assertTrue(
-                "precondition: at least one frame must come out after EOS, or the override did nothing " +
-                    writer.diagnostics(),
-                writer.finalDrainSamplesWrittenForTest >= 1,
+                "precondition: the override must have acted on at least one frame " + writer.diagnostics(),
+                writer.overriddenSamplesForTest >= 1,
             )
             assertTrue("the regressing timestamps must have been rewritten", writer.timestampCorrections >= 1)
             assertFalse(

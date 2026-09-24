@@ -103,6 +103,8 @@ class StreamingAacWriter private constructor(
     private var eosMarkerError: String? = null
     private var finalDrainSamples = 0
     private var inFinalDrain = false
+    private var overriddenSamples = 0
+    private var codecName: String = "?"
 
     /** Total PCM bytes (audio + injected silence) fed into the encoder so far. */
     override val totalBytesWritten: Long
@@ -134,18 +136,22 @@ class StreamingAacWriter private constructor(
         get() = synchronized(lock) { timestamps.firstCorrection }
 
     /**
-     * Test-only seam (issue #378): when set, every encoded sample that comes out of the encoder
-     * while [finish] is draining it after end-of-stream gets this function applied to its
-     * presentation timestamp before anything else sees it. Lets an emulator test reproduce an
-     * encoder that stamps its final frames earlier than the ones before them, which is the input
-     * that makes `MPEG4Writer` mark the track malformed. Nothing in production sets it.
+     * Test-only seam (issue #378): while set, every encoded sample the encoder hands out gets this
+     * function applied to its presentation timestamp before anything else sees it. A test sets it
+     * part-way through a session to reproduce an encoder whose later frames are stamped earlier
+     * than the ones before them, the input that makes `MPEG4Writer` mark the track malformed.
+     * Nothing in production sets it.
+     *
+     * Deliberately not tied to "frames after end-of-stream": CI's software encoder emits no frame
+     * at all after EOS (observed in run 36063434655: `finalDrainSamples=0`), so such a seam would
+     * have nothing to act on there.
      */
-    internal var finalDrainCodecPtsOverrideForTest: ((Long) -> Long)? = null
+    internal var codecPtsOverrideForTest: ((Long) -> Long)? = null
 
-    /** Test-only (issue #378): samples written to the muxer during [finish]'s post-EOS drain, so a
-     * test can prove the override above actually had a sample to act on. */
-    internal val finalDrainSamplesWrittenForTest: Int
-        get() = synchronized(lock) { finalDrainSamples }
+    /** Test-only (issue #378): samples whose timestamp [codecPtsOverrideForTest] rewrote, so a test
+     * can prove the override actually had a sample to act on. */
+    internal val overriddenSamplesForTest: Int
+        get() = synchronized(lock) { overriddenSamples }
 
     /** What the muxer was fed, for failure messages and logs (issue #378). */
     fun diagnostics(): String = synchronized(lock) {
@@ -155,7 +161,7 @@ class StreamingAacWriter private constructor(
             ", eosFlaggedDataSamples=$eosFlaggedDataSamples, eosMarkerWritten=$eosMarkerWritten" +
             (eosMarkerError?.let { ", eosMarkerError=$it" } ?: "") +
             ", csd0PresentAtAddTrack=$csd0PresentAtAddTrack, finalDrainSamples=$finalDrainSamples" +
-            ", pcmBytesFed=$totalBytesFed, codec=${runCatching { codec.name }.getOrDefault("?")}]"
+            ", pcmBytesFed=$totalBytesFed, codec=$codecName]"
     }
 
     /**
@@ -167,7 +173,7 @@ class StreamingAacWriter private constructor(
      * Issue #378 note: #347 assumed the native muxer auto-stops when it sees
      * `BUFFER_FLAG_END_OF_STREAM` on a data buffer. AOSP's `MPEG4Writer` does not do that (it only
      * acts on EOS for zero-length buffers); the S25 failure matches a malformed track, which is what
-     * [finalDrainCodecPtsOverrideForTest] reproduces. This seam does not model that case.
+     * [codecPtsOverrideForTest] reproduces. This seam does not model that case.
      */
     internal var forceMuxerAlreadyStoppedBeforeExplicitStopForTest: Boolean = false
 
@@ -205,6 +211,7 @@ class StreamingAacWriter private constructor(
 
             this.codec = createdCodec
             this.muxer = muxerInstance
+            this.codecName = runCatching { createdCodec.name }.getOrDefault("?")
             this.codecStarted = true
         } catch (t: Throwable) {
             if (startedCodec) runCatching { createdCodec.stop() }
@@ -359,8 +366,9 @@ class StreamingAacWriter private constructor(
                         // already" and leaves a file with an empty sample table. See
                         // MuxerTimestampSanitizer for why rewriting it is exact for AAC-LC.
                         var codecPtsUs = bufferInfo.presentationTimeUs
-                        if (inFinalDrain) {
-                            finalDrainCodecPtsOverrideForTest?.let { codecPtsUs = it(codecPtsUs) }
+                        codecPtsOverrideForTest?.let {
+                            codecPtsUs = it(codecPtsUs)
+                            overriddenSamples++
                         }
                         val ptsUs = timestamps.next(codecPtsUs, isEndOfStream)
                         bufferInfo.set(
