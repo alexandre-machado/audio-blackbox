@@ -230,18 +230,13 @@ class StreamingAacWriterTest {
 
     @Test
     fun finish_recoversWhenNativeMuxerAlreadyStoppedBeforeExplicitStop() {
-        // Issue #347 -- a live recording on the owner's Galaxy S25 failed at finish() with
-        // `MediaMuxer.stop()` throwing "muxer would have stopped already": a hardware AAC encoder
-        // sets BUFFER_FLAG_END_OF_STREAM on the buffer carrying its last real encoded frame
-        // (instead of a separate empty marker buffer, as MediaMuxer#writeSampleData documents),
-        // which makes the *native* muxer auto-finalize out from under this class's own
-        // `muxerStarted` flag; finish()'s own explicit `muxer.stop()` then races an
-        // already-stopped muxer and throws. That hardware quirk cannot be produced
-        // deterministically from the software encoder available here, so this test uses the
-        // dedicated seam (`forceMuxerAlreadyStoppedBeforeExplicitStopForTest`) to reproduce the
-        // resulting state mismatch -- an already-stopped muxer at the exact point finish() calls
-        // stop() -- against the real StreamingAacWriter/MediaCodec/MediaMuxer objects, rather than
-        // a hand-built fixture standing in for them.
+        // Issue #347 -- covers the recovery path only: stop() throws after the file was already
+        // fully finalized (here via a second stop() on a stopped muxer), and finish() must accept
+        // it only because the independent re-read proves the file complete. Issue #378 corrected
+        // #347's premise: AOSP's muxer does not auto-stop on an EOS-flagged data buffer, and the
+        // S25 failure matches a malformed track (see MuxerTimestampSanitizer), which this seam does
+        // not model. That case is covered by
+        // finish_finalFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile.
         val sampleRateHz = 16_000
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val outFile = File.createTempFile("stream_aac_recover_", ".m4a", cacheDir)
@@ -267,6 +262,112 @@ class StreamingAacWriterTest {
             assertEquals(1, decoded.channelCount)
         } finally {
             outFile.delete()
+        }
+    }
+
+    @Test
+    fun finish_finalFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile() {
+        // Issue #378. AOSP MPEG4Writer marks a track malformed when a sample's timestamp goes
+        // backwards; stop() then fails with "muxer would have stopped already" and the moov is
+        // written with an empty sample table, i.e. an unplayable file. The seam stamps every
+        // frame the encoder flushes after end-of-stream with pts 0, the extreme form of an
+        // encoder whose final frames are stamped earlier than the ones before them.
+        //
+        // Oracle: with the writer's timestamp sanitizer in place stop() succeeds on its own (no
+        // recovery path) and the file decodes to the full duration. With the sanitizer removed,
+        // finish() throws (mutation noted in the PR; this tier only runs on CI's emulator).
+        //
+        // What this does NOT prove: the emulator's software encoder is not the S25's encoder. It
+        // proves the writer survives this input on AOSP's muxer, not that this input is what the
+        // S25 produces. That is confirmed on the device by the MUXER_TIMESTAMP_CORRECTED audit
+        // entry ForwardRecordingEngine logs.
+        val sampleRateHz = 44_100
+        val channelCount = 2
+        val toneHz = 1000.0
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = channelCount)
+        // Not a multiple of 1024 samples, so a partial frame is guaranteed to stay inside the
+        // encoder until end-of-stream and come out during finish()'s final drain.
+        val durationMillis = 2_010L
+        val outFile = File.createTempFile("stream_aac_pts_regress_", ".m4a", cacheDir)
+        try {
+            val writer = StreamingAacWriter(outFile, config)
+            writer.finalDrainCodecPtsOverrideForTest = { 0L }
+            writeToneChunks(writer, config, toneHz, durationMillis = durationMillis, chunkMillis = 50L)
+
+            writer.finish()
+
+            assertTrue(
+                "precondition: at least one frame must come out after EOS, or the override did nothing " +
+                    writer.diagnostics(),
+                writer.finalDrainSamplesWrittenForTest >= 1,
+            )
+            assertTrue("the regressing timestamps must have been rewritten", writer.timestampCorrections >= 1)
+            assertFalse(
+                "stop() must succeed outright, not via the recovery path: ${writer.diagnostics()}",
+                writer.recoveredFromMuxerAlreadyStopped,
+            )
+
+            val decoded = AacDecodeSupport.decode(outFile)
+            assertEquals(sampleRateHz, decoded.sampleRateHz)
+            assertEquals(channelCount, decoded.channelCount)
+            val requestedDurationUs = durationMillis * 1000L
+            val frameToleranceUs = (2 * 1024 * 1_000_000L) / sampleRateHz
+            assertTrue(
+                "declared duration ${decoded.containerDurationUs}us too far from ${requestedDurationUs}us",
+                Math.abs(decoded.containerDurationUs - requestedDurationUs) <= frameToleranceUs,
+            )
+            val energyAtTone = GoertzelDetector.energyAt(decoded.pcm, toneHz, sampleRateHz, channelCount)
+            assertTrue("expected tone energy in the decoded file, got $energyAtTone", energyAtTone > 50.0)
+        } finally {
+            outFile.delete()
+        }
+    }
+
+    @Test
+    fun outputProbe_fdTarget_readsFromStartRegardlessOfFilePosition_andRejectsBrokenFiles() {
+        // Issue #378: the recovery re-read must work on a MediaStore-style descriptor whose shared
+        // file position is wherever the muxer left it, and must reject a file that is not a
+        // complete recording.
+        val sampleRateHz = 16_000
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
+        val good = File.createTempFile("stream_aac_probe_good_", ".m4a", cacheDir)
+        val truncated = File.createTempFile("stream_aac_probe_trunc_", ".m4a", cacheDir)
+        val zeros = File.createTempFile("stream_aac_probe_zero_", ".m4a", cacheDir)
+        val stopError = IllegalStateException("simulated stop() failure")
+        try {
+            StreamingAacWriter(good, config).use { writer ->
+                writeToneChunks(writer, config, 1000.0, durationMillis = 3_000L, chunkMillis = 40L)
+                writer.finish()
+            }
+
+            java.io.RandomAccessFile(good, "rw").use { raf ->
+                raf.seek(raf.length()) // where a muxer's dup() of the descriptor would leave it
+                val probe = Mp4OutputProbe.probe(outputFile = null, fileDescriptor = raf.fd)
+                assertTrue("valid file via fd must probe decodable, got $probe", probe is OutputProbeResult.Decodable)
+                assertEquals(
+                    "a complete file must be accepted",
+                    null,
+                    MuxerStopFailurePolicy.resolve(stopError, probe, minimumDurationUs = 2_900_000L, diagnostics = ""),
+                )
+            }
+
+            val bytes = good.readBytes()
+            truncated.writeBytes(bytes.copyOf(bytes.size / 2))
+            java.io.RandomAccessFile(truncated, "r").use { raf ->
+                val probe = Mp4OutputProbe.probe(outputFile = null, fileDescriptor = raf.fd)
+                assertTrue(
+                    "a half-truncated file must not be accepted, probe said $probe",
+                    MuxerStopFailurePolicy.resolve(stopError, probe, minimumDurationUs = 2_900_000L, diagnostics = "") != null,
+                )
+            }
+
+            zeros.writeBytes(ByteArray(bytes.size))
+            val zeroProbe = Mp4OutputProbe.probe(outputFile = zeros, fileDescriptor = null)
+            assertTrue("a zero-filled file must probe not decodable, got $zeroProbe", zeroProbe is OutputProbeResult.NotDecodable)
+        } finally {
+            good.delete()
+            truncated.delete()
+            zeros.delete()
         }
     }
 
