@@ -102,6 +102,7 @@ class BoundedExportMultiFormatTest {
             // issue #385: this test is about multi-format PCM conversion, not the saturated-buffer
             // startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { ringBuffer.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = capturedSink,

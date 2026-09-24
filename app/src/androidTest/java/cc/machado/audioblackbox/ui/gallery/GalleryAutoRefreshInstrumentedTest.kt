@@ -123,6 +123,7 @@ class GalleryAutoRefreshInstrumentedTest {
         val name = "blackbox_${runId}_gallery_autorefresh.m4a"
 
         val engine = ForwardRecordingEngine(
+            exportFloorAdvancerProvider = { null },
             config = config,
             readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
             writeCursorProvider = { buffer.writeCursor() },

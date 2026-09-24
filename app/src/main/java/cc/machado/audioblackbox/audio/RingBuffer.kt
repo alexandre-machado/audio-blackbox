@@ -311,6 +311,27 @@ class RingBuffer(
     private fun oldestAvailableLocked(): Long =
         maxOf(baseStreamOffset, totalWritten - _capacityBytes.toLong())
 
+    // Export floor (issue #410): stream offset where the next "save the past" starts, i.e. the end
+    // of the window the last *successful* save persisted. A logical cursor only -- nothing is
+    // zeroed, reallocated or copied when it moves, and the capture thread never touches it. Always
+    // `<= totalWritten`, monotonic within one stream, reset to 0 by [clear] together with the
+    // stream itself. Guarded by [lock] like everything else here.
+    private var exportFloor: Long = 0L
+
+    /**
+     * Oldest byte a *new* save may contain: the physical oldest byte, or the export floor if a
+     * previous save already persisted past it (issue #410). This is what [oldestCursor],
+     * [bufferedBytes], [bufferedDurationMillis] and [snapshot] report, so the UI, notification and
+     * the next export all see "what a save would contain now", never audio that was already saved.
+     *
+     * Deliberately NOT used by [readSince] (lapping), [resize] (what to keep) or segment pruning:
+     * those are about which bytes *physically* still exist. A reader that fixed its cursor before
+     * the floor moved (a forward recording that started draining the retained past before an
+     * unrelated save succeeded) still owns a valid cursor into real bytes, and must not be told it
+     * lapped just because someone else saved.
+     */
+    private fun saveableOldestLocked(): Long = maxOf(oldestAvailableLocked(), exportFloor)
+
     // Active format segments. Preserves format history across quality preset changes (issue #194).
     private val segments = mutableListOf(FormatSegment(startOffset = 0L, config = initialConfig))
 
@@ -327,8 +348,35 @@ class RingBuffer(
     private var markerCount = 0
     private var markerNextSlot = 0
 
-    /** Bytes currently held in the buffer (<= [capacityBytes]). */
-    fun bufferedBytes(): Long = synchronized(lock) { totalWritten - oldestAvailableLocked() }
+    /** Bytes a save would contain right now (<= [capacityBytes]): everything buffered since the
+     * later of the physical oldest byte and the export floor (issue #410). */
+    fun bufferedBytes(): Long = synchronized(lock) { totalWritten - saveableOldestLocked() }
+
+    /**
+     * Records that a save successfully persisted everything up to [cursor] (exclusive), so the next
+     * save starts there (issue #410). Returns whether the floor actually moved.
+     *
+     * - Monotonic: a [cursor] at or below the current floor is ignored.
+     * - A [cursor] past the write head is ignored rather than clamped: it can only come from a
+     *   stream that was [clear]ed after the save fixed its window, and clamping it onto the new
+     *   stream would hide audio that save never contained.
+     * - O(1), no allocation, no copy: the bytes below the floor stay physically in place until the
+     *   writer overwrites them as usual.
+     *
+     * Callers must only invoke this after the save's sink commit succeeded; a failed, cancelled or
+     * lapped save must leave the floor alone so a retry gets the same audio.
+     */
+    fun advanceExportFloor(cursor: Long): Boolean = synchronized(lock) {
+        if (cursor > totalWritten || cursor <= exportFloor) {
+            false
+        } else {
+            exportFloor = cursor
+            true
+        }
+    }
+
+    /** Current export floor (issue #410); see [advanceExportFloor]. */
+    fun exportFloor(): Long = synchronized(lock) { exportFloor }
 
     /**
      * Resizes the ring buffer capacity in-place without discarding surviving audio (issue #223).
@@ -613,6 +661,10 @@ class RingBuffer(
                 chunks = (newChunks as Array<ByteArray>).toMutableList()
                 _capacityBytes = newCapacityBytes
                 baseStreamOffset = startOffset
+                // `exportFloor` (issue #410) is left untouched: it is a stream offset, which a
+                // resize never renumbers, and it is still `<= totalWritten`. If a shrink dropped
+                // bytes above it, `saveableOldestLocked()` simply resolves to the new physical
+                // oldest instead -- the max() does the clamping, no special case needed here.
                 pruneExpiredSegmentsLocked()
                 return ResizeOutcome.Applied
             } catch (failure: Throwable) {
@@ -714,7 +766,7 @@ class RingBuffer(
      * Wall-clock audio duration currently held in the buffer (in milliseconds).
      */
     fun bufferedDurationMillis(): Long = synchronized(lock) {
-        val oldest = oldestAvailableLocked()
+        val oldest = saveableOldestLocked()
         durationMillisLocked(oldest, totalWritten)
     }
 
@@ -787,6 +839,9 @@ class RingBuffer(
             segments.add(FormatSegment(startOffset = 0L, config = lastConfig))
             totalWritten = 0L
             baseStreamOffset = 0L
+            // The floor belongs to the stream it was set on (issue #410); a restarted stream
+            // starts with nothing saved.
+            exportFloor = 0L
             markerCount = 0
             markerNextSlot = 0
         }
@@ -841,7 +896,7 @@ class RingBuffer(
     fun snapshot(durationMillis: Long): AudioSnapshot {
         require(durationMillis >= 0) { "durationMillis must not be negative, was $durationMillis" }
         synchronized(lock) {
-            val oldest = oldestAvailableLocked()
+            val oldest = saveableOldestLocked()
             val available = totalWritten - oldest
             if (available == 0L || durationMillis == 0L) return AudioSnapshot(ByteArray(0), clock())
 
@@ -888,9 +943,13 @@ class RingBuffer(
      * Stream offset of the oldest byte still buffered: the cursor a caller should start from to
      * drain the retained past first and then continue live (issue #47's "record forward,
      * including the last N minutes"). Equal to [writeCursor] on an empty buffer.
+     *
+     * Honours the export floor (issue #410): after a successful save this is where that save's
+     * window ended, so neither the next save nor a new forward recording repeats audio that is
+     * already in a file.
      */
     fun oldestCursor(): Long =
-        synchronized(lock) { oldestAvailableLocked() }
+        synchronized(lock) { saveableOldestLocked() }
 
     /**
      * Incremental drain read (issue #51): returns the PCM written since [cursor], up to

@@ -76,6 +76,7 @@ class WindowedSaveExportTest {
         // saturated-buffer startup headroom (one case below happens to buffer exactly 30 of 30
         // minutes) -- `{ null }` keeps its pre-#385 behavior exactly.
         capacityBytesProvider = { null },
+        exportFloorAdvancerProvider = { null },
         estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
         gapsProvider = { emptyList() },
         sink = FakeSink(target),

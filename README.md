@@ -10,7 +10,7 @@
   <a href="https://developer.android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-3DDC84.svg?logo=android&logoColor=white" alt="Android Platform"></a>
   <a href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
   <a href="https://m3.material.io"><img src="https://img.shields.io/badge/Design-Material%203-6750A4.svg" alt="Material 3"></a>
-  <a href="https://play.google.com/apps/testing/cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Beta_Testing-01875F.svg?logo=googleplay&logoColor=white" alt="Google Play Beta"></a>
+  <a href="https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Get_it_on_Google_Play-01875F.svg?logo=googleplay&logoColor=white" alt="Get it on Google Play"></a>
   <a href="https://alexandre.machado.cc/audio-blackbox/"><img src="https://img.shields.io/badge/Project_Site-alexandre.machado.cc-FF5722.svg" alt="Project Site"></a>
 </p>
 
@@ -92,13 +92,9 @@ The Audio Blackbox memory limit is governed by strict, pre-calculated bounds rat
 
 This guarantees a **zero-risk recording loop**: the app never reallocates memory on the fly, never triggers Garbage Collector pauses that drop audio frames, and prevents crashes at the exact moment the user presses "Save".
 
-## 📲 Download & Beta Testing
+## 📲 Download
 
-Audio Blackbox is available in closed/internal beta via Google Play (no public listing yet):
-
-1. **Join the Tester Group** $\rightarrow$ [Google Groups: ccmachadoaudioblackbox](https://groups.google.com/g/ccmachadoaudioblackbox)
-2. **Accept the Web Test Invitation** $\rightarrow$ [Play Store Testing Portal](https://play.google.com/apps/testing/cc.machado.audioblackbox)
-3. **Install on Device** $\rightarrow$ Once enrolled, install "Audio Blackbox" from the Play Store app on your device (no public listing yet -- internal/closed beta only).
+Audio Blackbox is free on Google Play: **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)**. It runs on Android 10 (API 29) and newer.
 
 ---
 

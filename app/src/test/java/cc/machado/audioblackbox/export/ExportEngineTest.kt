@@ -90,6 +90,7 @@ class ExportEngineTest {
         writeCursorProvider = writeCursorProvider,
         oldestCursorProvider = { ring.oldestCursor() },
         capacityBytesProvider = capacityBytesProvider,
+        exportFloorAdvancerProvider = { null },
         estimateTimestampProvider = estimateTimestampProvider,
         gapsProvider = gapsProvider,
         sink = sink,
@@ -159,6 +160,7 @@ class ExportEngineTest {
             // issue #385: this test is about the segmentsProvider-null distinction, not the
             // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = sink,
@@ -190,6 +192,7 @@ class ExportEngineTest {
             // issue #385: this test is about the legacy no-segmentsProvider passthrough, not the
             // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
             sink = sink,
@@ -425,6 +428,7 @@ class ExportEngineTest {
             // headroom -- `{ null }` keeps its pre-#385 behavior exactly (the ring here is built
             // saturated on purpose, for unrelated reasons -- see the comment above).
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { 0L },
             gapsProvider = { gaps },
             sink = sink,
@@ -650,6 +654,7 @@ class ExportEngineTest {
             // issue #385: this test is about minExportDurationMillis timing, not the
             // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { ring.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = sink,

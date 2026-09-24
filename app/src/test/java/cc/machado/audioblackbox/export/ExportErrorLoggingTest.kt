@@ -48,6 +48,7 @@ class ExportErrorLoggingTest {
             // issue #385: this test is about error-log emission (sink open failure), not the
             // saturated-buffer startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { 1000L },
             gapsProvider = { emptyList() },
             sink = failingSink,

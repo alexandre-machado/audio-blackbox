@@ -51,6 +51,7 @@ class BoundedExportToneRoundTripTest {
             // boundary, not the saturated-buffer startup headroom -- `{ null }` keeps its
             // pre-#385 behavior exactly.
             capacityBytesProvider = { null },
+            exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { ring.estimateTimestamp(it) },
             gapsProvider = { emptyList() },
             sink = sink,

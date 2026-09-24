@@ -109,6 +109,7 @@ class ForwardRecordingEngineTest {
         sink: StreamingExportSink = FakeStreamingSink(),
         writerFactory: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter = { target, cfg -> FakeStreamingAudioWriter(target, cfg) },
     ) = ForwardRecordingEngine(
+        exportFloorAdvancerProvider = { null },
         config = config,
         readSinceProvider = readSinceProvider,
         writeCursorProvider = writeCursorProvider,
