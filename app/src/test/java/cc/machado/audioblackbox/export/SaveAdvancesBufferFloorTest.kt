@@ -46,6 +46,9 @@ class SaveAdvancesBufferFloorTest {
     private class RecordingSink(
         var failOpen: Boolean = false,
         var failWrite: Boolean = false,
+        /** Runs inside [open], i.e. while the export's window is already fixed but before a
+         * single byte has been drained -- where a real MediaStore insert's latency sits (#385). */
+        var onOpen: () -> Unit = {},
     ) : ExportSink {
         val committed = mutableListOf<ByteArray>()
         var aborts = 0
@@ -53,6 +56,7 @@ class SaveAdvancesBufferFloorTest {
 
         override fun open(displayName: String, mimeType: String): ExportTarget {
             opens++
+            onOpen()
             if (failOpen) throw IOException("insert rejected")
             val buffer = ByteArrayOutputStream()
             val stream: OutputStream = if (failWrite) {
@@ -242,9 +246,63 @@ class SaveAdvancesBufferFloorTest {
     }
 
     @Test
+    fun `startup headroom still applies when a floor sits just ahead of the physical eviction edge`() {
+        // `@rev` M1 on PR #411. This test saturates the ring PHYSICALLY on purpose (writes exceed
+        // capacity), so AGENTS.md §2 trap 2 ("keep writes below capacity") does not apply: the
+        // property under test is the #385 startup headroom, which only exists for a saturated
+        // buffer. Saturation cannot mask anything here because every assertion is on exact cursors
+        // and byte-exact committed PCM, not on bufferedBytes().
+        //
+        // Setup: capacity 10_000, 12_000 written, so the eviction edge (physical oldest) is 2000.
+        // A previous save's floor sits at 2100, 100 bytes ahead of it; the headroom is 250 ms =
+        // 500 bytes here. oldestCursor() is therefore 2100 and writeCursor - oldestCursor = 9900 <
+        // capacity, which is what used to switch the headroom off. The sink's open() then lets the
+        // writer advance 300 bytes (physical oldest -> 2300, past the floor). Without the headroom
+        // the drain starts at 2100 and laps; with it the drain starts at 2000 + 500 = 2500.
+        val capacity = 10_000
+        val ring = RingBuffer(capacityBytes = capacity, bytesPerSecond = config.bytesPerSecond)
+        val stream = ByteArray(12_000) { (it % 97).toByte() }
+        // Two writes, each below capacity: a single write larger than capacity keeps only its tail
+        // and advances the stream by `capacity`, not by its own length.
+        ring.write(stream, 0, 6_000)
+        ring.write(stream, 6_000, 6_000)
+        assertEquals(12_000L, ring.writeCursor())
+        assertTrue(ring.advanceExportFloor(2_100L))
+        assertEquals(2_100L, ring.oldestCursor())
+
+        var raced = false
+        val sink = RecordingSink(onOpen = {
+            if (!raced) {
+                raced = true
+                ring.write(ByteArray(300) { 99 })
+            }
+        })
+        val engine = engineFor(ring, sink)
+
+        val result = engine.export(WHOLE_BUFFER_MILLIS, minutesLabel = 1)
+
+        assertTrue("headroom must absorb the sink-open race, got $result", result is ExportState.Success)
+        assertArrayEquals(
+            "drain must start one margin past the eviction edge (2500) and end at the fixed window end (12000)",
+            stream.copyOfRange(2_500, 12_000),
+            pcmOf(sink.committed.single()),
+        )
+        assertEquals(12_000L, ring.exportFloor())
+    }
+
+    @Test
     fun `a save whose stream was cleared before it committed cannot move the new stream's floor`() {
         // The floor cursor from the old stream (4000) lies past the restarted stream's write head,
         // so advanceExportFloor must ignore it rather than clamp it onto unsaved new audio.
+        //
+        // The export's own outcome is pinned too (`@rev` L2 on PR #411), and it is the documented
+        // PRE-EXISTING positional-detection limit of ReadSinceResult.StreamReset (see its KDoc),
+        // not something this PR introduced or fixes: the drain's cursor 0 is still "valid" in the
+        // restarted stream, so it reads the 1000 new-stream bytes and then finds nothing more,
+        // and the save reports Success declaring 4000 bytes while committing a file that holds
+        // only those 1000 new-stream bytes. Unreachable in production today (AudioCaptureEngine
+        // never writes to a buffer again after clear()); the real fix is the generation counter
+        // tracked with #54. If that lands, this expectation should flip to STREAM_RESET.
         val ring = newRing()
         val sink = RecordingSink()
         var restart = true
@@ -258,8 +316,13 @@ class SaveAdvancesBufferFloorTest {
         })
         ring.write(pattern(4000, 1))
 
-        engine.export(WHOLE_BUFFER_MILLIS, minutesLabel = 1)
+        val newStream = pattern(1000, 60)
+        val result = engine.export(WHOLE_BUFFER_MILLIS, minutesLabel = 1)
 
+        assertTrue("$result", result is ExportState.Success)
+        assertEquals(4000, (result as ExportState.Success).bytesWritten)
+        assertEquals(1, sink.committed.size)
+        assertArrayEquals(newStream, pcmOf(sink.committed.single()))
         assertEquals(0L, ring.exportFloor())
         assertEquals(1000L, ring.bufferedBytes())
     }

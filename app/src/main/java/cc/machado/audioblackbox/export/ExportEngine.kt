@@ -352,16 +352,30 @@ class ExportEngine(
             // no matter how long the drain takes, so there is nothing to guard against and no
             // audio should be sacrificed (see startCursorMarginBytes's doc for why the margin
             // itself is sized the way it is).
+            //
+            // Issue #410 (`@rev` finding M1 on PR #411): saturation is judged against the
+            // *physical* eviction edge (`writeCursor - capacityBytes`, the byte the writer
+            // overwrites next), never against `oldestCursor`. Since #410, `oldestCursor` is
+            // `max(physical oldest, export floor)`, so `writeCursor - oldestCursor >= capacity`
+            // (the pre-#410 condition) goes false whenever a floor sits even one byte ahead of the
+            // physical oldest byte -- and a floor less than one margin ahead of the edge is exactly
+            // the case the writer evicts during `sink.open()`, reproducing #385's CURSOR_LAPPED.
+            // So: the drain must start at least one margin past the eviction edge, and at least at
+            // `oldestCursor` (which already carries the floor). With no floor this is identical to
+            // the pre-#410 `oldestCursor + margin` on a saturated buffer, and 0 on an unsaturated
+            // one (`writeCursor < capacityBytes`, nothing has ever been evicted).
             val capacityBytes = capacityBytesProvider()
-            val marginBytes = if (capacityBytes != null && rawLength >= capacityBytes) {
+            val startCursor = if (capacityBytes != null && writeCursor >= capacityBytes) {
+                val evictionEdge = writeCursor - capacityBytes
+                val guardedStart = maxOf(oldestCursor, evictionEdge + startCursorMarginBytes(targetConfig))
                 // Never discard the whole window: this is a defensive backstop for a
                 // pathological capacity smaller than the headroom itself, not something expected
                 // to trigger on any real device (the ring buffer is sized for minutes of audio).
-                minOf(startCursorMarginBytes(targetConfig), maxOf(rawLength - 1L, 0L))
+                minOf(guardedStart, maxOf(writeCursor - 1L, oldestCursor))
             } else {
-                0L
+                oldestCursor
             }
-            val startCursor = oldestCursor + marginBytes
+            val marginBytes = startCursor - oldestCursor
             val adjustedRawLength = rawLength - marginBytes
             // Re-anchor the window's wall-clock start on the actual first byte being read, not
             // the discarded margin -- otherwise the plan's gap/duration bookkeeping below would
