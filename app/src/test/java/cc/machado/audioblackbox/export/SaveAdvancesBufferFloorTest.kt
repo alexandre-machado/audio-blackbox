@@ -291,6 +291,33 @@ class SaveAdvancesBufferFloorTest {
     }
 
     @Test
+    fun `on a physically full buffer a floor far past the eviction edge still bounds the save`() {
+        // `@rev` low finding on PR #411 (#issuecomment-5808410837). Saturates the ring on purpose
+        // (writes exceed capacity, in chunks below it), so AGENTS.md §2 trap 2 does not apply:
+        // the headroom branch only runs on a saturated buffer, and every assertion is byte-exact.
+        //
+        // Edge = 12_000 - 10_000 = 2000, edge + margin = 2500, floor = 8000. The floor is the
+        // max() term that must win. readSince only checks the physical oldest byte, so a start
+        // below the floor would silently re-export already-saved audio [2500, 8000).
+        val capacity = 10_000
+        val ring = RingBuffer(capacityBytes = capacity, bytesPerSecond = config.bytesPerSecond)
+        val stream = ByteArray(12_000) { (it % 97).toByte() }
+        ring.write(stream, 0, 6_000)
+        ring.write(stream, 6_000, 6_000)
+        assertTrue(ring.advanceExportFloor(8_000L))
+        val sink = RecordingSink()
+
+        val result = engineFor(ring, sink).export(WHOLE_BUFFER_MILLIS, minutesLabel = 1)
+
+        assertTrue("$result", result is ExportState.Success)
+        assertArrayEquals(
+            "save must start at the floor (8000), never re-export already-saved audio",
+            stream.copyOfRange(8_000, 12_000),
+            pcmOf(sink.committed.single()),
+        )
+    }
+
+    @Test
     fun `a save whose stream was cleared before it committed cannot move the new stream's floor`() {
         // The floor cursor from the old stream (4000) lies past the restarted stream's write head,
         // so advanceExportFloor must ignore it rather than clamp it onto unsaved new audio.
