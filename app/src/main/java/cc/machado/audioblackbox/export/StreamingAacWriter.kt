@@ -128,6 +128,10 @@ class StreamingAacWriter private constructor(
         get() = synchronized(lock) { recoveredFromAlreadyStoppedMuxer }
 
     /** How many encoder timestamps had to be rewritten before reaching the muxer (issue #378). */
+    /** Encoded AAC frames handed to the muxer as data samples (the end-of-stream marker excluded). */
+    internal val muxedFrameCount: Int
+        get() = synchronized(lock) { timestamps.samples }
+
     val timestampCorrections: Int
         get() = synchronized(lock) { timestamps.corrections }
 

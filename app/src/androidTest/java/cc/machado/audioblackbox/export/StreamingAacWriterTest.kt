@@ -155,6 +155,7 @@ class StreamingAacWriterTest {
                     decoded.containerDurationUs,
                     requestedDurationUs = duration * 1000L,
                     sampleRateHz = sampleRateHz,
+                    muxedFrames = writer.muxedFrameCount,
                 )
 
                 val energyAtTone = GoertzelDetector.energyAt(decoded.pcm, toneHz, sampleRateHz, 1)
@@ -332,6 +333,7 @@ class StreamingAacWriterTest {
                 decoded.containerDurationUs,
                 requestedDurationUs = durationMillis * 1000L,
                 sampleRateHz = sampleRateHz,
+                muxedFrames = writer.muxedFrameCount,
             )
             val energyAtTone = GoertzelDetector.energyAt(decoded.pcm, toneHz, sampleRateHz, channelCount)
             assertTrue("expected tone energy in the decoded file, got $energyAtTone", energyAtTone > 50.0)
@@ -426,39 +428,47 @@ class StreamingAacWriterTest {
     }
 
     /**
-     * The container's declared duration, modelled on what an AAC-LC encoder actually emits rather
-     * than a symmetric tolerance around the requested length.
+     * The container's declared duration, modelled on what the encoder and muxer actually do rather
+     * than a symmetric tolerance around the requested length. Two separate checks:
      *
-     * The encoder can only emit whole 1024-sample frames, so the PCM it was fed occupies
-     * `ceil(samples / 1024)` frames. On top of that it emits a small, fixed number of extra frames
-     * for its own priming and end-of-stream flush. Measured on the S25 (`c2.android.aac.encoder`,
-     * PR #415): 5 600 samples -> 8 frames, 32 000 -> 34, 88 200 -> 89, i.e. exactly
-     * `ceil(samples / 1024) + 2` every time. MPEG4Writer declares `frames x 1024 / rate`.
+     * **Frames the encoder emitted ([muxedFrames], read from the writer, not inferred).** AAC-LC
+     * frames hold 1024 samples, so `samplesFed` occupies `ceil(samplesFed / 1024)` frames. The
+     * encoder may add up to [MAX_CODEC_OVERHEAD_FRAMES] priming/flush frames on top (measured on
+     * the S25's `c2.android.aac.encoder`, PR #415: 5 600 samples -> 8 frames, 32 000 -> 34,
+     * 88 200 -> 89, exactly `ceil + 2`), and it may hold back a sub-frame tail it never pads out,
+     * so the floor is `floor(samplesFed / 1024)`. More than the upper bound means the writer is
+     * inventing frames; fewer than the floor means whole frames of fed audio were lost.
      *
-     * So the oracle is two-sided and asymmetric:
-     * - **lower bound**: every frame the fed PCM needs must be declared. The old `abs(...) <= 2
-     *   frames` check let a file silently lose up to two frames of written audio and still pass.
-     * - **upper bound**: no more than [MAX_CODEC_OVERHEAD_FRAMES] frames beyond that. More would
-     *   mean the writer itself is inventing audio (e.g. the timestamp sanitizer spacing frames that
-     *   do not exist).
-     * A quarter frame of slack absorbs the muxer's per-sample timescale rounding.
+     * **What the muxer declares for those frames.** Either all of them (`frames x 1024 / rate`,
+     * the S25's Android 16 MPEG4Writer) or the pts span without the last frame's own duration
+     * (`(frames - 1) x 1024 / rate`, what the API 30 CI emulator declared on PR #415). Anything
+     * outside that one-frame window means the container disagrees with what was muxed. A quarter
+     * frame of slack absorbs per-sample timescale rounding.
+     *
+     * The old check, `abs(declared - requested) <= 2 frames`, failed the S25 (which adds 2 frames
+     * plus the rounded-up partial frame) and would have passed a file missing two frames of audio.
      */
     private fun assertDeclaredDurationCoversEncodedFrames(
         label: String,
         declaredUs: Long,
         requestedDurationUs: Long,
         sampleRateHz: Int,
+        muxedFrames: Int,
     ) {
         val samplesFed = requestedDurationUs * sampleRateHz / 1_000_000L
-        val framesForPcm = (samplesFed + AAC_FRAME_SAMPLES - 1) / AAC_FRAME_SAMPLES
-        val frameUs = AAC_FRAME_SAMPLES * 1_000_000L / sampleRateHz
-        val slackUs = frameUs / 4
-        val minUs = framesForPcm * AAC_FRAME_SAMPLES * 1_000_000L / sampleRateHz - slackUs
-        val maxUs = (framesForPcm + MAX_CODEC_OVERHEAD_FRAMES) * AAC_FRAME_SAMPLES * 1_000_000L / sampleRateHz + slackUs
+        val minFrames = samplesFed / AAC_FRAME_SAMPLES
+        val maxFrames = (samplesFed + AAC_FRAME_SAMPLES - 1) / AAC_FRAME_SAMPLES + MAX_CODEC_OVERHEAD_FRAMES
         assertTrue(
-            "$label: declared ${declaredUs}us, but the $samplesFed samples fed need $framesForPcm frames " +
-                "(${minUs}us); at most $MAX_CODEC_OVERHEAD_FRAMES codec priming/flush frames allowed on top (${maxUs}us)",
-            declaredUs in minUs..maxUs,
+            "$label: encoder emitted $muxedFrames frames for $samplesFed samples; expected $minFrames..$maxFrames",
+            muxedFrames.toLong() in minFrames..maxFrames,
+        )
+        fun framesUs(frames: Long) = frames * AAC_FRAME_SAMPLES * 1_000_000L / sampleRateHz
+        val slackUs = framesUs(1) / 4
+        val lowUs = framesUs(muxedFrames - 1L) - slackUs
+        val highUs = framesUs(muxedFrames.toLong()) + slackUs
+        assertTrue(
+            "$label: declared ${declaredUs}us for $muxedFrames muxed frames; expected ${lowUs}..${highUs}us",
+            declaredUs in lowUs..highUs,
         )
     }
 
@@ -472,9 +482,10 @@ class StreamingAacWriterTest {
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = channelCount)
         val outFile = File.createTempFile("stream_aac_roundtrip_", ".m4a", cacheDir)
         try {
-            StreamingAacWriter(outFile, config).use { writer ->
+            val muxedFrames = StreamingAacWriter(outFile, config).use { writer ->
                 writeToneChunks(writer, config, toneHz, durationMillis, chunkMillis)
                 writer.finish()
+                writer.muxedFrameCount
             }
 
             val decoded = AacDecodeSupport.decode(outFile)
@@ -486,6 +497,7 @@ class StreamingAacWriterTest {
                 decoded.containerDurationUs,
                 requestedDurationUs = durationMillis * 1000L,
                 sampleRateHz = sampleRateHz,
+                muxedFrames = muxedFrames,
             )
 
             val bytesPerFrame = 2 * channelCount
