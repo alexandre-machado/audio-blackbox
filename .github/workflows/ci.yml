@@ -113,6 +113,14 @@ jobs:
       - name: Assemble debug
         run: ./gradlew assembleDebug --no-daemon
 
+      # Issue #416: release is minified with R8, and every merge to main ships that build to the
+      # Play internal track. Run the release R8 pass on every PR so a keep-rule or missing-class
+      # regression fails here, before merge. minifyReleaseWithR8 (not assembleRelease) because
+      # this job has no signing secrets and validateSigningRelease would fail without them; the
+      # R8 pass, including resource shrinking, is the part a keep-rule change can break.
+      - name: R8 release build
+        run: ./gradlew minifyReleaseWithR8 --no-daemon
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon
 
@@ -632,9 +640,25 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: cc.machado.audioblackbox
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          # Issue #416: the release build is obfuscated by R8. AGP already embeds this file in the
+          # AAB (BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map); uploading it
+          # explicitly as well makes deobfuscation of Play crash reports not depend on that.
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: ${{ github.event.inputs.track || (startsWith(github.ref, 'refs/tags/v') && 'alpha' || 'internal') }}
           status: ${{ github.event.inputs.status || 'completed' }}
           whatsNewDirectory: distribution/whatsnew
+
+      # Issue #416: the on-device error/crash log users share from Settings holds obfuscated
+      # stack frames. Keep the matching mapping.txt next to the run so those can be retraced
+      # (retrace/mapping lookups need the exact file for that versionCode).
+      - name: Upload R8 mapping
+        if: ${{ !inputs.sync_only }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: r8-mapping-${{ github.run_number }}-${{ github.sha }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
