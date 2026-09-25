@@ -661,20 +661,36 @@ class ForwardRecordingEngine(
 
             writer.finish()
             if (writer is StreamingAacWriter && writer.recoveredFromMuxerAlreadyStopped) {
-                // The file is complete and valid (see StreamingAacWriter.finish()'s catch site for
-                // why that is guaranteed rather than assumed) -- state stays Success below -- but
-                // this is still worth an audit trail entry rather than disappearing silently
-                // (issue #347, same evidentiary standard already applied to TAIL_TRUNCATED above).
+                // The file was re-read and verified complete and decodable (see
+                // MuxerStopFailurePolicy) -- state stays Success below -- but this is still worth
+                // an audit trail entry rather than disappearing silently (issue #347, same
+                // evidentiary standard already applied to TAIL_TRUNCATED above).
                 logExportError(
                     errorLogFile,
                     clock,
                     "ForwardRecordingEngine",
                     "MUXER_STOP_RECOVERED",
-                    "MediaMuxer had already stopped itself before finish() could call stop() " +
-                        "explicitly; the file was still fully finalized and is not lost",
+                    "MediaMuxer.stop() reported an error, but the file was re-read and verified " +
+                        "complete and decodable, so it is not lost. ${writer.diagnostics()}",
                     null,
                     // Issue #346: same reasoning as TAIL_TRUNCATED above -- a recovered-but-
                     // noteworthy event on a session that still succeeded, not a failure.
+                    ErrorLogSeverity.AUDIT,
+                )
+            }
+            if (writer is StreamingAacWriter && writer.timestampCorrections > 0) {
+                // Issue #378: the encoder handed out timestamps the muxer would have rejected, and
+                // the writer rewrote them. The recording is fine. This is defence in depth: the
+                // S25's actual #378 failure was the stale MediaStore descriptor (see
+                // MediaStoreSink.openStreaming), and its encoder needed no corrections.
+                logExportError(
+                    errorLogFile,
+                    clock,
+                    "ForwardRecordingEngine",
+                    "MUXER_TIMESTAMP_CORRECTED",
+                    "Rewrote ${writer.timestampCorrections} encoder timestamp(s) that did not advance; " +
+                        "the file is complete. ${writer.diagnostics()}",
+                    null,
                     ErrorLogSeverity.AUDIT,
                 )
             }

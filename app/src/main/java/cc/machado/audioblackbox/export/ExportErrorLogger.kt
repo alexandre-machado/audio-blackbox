@@ -61,7 +61,7 @@ enum class ErrorLogSeverity {
  * path, which never had a severity field on disk at all) resolve through [severityForReason]
  * rather than keeping their own lists, so a reason added here can never silently be misclassified
  * by the other path (issue #346 review finding on PR #349). */
-private val AUDIT_REASONS = setOf("TAIL_TRUNCATED", "MUXER_STOP_RECOVERED")
+private val AUDIT_REASONS = setOf("TAIL_TRUNCATED", "MUXER_STOP_RECOVERED", "MUXER_TIMESTAMP_CORRECTED")
 
 /** Resolves the severity for a bare `reason` string, used both as [logExportError]'s default for
  * newly-written entries and by [LegacyBuilder.build] for entries recovered from the old

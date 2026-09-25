@@ -1,0 +1,7 @@
+# Jekyll build for the GitHub Pages hotsite (issue #414). Used by .github/workflows/pages.yml.
+# The github-pages gem pins the same Jekyll + plugin set GitHub's own Pages builder uses, so the
+# workflow renders docs/ the way the legacy builder did. Jekyll excludes Gemfile/Gemfile.lock from
+# the built site by default.
+source "https://rubygems.org"
+
+gem "github-pages", "= 232", group: :jekyll_plugins

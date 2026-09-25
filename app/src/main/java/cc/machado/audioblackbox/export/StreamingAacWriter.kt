@@ -92,6 +92,20 @@ class StreamingAacWriter private constructor(
     private var isClosed = false
     private var recoveredFromAlreadyStoppedMuxer = false
 
+    // Issue #378: every timestamp handed to the muxer goes through this, see its class doc.
+    private val timestamps = MuxerTimestampSanitizer(config.sampleRateHz)
+
+    // Issue #378 diagnostics. None of these change behaviour; they exist so that a finish()
+    // failure on a device nobody can attach a debugger to still says what the muxer was fed.
+    private var csd0PresentAtAddTrack: Boolean? = null
+    private var eosFlaggedDataSamples = 0
+    private var eosMarkerWritten = false
+    private var eosMarkerError: String? = null
+    private var finalDrainSamples = 0
+    private var inFinalDrain = false
+    private var overriddenSamples = 0
+    private var codecName: String = UNKNOWN_CODEC_NAME
+
     /** Total PCM bytes (audio + injected silence) fed into the encoder so far. */
     override val totalBytesWritten: Long
         get() = synchronized(lock) { totalBytesFed }
@@ -105,31 +119,74 @@ class StreamingAacWriter private constructor(
         get() = synchronized(lock) { isClosed }
 
     /**
-     * Whether [finish] recovered from the native muxer having already stopped itself before the
-     * explicit `muxer.stop()` call (issue #347). When `true`, [finish] still completed and the
-     * output file is a complete, valid container -- see [finish]'s catch site for why that is
-     * guaranteed rather than assumed. Exposed so a caller (e.g. `ForwardRecordingEngine`) can log
-     * the occurrence for audit purposes even though the session did not fail.
+     * Whether `muxer.stop()` threw during [finish] and [finish] still completed because an
+     * independent re-read verified the output is a complete, decodable recording (issues #347,
+     * #378; see [MuxerStopFailurePolicy]). Exposed so a caller (e.g. `ForwardRecordingEngine`) can
+     * log the occurrence for audit purposes even though the session did not fail.
      */
     val recoveredFromMuxerAlreadyStopped: Boolean
         get() = synchronized(lock) { recoveredFromAlreadyStoppedMuxer }
 
+    /** How many encoder timestamps had to be rewritten before reaching the muxer (issue #378). */
+    /** Encoded AAC frames handed to the muxer as data samples (the end-of-stream marker excluded). */
+    internal val muxedFrameCount: Int
+        get() = synchronized(lock) { timestamps.samples }
+
+    val timestampCorrections: Int
+        get() = synchronized(lock) { timestamps.corrections }
+
+    /**
+     * The encoder's component name (e.g. `c2.android.aac.encoder`), captured once the codec is
+     * configured and started. It identifies the S25's encoder in the `MUXER_TIMESTAMP_CORRECTED`
+     * audit entry (issue #378). Captured at construction, not read from the codec later, because
+     * `diagnostics()` is also called after [finish] has released the codec.
+     */
+    val encoderName: String
+        get() = synchronized(lock) { codecName }
+
+    /** Description of the first rewritten timestamp, or null if none was (issue #378). */
+    val firstTimestampCorrection: String?
+        get() = synchronized(lock) { timestamps.firstCorrection }
+
+    /**
+     * Test-only seam (issue #378): while set, every encoded sample the encoder hands out gets this
+     * function applied to its presentation timestamp before anything else sees it. A test sets it
+     * part-way through a session to reproduce an encoder whose later frames are stamped earlier
+     * than the ones before them, the input that makes `MPEG4Writer` mark the track malformed.
+     * Nothing in production sets it.
+     *
+     * Deliberately not tied to "frames after end-of-stream": CI's software encoder emits no frame
+     * at all after EOS (observed in run 36063434655: `finalDrainSamples=0`), so such a seam would
+     * have nothing to act on there.
+     */
+    internal var codecPtsOverrideForTest: ((Long) -> Long)? = null
+
+    /** Test-only (issue #378): samples whose timestamp [codecPtsOverrideForTest] rewrote, so a test
+     * can prove the override actually had a sample to act on. */
+    internal val overriddenSamplesForTest: Int
+        get() = synchronized(lock) { overriddenSamples }
+
+    /** What the muxer was fed, for failure messages and logs (issue #378). */
+    fun diagnostics(): String = synchronized(lock) {
+        "[muxer input: samples=${timestamps.samples}, firstPtsUs=${timestamps.firstPtsUs}, " +
+            "lastPtsUs=${timestamps.lastPtsUs}, ptsCorrections=${timestamps.corrections}" +
+            (timestamps.firstCorrection?.let { " (first: $it)" } ?: "") +
+            ", eosFlaggedDataSamples=$eosFlaggedDataSamples, eosMarkerWritten=$eosMarkerWritten" +
+            (eosMarkerError?.let { ", eosMarkerError=$it" } ?: "") +
+            ", csd0PresentAtAddTrack=$csd0PresentAtAddTrack, finalDrainSamples=$finalDrainSamples" +
+            ", pcmBytesFed=$totalBytesFed, codec=$codecName]"
+    }
+
     /**
      * Test-only seam (issue #347): when `true`, [finish] calls the real `muxer.stop()` itself,
-     * once, immediately before its own explicit stop attempt -- deliberately at the exact point in
-     * the sequence where the native auto-stop this issue is about would have already happened, so
-     * this class's own explicit `muxer.stop()` call race against an already-stopped muxer exactly
-     * as it does in production. Nothing in production sets this -- the default is `false`, a no-op
-     * -- so it changes no production behaviour.
+     * once, immediately before its own explicit stop attempt, so the explicit call throws on a
+     * file that is already fully finalized. That exercises the recovery path's acceptance side
+     * (an independent re-read proves the file complete). Nothing in production sets this.
      *
-     * This exists because the actual trigger (a hardware AAC encoder setting
-     * `BUFFER_FLAG_END_OF_STREAM` on a buffer that also carries real sample data, which makes the
-     * *native* muxer auto-finalize out from under this class's own `muxerStarted` flag) is
-     * hardware-specific and cannot be produced deterministically from the software encoder
-     * available in CI. This seam reproduces the resulting state mismatch -- an already-stopped
-     * muxer at the point `finish()` calls `stop()` -- against the real `MediaCodec`/`MediaMuxer`
-     * objects, exercising `finish()`'s actual recovery code end-to-end rather than a hand-built
-     * fixture standing in for them.
+     * Issue #378 note: #347 assumed the native muxer auto-stops when it sees
+     * `BUFFER_FLAG_END_OF_STREAM` on a data buffer. AOSP's `MPEG4Writer` does not do that (it only
+     * acts on EOS for zero-length buffers); the S25 failure matches a malformed track, which is what
+     * [codecPtsOverrideForTest] reproduces. This seam does not model that case.
      */
     internal var forceMuxerAlreadyStoppedBeforeExplicitStopForTest: Boolean = false
 
@@ -167,6 +224,9 @@ class StreamingAacWriter private constructor(
 
             this.codec = createdCodec
             this.muxer = muxerInstance
+            this.codecName = runCatching { createdCodec.name }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: runCatching { createdCodec.codecInfo.name }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: UNKNOWN_CODEC_NAME
             this.codecStarted = true
         } catch (t: Throwable) {
             if (startedCodec) runCatching { createdCodec.stop() }
@@ -283,7 +343,12 @@ class StreamingAacWriter private constructor(
             when (val outputIndex = codec.dequeueOutputBuffer(bufferInfo, timeout)) {
                 MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                     check(!muxerStarted) { "MediaCodec changed output format more than once" }
-                    muxerTrackIndex = muxer.addTrack(codec.outputFormat)
+                    val outputFormat = codec.outputFormat
+                    // AOSP's MPEG4Writer only takes AAC codec-specific data from the track format
+                    // (csd-0 -> ESDS), never from a CODEC_CONFIG sample, and marks the track
+                    // malformed at stop() without it. Recorded for diagnostics (issue #378).
+                    csd0PresentAtAddTrack = outputFormat.containsKey("csd-0")
+                    muxerTrackIndex = muxer.addTrack(outputFormat)
                     muxer.start()
                     muxerStarted = true
                 }
@@ -303,40 +368,49 @@ class StreamingAacWriter private constructor(
                         check(muxerStarted) { "encoder produced sample data before the muxer's track was added" }
                         outputBuffer.position(bufferInfo.offset)
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                        if (isEndOfStream) {
-                            // Issue #347: MediaMuxer.writeSampleData's own contract is that
-                            // BUFFER_FLAG_END_OF_STREAM is only meaningful on a dedicated, *empty*
-                            // (size == 0) marker buffer used to set the previous sample's duration --
-                            // never on a buffer that also carries real encoded data. Software encoders
-                            // generally honor that and emit the EOS marker as a separate zero-size
-                            // buffer after the last real one, but the hardware AAC encoder on the
-                            // owner's Galaxy S25 instead sets BUFFER_FLAG_END_OF_STREAM directly on the
-                            // buffer holding the final real frame. Handing that combination to the
-                            // muxer makes its native writer treat the track as finished and silently
-                            // run its own internal stop/finalize sequence right there -- well before
-                            // our explicit finish() reaches muxer.stop() below, which then throws
-                            // IllegalStateException ("muxer would have stopped already") because the
-                            // native muxer has already gone through it. So: still write the real
-                            // sample data, but never let the EOS flag reach the muxer attached to
-                            // non-empty data. `isEndOfStream` (captured above, before this mutation)
-                            // still drives the deadline-bounded drain loop's own exit condition below.
-                            bufferInfo.set(
-                                bufferInfo.offset,
-                                bufferInfo.size,
-                                bufferInfo.presentationTimeUs,
-                                bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv(),
-                            )
+                        if (isEndOfStream) eosFlaggedDataSamples++
+                        // Issue #347 observed that the S25's encoder sets BUFFER_FLAG_END_OF_STREAM
+                        // on the buffer holding its last real frame. MediaMuxer only gives that flag
+                        // meaning on an empty marker buffer, so it is stripped from real data here
+                        // and sent on its own marker below. `isEndOfStream` (captured above) still
+                        // drives this loop's exit.
+                        //
+                        // Issue #378: the timestamp is not passed through blindly either. A sample
+                        // whose pts does not advance makes MPEG4Writer mark the whole track
+                        // malformed, which only surfaces at stop() as "muxer would have stopped
+                        // already" and leaves a file with an empty sample table. See
+                        // MuxerTimestampSanitizer for why rewriting it is exact for AAC-LC.
+                        var codecPtsUs = bufferInfo.presentationTimeUs
+                        codecPtsOverrideForTest?.let {
+                            codecPtsUs = it(codecPtsUs)
+                            overriddenSamples++
                         }
+                        val ptsUs = timestamps.next(codecPtsUs, isEndOfStream)
+                        bufferInfo.set(
+                            bufferInfo.offset,
+                            bufferInfo.size,
+                            ptsUs,
+                            bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv(),
+                        )
                         muxer.writeSampleData(muxerTrackIndex, outputBuffer, bufferInfo)
-                        
-                        if (isEndOfStream) {
-                            val emptyInfo = MediaCodec.BufferInfo()
-                            emptyInfo.set(0, 0, bufferInfo.presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            try {
-                                muxer.writeSampleData(muxerTrackIndex, java.nio.ByteBuffer.allocate(0), emptyInfo)
-                            } catch (e: Exception) {
-                                // Ignore if it auto-stops here
-                            }
+                        if (inFinalDrain) finalDrainSamples++
+                    }
+                    if (isEndOfStream && muxerStarted && timestamps.samples > 0) {
+                        // Empty end-of-stream marker, sent whether the encoder put EOS on its last
+                        // real frame (the S25) or on a separate empty buffer (the emulator's
+                        // software encoder), so both take the same muxer path. Its timestamp is one
+                        // frame after the last sample, which MPEG4Writer turns into that sample's
+                        // duration. A failure here is recorded, not swallowed: it means the track
+                        // was already stopped, and stop() will then fail with this in its message.
+                        val markerInfo = MediaCodec.BufferInfo()
+                        markerInfo.set(0, 0, timestamps.endOfStreamMarkerPtsUs(), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        try {
+                            muxer.writeSampleData(muxerTrackIndex, java.nio.ByteBuffer.allocate(0), markerInfo)
+                            eosMarkerWritten = true
+                        } catch (e: IllegalStateException) {
+                            eosMarkerError = "${e.javaClass.simpleName}: ${e.message}"
+                        } catch (e: IllegalArgumentException) {
+                            eosMarkerError = "${e.javaClass.simpleName}: ${e.message}"
                         }
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
@@ -391,7 +465,12 @@ class StreamingAacWriter private constructor(
                     }
                 }
 
-                drainOutput(endOfStream = true, deadlineNanos = deadlineNanos)
+                inFinalDrain = true
+                try {
+                    drainOutput(endOfStream = true, deadlineNanos = deadlineNanos)
+                } finally {
+                    inFinalDrain = false
+                }
 
                 if (forceMuxerAlreadyStoppedBeforeExplicitStopForTest && muxerStarted) {
                     muxer.stop()
@@ -401,31 +480,25 @@ class StreamingAacWriter private constructor(
                     try {
                         muxer.stop()
                     } catch (e: IllegalStateException) {
-                        // Issue #347 / 357: to avoid swallowing genuine errors (e.g. disk full during stop),
-                        // verify the moov atom was actually written.
-                        var valid = false
-                        try {
-                            val extractor = android.media.MediaExtractor()
-                            if (outputFile != null) {
-                                extractor.setDataSource(outputFile.absolutePath)
-                            } else if (fileDescriptor != null) {
-                                // For Android versions before API 24, setDataSource(FileDescriptor) doesn't take offset/length
-                                // but we are on minSdk 29, so we can just use the standard one.
-                                // Actually, setDataSource(fileDescriptor) requires offset and length for safety sometimes, 
-                                // but simple fileDescriptor works if it's not a raw resource.
-                                extractor.setDataSource(fileDescriptor)
-                            }
-                            if (extractor.trackCount > 0) {
-                                valid = true
-                            }
-                            extractor.release()
-                        } catch (_: Exception) {}
-
-                        if (valid) {
-                            recoveredFromAlreadyStoppedMuxer = true
+                        // Issues #347/#357/#378: this message covers every non-OK status from the
+                        // native stop(), including a malformed track whose moov was written with
+                        // an empty sample table. Only an independent re-read that finds a
+                        // readable, complete audio track may turn this into success.
+                        muxerStarted = false
+                        val writtenSpanUs = if (timestamps.samples > 0) {
+                            timestamps.lastPtsUs - timestamps.firstPtsUs
                         } else {
-                            throw e
+                            0L
                         }
+                        val failure = MuxerStopFailurePolicy.resolve(
+                            stopError = e,
+                            probe = Mp4OutputProbe.probe(outputFile, fileDescriptor),
+                            writtenSpanUs = writtenSpanUs,
+                            frameDurationUs = timestamps.frameDurationUs,
+                            diagnostics = diagnostics(),
+                        )
+                        if (failure != null) throw failure
+                        recoveredFromAlreadyStoppedMuxer = true
                     }
                     muxerStarted = false
                 }
@@ -487,6 +560,9 @@ class StreamingAacWriter private constructor(
         private const val OP_TIMEOUT_MILLIS = 30_000L
         private const val FINISH_DEADLINE_MILLIS = 60_000L
         private const val ZERO_BUFFER_SIZE = 4096
+
+        /** Placeholder for [encoderName] when the platform reports no codec name at all. */
+        internal const val UNKNOWN_CODEC_NAME = "?"
 
         /** Default ~64 kbps per audio channel for AAC-LC. */
         const val BIT_RATE_PER_CHANNEL_BPS = 64_000

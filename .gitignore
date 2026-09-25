@@ -24,3 +24,8 @@ certificates/
 
 # WSL/NTFS metadata artifact left behind when a file is copied from Windows
 *:Zone.Identifier
+
+# Jekyll build output from pages.yml / local hotsite builds (#414)
+/_site/
+/docs/_site/
+/docs/.jekyll-cache/

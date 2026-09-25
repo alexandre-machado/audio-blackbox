@@ -150,12 +150,12 @@ class StreamingAacWriterTest {
                 assertEquals(sampleRateHz, decoded.sampleRateHz)
                 assertEquals(1, decoded.channelCount)
 
-                val requestedDurationUs = duration * 1000L
-                val frameToleranceUs = (2 * 1024 * 1_000_000L) / sampleRateHz
-                assertTrue(
-                    "arbitrary duration $duration ms declared container duration ${decoded.containerDurationUs}us " +
-                        "exceeds tolerance (requested ${requestedDurationUs}us, tolerance ${frameToleranceUs}us)",
-                    Math.abs(decoded.containerDurationUs - requestedDurationUs) <= frameToleranceUs,
+                assertDeclaredDurationCoversEncodedFrames(
+                    "arbitrary duration $duration ms",
+                    decoded.containerDurationUs,
+                    requestedDurationUs = duration * 1000L,
+                    sampleRateHz = sampleRateHz,
+                    muxedFrames = writer.muxedFrameCount,
                 )
 
                 val energyAtTone = GoertzelDetector.energyAt(decoded.pcm, toneHz, sampleRateHz, 1)
@@ -230,18 +230,15 @@ class StreamingAacWriterTest {
 
     @Test
     fun finish_recoversWhenNativeMuxerAlreadyStoppedBeforeExplicitStop() {
-        // Issue #347 -- a live recording on the owner's Galaxy S25 failed at finish() with
-        // `MediaMuxer.stop()` throwing "muxer would have stopped already": a hardware AAC encoder
-        // sets BUFFER_FLAG_END_OF_STREAM on the buffer carrying its last real encoded frame
-        // (instead of a separate empty marker buffer, as MediaMuxer#writeSampleData documents),
-        // which makes the *native* muxer auto-finalize out from under this class's own
-        // `muxerStarted` flag; finish()'s own explicit `muxer.stop()` then races an
-        // already-stopped muxer and throws. That hardware quirk cannot be produced
-        // deterministically from the software encoder available here, so this test uses the
-        // dedicated seam (`forceMuxerAlreadyStoppedBeforeExplicitStopForTest`) to reproduce the
-        // resulting state mismatch -- an already-stopped muxer at the exact point finish() calls
-        // stop() -- against the real StreamingAacWriter/MediaCodec/MediaMuxer objects, rather than
-        // a hand-built fixture standing in for them.
+        // Issue #347 -- covers the recovery path only: stop() throws after the file was already
+        // fully finalized (here via a second stop() on a stopped muxer), and finish() must accept
+        // it only because the independent re-read proves the file complete. Issue #378 corrected
+        // #347's premise: AOSP's muxer does not auto-stop on an EOS-flagged data buffer, and the
+        // S25 failure matches a malformed track (see MuxerTimestampSanitizer), which this seam does
+        // not model. That case is covered by
+        // finish_laterFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile (writer path)
+        // and bareMuxer_finalSamplePtsRegression_stopThrows_probeRejects_sanitizedSequenceIsAccepted
+        // (the exact production artifact).
         val sampleRateHz = 16_000
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val outFile = File.createTempFile("stream_aac_recover_", ".m4a", cacheDir)
@@ -267,6 +264,133 @@ class StreamingAacWriterTest {
             assertEquals(1, decoded.channelCount)
         } finally {
             outFile.delete()
+        }
+    }
+
+    @Test
+    fun finish_laterFramesStampedEarlierByEncoder_stillProducesCompleteDecodableFile() {
+        // Issue #378. AOSP MPEG4Writer marks a track malformed when a sample's timestamp goes
+        // backwards; stop() then fails with "muxer would have stopped already" and the moov is
+        // written with an empty sample table, i.e. an unplayable file. After most of the audio
+        // has been written, the seam stamps every further frame with pts 0: an encoder whose
+        // later frames are stamped earlier than the ones before them.
+        //
+        // (A first version applied the override only to frames flushed after end-of-stream, but
+        // CI's software encoder emits none -- the precondition below caught that on run
+        // 36063434655 -- so the override now starts at a point the test controls.)
+        //
+        // Oracle: with the writer's timestamp sanitizer in place every write and stop() succeed
+        // (no recovery path) and the file decodes to the full duration. With the sanitizer
+        // removed, the first regressing sample malforms the track and the next writeSampleData
+        // or stop() throws.
+        //
+        // What this does NOT prove: the emulator's software encoder is not the S25's encoder. It
+        // proves the writer survives this input on AOSP's muxer, not that this input is what the
+        // S25 produces. That is confirmed on the device by the MUXER_TIMESTAMP_CORRECTED audit
+        // entry ForwardRecordingEngine logs.
+        val sampleRateHz = 44_100
+        val channelCount = 2
+        val toneHz = 1000.0
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = channelCount)
+        val firstPartMillis = 1_500L
+        val secondPartMillis = 500L
+        val durationMillis = firstPartMillis + secondPartMillis
+        val outFile = File.createTempFile("stream_aac_pts_regress_", ".m4a", cacheDir)
+        try {
+            val writer = StreamingAacWriter(outFile, config)
+            writeToneChunks(writer, config, toneHz, durationMillis = firstPartMillis, chunkMillis = 50L)
+            writer.codecPtsOverrideForTest = { 0L }
+            // ~21 frames of input after the override is armed, far more than any AAC encoder's
+            // internal buffering, so frames must come out under it.
+            writeToneChunks(writer, config, toneHz, durationMillis = secondPartMillis, chunkMillis = 50L)
+
+            writer.finish()
+
+            assertTrue(
+                "precondition: the override must have acted on at least one frame " + writer.diagnostics(),
+                writer.overriddenSamplesForTest >= 1,
+            )
+            assertTrue("the regressing timestamps must have been rewritten", writer.timestampCorrections >= 1)
+            // @sec PR #415 info: the audit entry must name the encoder, so the S25's is identifiable.
+            assertTrue(
+                "encoder name must be recorded, got '${writer.encoderName}'",
+                writer.encoderName.isNotBlank() && writer.encoderName != StreamingAacWriter.UNKNOWN_CODEC_NAME,
+            )
+            assertTrue(
+                "diagnostics must carry the encoder name even after finish() released the codec: ${writer.diagnostics()}",
+                writer.diagnostics().contains("codec=${writer.encoderName}]"),
+            )
+            assertFalse(
+                "stop() must succeed outright, not via the recovery path: ${writer.diagnostics()}",
+                writer.recoveredFromMuxerAlreadyStopped,
+            )
+
+            val decoded = AacDecodeSupport.decode(outFile)
+            assertEquals(sampleRateHz, decoded.sampleRateHz)
+            assertEquals(channelCount, decoded.channelCount)
+            assertDeclaredDurationCoversEncodedFrames(
+                "pts-regression session",
+                decoded.containerDurationUs,
+                requestedDurationUs = durationMillis * 1000L,
+                sampleRateHz = sampleRateHz,
+                muxedFrames = writer.muxedFrameCount,
+            )
+            val energyAtTone = GoertzelDetector.energyAt(decoded.pcm, toneHz, sampleRateHz, channelCount)
+            assertTrue("expected tone energy in the decoded file, got $energyAtTone", energyAtTone > 50.0)
+        } finally {
+            outFile.delete()
+        }
+    }
+
+    @Test
+    fun outputProbe_fdTarget_readsFromStartRegardlessOfFilePosition_andRejectsBrokenFiles() {
+        // Issue #378: the recovery re-read must work on a MediaStore-style descriptor whose shared
+        // file position is wherever the muxer left it, and must reject a file that is not a
+        // complete recording.
+        val sampleRateHz = 16_000
+        val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
+        val good = File.createTempFile("stream_aac_probe_good_", ".m4a", cacheDir)
+        val truncated = File.createTempFile("stream_aac_probe_trunc_", ".m4a", cacheDir)
+        val zeros = File.createTempFile("stream_aac_probe_zero_", ".m4a", cacheDir)
+        val stopError = IllegalStateException("simulated stop() failure")
+        // 3 s at 16 kHz is ~47 frames of 64 ms. A conservative written span (a few frames short
+        // of 3 s) so this checks the probe, not the encoder's exact frame count.
+        val frameUs = 64_000L
+        val writtenSpanUs = 2_800_000L
+        try {
+            StreamingAacWriter(good, config).use { writer ->
+                writeToneChunks(writer, config, 1000.0, durationMillis = 3_000L, chunkMillis = 40L)
+                writer.finish()
+            }
+
+            java.io.RandomAccessFile(good, "rw").use { raf ->
+                raf.seek(raf.length()) // where a muxer's dup() of the descriptor would leave it
+                val probe = Mp4OutputProbe.probe(outputFile = null, fileDescriptor = raf.fd)
+                assertTrue("valid file via fd must probe indexed, got $probe", probe is OutputProbeResult.Indexed)
+                assertEquals(
+                    "a complete file must be accepted, probe said $probe",
+                    null,
+                    MuxerStopFailurePolicy.resolve(stopError, probe, writtenSpanUs, frameUs, diagnostics = ""),
+                )
+            }
+
+            val bytes = good.readBytes()
+            truncated.writeBytes(bytes.copyOf(bytes.size / 2))
+            java.io.RandomAccessFile(truncated, "r").use { raf ->
+                val probe = Mp4OutputProbe.probe(outputFile = null, fileDescriptor = raf.fd)
+                assertTrue(
+                    "a half-truncated file must not be accepted, probe said $probe",
+                    MuxerStopFailurePolicy.resolve(stopError, probe, writtenSpanUs, frameUs, diagnostics = "") != null,
+                )
+            }
+
+            zeros.writeBytes(ByteArray(bytes.size))
+            val zeroProbe = Mp4OutputProbe.probe(outputFile = zeros, fileDescriptor = null)
+            assertTrue("a zero-filled file must probe not indexed, got $zeroProbe", zeroProbe is OutputProbeResult.NotIndexed)
+        } finally {
+            good.delete()
+            truncated.delete()
+            zeros.delete()
         }
     }
 
@@ -303,6 +427,51 @@ class StreamingAacWriterTest {
         }
     }
 
+    /**
+     * The container's declared duration, modelled on what the encoder and muxer actually do rather
+     * than a symmetric tolerance around the requested length. Two separate checks:
+     *
+     * **Frames the encoder emitted ([muxedFrames], read from the writer, not inferred).** AAC-LC
+     * frames hold 1024 samples, so `samplesFed` occupies `ceil(samplesFed / 1024)` frames. The
+     * encoder may add up to [MAX_CODEC_OVERHEAD_FRAMES] priming/flush frames on top (measured on
+     * the S25's `c2.android.aac.encoder`, PR #415: 5 600 samples -> 8 frames, 32 000 -> 34,
+     * 88 200 -> 89, exactly `ceil + 2`), and it may hold back a sub-frame tail it never pads out,
+     * so the floor is `floor(samplesFed / 1024)`. More than the upper bound means the writer is
+     * inventing frames; fewer than the floor means whole frames of fed audio were lost.
+     *
+     * **What the muxer declares for those frames.** Either all of them (`frames x 1024 / rate`,
+     * the S25's Android 16 MPEG4Writer) or the pts span without the last frame's own duration
+     * (`(frames - 1) x 1024 / rate`, what the API 30 CI emulator declared on PR #415). Anything
+     * outside that one-frame window means the container disagrees with what was muxed. A quarter
+     * frame of slack absorbs per-sample timescale rounding.
+     *
+     * The old check, `abs(declared - requested) <= 2 frames`, failed the S25 (which adds 2 frames
+     * plus the rounded-up partial frame) and would have passed a file missing two frames of audio.
+     */
+    private fun assertDeclaredDurationCoversEncodedFrames(
+        label: String,
+        declaredUs: Long,
+        requestedDurationUs: Long,
+        sampleRateHz: Int,
+        muxedFrames: Int,
+    ) {
+        val samplesFed = requestedDurationUs * sampleRateHz / 1_000_000L
+        val minFrames = samplesFed / AAC_FRAME_SAMPLES
+        val maxFrames = (samplesFed + AAC_FRAME_SAMPLES - 1) / AAC_FRAME_SAMPLES + MAX_CODEC_OVERHEAD_FRAMES
+        assertTrue(
+            "$label: encoder emitted $muxedFrames frames for $samplesFed samples; expected $minFrames..$maxFrames",
+            muxedFrames.toLong() in minFrames..maxFrames,
+        )
+        fun framesUs(frames: Long) = frames * AAC_FRAME_SAMPLES * 1_000_000L / sampleRateHz
+        val slackUs = framesUs(1) / 4
+        val lowUs = framesUs(muxedFrames - 1L) - slackUs
+        val highUs = framesUs(muxedFrames.toLong()) + slackUs
+        assertTrue(
+            "$label: declared ${declaredUs}us for $muxedFrames muxed frames; expected ${lowUs}..${highUs}us",
+            declaredUs in lowUs..highUs,
+        )
+    }
+
     private fun assertIncrementalRoundTrip(
         sampleRateHz: Int,
         channelCount: Int,
@@ -313,20 +482,22 @@ class StreamingAacWriterTest {
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = channelCount)
         val outFile = File.createTempFile("stream_aac_roundtrip_", ".m4a", cacheDir)
         try {
-            StreamingAacWriter(outFile, config).use { writer ->
+            val muxedFrames = StreamingAacWriter(outFile, config).use { writer ->
                 writeToneChunks(writer, config, toneHz, durationMillis, chunkMillis)
                 writer.finish()
+                writer.muxedFrameCount
             }
 
             val decoded = AacDecodeSupport.decode(outFile)
             assertEquals(sampleRateHz, decoded.sampleRateHz)
             assertEquals(channelCount, decoded.channelCount)
 
-            val requestedDurationUs = durationMillis * 1000L
-            val frameToleranceUs = (2 * 1024 * 1_000_000L) / sampleRateHz
-            assertTrue(
-                "declared duration ${decoded.containerDurationUs}us too far from requested ${requestedDurationUs}us",
-                Math.abs(decoded.containerDurationUs - requestedDurationUs) <= frameToleranceUs,
+            assertDeclaredDurationCoversEncodedFrames(
+                "round trip ${sampleRateHz}Hz/${channelCount}ch",
+                decoded.containerDurationUs,
+                requestedDurationUs = durationMillis * 1000L,
+                sampleRateHz = sampleRateHz,
+                muxedFrames = muxedFrames,
             )
 
             val bytesPerFrame = 2 * channelCount
@@ -382,5 +553,14 @@ class StreamingAacWriterTest {
         writer.finish()
         org.junit.Assert.assertTrue("output file must exist", outFile.exists())
         org.junit.Assert.assertTrue("output file must be non-empty", outFile.length() > 0)
+    }
+
+    private companion object {
+        /** Samples per AAC-LC access unit. */
+        const val AAC_FRAME_SAMPLES = 1024L
+
+        /** Priming + end-of-stream flush frames an AAC-LC encoder adds beyond the fed PCM
+         * (measured 2 on the S25's `c2.android.aac.encoder`; see [assertDeclaredDurationCoversEncodedFrames]). */
+        const val MAX_CODEC_OVERHEAD_FRAMES = 2L
     }
 }
