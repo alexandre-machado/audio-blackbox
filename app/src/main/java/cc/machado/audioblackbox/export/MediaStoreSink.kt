@@ -94,17 +94,10 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
         val uri = resolver.insert(collection, values)
             ?: throw IOException("MediaStore insert rejected for $displayName")
 
-        val pfd = try {
-            resolver.openFileDescriptor(uri, "rwt")
-                ?: resolver.openFileDescriptor(uri, "rw")
-                ?: throw IOException("openFileDescriptor returned null for $uri")
-        } catch (e: IOException) {
-            resolver.delete(uri, null, null)
-            throw e
-        } catch (e: SecurityException) {
-            resolver.delete(uri, null, null)
-            throw IOException("openFileDescriptor denied for $uri", e)
-        }
+        // This first descriptor exists only to create the file on disk. Clearing IS_PENDING on a
+        // row whose file does not exist yet drops the row (measured on the S25, PR #415), so the
+        // file has to be there before the early commit below.
+        val creatingPfd = openWritable(resolver, uri)
 
         // Early commit (issue #53): clear IS_PENDING immediately so the recording in progress is
         // visible in MediaStore and Gallery while still being written.
@@ -112,10 +105,26 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
             val earlyCommit = ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }
             resolver.update(uri, earlyCommit, null, null)
         } catch (e: Exception) {
-            try { pfd.close() } catch (_: Exception) {}
+            try { creatingPfd.close() } catch (_: Exception) {}
             resolver.delete(uri, null, null)
             throw IOException("Failed to early-commit MediaStore row for $uri", e)
         }
+
+        // Issue #378: the early commit *renames* the file on disk, from
+        // `.pending-<expiry>-<name>` to `<name>`. A descriptor opened before that rename keeps
+        // accepting write(), but fstat() and ftruncate() on it fail with EIO on the S25's FUSE
+        // (open mode makes no difference: "rw" and "rwt" behave the same). MediaMuxer.stop() needs
+        // both: it ftruncates its pre-allocated tail, and fails with ERROR_IO (-1004) when that
+        // returns EIO, which the JNI reports as "muxer would have stopped already". So the
+        // descriptor the muxer writes through is opened after the rename, on the published file.
+        val pfd = try {
+            openWritable(resolver, uri)
+        } catch (e: IOException) {
+            // openWritable has already deleted the row.
+            try { creatingPfd.close() } catch (_: Exception) {}
+            throw e
+        }
+        try { creatingPfd.close() } catch (_: Exception) {}
 
         return object : StreamingExportTarget {
             private var isClosed = false
@@ -292,6 +301,20 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
             }
         }
     }
+
+    /** Opens [uri] read-write, deleting the row and throwing [IOException] if that fails. */
+    private fun openWritable(resolver: android.content.ContentResolver, uri: Uri): ParcelFileDescriptor =
+        try {
+            resolver.openFileDescriptor(uri, "rwt")
+                ?: resolver.openFileDescriptor(uri, "rw")
+                ?: throw IOException("openFileDescriptor returned null for $uri")
+        } catch (e: IOException) {
+            resolver.delete(uri, null, null)
+            throw e
+        } catch (e: SecurityException) {
+            resolver.delete(uri, null, null)
+            throw IOException("openFileDescriptor denied for $uri", e)
+        }
 
     /** See class doc: `Recordings/` is only a valid `MediaStore` root from API 31; API 29-30 fall
      * back to `Music/Blackbox/`. Decided from the runtime OS, not `targetSdk`/a build flag. */

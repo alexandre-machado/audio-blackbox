@@ -680,9 +680,9 @@ class ForwardRecordingEngine(
             }
             if (writer is StreamingAacWriter && writer.timestampCorrections > 0) {
                 // Issue #378: the encoder handed out timestamps the muxer would have rejected, and
-                // the writer rewrote them. The recording is fine; this entry is how the owner's
-                // device confirms (or refutes) that this was the S25's failure trigger, since no
-                // test tier here runs its encoder.
+                // the writer rewrote them. The recording is fine. This is defence in depth: the
+                // S25's actual #378 failure was the stale MediaStore descriptor (see
+                // MediaStoreSink.openStreaming), and its encoder needed no corrections.
                 logExportError(
                     errorLogFile,
                     clock,

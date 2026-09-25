@@ -12,11 +12,17 @@ package cc.machado.audioblackbox.export
  * track, still writes a `moov` box, but `Track::writeStblBox()` leaves the sample table empty for
  * a malformed track (no `stsd`/`stts`/`stsz`/`stco`), and the JNI layer turns the non-OK status
  * into `IllegalStateException("Error during stop(), muxer would have stopped already")`. The
- * resulting file holds all of the encoded audio in `mdat` with no index to find it. That matches
- * both S25 symptoms: #357's unplayable 90-minute file (while #347's catch swallowed the error) and
- * #378's `WRITE_FAILED` (once #358's re-read correctly rejected it). The mechanism above is read
- * from AOSP source; that a non-advancing timestamp is what the S25's encoder emits is inferred,
- * not observed, and is what the `MUXER_TIMESTAMP_CORRECTED` audit entry exists to confirm.
+ * resulting file holds all of the encoded audio in `mdat` with no index to find it.
+ *
+ * **This was not the S25's failure, and it stays as defence in depth.** Tier 2 on PR #415 ran the
+ * S25's encoder (`c2.android.aac.encoder`) and this sanitizer corrected nothing there
+ * (`ptsCorrections=0`); the encoder already repairs overlapping input timestamps itself. The
+ * S25's `stop()` failure was `ERROR_IO` (-1004), not `ERROR_MALFORMED` (-1007): MPEG4Writer's
+ * `ftruncate` hit EIO on a MediaStore descriptor opened before the early commit renamed the file
+ * (see [MediaStoreSink.openStreaming]). The JNI reports every non-OK `stop()` with the same
+ * "muxer would have stopped already" text, which is how the two looked alike. The malformed-track
+ * shape is still real on AOSP's muxer (`BareMuxerStopFailureTest` builds it on the device), so an
+ * encoder that does regress timestamps is still covered.
  *
  * A malformation well before the end would make a following `writeSampleData` throw instead ("writeSampleData returned an error"), not `stop()`. The only
  * write whose failure `StreamingAacWriter` used to swallow is the empty end-of-stream marker that
