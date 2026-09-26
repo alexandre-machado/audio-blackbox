@@ -1,5 +1,5 @@
-What's new in version 0.3.2:
-• Streamlined Gallery UI: Compact Material 3 icon actions (Play/Pause, Share, Delete) aligned in the header row
-• Reduced recording card height and enhanced playback seeker controls
-• Modernized interactive documentation and landing page
-• Purely local offline processing, zero telemetry, and complete privacy
+What's new:
+• Consecutive saves no longer overlap: each save starts where the previous one ended
+• The buffer limit is now worked out for your phone and quality preset, and shown in Settings
+• Home-screen widget to start or stop recording with one tap
+• Still fully offline: no internet permission, no analytics

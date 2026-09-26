@@ -22,7 +22,7 @@
 
 **Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio in device RAM (**at least 5 minutes, in 5-minute steps, with no fixed upper bound** -- the ceiling is sized automatically per device and per quality preset from how much memory it can safely hold) and writes to storage **only when you explicitly ask it to**.
 
-Nothing touches your disk or leaves your phone until you press save. You can capture important conversations, ideas, or unexpected events *after* they have already happened.
+Nothing touches your disk until you press save, and the app has no internet permission, so it never uploads anything; saved files go to your phone's `Recordings/Blackbox` folder, where you control them. It is made for the moments you only know mattered *after* they happened: the riff you just played, an idea you said out loud, what was just agreed in a meeting you were part of, or a family moment.
 
 ---
 
@@ -37,7 +37,7 @@ Nothing touches your disk or leaves your phone until you press save. You can cap
 ## ✨ Key Features
 
 - 🎯 **Two Primary Capture Modes**:
-  - **Save Recent Past (Lookback)**: Instantly snapshot everything currently buffered from the memory ring buffer into an AAC (`.m4a`) file. One action, always the whole buffer -- the old 5/15/30 selector was retired in #121 because it promised windows the buffer might not hold.
+  - **Save Recent Past (Lookback)**: Write the buffered audio since your last save (the whole buffer the first time) from the memory ring buffer into an AAC (`.m4a`) file. One action, no window to pick -- the old fixed-window selector was retired in #121 because it promised windows the buffer might not hold. Since #410 a successful save advances the buffer's export floor, so the next save starts where the previous file ended and consecutive saves never overlap.
   - **Continuous Live Recording**: Start a forward live recording that automatically preserves the preceding buffer timeline so nothing is lost.
 - 🎚️ **Selectable Audio Quality**: Three presets in Settings -- Voice (16 kHz mono), Balanced (32 kHz mono), and High Fidelity (44.1 kHz stereo) -- each trading sample rate/channels for its own device-derived retention ceiling.
 - 📊 **Real-time Live VU Meter**: 20-capsule reactive microphone input level indicator built on Material 3 components, styled with the app's avionics/cockpit brand theme (see `AGENTS.md` §5).
@@ -73,7 +73,7 @@ Measured live on physical **Samsung Galaxy S25 (`SM-S931B`, Android 16 / API 36)
 | Metric / Resource | Background Capture (Screen Off) | Active Foreground (Dashboard UI) | Operational Invariant |
 | :--- | :--- | :--- | :--- |
 | **Battery Drain Rate** | **~1.0% – 1.5% / hour** (~45–60 mA) | ~7.0% – 9.0% / hour (display-bound) | Over **65+ hours** continuous recording autonomy |
-| **Volatile Audio Buffer RAM** | **54.9 MB** (30 min retention window) | **54.9 MB** (30 min retention window) | Deterministic pre-allocation; zero mid-flight reallocations |
+| **Volatile Audio Buffer RAM** | **54.9 MB** (30 min retention window) | **54.9 MB** (30 min retention window) | Pre-allocated up front; resized only on a settings change, behind a memory-budget check (#223, #272) |
 | **JVM Heap Footprint** | **~7.3 MB resident** (256 MB max budget) | **~16.3 MB resident** (256 MB max budget) | Minimal GC pressure; ring buffer writer allocates zero objects |
 | **Storage Disk I/O** | **0 KB/s** (Zero disk writes) | **0 KB/s** (Zero disk writes) | Pure volatile RAM; zero flash memory wear |
 | **CPU Utilization** | **< 1.0% CPU** | ~3.5% – 4.5% CPU (60fps VU meter) | Blocking native `AudioRecord` thread with zero busy-waiting |
@@ -81,16 +81,16 @@ Measured live on physical **Samsung Galaxy S25 (`SM-S931B`, Android 16 / API 36)
 ---
 
 
-## 📚 Engineering Studies: Deterministic Memory Limits
+## 📚 Engineering Studies: Device-Derived Memory Limits
 
-The Audio Blackbox memory limit is governed by strict, pre-calculated bounds rather than reacting dynamically to Android's memory pressure APIs (`onTrimMemory`). This is a deliberate engineering decision:
+The buffer's ceiling is computed from the device's own memory numbers rather than reacting to Android's memory-pressure callbacks (`onTrimMemory`), and the buffer is never grown behind the user's back. This is a deliberate engineering decision:
 
 1. **Memory Warnings are Blind to Process Limits**: The OS broadcasts memory pressure warnings when the *entire system* is low on RAM. However, every Android application operates under a strict per-process limit (the Dalvik Heap Limit). If the app suddenly exceeds its own quota, the runtime immediately throws an `OutOfMemoryError` and crashes the app, without ever broadcasting an `onTrimMemory` warning.
-2. **The 2x Re-allocation Trap**: Dynamically expanding an array in Kotlin requires allocating a new, larger array before garbage-collecting the old one. If we tried to "stretch" a 100 MB audio buffer to 150 MB, the app would briefly need 250 MB of contiguous memory, causing an instant fatal crash on most devices.
-3. **The Safe 85% Ceiling**: Audio Blackbox queries the hard limit at startup (`Runtime.getRuntime().maxMemory()`), subtracts the live footprint, and caps the buffer safely at **85%** of the available headroom. We also reserve a **15%** overhead strictly for the export process.
-4. **The Discarded Chunked Array Alternative**: The only way to grow a buffer without a $2\times$ memory copy is to use a segmented "chunked" array (e.g., a linked list of 1 MB byte arrays). This was deliberately discarded because allocating new chunks dynamically during active capture violates the zero-allocation hot-path rule. Dynamic allocations wake the Garbage Collector, causing unpredictable thread pauses that lead to hardware buffer overflows and permanently dropped audio frames.
+2. **A Per-Device, Per-Preset Ceiling**: `DeviceMemoryBudget` (#298) caps total heap use at **85%** of `Runtime.getRuntime().maxMemory()`, subtracts the app's live heap footprint, also caps against 85% of the system's available memory, and divides what is left by a measured **1.15x** export peak-to-buffer ratio. The result, floored to 5-minute steps and never below 5 minutes, is the largest window the stepper offers for the chosen quality preset. It is recomputed on every read, so a heavier release or a tighter device clamps a stored value down (with a visible notice) instead of crashing.
+3. **Chunked Store, Resized Chunk by Chunk**: Growing one flat array means allocating the new, larger array while the old one is still alive, so stretching a 100 MB buffer to 150 MB would briefly need 250 MB. `RingBuffer` avoids that by keeping its audio in 1 MiB chunks, all allocated when the buffer is built. When you change the window or preset during capture, `RingBuffer.resize` (#223) keeps the audio already buffered and copies it chunk by chunk, dropping each old chunk as soon as it has been copied out, so the peak is about the larger of the two sizes plus a chunk, not old plus new (#277). Before allocating anything it still checks an injected `MemoryBudget` against the real net growth (new minus old, plus two chunks of slack) and refuses (`ResizeOutcome.Refused`, nothing allocated, the current buffer untouched) when that would not fit (#272). A refusal surfaces as a visible "Setting not applied" error, never a crash and never a silently changed setting.
+4. **No Allocation on the Capture Path**: Chunks are allocated up front (at construction, or inside an explicit resize), never on the capture hot path. Allocating while capturing would wake the Garbage Collector, causing unpredictable thread pauses that lead to hardware buffer overflows and permanently dropped audio frames.
 
-This guarantees a **zero-risk recording loop**: the app never reallocates memory on the fly, never triggers Garbage Collector pauses that drop audio frames, and prevents crashes at the exact moment the user presses "Save".
+The result: the capture loop itself never allocates, a reallocation only ever happens on an explicit settings change and only when the memory budget allows it, and the save path keeps the headroom it needs at the exact moment the user presses "Save".
 
 ## 📲 Download
 
@@ -129,7 +129,7 @@ For testing principles, non-vacuous mutation rules, and architecture invariants,
 
 ## ⚖️ Legal & Recording Regulations
 
-Recording conversations may require one-party or all-party consent depending on your jurisdiction. Audio Blackbox is a tool; you are solely responsible for ensuring your use complies with local laws and privacy regulations.
+Use Audio Blackbox for your own conversations and ideas. Recording conversations may require one-party or all-party consent depending on your jurisdiction, so check your local recording laws before you record. Audio Blackbox is a tool; you are solely responsible for ensuring your use complies with local laws and privacy regulations.
 
 ---
 
