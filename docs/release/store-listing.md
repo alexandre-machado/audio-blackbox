@@ -6,83 +6,21 @@ Comprehensive store listing copy, graphic assets specification, and policy decla
 
 ## 1. Store Listing Copy (Bilingual)
 
-### English (`en-US`)
+The listing text lives in `distribution/metadata/android/{en-US,pt-BR}/` and is pushed to Play by `scripts/ci/sync-play-store-metadata.py`. Those files are the source of truth; this section only records the constraints and the current title and short description, so the long copy is not duplicated here and left to drift (issue #419 found the old copy here still promising a "5 to 60 minutes" window).
 
-#### App Title (≤ 30 characters)
-```text
-Audio Blackbox
-```
-*(14 / 30 characters)*
+| Field | Play limit | `en-US` | `pt-BR` |
+| :--- | :--- | :--- | :--- |
+| Title (`title.txt`) | 30 | `Audio Blackbox: Past Recorder` (29) | `Audio Blackbox: Gravador` (24) |
+| Short description (`short_description.txt`) | 80 | `Save the last minutes you just heard. Stays on your phone, no internet access.` (78) | `Salve os minutos que você acabou de ouvir. Fica no seu celular, sem internet.` (77) |
+| Full description (`full_description.txt`) | 4000 | see file | see file |
 
-#### Short Description (≤ 80 characters)
-```text
-Continuous ambient audio buffer. Save recent audio anytime.
-```
-*(59 / 80 characters)*
+Rules the copy must keep (issue #419):
 
-#### Full Description (≤ 4000 characters)
-```text
-Audio Blackbox works like a dashcam, but for sound. It keeps a rolling buffer of recent ambient audio in memory—never writing anything to storage until you choose to save it.
-
-HOW IT WORKS
-• Continuous In-Memory Buffer: When recording is enabled, the app continuously buffers the last few minutes of audio (5 to 60 minutes, configured by you in Settings) entirely in device RAM.
-• Overwrite Loop: As new audio arrives, the oldest audio in the buffer is automatically overwritten.
-• Instant Single-Tap Save: If a conversation, meeting note, sudden inspiration, or incident just happened, tap "Save recent audio" to immediately export the entire buffered window to standard M4A (AAC) format.
-• Forward Continuous Recording: Need to record continuously from now on? Start forward recording to write directly to an audio file.
-
-PRIVACY BY DESIGN
-• 100% On-Device: Audio stays strictly inside your device's memory.
-• Zero Network Egress: Audio Blackbox contains no internet permissions, no telemetry trackers, and no external servers.
-• User Controlled: You start and stop capture explicitly via the dashboard toggle. A persistent foreground notification remains visible the entire time recording is active.
-
-SMART INTEGRATION & GALLERY
-• Telephony Call Courtesy: Capture automatically pauses during phone calls and seamlessly resumes when the call ends, filling call gaps with silence to keep timestamps accurate.
-• In-App Gallery: Play back saved recordings, seek through waveforms, share audio to other apps, or delete recordings directly.
-• Material 3 Design: Native, dynamic color theming that respects your Android system aesthetic and dark mode.
-
-LEGAL & CONSENT NOTICE
-Recording conversations may require the consent of all parties involved depending on applicable laws in your jurisdiction. You are solely responsible for ensuring your use of Audio Blackbox complies with all relevant local, state, and national laws.
-```
-
----
-
-### Portuguese (Brazil) (`pt-BR`)
-
-#### Nome do App (≤ 30 caracteres)
-```text
-Audio Blackbox
-```
-*(14 / 30 caracteres)*
-
-#### Descrição Breve (≤ 80 caracteres)
-```text
-Gravação contínua em memória. Salve o áudio recente a qualquer momento.
-```
-*(71 / 80 caracteres)*
-
-#### Descrição Completa (≤ 4000 caracteres)
-```text
-O Audio Blackbox funciona como uma câmera veicular (dashcam), mas para som. Ele mantém um buffer circular contínuo do áudio ambiente recente na memória RAM — sem gravar nada no armazenamento até que você decida salvar.
-
-COMO FUNCIONA
-• Buffer Contínuo em Memória: Com a gravação ativa, o aplicativo retém os últimos minutos de áudio (de 5 a 60 minutos, configuráveis em Configurações) exclusivamente na memória RAM.
-• Substituição Automática: Conforme novo áudio é capturado, o áudio mais antigo é automaticamente descartado do buffer.
-• Salvamento Instantâneo com Um Toque: Se uma conversa, ideia importante ou momento marcante acabou de acontecer, toque em "Salvar o passado" para exportar imediatamente todo o buffer recente em formato padrão M4A (AAC).
-• Gravação Contínua para Frente: Precisa gravar continuamente a partir de agora? Inicie a gravação contínua direta para um arquivo de áudio.
-
-PRIVACIDADE POR DESIGN
-• 100% no Dispositivo: O áudio nunca sai do seu celular.
-• Zero Acesso à Rede: O Audio Blackbox não possui permissão de internet, não utiliza servidores externos e não realiza telemetria.
-• Controle Total do Usuário: Você inicia e interrompe a captura diretamente pelo interruptor no painel. Uma notificação persistente permanece visível durante todo o tempo em que a captura estiver ativa.
-
-INTEGRAÇÃO INTELIGENTE E GALERIA
-• Pausa em Chamadas Telefônicas: A captura pausa automaticamente durante ligações e retorna assim que a chamada é encerrada, preenchendo a lacuna com silêncio para manter o sincronismo temporal exato.
-• Galeria Integrada: Ouça suas gravações salvas, navegue pela reprodução, compartilhe arquivos com outros apps ou exclua gravações com facilidade.
-• Design Material 3: Visual limpo com suporte a cores dinâmicas do sistema e modo escuro nativo do Android.
-
-AVISO LEGAL E DE CONSENTIMENTO
-A gravação de conversas pode exigir o consentimento de todos os participantes, conforme as leis vigentes na sua jurisdição. O uso do aplicativo em conformidade com as leis aplicáveis é de responsabilidade do usuário.
-```
+- **Truthful to the shipped app.** The buffer is at least 5 minutes, in 5-minute steps, with no fixed maximum: the ceiling is computed per device and per quality preset (`DeviceMemoryBudget`, #298). Save always exports the whole buffer (#121), and the next save starts where the previous one ended (#410). Export is AAC (`.m4a`). The merged manifest has no `INTERNET` permission (`ManifestPermissionSecurityTest`). Never quote a fixed set of windows or a fixed maximum.
+- **Use cases, in this order:** musicians and songwriters, ideas and thinking out loud, meetings and agreements the user is part of, family moments.
+- **Never** use "secret", "stealth", "hidden", "spy" or "record without them knowing"; never suggest recording conversations the user is not part of; never claim "court-admissible", "legal evidence" or "legal everywhere".
+- **Do** say "your own conversations and ideas", mention the visible notification while recording, say the audio stays on the phone, and tell users to check their local recording laws. Keep the consent disclaimer in both languages.
+- Play format rules: no ranking claims ("#1", "best"), no emoji, no ALL CAPS, no keyword stuffing. EN and PT-BR are equivalent in content, not literal translations.
 
 ---
 
@@ -120,7 +58,7 @@ Because `targetSdk` is 36, Google Play requires a specific declaration for `FORE
 
 - **Use case selection**: `Background Audio Access / Voice recording`.
 - **Functionality Description**:
-  > Audio Blackbox provides a continuous rolling audio buffer in device RAM (user-configured between 5 to 60 minutes), operating like an audio dashcam. The user explicitly controls the service via a prominent switch on the dashboard and persistent system notification. When the user taps 'Save recent audio', the recent in-memory buffer is exported to device storage. If the foreground service were stopped, the in-memory rolling buffer would be immediately lost, preventing the user from retrieving recently elapsed audio.
+  > Audio Blackbox provides a continuous rolling audio buffer in device RAM (user-configured in 5-minute steps from a 5-minute minimum up to a ceiling the app computes from the device's available memory), operating like an audio dashcam. The user explicitly controls the service via a prominent switch on the dashboard and persistent system notification. When the user taps 'Save recent audio', the recent in-memory buffer is exported to device storage. If the foreground service were stopped, the in-memory rolling buffer would be immediately lost, preventing the user from retrieving recently elapsed audio.
 - **Demo Video Requirement**:
   > A short video recorded on a real device or emulator showing:
   > 1. User launching the app and toggling the recording engine ON.
