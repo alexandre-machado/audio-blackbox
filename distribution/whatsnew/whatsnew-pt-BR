@@ -1,5 +1,5 @@
-Novidades da versão 0.3.2:
-• Galeria modernizada com botões compactos de ícones (Reproduzir/Pausar, Compartilhar, Excluir) alinhados no cabeçalho
-• Altura reduzida dos cartões de áudio e controle aprimorado da barra de progresso
-• Documentação e hotsite interativo atualizados
-• Processamento 100% local, zero telemetria e privacidade total
+Novidades:
+• Salvamentos seguidos não se repetem mais: cada um começa onde o anterior terminou
+• O limite do buffer agora é calculado para o seu aparelho e preset de qualidade, e aparece nos Ajustes
+• Widget na tela inicial para ligar ou desligar a gravação com um toque
+• Continua 100% offline: sem permissão de internet, sem analytics

@@ -1,11 +1,31 @@
-Audio Blackbox acts as a true audio black box for your day-to-day life.
+Audio Blackbox keeps the last minutes of sound in your phone's memory, so you can save something after it happened. Played a riff you want to keep? Said an idea out loud? Agreed on something in a meeting you were part of? Tap Save and those minutes become an audio file.
 
-It records continuously in a rolling circular buffer stored 100% in your device's RAM (5, 15, or 30 minutes). When something important happens, you can retroactively save the audio you just heard or start a forward recording without losing context.
+Nothing is written to storage until you tap Save, and the app has no internet permission, so your audio stays on your phone.
 
-KEY FEATURES:
-• RAM-Only Circular Buffer: Audio is written to disk storage only when you explicitly tap to save.
-• Save the Past: Retroactively export the last 5, 15, or 30 minutes of captured audio with a single tap.
-• Continuous Forward Recording: Keep recording seamlessly while preserving the historical moments leading up to it.
-• Smart Interruption Handling: Automatically pauses and resumes during phone calls while preserving timeline alignment.
-• Integrated Offline Gallery: Listen, seek, share, and manage your saved recordings with an embedded native player.
-• 100% Private & Secure: Zero cloud uploads, zero remote transcription, zero ads, and fully auditable open source architecture.
+Made for
+• Musicians and songwriters: keep the riff or melody you just played, without having pressed record first.
+• Ideas and thinking out loud: save the thought before it slips away.
+• Meetings and agreements you are part of: keep what was just agreed.
+• Family moments: the first word, the funny line, the song at the dinner table.
+
+How it works
+• Turn on continuous recording. A visible notification stays up the whole time the app is recording.
+• Audio goes into a rolling buffer in RAM. When the buffer is full, the oldest audio is replaced by the newest.
+• The buffer is at least 5 minutes, set in 5-minute steps. There is no fixed maximum: the app works out how much your phone can safely hold for the quality preset you picked, and shows that limit in Settings.
+• Save writes everything in the buffer to an AAC (.m4a) file. The next save starts where the previous one ended, so your files never overlap.
+• Live starts a recording that keeps the buffered past and continues until you stop it.
+
+Features
+• Three quality presets: Voice (16 kHz mono, the longest buffer), Balanced (32 kHz mono) and High fidelity (44.1 kHz stereo, which can use more than one microphone on phones that have them). Higher quality uses more memory per minute, so the buffer gets shorter.
+• Home-screen widget to start or stop recording with one tap.
+• Save, Live and Stop right from the notification.
+• Pauses when another app takes the microphone, such as a phone call, and resumes on its own once it is free.
+• Built-in player to listen, seek, share and delete your saved recordings.
+
+Privacy
+• No internet permission in the app. No account, no ads, no analytics, no cloud.
+• Audio stays in memory until you save it. Saved files stay on your phone, in Recordings/Blackbox (Music/Blackbox on Android 10 and 11).
+• Free and open source under GPL-3.0, actively maintained, with the full source code on GitHub.
+
+Record responsibly
+Use Audio Blackbox for your own conversations and ideas. Recording other people may require their consent, and the rules differ between countries and states. Check your local recording laws before you record. You are responsible for how you use the app.

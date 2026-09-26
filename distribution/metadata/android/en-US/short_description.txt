@@ -1,1 +1,1 @@
-Audio blackbox: record continuously and save past moments on demand.
+Save the last minutes you just heard. Stays on your phone, no internet access.
