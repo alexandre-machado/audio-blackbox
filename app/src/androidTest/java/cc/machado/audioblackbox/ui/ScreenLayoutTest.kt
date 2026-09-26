@@ -937,7 +937,39 @@ class ScreenLayoutTest {
                     "label's ($cockpitHeight) in the same bar.",
                 height <= cockpitHeight * 1.5f,
             )
+            // Issue #420: the two checks above cannot see a label the bar *clips* rather than
+            // wraps -- a clipped label keeps its single-line height and stays inside the window.
+            // Mutation run on PR #423 showed exactly that: an overlong German label passed both.
+            // The text layout itself is the signal: one line, laid out at least as wide as the
+            // label needs unconstrained. Not `hasVisualOverflow`: NavigationBarItem gives its label
+            // a height slot slightly under the text's line height, so that flag is true even for
+            // "Recordings" in English (second mutation run on PR #423); only width is meaningful.
+            val labelNode = composeRule.onNodeWithText(labelText, useUnmergedTree = true)
+            val layout = labelNode.textLayout()
+            val neededWidth = layout.multiParagraph.intrinsics.maxIntrinsicWidth
+            assertTrue(
+                "nav label \"$labelText\" does not fit its slot at compact width: it needs " +
+                    "${neededWidth}px on one line but was laid out ${layout.size.width}px wide on " +
+                    "${layout.lineCount} line(s).",
+                layout.lineCount == 1 && neededWidth <= layout.size.width + 0.5f,
+            )
+            val labelBounds = labelNode.getUnclippedBoundsInRoot()
+            val itemBounds = tab(labelText).getUnclippedBoundsInRoot()
+            assertTrue(
+                "nav label \"$labelText\" spills out of its own tab: label spans " +
+                    "${labelBounds.left}..${labelBounds.right}, tab spans " +
+                    "${itemBounds.left}..${itemBounds.right}.",
+                labelBounds.left >= itemBounds.left && labelBounds.right <= itemBounds.right,
+            )
         }
+    }
+
+    /** The [TextLayoutResult] the node's Text actually rendered with. */
+    private fun SemanticsNodeInteraction.textLayout(): TextLayoutResult {
+        val results = mutableListOf<TextLayoutResult>()
+        performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+        assertTrue("no text layout for node", results.isNotEmpty())
+        return results.first()
     }
 
     @Test
