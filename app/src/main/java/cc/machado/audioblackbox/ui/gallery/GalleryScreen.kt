@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -154,10 +155,17 @@ fun GalleryScreen(
     onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // Issue #420: no bottom gutter here. Dashboard and Settings apply SCREEN_GUTTER *inside*
+    // their verticalScroll, so their scroll viewport runs to the bottom of AppScaffold's content
+    // area and content scrolls up to the same edge above the navigation bar on both. Padding this
+    // Column on all four sides instead clipped Gallery's list SCREEN_GUTTER higher than the other
+    // two tabs: the inconsistent bar edge the owner reported. The bottom gutter moves into
+    // RecordingList's contentPadding, so it still separates the last card from the bar at the end
+    // of the scroll, exactly as on the other two screens.
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(SCREEN_GUTTER),
+            .padding(start = SCREEN_GUTTER, top = SCREEN_GUTTER, end = SCREEN_GUTTER),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
@@ -311,6 +319,8 @@ private fun RecordingList(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        // The screen's bottom gutter, scrolled with the content rather than clipping it (#420).
+        contentPadding = PaddingValues(bottom = SCREEN_GUTTER),
         verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         items(items, key = { it.recording.uri.toString() }) { item ->

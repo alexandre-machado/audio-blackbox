@@ -1,0 +1,367 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">Audio Blackbox</string>
+    <!-- Launcher label only. Overridden per build type so a staging install is
+         distinguishable on the home screen; see values/strings.xml. -->
+    <string name="app_launcher_name">Audio Blackbox</string>
+
+    <!-- Spanish (issue #420), neutral European register with "tú". Glossary: buffer = búfer;
+         save the past = guardar el pasado; forward/live recording = grabación en directo;
+         retention window = ventana de retención; Settings = Ajustes. -->
+
+    <!-- Pantalla de consentimiento (issue #213): faithful translation of the default consent text. -->
+    <string name="onboarding_consent_title">Antes de empezar</string>
+    <string name="onboarding_consent_body">Audio Blackbox graba continuamente el audio ambiente en segundo plano y conserva solo los minutos más recientes en un búfer circular en memoria. El audio permanece únicamente en la memoria de este dispositivo y nunca se envía a ningún sitio. Solo se guarda en un archivo cuando tocas Guardar. Grabar conversaciones puede requerir el consentimiento de todas las personas implicadas, según las leyes de tu jurisdicción, y eres responsable de usar esta aplicación de acuerdo con la legislación aplicable.</string>
+    <string name="onboarding_consent_accept">Aceptar y continuar</string>
+    <string name="onboarding_consent_decline">Rechazar y salir</string>
+    <string name="onboarding_consent_privacy_link">Política de privacidad</string>
+
+    <!-- RECORD_AUDIO rationale -->
+    <string name="onboarding_audio_title">Permiso de micrófono</string>
+    <string name="onboarding_audio_body">Audio Blackbox necesita acceso al micrófono para grabar los últimos minutos de audio en un búfer continuo. Sin este permiso, la aplicación no puede grabar nada.</string>
+    <string name="onboarding_audio_grant">Permitir micrófono</string>
+
+    <!-- RECORD_AUDIO permanently denied -->
+    <string name="onboarding_audio_denied_title">Micrófono bloqueado</string>
+    <string name="onboarding_audio_denied_body">Has denegado el acceso al micrófono de forma permanente. Audio Blackbox no puede grabar sin él. Abre los ajustes de la aplicación y permite el acceso al micrófono manualmente.</string>
+    <string name="onboarding_open_settings">Abrir ajustes de la aplicación</string>
+
+    <!-- POST_NOTIFICATIONS rationale -->
+    <string name="onboarding_notifications_title">Permiso de notificaciones</string>
+    <string name="onboarding_notifications_body">Audio Blackbox graba en segundo plano mediante un servicio en primer plano, que requiere una notificación permanente que indica que la grabación está activa. Sin este permiso, Android puede detener el servicio.</string>
+    <string name="onboarding_notifications_grant">Permitir notificaciones</string>
+
+    <!-- POST_NOTIFICATIONS permanently denied -->
+    <string name="onboarding_notifications_denied_title">Notificaciones bloqueadas</string>
+    <string name="onboarding_notifications_denied_body">Has denegado el permiso de notificaciones de forma permanente. Abre los ajustes de la aplicación para permitirlo manualmente y asegurarte de que la grabación en segundo plano siga funcionando.</string>
+
+    <!-- Optimización de batería (banner after onboarding) -->
+    <string name="onboarding_battery_grant">Excluir de la optimización de batería</string>
+    <string name="onboarding_battery_warning">Sin esta exclusión, el sistema puede interrumpir la grabación en segundo plano. Puedes activarla más tarde en los ajustes de la aplicación.</string>
+
+    <!-- Recorder foreground service notification -->
+    <string name="recorder_notification_channel_name">Grabación en segundo plano</string>
+    <string name="recorder_notification_channel_description">Muestra el estado de la grabación continua mientras Audio Blackbox está activo.</string>
+    <string name="recorder_notification_state_recording">Grabando</string>
+    <string name="recorder_notification_state_paused">En pausa (micrófono en uso)</string>
+    <string name="recorder_notification_state_idle">Detenido</string>
+    <string name="recorder_notification_state_error">Error de grabación</string>
+    <string name="recorder_notification_buffered">Búfer: %1$s</string>
+    <string name="recorder_notification_action_save">Guardar (%1$d m)</string>
+    <string name="recorder_notification_action_save_seconds">Guardar (%1$d s)</string>
+    <string name="recorder_notification_action_stop">Detener</string>
+    <string name="recorder_notification_export_exporting">Guardando grabación…</string>
+    <string name="recorder_notification_export_success">Grabación guardada: %1$s</string>
+    <string name="recorder_notification_export_error">No se pudo guardar la grabación</string>
+    <string name="recorder_notification_forward_recording">Grabación en directo: %1$s</string>
+    <string name="recorder_notification_forward_success">Grabación en directo guardada: %1$s</string>
+    <string name="recorder_notification_forward_error">Error en la grabación en directo</string>
+    <!-- Issue #139: a verb distinct from "Guardar", short enough for the notification action slot. -->
+    <string name="recorder_notification_action_start_forward">Directo</string>
+    <string name="recorder_notification_action_stop_forward">Parar directo</string>
+
+    <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
+    <string name="widget_label">Audio Blackbox</string>
+    <string name="widget_description">Activa o detén la grabación con un toque desde la pantalla de inicio.</string>
+    <string name="widget_status_recording">Grabando</string>
+    <string name="widget_status_paused">En pausa</string>
+    <string name="widget_status_error">Error</string>
+    <string name="widget_status_idle">Detenido</string>
+    <string name="widget_action_start">Iniciar</string>
+    <string name="widget_action_stop">Detener</string>
+    <string name="widget_action_start_description">Iniciar grabación</string>
+    <string name="widget_action_stop_description">Detener grabación</string>
+    <string name="widget_content_description_recording">Audio Blackbox: grabando</string>
+    <string name="widget_content_description_paused">Audio Blackbox: en pausa, micrófono en uso</string>
+    <string name="widget_content_description_error">Audio Blackbox: error de grabación</string>
+    <string name="widget_content_description_idle">Audio Blackbox: sin grabar</string>
+
+    <!-- Dashboard (Module 4, issue #6) -->
+    <string name="dashboard_app_subtitle">Grabadora de audio con memoria continua</string>
+    <string name="dashboard_mic_level_label">Nivel de entrada del micrófono</string>
+    <string name="dashboard_card_annunciator_label">ESTADO DEL SISTEMA // ANUNCIADOR</string>
+    <string name="dashboard_annunciator_armed">GRABADORA ARMADA &amp; ACTIVA</string>
+    <string name="dashboard_annunciator_armed_sub">CH-01 · 16 BITS · MEMORIA VOLÁTIL</string>
+    <string name="dashboard_annunciator_paused">EN PAUSA // MIC EN USO</string>
+    <string name="dashboard_annunciator_paused_sub">INTERRUPCIÓN TELEFÓNICA // ESPERA</string>
+    <string name="dashboard_annunciator_standby">GRABADORA EN ESPERA // DESARMADA</string>
+    <string name="dashboard_annunciator_standby_sub">CH-01 · LISTA PARA ARMAR</string>
+    <string name="dashboard_annunciator_error">ALARMA PRINCIPAL // ERROR</string>
+    <string name="dashboard_annunciator_error_sub">CH-01 · REQUIERE RECUPERACIÓN DE HARDWARE</string>
+    <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // GRABADORA EN ESPERA</string>
+    <string name="dashboard_rbf_remove_action">Quitar la etiqueta y armar la grabadora</string>
+    <string name="dashboard_card_vu_label">NIVEL DE ENTRADA DEL MIC (VU)</string>
+    <string name="dashboard_card_tape_label">RETENCIÓN DEL BÚFER CIRCULAR</string>
+
+    <!-- Issue #337: dashboard-only short form (Mono -> M, Estéreo -> S). -->
+    <string name="dashboard_preset_voice_specs">16 kHz · M</string>
+    <string name="dashboard_preset_balanced_specs">32 kHz · M</string>
+    <string name="dashboard_preset_high_fidelity_specs">44.1 kHz · S</string>
+
+    <string name="dashboard_card_save_outcome_label">ESTADO DE EXPORTACIÓN // MEDIASTORE</string>
+    <string name="dashboard_card_forward_outcome_label">ESTADO DE GRABACIÓN // MEDIASTORE</string>
+    <string name="gallery_empty_card_label">ARCHIVO DE VUELOS // MEDIASTORE</string>
+    <string name="onboarding_card_consent_label">CONFIGURACIÓN INICIAL // CONSENTIMIENTO OBLIGATORIO</string>
+    <string name="onboarding_card_permissions_label">AVISO DE PERMISOS DEL SISTEMA</string>
+    <string name="settings_card_preset_label">PERFIL DE CALIDAD DE AUDIO</string>
+    <string name="settings_card_retention_label">VENTANA DE RETENCIÓN</string>
+    <string name="settings_card_telemetry_label">ENERGÍA &amp; TELEMETRÍA DEL SISTEMA</string>
+    <string name="settings_card_specs_label">ESPECIFICACIONES DEL MOTOR DE AUDIO</string>
+    <string name="settings_card_privacy_label">PRIVACIDAD &amp; PROCESAMIENTO LOCAL</string>
+    <string name="settings_tag_default">PREDETERMINADO</string>
+    <string name="settings_tag_live">EN DIRECTO (S25)</string>
+    <string name="settings_retention_buffer_type">Búfer circular en RAM</string>
+    <string name="gallery_card_label">REGISTRO DE VUELO // MEDIASTORE</string>
+    <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
+    <!-- Not "MUTED": see values/strings.xml. -->
+    <string name="dashboard_mic_level_no_signal">SIN SEÑAL</string>
+    <string name="dashboard_buffer_ram_label">Búfer circular (RAM)</string>
+    <string name="dashboard_buffer_ram_explanation">Mantiene el audio en la RAM. Cuando se llena, el sonido más antiguo se sobrescribe continuamente sin escribir en el disco.</string>
+    <string name="dashboard_save_card_title">Guardar el pasado (Lookback)</string>
+    <string name="dashboard_forward_card_title">Grabación continua en directo</string>
+
+    <string name="dashboard_status_idle">Detenido</string>
+    <string name="dashboard_status_recording">Grabando</string>
+    <string name="dashboard_status_paused">En pausa</string>
+    <string name="dashboard_status_error">Error</string>
+
+    <string name="dashboard_idle_explanation">La grabación está detenida. Ahora mismo no se graba nada. Activa el interruptor de abajo para iniciar la grabación continua en segundo plano.</string>
+    <string name="dashboard_recording_explanation">La grabación continúa en segundo plano. Cuando el búfer se llena, el audio más antiguo se sustituye automáticamente por el más reciente.</string>
+    <string name="dashboard_paused_explanation">La grabación está en pausa porque otra aplicación está usando el micrófono. Se reanudará automáticamente en cuanto el micrófono quede libre.</string>
+
+    <!-- Capture error reasons (issue #39) -->
+    <string name="capture_error_buffer_allocation_failed">No hay memoria suficiente para reservar el búfer de audio. Prueba a reducir la ventana de retención en Ajustes.</string>
+    <string name="capture_error_unsupported_config">Tu dispositivo no admite el formato de grabación de audio necesario.</string>
+    <string name="capture_error_audio_record_init_failed">No se pudo inicializar el micrófono. Asegúrate de que ninguna otra aplicación lo esté usando y vuelve a intentarlo.</string>
+    <string name="capture_error_read_invalid_operation">La grabadora de audio encontró una operación no válida. Desactiva y vuelve a activar la grabación para reintentarlo.</string>
+    <string name="capture_error_read_bad_value">La grabadora de audio recibió parámetros no válidos. Desactiva y vuelve a activar la grabación para reintentarlo.</string>
+    <string name="capture_error_read_dead_object">El servicio de audio del sistema dejó de responder. Desactiva y vuelve a activar la grabación, o reinicia el dispositivo.</string>
+    <string name="capture_error_read_unknown_error">Se produjo un error inesperado en la grabación de audio. Desactiva y vuelve a activar la grabación para reintentarlo.</string>
+    <string name="capture_error_foreground_service_promotion_refused">Android ha rechazado iniciar la grabación en este momento. Abre la aplicación y vuelve a intentarlo.</string>
+    <string name="capture_error_unexpected_capture_failure">La grabación se detuvo por un error inesperado. Desactiva y vuelve a activar la grabación para reintentarlo.</string>
+
+    <string name="dashboard_status_announcement">Estado de la grabación: %1$s</string>
+
+    <!-- Continuous-recording switch (issue #46) -->
+    <string name="dashboard_engine_switch_label">Grabación continua</string>
+    <string name="dashboard_engine_switch_state_on">Activada: grabando de forma continua</string>
+    <string name="dashboard_engine_switch_state_off">Desactivada: no se está grabando nada</string>
+    <string name="dashboard_engine_switch_state_paused">En pausa: otra aplicación está usando el micrófono; la grabación se reanudará automáticamente</string>
+    <string name="dashboard_engine_switch_state_starting">Iniciando…</string>
+    <string name="dashboard_engine_switch_state_stopping">Deteniendo…</string>
+    <string name="dashboard_engine_switch_state_error">Desactivada: la grabación se detuvo por un error</string>
+    <string name="dashboard_engine_switch_announcement">Interruptor de grabación continua: %1$s</string>
+
+    <string name="dashboard_buffer_status">%1$s de %2$s en memoria</string>
+    <string name="dashboard_buffer_status_cd">Búfer de audio: %1$s de %2$s en memoria</string>
+    <string name="dashboard_buffer_full_notice">Búfer lleno: grabando sobre el audio más antiguo</string>
+
+    <!-- Kept for AccessibilityStringsTest's naming-convention check against gallery_empty_body. -->
+    <string name="dashboard_save_button">Guardar el pasado</string>
+    <string name="dashboard_save_explanation_full">Guarda el búfer completo (%1$d min) en el almacenamiento del dispositivo.</string>
+    <string name="dashboard_save_explanation_partial">Guarda el audio grabado hasta ahora (%1$s) en el almacenamiento del dispositivo.</string>
+    <string name="dashboard_save_button_cd_full">Guardar el búfer completo de %1$d min</string>
+    <string name="dashboard_save_button_cd_partial">Guardar el audio grabado hasta ahora (%1$s)</string>
+    <string name="dashboard_save_disabled_no_audio">Espera a que se llene el búfer para poder guardar.</string>
+
+    <string name="dashboard_save_exporting_title">Guardando…</string>
+    <string name="dashboard_save_exporting_body">Escribiendo el intervalo seleccionado en el almacenamiento del dispositivo.</string>
+    <string name="dashboard_save_success_title">Grabación guardada</string>
+    <string name="dashboard_save_success_body">Archivo: %1$s</string>
+    <string name="dashboard_save_error_title">Error al guardar</string>
+    <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
+    <string name="dashboard_save_notice_dismiss">Aceptar</string>
+
+    <!-- Forward recording (issue #55, #139) -->
+    <string name="dashboard_forward_start_button">Guardar el pasado y seguir grabando</string>
+    <string name="dashboard_forward_recording_title">Grabando en directo</string>
+    <string name="dashboard_forward_elapsed_cd">Tiempo transcurrido de la grabación en directo: %1$s</string>
+    <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
+    <string name="dashboard_forward_stop_button">Detener la grabación en directo</string>
+    <string name="dashboard_forward_success_title">Grabación en directo guardada</string>
+    <string name="dashboard_forward_success_body">Archivo: %1$s</string>
+    <string name="dashboard_forward_error_title">Error en la grabación en directo</string>
+    <string name="dashboard_forward_outcome_announcement">%1$s. %2$s</string>
+
+    <!-- Issue #335: short panel labels. -->
+    <string name="dashboard_panel_save_label">Guardar</string>
+    <string name="dashboard_panel_save_saving_label">Guardando</string>
+    <string name="dashboard_panel_live_label">Directo</string>
+    <string name="dashboard_panel_live_stop_label">Detener</string>
+
+    <!-- Issue #335 wiring: one-line panel captions. -->
+    <string name="dashboard_panel_save_caption_no_audio">Aún no hay audio</string>
+    <string name="dashboard_panel_save_caption_saving">Escribiendo en disco…</string>
+    <string name="dashboard_panel_save_caption_full">Búfer lleno · %1$d min</string>
+    <string name="dashboard_panel_save_caption_buffered">%1$s en búfer</string>
+    <string name="dashboard_panel_live_caption_idle">Crea un archivo nuevo</string>
+    <string name="dashboard_panel_live_caption_recording">%1$s en directo</string>
+
+    <!-- Gallery (Module 4, issue #7) -->
+    <string name="gallery_title">Grabaciones guardadas</string>
+    <string name="gallery_subtitle">Reproducir, compartir &amp; eliminar</string>
+    <string name="gallery_loading">Cargando grabaciones…</string>
+    <string name="gallery_empty_title">Aún no hay grabaciones</string>
+    <string name="gallery_empty_body">Cuando guardes un fragmento grabado, aparecerá aquí para que puedas escucharlo y compartirlo. Toca \"Guardar el pasado\" en el Cockpit para crear tu primera grabación.</string>
+    <string name="gallery_item_duration_size">%1$s · %2$s</string>
+    <string name="gallery_play">Reproducir</string>
+    <string name="gallery_pause">Pausar</string>
+    <string name="gallery_play_cd">Reproducir grabación del %1$s</string>
+    <string name="gallery_pause_cd">Pausar grabación del %1$s</string>
+    <string name="gallery_seek_cd">Posición de reproducción: %1$s</string>
+    <string name="gallery_elapsed_total">%1$s / %2$s</string>
+    <string name="gallery_share">Compartir</string>
+    <string name="gallery_share_cd">Compartir grabación del %1$s</string>
+    <string name="gallery_share_chooser_title">Compartir grabación</string>
+    <string name="gallery_delete">Eliminar</string>
+    <string name="gallery_delete_cd">Eliminar grabación del %1$s</string>
+    <string name="gallery_delete_confirm_title">¿Eliminar grabación?</string>
+    <string name="gallery_delete_confirm_body">El archivo se eliminará de forma permanente y no se podrá deshacer.</string>
+    <string name="gallery_delete_confirm_action">Eliminar</string>
+    <string name="gallery_delete_cancel_action">Cancelar</string>
+    <string name="gallery_delete_error_title">No se pudo eliminar</string>
+    <string name="gallery_delete_error_body">No se pudo eliminar esta grabación. Puede ocurrir con grabaciones antiguas después de reinstalar la aplicación.</string>
+    <string name="gallery_delete_error_dismiss">Aceptar</string>
+    <string name="gallery_refresh_cd">Actualizar lista de grabaciones</string>
+    <string name="gallery_recording_badge">Grabando</string>
+    <!-- Floating bottom bar (issue #340): "Cockpit" stays untranslated, as in pt-BR. -->
+    <string name="nav_dashboard_label">Cockpit</string>
+    <string name="nav_gallery_label">Grabaciones</string>
+    <string name="nav_settings_label">Aviónica</string>
+
+    <!-- Settings screen / retention stepper (issue #73) -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_subtitle">Búfer de audio &amp; preferencias de la aplicación</string>
+    <string name="settings_specs_title">Especificaciones del motor de audio</string>
+    <string name="settings_specs_format_label">Formato de audio</string>
+    <string name="settings_specs_format_value">PCM de 16 bits (búfer circular)</string>
+    <string name="settings_specs_export_label">Formato de exportación</string>
+    <string name="settings_specs_export_value">AAC (.m4a) / WAV sin pérdida</string>
+    <string name="settings_specs_sample_rate_label">Frecuencia de muestreo</string>
+    <string name="settings_specs_sample_rate_value">16000 Hz</string>
+    <string name="settings_specs_channels_label">Canales</string>
+    <string name="settings_specs_channels_value">Mono (1 canal)</string>
+    <string name="settings_specs_channels_stereo_value">Estéreo (2 canales)</string>
+    <string name="settings_specs_persistence_label">Modo de persistencia</string>
+    <string name="settings_specs_persistence_value">MediaStore (almacenamiento local)</string>
+    <string name="settings_privacy_title">Privacidad &amp; procesamiento local</string>
+    <string name="settings_privacy_explanation">Audio Blackbox funciona de forma totalmente local en tu dispositivo. El audio del micrófono se mantiene en RAM temporal y se sobrescribe automáticamente. Nunca se envía telemetría, informes de fallos ni flujos de audio a servidores remotos.</string>
+    <string name="settings_retention_title">Ventana de retención del búfer</string>
+    <string name="settings_retention_explanation">Cuánto audio conserva el búfer en la memoria del dispositivo. Un valor mayor usa más memoria. Los cambios se aplican automáticamente poco después de que dejes de ajustarlo.</string>
+    <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
+    <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
+    <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutos, unos %2$d megabytes, activo ahora</string>
+    <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d minutos, unos %2$d megabytes, aún no aplicado</string>
+    <string name="settings_retention_decrement_cd">Reducir la retención en 5 minutos</string>
+    <string name="settings_retention_increment_cd">Aumentar la retención en 5 minutos</string>
+
+    <!-- Quality preset selector (issue #193) -->
+    <string name="settings_quality_preset_title">Perfil de calidad de audio</string>
+    <string name="settings_quality_preset_explanation">Elige entre más tiempo de retención o mayor fidelidad de audio. Una fidelidad mayor usa más RAM por minuto.</string>
+    <string name="settings_preset_voice_title">Voz</string>
+    <string name="settings_preset_voice_specs">16 kHz · Mono</string>
+    <string name="settings_preset_voice_desc">Optimizado para la voz, con la ventana de retención más larga.</string>
+    <string name="settings_preset_balanced_title">Equilibrado</string>
+    <string name="settings_preset_balanced_specs">32 kHz · Mono</string>
+    <string name="settings_preset_balanced_desc">Más claridad con un uso de memoria moderado.</string>
+    <string name="settings_preset_high_fidelity_title">Alta fidelidad</string>
+    <string name="settings_preset_high_fidelity_specs">44.1 kHz · Estéreo</string>
+    <string name="settings_preset_high_fidelity_desc">Calidad de estudio con los múltiples micrófonos del dispositivo.</string>
+    <string name="settings_preset_max_window">Máx.: %1$d min</string>
+
+    <!-- Telemetry & Power Consumption -->
+    <string name="settings_consumption_title">Energía &amp; telemetría del sistema</string>
+    <string name="settings_consumption_explanation">Métricas en tiempo real del consumo de energía, la ocupación de RAM volátil y la eficiencia de la captura por hardware.</string>
+    <string name="settings_consumption_battery_drain_label">Consumo en segundo plano</string>
+    <string name="settings_consumption_battery_drain_value" formatted="false">~1,0 % – 1,5 % / h</string>
+    <string name="settings_consumption_battery_level_label">Estado de la batería</string>
+    <string name="settings_consumption_battery_level_value">%1$d%% (%2$s)</string>
+    <string name="settings_consumption_battery_charging">Cargando</string>
+    <string name="settings_consumption_battery_discharging">Descargando</string>
+    <string name="settings_consumption_battery_opt_label">Optimización de batería</string>
+    <string name="settings_consumption_battery_opt_unrestricted">Excluida (activa)</string>
+    <string name="settings_consumption_battery_opt_optimized">Optimizada por el sistema</string>
+    <string name="settings_consumption_ram_buffer_label">Memoria del búfer de audio</string>
+    <string name="settings_consumption_ram_buffer_value">%1$.1f MB (volátil)</string>
+    <string name="settings_consumption_ram_heap_label">Heap de la JVM en uso</string>
+    <string name="settings_consumption_ram_heap_value">%1$.1f MB / %2$.0f MB máx.</string>
+    <string name="settings_consumption_io_label">E/S de disco</string>
+    <string name="settings_consumption_io_value">0 KB/s (solo RAM)</string>
+
+    <!-- Clamp-down notice (issue #298) -->
+    <string name="settings_retention_clamp_notice_title">Ventana de retención reducida</string>
+    <!-- Not a plural, see values/strings.xml. -->
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu ventana de retención se ha reducido de %1$d a %2$d minutos porque ya no cabe en este dispositivo.</string>
+    <string name="settings_retention_clamp_notice_dismiss">Entendido</string>
+
+    <!-- Resize-refused notice (issue #272) -->
+    <string name="settings_resize_error_title">Ajuste no aplicado</string>
+    <string name="settings_resize_error_body" tools:ignore="PluralsCandidate">No se pudo cambiar la duración de la grabación a %1$d min (%2$d MB): ahora mismo no hay memoria suficiente en este dispositivo. El ajuste actual sigue activo. Prueba con una ventana de retención más corta, o libera memoria en el dispositivo y vuelve a intentarlo.</string>
+    <string name="settings_resize_error_body_no_mb" tools:ignore="PluralsCandidate">No se pudo cambiar la duración de la grabación a %1$d min: ahora mismo no hay memoria suficiente en este dispositivo. El ajuste actual sigue activo. Prueba con una ventana de retención más corta, o libera memoria en el dispositivo y vuelve a intentarlo.</string>
+    <string name="settings_resize_error_dismiss">Aceptar</string>
+    <!-- Resume recording after reboot notification (issue #79) -->
+    <string name="notification_resume_channel_name">Aviso para reanudar la grabación</string>
+    <string name="notification_resume_channel_description">Propone reanudar la grabación continua después de reiniciar el dispositivo.</string>
+    <string name="notification_resume_title">Reanudar grabación continua</string>
+    <string name="notification_resume_content">La grabación estaba activa antes de que se reiniciara el dispositivo.</string>
+    <string name="notification_resume_action_resume">Reanudar grabación</string>
+    <string name="notification_resume_action_dismiss">Descartar</string>
+
+    <!-- About / App Version section -->
+    <string name="settings_about_title">Acerca de</string>
+    <string name="settings_version_label">Versión %1$s</string>
+    <string name="settings_version_with_date_label">Versión %1$s (%2$s)</string>
+    <string name="settings_website_label">Sitio web del producto</string>
+    <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
+    <string name="settings_privacy_policy_label">Política de privacidad</string>
+    <string name="settings_privacy_policy_url">https://alexandre.machado.cc/audio-blackbox/release/privacy-policy</string>
+
+    <!-- Full Diagnostic Log export (issue #388) -->
+    <string name="settings_card_diagnostics_label">REGISTRO DE DIAGNÓSTICO</string>
+    <string name="settings_diagnostics_explanation">Exporta el registro de diagnóstico completo del dispositivo (entradas de errores, auditoría y fallos) en un solo archivo, para compartirlo con el soporte. No se envía nada automáticamente; solo se abre el menú para compartir estándar.</string>
+    <string name="settings_diagnostics_export_action">Exportar registro de diagnóstico</string>
+    <string name="settings_diagnostics_export_empty_toast">El registro de diagnóstico está vacío, no hay nada que exportar</string>
+    <string name="settings_diagnostics_export_error_toast">No se pudo exportar el registro de diagnóstico</string>
+    <string name="settings_diagnostics_export_subject">Registro de diagnóstico de Audio Blackbox</string>
+    <string name="settings_diagnostics_export_chooser_title">Exportar registro de diagnóstico</string>
+
+    <!-- Incident Diagnostics / Error Telemetry (issue #206) -->
+    <string name="dashboard_error_telemetry_title">Diagnóstico del incidente</string>
+    <string name="dashboard_error_telemetry_code">Código: %1$s</string>
+    <string name="dashboard_error_telemetry_preset">Perfil: %1$s</string>
+    <string name="dashboard_error_telemetry_buffer">Búfer: %1$d min (%2$s)</string>
+    <string name="dashboard_error_action_retry">Reintentar</string>
+    <string name="dashboard_error_action_copy">Copiar informe</string>
+    <string name="dashboard_error_action_share">Compartir registro</string>
+    <string name="dashboard_error_copied_toast">Informe del incidente copiado al portapapeles</string>
+    <string name="dashboard_error_share_chooser_title">Compartir informe del incidente</string>
+
+    <!-- Durable Error Log card + modal (issue #346) -->
+    <string name="dashboard_card_error_log_label">Registro de errores</string>
+    <string name="dashboard_error_log_card_body">Se registraron errores de grabación. Toca para revisarlos.</string>
+    <string name="dashboard_error_log_card_body_crash_only">Se registraron cierres inesperados de la aplicación. Ningún error de grabación. Toca para revisarlos.</string>
+    <string name="dashboard_error_log_card_body_mixed">Se registraron errores de grabación y cierres inesperados de la aplicación. Toca para revisarlos.</string>
+    <string name="dashboard_error_log_card_content_description">%1$d error(es) de grabación registrado(s). Toca para ver el registro de errores.</string>
+    <string name="dashboard_error_log_card_content_description_crash_only">%1$d cierre(s) inesperado(s) de la aplicación registrado(s). Ningún error de grabación. Toca para ver el registro de errores.</string>
+    <string name="dashboard_error_log_card_content_description_mixed">%1$d error(es) de grabación y %2$d cierre(s) inesperado(s) de la aplicación registrado(s). Toca para ver el registro de errores.</string>
+    <string name="dashboard_error_log_card_crash_tag">C%1$d</string>
+    <string name="dashboard_error_log_modal_title">Registro de errores</string>
+    <string name="dashboard_error_log_modal_empty">No hay errores registrados.</string>
+    <string name="dashboard_error_log_page_previous">Anterior</string>
+    <string name="dashboard_error_log_page_next">Siguiente</string>
+    <string name="dashboard_error_log_page_indicator">Página %1$d de %2$d</string>
+    <string name="dashboard_error_log_clear">Borrar registro</string>
+    <string name="dashboard_error_log_clear_confirm_body">Se eliminará de forma permanente todo el registro de errores de este dispositivo. Esta acción no se puede deshacer.</string>
+    <string name="dashboard_error_log_clear_cancel">Cancelar</string>
+    <string name="dashboard_error_log_clear_confirm">Eliminar registro</string>
+
+    <!-- Gallery File Specifications -->
+    <string name="gallery_details_title">Especificaciones de la grabación</string>
+    <string name="gallery_details_created_at">Inicio de la captura</string>
+    <string name="gallery_details_saved_at">Guardado el</string>
+    <string name="gallery_details_duration">Duración</string>
+    <string name="gallery_details_size">Tamaño del archivo</string>
+    <string name="gallery_details_format">Formato</string>
+    <string name="gallery_details_quality">Calidad</string>
+    <string name="gallery_details_storage">Almacenamiento</string>
+    <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+</resources>

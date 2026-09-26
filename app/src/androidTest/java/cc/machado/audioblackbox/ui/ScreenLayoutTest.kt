@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.ui
 import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -17,6 +18,7 @@ import cc.machado.audioblackbox.ui.dashboard.FORWARD_STOP_BUTTON_TEST_TAG
 import cc.machado.audioblackbox.ui.dashboard.SaveUiState
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import java.util.Locale
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -215,6 +217,67 @@ class ScreenLayoutTest {
     }
 
     /**
+     * Issue #420 (owner report, 2026-09-26): the edge where content stops above the navigation bar
+     * was not the same on the three screens. The bar itself is shared ([AppScaffold] hosts one
+     * [FloatingBottomBar] for every destination), so its own rectangle could not differ; what
+     * differed was each screen's *scroll viewport*. Dashboard and Settings put their
+     * [SCREEN_GUTTER] padding inside `verticalScroll`, so their viewport runs to the bottom of the
+     * content area and cards scroll right up to the bar's margin. Gallery applied the same gutter
+     * outside its `LazyColumn`, so its list was clipped a further [SCREEN_GUTTER] above the bar:
+     * a visibly different cut-off line, on the same bar, on one of three tabs.
+     *
+     * Runs all three destinations in one composition, switched through the real bar, with a
+     * gallery fixture long enough to overflow [COMPACT_WINDOW_HEIGHT] so every screen really
+     * scrolls (the natural-window-size trap, AGENTS.md section 2).
+     *
+     * Oracle: fails if the floating bar's measured rectangle differs between any two screens, or if
+     * any screen's scroll viewport ends anywhere other than the bottom of the content area
+     * [AppScaffold] reserves above the bar. Against pre-#420 Gallery (gutter outside the list) the
+     * Gallery viewport ends [SCREEN_GUTTER] short and this fails.
+     */
+    @Test
+    fun navigationBarBoundsAndContentCutOffMatchAcrossAllThreeScreens() {
+        composeRule.setContent {
+            CompactHarnessApp(Destination.DASHBOARD, galleryUiState = showcaseGalleryFixture())
+        }
+
+        val screens = listOf(
+            "Dashboard" to dashboardTab(),
+            "Gallery" to galleryTab(),
+            "Settings" to settingsTab(),
+        )
+        var reference: androidx.compose.ui.unit.DpRect? = null
+        for ((name, tab) in screens) {
+            tab.performClick()
+            tab.assertIsSelected()
+
+            val bar = composeRule.onNodeWithTag(FLOATING_BOTTOM_BAR_TEST_TAG).getUnclippedBoundsInRoot()
+            val expected = reference ?: bar.also { reference = it }
+            assertTrue(
+                "the navigation bar on $name is at $bar, but on Dashboard it is at $expected: the " +
+                    "bar is shared, so its bounds must be identical on every screen.",
+                listOf(
+                    bar.left - expected.left,
+                    bar.top - expected.top,
+                    bar.right - expected.right,
+                    bar.bottom - expected.bottom,
+                ).all { it.value.absoluteValue <= GAP_TOLERANCE_DP },
+            )
+
+            val contentBottom = contentArea().getUnclippedBoundsInRoot().bottom
+            val viewportBottom = scrollViewportBottom()
+            assertTrue(
+                "$name's scroll viewport ends at $viewportBottom, ${bar.top - viewportBottom} above " +
+                    "the navigation bar, but the content area reserved above the bar ends at " +
+                    "$contentBottom (${bar.top - contentBottom} above it). Every screen must let " +
+                    "its content scroll to the same edge above the bar; a gutter applied outside " +
+                    "the scroll container moves that edge up on one screen only.",
+                (viewportBottom - contentBottom).value.absoluteValue <= GAP_TOLERANCE_DP,
+            )
+        }
+    }
+
+    /**
      * The one assertion that runs at the emulator's natural size in an **edge-to-edge** window, the
      * way [MainActivity] draws (`enableEdgeToEdge()`, `MainActivity.kt`). The three tests above run
      * in a fixed box inside a normally-inset window, where the decor has already consumed the
@@ -363,6 +426,55 @@ class ScreenLayoutTest {
         }
 
         assertSaveSectionValid(ptLocale)
+    }
+
+    /**
+     * Issue #420: German is the longest of the four EU locales added there (compound nouns, no
+     * natural break points), so it gets the same compact-width coverage pt-BR has.
+     *
+     * Oracle: same defect as [engineSwitchRemainsWithinRootBoundsInCompactWidthWithPortugueseLocale],
+     * under the German paused-state text: fails if the long switch-state line pushes the Switch
+     * past the root's right edge or past the screen gutter.
+     */
+    @Test
+    fun engineSwitchRemainsWithinRootBoundsInCompactWidthWithGermanLocale() {
+        composeRule.setContent {
+            InLocale(GERMAN) { CompactHarnessApp(Destination.DASHBOARD) }
+        }
+
+        val engineSwitch = composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG, useUnmergedTree = true)
+        engineSwitch.performScrollTo()
+        engineSwitch.assertIsDisplayed()
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val switchBounds = engineSwitch.getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "the continuous recording switch is clipped off the right edge with de paused text: " +
+                "its right edge is at ${switchBounds.right}, but the root window right edge is at ${rootBounds.right}.",
+            switchBounds.right <= rootBounds.right,
+        )
+        val expectedMaxRight = rootBounds.right - SCREEN_GUTTER
+        assertTrue(
+            "the continuous recording switch right edge is at ${switchBounds.right}, expected to be at or within " +
+                "$expectedMaxRight (accounting for $SCREEN_GUTTER dashboard padding).",
+            (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
+        )
+    }
+
+    /** Oracle: same as [saveSectionDoesNotClipInCompactWidth], under the German (de) locale. */
+    @Test
+    fun saveSectionDoesNotClipInCompactWidthWithGermanLocale() {
+        composeRule.setContent {
+            InLocale(GERMAN) {
+                CompactHarnessApp(
+                    Destination.DASHBOARD,
+                    dashboardUiState = emptyBufferDashboardFixture(),
+                )
+            }
+        }
+
+        assertSaveSectionValid(GERMAN)
     }
 
     /**
@@ -825,7 +937,39 @@ class ScreenLayoutTest {
                     "label's ($cockpitHeight) in the same bar.",
                 height <= cockpitHeight * 1.5f,
             )
+            // Issue #420: the two checks above cannot see a label the bar *clips* rather than
+            // wraps -- a clipped label keeps its single-line height and stays inside the window.
+            // Mutation run on PR #423 showed exactly that: an overlong German label passed both.
+            // The text layout itself is the signal: one line, laid out at least as wide as the
+            // label needs unconstrained. Not `hasVisualOverflow`: NavigationBarItem gives its label
+            // a height slot slightly under the text's line height, so that flag is true even for
+            // "Recordings" in English (second mutation run on PR #423); only width is meaningful.
+            val labelNode = composeRule.onNodeWithText(labelText, useUnmergedTree = true)
+            val layout = labelNode.textLayout()
+            val neededWidth = layout.multiParagraph.intrinsics.maxIntrinsicWidth
+            assertTrue(
+                "nav label \"$labelText\" does not fit its slot at compact width: it needs " +
+                    "${neededWidth}px on one line but was laid out ${layout.size.width}px wide on " +
+                    "${layout.lineCount} line(s).",
+                layout.lineCount == 1 && neededWidth <= layout.size.width + 0.5f,
+            )
+            val labelBounds = labelNode.getUnclippedBoundsInRoot()
+            val itemBounds = tab(labelText).getUnclippedBoundsInRoot()
+            assertTrue(
+                "nav label \"$labelText\" spills out of its own tab: label spans " +
+                    "${labelBounds.left}..${labelBounds.right}, tab spans " +
+                    "${itemBounds.left}..${itemBounds.right}.",
+                labelBounds.left >= itemBounds.left && labelBounds.right <= itemBounds.right,
+            )
         }
+    }
+
+    /** The [TextLayoutResult] the node's Text actually rendered with. */
+    private fun SemanticsNodeInteraction.textLayout(): TextLayoutResult {
+        val results = mutableListOf<TextLayoutResult>()
+        performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+        assertTrue("no text layout for node", results.isNotEmpty())
+        return results.first()
     }
 
     @Test
@@ -850,7 +994,51 @@ class ScreenLayoutTest {
         assertNavLabelsFitOnOneLineAtCompactWidth(ptLocale)
     }
 
+    /** Issue #420: the German nav labels ("Aufnahmen"/"Avionik") under the same one-line oracle. */
+    @Test
+    fun bottomNavLabelsFitAtCompactWidthInGerman() {
+        composeRule.setContent { InLocale(GERMAN) { CompactHarnessApp(Destination.DASHBOARD) } }
+        assertNavLabelsFitOnOneLineAtCompactWidth(GERMAN)
+    }
+
+    /** Issue #420: French runs longest on this bar ("Avionique"), same oracle. */
+    @Test
+    fun bottomNavLabelsFitAtCompactWidthInFrench() {
+        composeRule.setContent { InLocale(FRENCH) { CompactHarnessApp(Destination.DASHBOARD) } }
+        assertNavLabelsFitOnOneLineAtCompactWidth(FRENCH)
+    }
+
     // ---- helpers ----
+
+    /**
+     * Bottom edge of the current screen's vertical scroll container: `verticalScroll` on Dashboard
+     * and Settings, the `LazyColumn` on Gallery. Picked as the tallest node that exposes a vertical
+     * scroll range rather than "the only one", so a nested scrollable (a dialog's list, say) cannot
+     * turn this into a matcher error.
+     */
+    private fun scrollViewportBottom(): Dp {
+        val nodes = composeRule
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .fetchSemanticsNodes()
+        assertTrue("no vertically scrollable node on screen", nodes.isNotEmpty())
+        val tallest = nodes.maxBy { it.boundsInRoot.height }
+        return with(composeRule.density) { tallest.boundsInRoot.bottom.toDp() }
+    }
+
+    /**
+     * Renders [content] with [locale]'s resources, the same `LocalConfiguration`/`LocalContext`
+     * override the pt-BR tests above spell out inline.
+     */
+    @Composable
+    private fun InLocale(locale: Locale, content: @Composable () -> Unit) {
+        val config = Configuration(LocalConfiguration.current).apply { setLocale(locale) }
+        val context = LocalContext.current.createConfigurationContext(config)
+        CompositionLocalProvider(
+            LocalConfiguration provides config,
+            LocalContext provides context,
+            content = content,
+        )
+    }
 
     /**
      * Samples a pixel from this node's rendered container colour, for colour-equality assertions
@@ -931,5 +1119,8 @@ class ScreenLayoutTest {
         /** Dp arithmetic on real measured bounds lands on fractional pixels; 1dp is far below the
          * bar height a double-count would add, so this loosens nothing that matters. */
         const val GAP_TOLERANCE_DP = 1f
+
+        val GERMAN: Locale = Locale.forLanguageTag("de")
+        val FRENCH: Locale = Locale.forLanguageTag("fr")
     }
 }
