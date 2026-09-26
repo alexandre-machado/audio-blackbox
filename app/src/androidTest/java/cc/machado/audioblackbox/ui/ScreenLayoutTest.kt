@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.ui
 import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -363,6 +364,55 @@ class ScreenLayoutTest {
         }
 
         assertSaveSectionValid(ptLocale)
+    }
+
+    /**
+     * Issue #420: German is the longest of the four EU locales added there (compound nouns, no
+     * natural break points), so it gets the same compact-width coverage pt-BR has.
+     *
+     * Oracle: same defect as [engineSwitchRemainsWithinRootBoundsInCompactWidthWithPortugueseLocale],
+     * under the German paused-state text: fails if the long switch-state line pushes the Switch
+     * past the root's right edge or past the screen gutter.
+     */
+    @Test
+    fun engineSwitchRemainsWithinRootBoundsInCompactWidthWithGermanLocale() {
+        composeRule.setContent {
+            InLocale(GERMAN) { CompactHarnessApp(Destination.DASHBOARD) }
+        }
+
+        val engineSwitch = composeRule.onNodeWithTag(ENGINE_SWITCH_TEST_TAG, useUnmergedTree = true)
+        engineSwitch.performScrollTo()
+        engineSwitch.assertIsDisplayed()
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val switchBounds = engineSwitch.getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "the continuous recording switch is clipped off the right edge with de paused text: " +
+                "its right edge is at ${switchBounds.right}, but the root window right edge is at ${rootBounds.right}.",
+            switchBounds.right <= rootBounds.right,
+        )
+        val expectedMaxRight = rootBounds.right - SCREEN_GUTTER
+        assertTrue(
+            "the continuous recording switch right edge is at ${switchBounds.right}, expected to be at or within " +
+                "$expectedMaxRight (accounting for $SCREEN_GUTTER dashboard padding).",
+            (switchBounds.right - expectedMaxRight).value <= GAP_TOLERANCE_DP,
+        )
+    }
+
+    /** Oracle: same as [saveSectionDoesNotClipInCompactWidth], under the German (de) locale. */
+    @Test
+    fun saveSectionDoesNotClipInCompactWidthWithGermanLocale() {
+        composeRule.setContent {
+            InLocale(GERMAN) {
+                CompactHarnessApp(
+                    Destination.DASHBOARD,
+                    dashboardUiState = emptyBufferDashboardFixture(),
+                )
+            }
+        }
+
+        assertSaveSectionValid(GERMAN)
     }
 
     /**
@@ -850,7 +900,36 @@ class ScreenLayoutTest {
         assertNavLabelsFitOnOneLineAtCompactWidth(ptLocale)
     }
 
+    /** Issue #420: the German nav labels ("Aufnahmen"/"Avionik") under the same one-line oracle. */
+    @Test
+    fun bottomNavLabelsFitAtCompactWidthInGerman() {
+        composeRule.setContent { InLocale(GERMAN) { CompactHarnessApp(Destination.DASHBOARD) } }
+        assertNavLabelsFitOnOneLineAtCompactWidth(GERMAN)
+    }
+
+    /** Issue #420: French runs longest on this bar ("Avionique"), same oracle. */
+    @Test
+    fun bottomNavLabelsFitAtCompactWidthInFrench() {
+        composeRule.setContent { InLocale(FRENCH) { CompactHarnessApp(Destination.DASHBOARD) } }
+        assertNavLabelsFitOnOneLineAtCompactWidth(FRENCH)
+    }
+
     // ---- helpers ----
+
+    /**
+     * Renders [content] with [locale]'s resources, the same `LocalConfiguration`/`LocalContext`
+     * override the pt-BR tests above spell out inline.
+     */
+    @Composable
+    private fun InLocale(locale: Locale, content: @Composable () -> Unit) {
+        val config = Configuration(LocalConfiguration.current).apply { setLocale(locale) }
+        val context = LocalContext.current.createConfigurationContext(config)
+        CompositionLocalProvider(
+            LocalConfiguration provides config,
+            LocalContext provides context,
+            content = content,
+        )
+    }
 
     /**
      * Samples a pixel from this node's rendered container colour, for colour-equality assertions
@@ -931,5 +1010,8 @@ class ScreenLayoutTest {
         /** Dp arithmetic on real measured bounds lands on fractional pixels; 1dp is far below the
          * bar height a double-count would add, so this loosens nothing that matters. */
         const val GAP_TOLERANCE_DP = 1f
+
+        val GERMAN: Locale = Locale.forLanguageTag("de")
+        val FRENCH: Locale = Locale.forLanguageTag("fr")
     }
 }

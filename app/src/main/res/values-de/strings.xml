@@ -1,0 +1,367 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">Audio Blackbox</string>
+    <!-- Launcher label only. Overridden per build type so a staging install is
+         distinguishable on the home screen; see values/strings.xml. -->
+    <string name="app_launcher_name">Audio Blackbox</string>
+
+    <!-- German (issue #420). Glossary: buffer = Puffer; save the past = Vergangenheit speichern;
+         forward/live recording = Live-Aufnahme; retention window = Aufbewahrungsfenster;
+         Settings = Einstellungen. Keep new strings consistent with these terms. -->
+
+    <!-- Einwilligungsbildschirm (issue #213): faithful translation of the default consent text. -->
+    <string name="onboarding_consent_title">Bevor du startest</string>
+    <string name="onboarding_consent_body">Audio Blackbox nimmt im Hintergrund fortlaufend Umgebungsgeräusche auf und behält dabei nur die letzten Minuten in einem rollierenden Puffer im Arbeitsspeicher. Das Audio bleibt ausschließlich im Speicher dieses Geräts und wird nirgendwohin gesendet. Es wird nur dann in einer Datei gespeichert, wenn du auf Speichern tippst. Das Aufnehmen von Gesprächen kann je nach den Gesetzen deiner Rechtsordnung die Einwilligung aller Beteiligten erfordern, und du bist dafür verantwortlich, diese App im Einklang mit dem geltenden Recht zu verwenden.</string>
+    <string name="onboarding_consent_accept">Akzeptieren und weiter</string>
+    <string name="onboarding_consent_decline">Ablehnen und beenden</string>
+    <string name="onboarding_consent_privacy_link">Datenschutzerklärung</string>
+
+    <!-- RECORD_AUDIO rationale -->
+    <string name="onboarding_audio_title">Mikrofonberechtigung</string>
+    <string name="onboarding_audio_body">Audio Blackbox braucht Zugriff auf das Mikrofon, um die letzten Minuten Audio in einem fortlaufenden Puffer aufzunehmen. Ohne diese Berechtigung kann die App nichts aufnehmen.</string>
+    <string name="onboarding_audio_grant">Mikrofon erlauben</string>
+
+    <!-- RECORD_AUDIO permanently denied -->
+    <string name="onboarding_audio_denied_title">Mikrofon blockiert</string>
+    <string name="onboarding_audio_denied_body">Du hast den Mikrofonzugriff dauerhaft verweigert. Ohne ihn kann Audio Blackbox nicht aufnehmen. Öffne die App-Einstellungen und erlaube den Mikrofonzugriff manuell.</string>
+    <string name="onboarding_open_settings">App-Einstellungen öffnen</string>
+
+    <!-- POST_NOTIFICATIONS rationale -->
+    <string name="onboarding_notifications_title">Benachrichtigungsberechtigung</string>
+    <string name="onboarding_notifications_body">Audio Blackbox nimmt über einen Vordergrunddienst im Hintergrund auf. Dafür ist eine dauerhafte Benachrichtigung nötig, die anzeigt, dass die Aufnahme aktiv ist. Ohne diese Berechtigung kann Android den Dienst beenden.</string>
+    <string name="onboarding_notifications_grant">Benachrichtigungen erlauben</string>
+
+    <!-- POST_NOTIFICATIONS permanently denied -->
+    <string name="onboarding_notifications_denied_title">Benachrichtigungen blockiert</string>
+    <string name="onboarding_notifications_denied_body">Du hast die Benachrichtigungsberechtigung dauerhaft verweigert. Öffne die App-Einstellungen, um sie manuell zu erlauben, damit die Hintergrundaufnahme weiter funktioniert.</string>
+
+    <!-- Akkuoptimierung (banner after onboarding) -->
+    <string name="onboarding_battery_grant">Von der Akkuoptimierung ausnehmen</string>
+    <string name="onboarding_battery_warning">Ohne diese Ausnahme kann das System die Hintergrundaufnahme unterbrechen. Du kannst sie später in den App-Einstellungen aktivieren.</string>
+
+    <!-- Recorder foreground service notification -->
+    <string name="recorder_notification_channel_name">Hintergrundaufnahme</string>
+    <string name="recorder_notification_channel_description">Zeigt den Status der Daueraufnahme, während Audio Blackbox aktiv ist.</string>
+    <string name="recorder_notification_state_recording">Aufnahme läuft</string>
+    <string name="recorder_notification_state_paused">Pausiert (Mikrofon belegt)</string>
+    <string name="recorder_notification_state_idle">Gestoppt</string>
+    <string name="recorder_notification_state_error">Aufnahmefehler</string>
+    <string name="recorder_notification_buffered">Puffer: %1$s</string>
+    <string name="recorder_notification_action_save">Speichern (%1$d m)</string>
+    <string name="recorder_notification_action_save_seconds">Speichern (%1$d s)</string>
+    <string name="recorder_notification_action_stop">Stopp</string>
+    <string name="recorder_notification_export_exporting">Aufnahme wird gespeichert…</string>
+    <string name="recorder_notification_export_success">Aufnahme gespeichert: %1$s</string>
+    <string name="recorder_notification_export_error">Aufnahme konnte nicht gespeichert werden</string>
+    <string name="recorder_notification_forward_recording">Live-Aufnahme: %1$s</string>
+    <string name="recorder_notification_forward_success">Live-Aufnahme gespeichert: %1$s</string>
+    <string name="recorder_notification_forward_error">Live-Aufnahme fehlgeschlagen</string>
+    <!-- Issue #139: a verb distinct from "Speichern", short enough for the notification action slot. -->
+    <string name="recorder_notification_action_start_forward">Live</string>
+    <string name="recorder_notification_action_stop_forward">Live stoppen</string>
+
+    <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
+    <string name="widget_label">Audio Blackbox</string>
+    <string name="widget_description">Aufnahme mit einem Tippen vom Startbildschirm aus ein- und ausschalten.</string>
+    <string name="widget_status_recording">Aufnahme</string>
+    <string name="widget_status_paused">Pausiert</string>
+    <string name="widget_status_error">Fehler</string>
+    <string name="widget_status_idle">Gestoppt</string>
+    <string name="widget_action_start">Start</string>
+    <string name="widget_action_stop">Stopp</string>
+    <string name="widget_action_start_description">Aufnahme starten</string>
+    <string name="widget_action_stop_description">Aufnahme stoppen</string>
+    <string name="widget_content_description_recording">Audio Blackbox: Aufnahme läuft</string>
+    <string name="widget_content_description_paused">Audio Blackbox: pausiert, Mikrofon belegt</string>
+    <string name="widget_content_description_error">Audio Blackbox: Aufnahmefehler</string>
+    <string name="widget_content_description_idle">Audio Blackbox: keine Aufnahme</string>
+
+    <!-- Dashboard (Module 4, issue #6) -->
+    <string name="dashboard_app_subtitle">Audiorekorder mit Dauerpuffer</string>
+    <string name="dashboard_mic_level_label">Mikrofonpegel</string>
+    <string name="dashboard_card_annunciator_label">SYSTEMSTATUS // ANZEIGE</string>
+    <string name="dashboard_annunciator_armed">REKORDER SCHARF &amp; AKTIV</string>
+    <string name="dashboard_annunciator_armed_sub">CH-01 · 16-BIT · FLÜCHTIGER SPEICHER</string>
+    <string name="dashboard_annunciator_paused">PAUSIERT // MIC BELEGT</string>
+    <string name="dashboard_annunciator_paused_sub">TELEFONUNTERBRECHUNG // BEREIT</string>
+    <string name="dashboard_annunciator_standby">REKORDER BEREIT // NICHT SCHARF</string>
+    <string name="dashboard_annunciator_standby_sub">CH-01 · BEREIT ZUM SCHARFSCHALTEN</string>
+    <string name="dashboard_annunciator_error">HAUPTWARNUNG // FEHLER</string>
+    <string name="dashboard_annunciator_error_sub">CH-01 · HARDWARE-WIEDERHERSTELLUNG NÖTIG</string>
+    <string name="dashboard_rbf_tag">REMOVE BEFORE FLIGHT // REKORDER BEREIT</string>
+    <string name="dashboard_rbf_remove_action">Anhänger entfernen und Rekorder scharf schalten</string>
+    <string name="dashboard_card_vu_label">MIKROFONPEGEL (VU)</string>
+    <string name="dashboard_card_tape_label">RINGPUFFER-AUFBEWAHRUNG</string>
+
+    <!-- Issue #337: dashboard-only short form (Mono -> M, Stereo -> S). -->
+    <string name="dashboard_preset_voice_specs">16 kHz · M</string>
+    <string name="dashboard_preset_balanced_specs">32 kHz · M</string>
+    <string name="dashboard_preset_high_fidelity_specs">44.1 kHz · S</string>
+
+    <string name="dashboard_card_save_outcome_label">EXPORTSTATUS // MEDIASTORE</string>
+    <string name="dashboard_card_forward_outcome_label">AUFNAHMESTATUS // MEDIASTORE</string>
+    <string name="gallery_empty_card_label">FLUGDATENARCHIV // MEDIASTORE</string>
+    <string name="onboarding_card_consent_label">ERSTEINRICHTUNG // PFLICHTEINWILLIGUNG</string>
+    <string name="onboarding_card_permissions_label">HINWEIS ZU SYSTEMBERECHTIGUNGEN</string>
+    <string name="settings_card_preset_label">AUDIOQUALITÄT</string>
+    <string name="settings_card_retention_label">AUFBEWAHRUNGSFENSTER</string>
+    <string name="settings_card_telemetry_label">ENERGIE- &amp; SYSTEMTELEMETRIE</string>
+    <string name="settings_card_specs_label">AUDIO-ENGINE-SPEZIFIKATIONEN</string>
+    <string name="settings_card_privacy_label">DATENSCHUTZ &amp; LOKALE VERARBEITUNG</string>
+    <string name="settings_tag_default">STANDARD</string>
+    <string name="settings_tag_live">LIVE (S25)</string>
+    <string name="settings_retention_buffer_type">Ringpuffer im RAM</string>
+    <string name="gallery_card_label">FLUGBUCH // MEDIASTORE</string>
+    <string name="dashboard_mic_level_dbfs">%1$d dBFS</string>
+    <!-- Not "MUTED": see values/strings.xml. -->
+    <string name="dashboard_mic_level_no_signal">KEIN SIGNAL</string>
+    <string name="dashboard_buffer_ram_label">Rollierender Puffer (RAM)</string>
+    <string name="dashboard_buffer_ram_explanation">Audio wird im RAM gehalten. Ist der Puffer voll, wird das älteste Audio fortlaufend überschrieben, ohne auf den Speicher zu schreiben.</string>
+    <string name="dashboard_save_card_title">Vergangenheit speichern (Rückblick)</string>
+    <string name="dashboard_forward_card_title">Fortlaufende Live-Aufnahme</string>
+
+    <string name="dashboard_status_idle">Gestoppt</string>
+    <string name="dashboard_status_recording">Aufnahme läuft</string>
+    <string name="dashboard_status_paused">Pausiert</string>
+    <string name="dashboard_status_error">Fehler</string>
+
+    <string name="dashboard_idle_explanation">Die Aufnahme ist gestoppt. Gerade wird nichts aufgenommen. Schalte den Schalter unten ein, um die Daueraufnahme im Hintergrund zu starten.</string>
+    <string name="dashboard_recording_explanation">Die Aufnahme läuft im Hintergrund weiter. Ist der Puffer voll, wird das älteste Audio automatisch durch das neueste ersetzt.</string>
+    <string name="dashboard_paused_explanation">Die Aufnahme ist pausiert, weil eine andere App das Mikrofon verwendet. Sie wird automatisch fortgesetzt, sobald das Mikrofon frei ist.</string>
+
+    <!-- Capture error reasons (issue #39) -->
+    <string name="capture_error_buffer_allocation_failed">Nicht genug Gerätespeicher für den Audiopuffer. Verkleinere das Aufbewahrungsfenster in den Einstellungen.</string>
+    <string name="capture_error_unsupported_config">Das benötigte Audioaufnahmeformat wird von deinem Gerät nicht unterstützt.</string>
+    <string name="capture_error_audio_record_init_failed">Das Mikrofon konnte nicht initialisiert werden. Stelle sicher, dass keine andere App es verwendet, und versuche es erneut.</string>
+    <string name="capture_error_read_invalid_operation">Der Audiorekorder hat eine ungültige Operation festgestellt. Schalte die Aufnahme aus und wieder ein, um es erneut zu versuchen.</string>
+    <string name="capture_error_read_bad_value">Der Audiorekorder hat ungültige Parameter erhalten. Schalte die Aufnahme aus und wieder ein, um es erneut zu versuchen.</string>
+    <string name="capture_error_read_dead_object">Der Audiodienst des Systems reagiert nicht mehr. Schalte die Aufnahme aus und wieder ein oder starte dein Gerät neu.</string>
+    <string name="capture_error_read_unknown_error">Bei der Audioaufnahme ist ein unerwarteter Fehler aufgetreten. Schalte die Aufnahme aus und wieder ein, um es erneut zu versuchen.</string>
+    <string name="capture_error_foreground_service_promotion_refused">Android hat den Start der Aufnahme gerade abgelehnt. Öffne die App und versuche es erneut.</string>
+    <string name="capture_error_unexpected_capture_failure">Die Aufnahme wurde wegen eines unerwarteten Fehlers beendet. Schalte die Aufnahme aus und wieder ein, um es erneut zu versuchen.</string>
+
+    <string name="dashboard_status_announcement">Aufnahmestatus: %1$s</string>
+
+    <!-- Continuous-recording switch (issue #46) -->
+    <string name="dashboard_engine_switch_label">Daueraufnahme</string>
+    <string name="dashboard_engine_switch_state_on">An: Aufnahme läuft fortlaufend</string>
+    <string name="dashboard_engine_switch_state_off">Aus: Es wird nichts aufgenommen</string>
+    <string name="dashboard_engine_switch_state_paused">Pausiert: Eine andere App verwendet das Mikrofon; die Aufnahme wird automatisch fortgesetzt</string>
+    <string name="dashboard_engine_switch_state_starting">Wird gestartet…</string>
+    <string name="dashboard_engine_switch_state_stopping">Wird gestoppt…</string>
+    <string name="dashboard_engine_switch_state_error">Aus: Aufnahme wegen eines Fehlers beendet</string>
+    <string name="dashboard_engine_switch_announcement">Schalter Daueraufnahme: %1$s</string>
+
+    <string name="dashboard_buffer_status">%1$s von %2$s im Speicher</string>
+    <string name="dashboard_buffer_status_cd">Audiopuffer: %1$s von %2$s im Speicher</string>
+    <string name="dashboard_buffer_full_notice">Puffer voll: Ältestes Audio wird überschrieben</string>
+
+    <!-- Kept for AccessibilityStringsTest's naming-convention check against gallery_empty_body. -->
+    <string name="dashboard_save_button">Vergangenheit speichern</string>
+    <string name="dashboard_save_explanation_full">Den vollen Puffer (%1$d min) im Gerätespeicher sichern.</string>
+    <string name="dashboard_save_explanation_partial">Das bisher aufgenommene Audio (%1$s) im Gerätespeicher sichern.</string>
+    <string name="dashboard_save_button_cd_full">Den vollen Puffer von %1$d min speichern</string>
+    <string name="dashboard_save_button_cd_partial">Die bisher aufgenommenen %1$s speichern</string>
+    <string name="dashboard_save_disabled_no_audio">Warte, bis sich der Puffer füllt, bevor du speichern kannst.</string>
+
+    <string name="dashboard_save_exporting_title">Wird gespeichert…</string>
+    <string name="dashboard_save_exporting_body">Der ausgewählte Zeitraum wird in den Gerätespeicher geschrieben.</string>
+    <string name="dashboard_save_success_title">Aufnahme gespeichert</string>
+    <string name="dashboard_save_success_body">Datei: %1$s</string>
+    <string name="dashboard_save_error_title">Speichern fehlgeschlagen</string>
+    <string name="dashboard_save_outcome_announcement">%1$s. %2$s</string>
+    <string name="dashboard_save_notice_dismiss">OK</string>
+
+    <!-- Forward recording (issue #55, #139) -->
+    <string name="dashboard_forward_start_button">Vergangenheit speichern und weiter aufnehmen</string>
+    <string name="dashboard_forward_recording_title">Live-Aufnahme läuft</string>
+    <string name="dashboard_forward_elapsed_cd">Dauer der Live-Aufnahme: %1$s</string>
+    <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
+    <string name="dashboard_forward_stop_button">Live-Aufnahme stoppen</string>
+    <string name="dashboard_forward_success_title">Live-Aufnahme gespeichert</string>
+    <string name="dashboard_forward_success_body">Datei: %1$s</string>
+    <string name="dashboard_forward_error_title">Live-Aufnahme fehlgeschlagen</string>
+    <string name="dashboard_forward_outcome_announcement">%1$s. %2$s</string>
+
+    <!-- Issue #335: short panel labels. -->
+    <string name="dashboard_panel_save_label">Speichern</string>
+    <string name="dashboard_panel_save_saving_label">Speichert</string>
+    <string name="dashboard_panel_live_label">Live</string>
+    <string name="dashboard_panel_live_stop_label">Stopp</string>
+
+    <!-- Issue #335 wiring: one-line panel captions. -->
+    <string name="dashboard_panel_save_caption_no_audio">Noch kein Audio</string>
+    <string name="dashboard_panel_save_caption_saving">Schreibe auf Speicher…</string>
+    <string name="dashboard_panel_save_caption_full">Puffer voll · %1$d min</string>
+    <string name="dashboard_panel_save_caption_buffered">%1$s gepuffert</string>
+    <string name="dashboard_panel_live_caption_idle">Startet neue Datei</string>
+    <string name="dashboard_panel_live_caption_recording">%1$s live</string>
+
+    <!-- Gallery (Module 4, issue #7) -->
+    <string name="gallery_title">Gespeicherte Aufnahmen</string>
+    <string name="gallery_subtitle">Abspielen, teilen &amp; löschen</string>
+    <string name="gallery_loading">Aufnahmen werden geladen…</string>
+    <string name="gallery_empty_title">Noch keine Aufnahmen</string>
+    <string name="gallery_empty_body">Wenn du einen Ausschnitt speicherst, erscheint er hier, damit du ihn anhören und teilen kannst. Tippe im Cockpit auf \"Vergangenheit speichern\", um deine erste Aufnahme zu erstellen.</string>
+    <string name="gallery_item_duration_size">%1$s · %2$s</string>
+    <string name="gallery_play">Abspielen</string>
+    <string name="gallery_pause">Pause</string>
+    <string name="gallery_play_cd">Aufnahme vom %1$s abspielen</string>
+    <string name="gallery_pause_cd">Aufnahme vom %1$s pausieren</string>
+    <string name="gallery_seek_cd">Wiedergabeposition: %1$s</string>
+    <string name="gallery_elapsed_total">%1$s / %2$s</string>
+    <string name="gallery_share">Teilen</string>
+    <string name="gallery_share_cd">Aufnahme vom %1$s teilen</string>
+    <string name="gallery_share_chooser_title">Aufnahme teilen</string>
+    <string name="gallery_delete">Löschen</string>
+    <string name="gallery_delete_cd">Aufnahme vom %1$s löschen</string>
+    <string name="gallery_delete_confirm_title">Aufnahme löschen?</string>
+    <string name="gallery_delete_confirm_body">Die Datei wird endgültig gelöscht. Das kann nicht rückgängig gemacht werden.</string>
+    <string name="gallery_delete_confirm_action">Löschen</string>
+    <string name="gallery_delete_cancel_action">Abbrechen</string>
+    <string name="gallery_delete_error_title">Löschen nicht möglich</string>
+    <string name="gallery_delete_error_body">Diese Aufnahme konnte nicht gelöscht werden. Das kann bei älteren Aufnahmen nach einer Neuinstallation der App passieren.</string>
+    <string name="gallery_delete_error_dismiss">OK</string>
+    <string name="gallery_refresh_cd">Aufnahmeliste aktualisieren</string>
+    <string name="gallery_recording_badge">Aufnahme</string>
+    <!-- Floating bottom bar (issue #340): "Cockpit" stays untranslated, as in pt-BR. -->
+    <string name="nav_dashboard_label">Cockpit</string>
+    <string name="nav_gallery_label">Aufnahmen</string>
+    <string name="nav_settings_label">Avionik</string>
+
+    <!-- Settings screen / retention stepper (issue #73) -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_subtitle">Audiopuffer &amp; App-Einstellungen</string>
+    <string name="settings_specs_title">Audio-Engine-Spezifikationen</string>
+    <string name="settings_specs_format_label">Audioformat</string>
+    <string name="settings_specs_format_value">16-Bit-PCM (Ringpuffer)</string>
+    <string name="settings_specs_export_label">Exportformat</string>
+    <string name="settings_specs_export_value">AAC (.m4a) / verlustfreies WAV</string>
+    <string name="settings_specs_sample_rate_label">Abtastrate</string>
+    <string name="settings_specs_sample_rate_value">16000 Hz</string>
+    <string name="settings_specs_channels_label">Kanäle</string>
+    <string name="settings_specs_channels_value">Mono (1 Kanal)</string>
+    <string name="settings_specs_channels_stereo_value">Stereo (2 Kanäle)</string>
+    <string name="settings_specs_persistence_label">Speichermodus</string>
+    <string name="settings_specs_persistence_value">MediaStore (lokaler Speicher)</string>
+    <string name="settings_privacy_title">Datenschutz &amp; lokale Verarbeitung</string>
+    <string name="settings_privacy_explanation">Audio Blackbox arbeitet ausschließlich lokal auf deinem Gerät. Mikrofonaudio liegt nur flüchtig im RAM und wird automatisch überschrieben. Es werden keinerlei Telemetrie, Absturzberichte oder Audiostreams an entfernte Server gesendet.</string>
+    <string name="settings_retention_title">Aufbewahrungsfenster des Puffers</string>
+    <string name="settings_retention_explanation">Wie viel Audio der Puffer im Gerätespeicher behält. Ein größerer Wert braucht mehr Speicher. Änderungen werden kurz nach dem letzten Anpassen automatisch übernommen.</string>
+    <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
+    <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
+    <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d Minuten, etwa %2$d Megabyte, derzeit aktiv</string>
+    <string name="settings_retention_value_pending_cd" tools:ignore="PluralsCandidate">%1$d Minuten, etwa %2$d Megabyte, noch nicht übernommen</string>
+    <string name="settings_retention_decrement_cd">Aufbewahrung um 5 Minuten verringern</string>
+    <string name="settings_retention_increment_cd">Aufbewahrung um 5 Minuten erhöhen</string>
+
+    <!-- Quality preset selector (issue #193) -->
+    <string name="settings_quality_preset_title">Audioqualität</string>
+    <string name="settings_quality_preset_explanation">Wähle zwischen längerer Aufbewahrung und höherer Klangtreue. Höhere Klangtreue braucht mehr RAM pro Minute.</string>
+    <string name="settings_preset_voice_title">Sprache</string>
+    <string name="settings_preset_voice_specs">16 kHz · Mono</string>
+    <string name="settings_preset_voice_desc">Für Sprache optimiert, mit dem längsten Aufbewahrungsfenster.</string>
+    <string name="settings_preset_balanced_title">Ausgewogen</string>
+    <string name="settings_preset_balanced_specs">32 kHz · Mono</string>
+    <string name="settings_preset_balanced_desc">Mehr Klarheit bei moderatem Speicherbedarf.</string>
+    <string name="settings_preset_high_fidelity_title">Hohe Klangtreue</string>
+    <string name="settings_preset_high_fidelity_specs">44.1 kHz · Stereo</string>
+    <string name="settings_preset_high_fidelity_desc">Studioqualität mit allen Mikrofonen des Geräts.</string>
+    <string name="settings_preset_max_window">Max.: %1$d min</string>
+
+    <!-- Telemetry & Power Consumption -->
+    <string name="settings_consumption_title">Energie- &amp; Systemtelemetrie</string>
+    <string name="settings_consumption_explanation">Live-Messwerte zu Energieverbrauch, flüchtigem RAM-Bedarf und Effizienz der Hardwareaufnahme.</string>
+    <string name="settings_consumption_battery_drain_label">Hintergrundverbrauch</string>
+    <string name="settings_consumption_battery_drain_value" formatted="false">~1,0 % – 1,5 % / h</string>
+    <string name="settings_consumption_battery_level_label">Akkustatus des Geräts</string>
+    <string name="settings_consumption_battery_level_value">%1$d%% (%2$s)</string>
+    <string name="settings_consumption_battery_charging">Wird geladen</string>
+    <string name="settings_consumption_battery_discharging">Entlädt</string>
+    <string name="settings_consumption_battery_opt_label">Akkuoptimierung</string>
+    <string name="settings_consumption_battery_opt_unrestricted">Ausgenommen (aktiv)</string>
+    <string name="settings_consumption_battery_opt_optimized">Vom System optimiert</string>
+    <string name="settings_consumption_ram_buffer_label">Speicher des Audiopuffers</string>
+    <string name="settings_consumption_ram_buffer_value">%1$.1f MB (flüchtig)</string>
+    <string name="settings_consumption_ram_heap_label">Belegter JVM-Heap</string>
+    <string name="settings_consumption_ram_heap_value">%1$.1f MB / %2$.0f MB max.</string>
+    <string name="settings_consumption_io_label">Datenträger-I/O</string>
+    <string name="settings_consumption_io_value">0 KB/s (nur RAM)</string>
+
+    <!-- Clamp-down notice (issue #298) -->
+    <string name="settings_retention_clamp_notice_title">Aufbewahrungsfenster verkleinert</string>
+    <!-- Not a plural, see values/strings.xml. -->
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Dein Aufbewahrungsfenster wurde von %1$d auf %2$d Minuten verkleinert, weil es auf diesem Gerät nicht mehr passt.</string>
+    <string name="settings_retention_clamp_notice_dismiss">Verstanden</string>
+
+    <!-- Resize-refused notice (issue #272) -->
+    <string name="settings_resize_error_title">Einstellung nicht übernommen</string>
+    <string name="settings_resize_error_body" tools:ignore="PluralsCandidate">Die Aufnahmelänge konnte nicht auf %1$d min (%2$d MB) geändert werden: Auf diesem Gerät ist gerade nicht genug Speicher frei. Die bisherige Einstellung bleibt aktiv. Wähle ein kürzeres Aufbewahrungsfenster oder gib Speicher frei und versuche es erneut.</string>
+    <string name="settings_resize_error_body_no_mb" tools:ignore="PluralsCandidate">Die Aufnahmelänge konnte nicht auf %1$d min geändert werden: Auf diesem Gerät ist gerade nicht genug Speicher frei. Die bisherige Einstellung bleibt aktiv. Wähle ein kürzeres Aufbewahrungsfenster oder gib Speicher frei und versuche es erneut.</string>
+    <string name="settings_resize_error_dismiss">OK</string>
+    <!-- Resume recording after reboot notification (issue #79) -->
+    <string name="notification_resume_channel_name">Hinweis zum Fortsetzen der Aufnahme</string>
+    <string name="notification_resume_channel_description">Erinnert nach einem Neustart des Geräts daran, die Daueraufnahme fortzusetzen.</string>
+    <string name="notification_resume_title">Daueraufnahme fortsetzen</string>
+    <string name="notification_resume_content">Die Aufnahme war vor dem Neustart des Geräts aktiv.</string>
+    <string name="notification_resume_action_resume">Aufnahme fortsetzen</string>
+    <string name="notification_resume_action_dismiss">Schließen</string>
+
+    <!-- About / App Version section -->
+    <string name="settings_about_title">Über</string>
+    <string name="settings_version_label">Version %1$s</string>
+    <string name="settings_version_with_date_label">Version %1$s (%2$s)</string>
+    <string name="settings_website_label">Produktwebsite</string>
+    <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
+    <string name="settings_privacy_policy_label">Datenschutzerklärung</string>
+    <string name="settings_privacy_policy_url">https://alexandre.machado.cc/audio-blackbox/release/privacy-policy</string>
+
+    <!-- Full Diagnostic Log export (issue #388) -->
+    <string name="settings_card_diagnostics_label">DIAGNOSEPROTOKOLL</string>
+    <string name="settings_diagnostics_explanation">Exportiert das vollständige Diagnoseprotokoll des Geräts (Fehler-, Audit- und Absturzeinträge) als eine Datei, um es mit dem Support zu teilen. Nichts wird automatisch gesendet; es öffnet sich nur das normale Teilen-Menü.</string>
+    <string name="settings_diagnostics_export_action">Diagnoseprotokoll exportieren</string>
+    <string name="settings_diagnostics_export_empty_toast">Das Diagnoseprotokoll ist leer, nichts zu exportieren</string>
+    <string name="settings_diagnostics_export_error_toast">Diagnoseprotokoll konnte nicht exportiert werden</string>
+    <string name="settings_diagnostics_export_subject">Audio Blackbox Diagnoseprotokoll</string>
+    <string name="settings_diagnostics_export_chooser_title">Diagnoseprotokoll exportieren</string>
+
+    <!-- Incident Diagnostics / Error Telemetry (issue #206) -->
+    <string name="dashboard_error_telemetry_title">Störungsdiagnose</string>
+    <string name="dashboard_error_telemetry_code">Code: %1$s</string>
+    <string name="dashboard_error_telemetry_preset">Profil: %1$s</string>
+    <string name="dashboard_error_telemetry_buffer">Puffer: %1$d min (%2$s)</string>
+    <string name="dashboard_error_action_retry">Erneut versuchen</string>
+    <string name="dashboard_error_action_copy">Bericht kopieren</string>
+    <string name="dashboard_error_action_share">Protokoll teilen</string>
+    <string name="dashboard_error_copied_toast">Störungsbericht in die Zwischenablage kopiert</string>
+    <string name="dashboard_error_share_chooser_title">Störungsbericht teilen</string>
+
+    <!-- Durable Error Log card + modal (issue #346) -->
+    <string name="dashboard_card_error_log_label">Fehlerprotokoll</string>
+    <string name="dashboard_error_log_card_body">Es wurden Aufnahmefehler protokolliert. Zum Ansehen tippen.</string>
+    <string name="dashboard_error_log_card_body_crash_only">Es wurden App-Abstürze protokolliert. Keine Aufnahmefehler. Zum Ansehen tippen.</string>
+    <string name="dashboard_error_log_card_body_mixed">Es wurden Aufnahmefehler und App-Abstürze protokolliert. Zum Ansehen tippen.</string>
+    <string name="dashboard_error_log_card_content_description">%1$d Aufnahmefehler protokolliert. Tippe, um das Fehlerprotokoll anzusehen.</string>
+    <string name="dashboard_error_log_card_content_description_crash_only">%1$d App-Absturz/-Abstürze protokolliert. Keine Aufnahmefehler. Tippe, um das Fehlerprotokoll anzusehen.</string>
+    <string name="dashboard_error_log_card_content_description_mixed">%1$d Aufnahmefehler und %2$d App-Absturz/-Abstürze protokolliert. Tippe, um das Fehlerprotokoll anzusehen.</string>
+    <string name="dashboard_error_log_card_crash_tag">C%1$d</string>
+    <string name="dashboard_error_log_modal_title">Fehlerprotokoll</string>
+    <string name="dashboard_error_log_modal_empty">Keine Fehler protokolliert.</string>
+    <string name="dashboard_error_log_page_previous">Zurück</string>
+    <string name="dashboard_error_log_page_next">Weiter</string>
+    <string name="dashboard_error_log_page_indicator">Seite %1$d von %2$d</string>
+    <string name="dashboard_error_log_clear">Protokoll leeren</string>
+    <string name="dashboard_error_log_clear_confirm_body">Das gesamte Fehlerprotokoll wird endgültig von diesem Gerät gelöscht. Das kann nicht rückgängig gemacht werden.</string>
+    <string name="dashboard_error_log_clear_cancel">Abbrechen</string>
+    <string name="dashboard_error_log_clear_confirm">Protokoll löschen</string>
+
+    <!-- Gallery File Specifications -->
+    <string name="gallery_details_title">Aufnahmedetails</string>
+    <string name="gallery_details_created_at">Aufnahmebeginn</string>
+    <string name="gallery_details_saved_at">Gespeichert am</string>
+    <string name="gallery_details_duration">Dauer</string>
+    <string name="gallery_details_size">Dateigröße</string>
+    <string name="gallery_details_format">Format</string>
+    <string name="gallery_details_quality">Qualität</string>
+    <string name="gallery_details_storage">Speicherort</string>
+    <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+</resources>
