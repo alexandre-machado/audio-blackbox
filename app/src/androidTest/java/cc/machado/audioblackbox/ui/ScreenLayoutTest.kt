@@ -18,6 +18,7 @@ import cc.machado.audioblackbox.ui.dashboard.FORWARD_STOP_BUTTON_TEST_TAG
 import cc.machado.audioblackbox.ui.dashboard.SaveUiState
 import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import java.util.Locale
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -213,6 +214,67 @@ class ScreenLayoutTest {
         settingsMarker().assertDoesNotExist()
         dashboardTab().assertIsSelected()
         contentArea().assertClearOfBottomBar("the dashboard's content area after switching back")
+    }
+
+    /**
+     * Issue #420 (owner report, 2026-09-26): the edge where content stops above the navigation bar
+     * was not the same on the three screens. The bar itself is shared ([AppScaffold] hosts one
+     * [FloatingBottomBar] for every destination), so its own rectangle could not differ; what
+     * differed was each screen's *scroll viewport*. Dashboard and Settings put their
+     * [SCREEN_GUTTER] padding inside `verticalScroll`, so their viewport runs to the bottom of the
+     * content area and cards scroll right up to the bar's margin. Gallery applied the same gutter
+     * outside its `LazyColumn`, so its list was clipped a further [SCREEN_GUTTER] above the bar:
+     * a visibly different cut-off line, on the same bar, on one of three tabs.
+     *
+     * Runs all three destinations in one composition, switched through the real bar, with a
+     * gallery fixture long enough to overflow [COMPACT_WINDOW_HEIGHT] so every screen really
+     * scrolls (the natural-window-size trap, AGENTS.md section 2).
+     *
+     * Oracle: fails if the floating bar's measured rectangle differs between any two screens, or if
+     * any screen's scroll viewport ends anywhere other than the bottom of the content area
+     * [AppScaffold] reserves above the bar. Against pre-#420 Gallery (gutter outside the list) the
+     * Gallery viewport ends [SCREEN_GUTTER] short and this fails.
+     */
+    @Test
+    fun navigationBarBoundsAndContentCutOffMatchAcrossAllThreeScreens() {
+        composeRule.setContent {
+            CompactHarnessApp(Destination.DASHBOARD, galleryUiState = showcaseGalleryFixture())
+        }
+
+        val screens = listOf(
+            "Dashboard" to dashboardTab(),
+            "Gallery" to galleryTab(),
+            "Settings" to settingsTab(),
+        )
+        var reference: androidx.compose.ui.unit.DpRect? = null
+        for ((name, tab) in screens) {
+            tab.performClick()
+            tab.assertIsSelected()
+
+            val bar = composeRule.onNodeWithTag(FLOATING_BOTTOM_BAR_TEST_TAG).getUnclippedBoundsInRoot()
+            val expected = reference ?: bar.also { reference = it }
+            assertTrue(
+                "the navigation bar on $name is at $bar, but on Dashboard it is at $expected: the " +
+                    "bar is shared, so its bounds must be identical on every screen.",
+                listOf(
+                    bar.left - expected.left,
+                    bar.top - expected.top,
+                    bar.right - expected.right,
+                    bar.bottom - expected.bottom,
+                ).all { it.value.absoluteValue <= GAP_TOLERANCE_DP },
+            )
+
+            val contentBottom = contentArea().getUnclippedBoundsInRoot().bottom
+            val viewportBottom = scrollViewportBottom()
+            assertTrue(
+                "$name's scroll viewport ends at $viewportBottom, ${bar.top - viewportBottom} above " +
+                    "the navigation bar, but the content area reserved above the bar ends at " +
+                    "$contentBottom (${bar.top - contentBottom} above it). Every screen must let " +
+                    "its content scroll to the same edge above the bar; a gutter applied outside " +
+                    "the scroll container moves that edge up on one screen only.",
+                (viewportBottom - contentBottom).value.absoluteValue <= GAP_TOLERANCE_DP,
+            )
+        }
     }
 
     /**
@@ -915,6 +977,21 @@ class ScreenLayoutTest {
     }
 
     // ---- helpers ----
+
+    /**
+     * Bottom edge of the current screen's vertical scroll container: `verticalScroll` on Dashboard
+     * and Settings, the `LazyColumn` on Gallery. Picked as the tallest node that exposes a vertical
+     * scroll range rather than "the only one", so a nested scrollable (a dialog's list, say) cannot
+     * turn this into a matcher error.
+     */
+    private fun scrollViewportBottom(): Dp {
+        val nodes = composeRule
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .fetchSemanticsNodes()
+        assertTrue("no vertically scrollable node on screen", nodes.isNotEmpty())
+        val tallest = nodes.maxBy { it.boundsInRoot.height }
+        return with(composeRule.density) { tallest.boundsInRoot.bottom.toDp() }
+    }
 
     /**
      * Renders [content] with [locale]'s resources, the same `LocalConfiguration`/`LocalContext`
