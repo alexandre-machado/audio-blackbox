@@ -278,9 +278,10 @@ foreground-service type:
 
 Draft functionality description for that form:
 
-> Audio Blackbox continuously buffers a short rolling window (5, 15, 30, or 60
-> minutes, user-configurable, per `AudioConfig.RETENTION_WINDOW_OPTIONS_MINUTES`)
-> of ambient audio in device RAM, similar to a dashcam. Nothing
+> Audio Blackbox continuously buffers a rolling window of ambient audio in device
+> RAM (user-configurable in 5-minute steps, at least 5 minutes, up to a ceiling the
+> app computes from the device's available memory and the chosen quality preset,
+> per `DeviceMemoryBudget`), similar to a dashcam. Nothing
 > is written to disk automatically. The user starts and stops capture explicitly
 > via an in-app toggle, sees a persistent notification the entire time capture is
 > active, and can export the recent buffer to a file on demand. If the foreground
@@ -384,45 +385,13 @@ entry is resolved below.
 
 ## E. Store listing
 
-### Short description (draft, ≤80 characters)
-
-> "Continuous ambient audio buffer. Save the last few minutes, on demand."
-
-(79 characters — Play's short-description limit is 80.)
-
-### Full description (draft, ≤4000 characters)
-
-> Audio Blackbox works like a dashcam, but for sound. It continuously holds the
-> last several minutes of ambient audio in memory — nothing is written to disk
-> until you decide to keep it.
->
-> Start capture, and the app keeps a rolling buffer of the most recent audio
-> (5, 15, 30, or 60 minutes, your choice) in RAM, always overwriting the oldest
-> audio as new audio comes in. If something worth keeping just happened, tap Save and the last few
-> minutes are exported as an audio file you can play back or share — capturing the
-> past, after the fact.
->
-> A persistent notification shows whenever the app is actively capturing, and you
-> control the engine with a single on-device switch. Capture pauses automatically
-> during phone calls and resumes when the call ends, without losing track of time.
->
-> Privacy: audio never leaves your device. There is no server, no account, no
-> network connection of any kind — the entire buffer lives in your phone's memory
-> and is only ever written to storage when you explicitly export it.
->
-> Please note: recording conversations may require the consent of the people
-> involved, depending on the laws where you are. You're responsible for using this
-> app in accordance with applicable law.
-
-This is a draft for the owner to approve and adjust in tone. It's written in
-English only, matching the app's default locale. Since the app itself now
-ships a complete Portuguese (Brazil) translation (`#65`, section A.7 above), a
-pt-BR store listing is a reasonable pairing if the owner decides to publish
-that locale — I did not draft one, since translating store-listing copy well
-is a judgment call about tone and idiom that shouldn't be templated from a
-machine translation of the paragraph above. It intentionally leads with the
-privacy story per issue #48's guidance, since it's the strongest, most
-verifiable claim available.
+**Superseded (issue #419).** The drafts that used to sit here described a fixed
+window selector (5/15/30/60 minutes) that no longer exists (it was retired in #121,
+and the window has had no fixed maximum since #298). The published listing text now
+lives in `distribution/metadata/android/{en-US,pt-BR}/` (title, short and full
+description), and its constraints, including the messaging rules and the
+consent disclaimer, are recorded in `docs/release/store-listing.md` section 1.
+Edit those files rather than reintroducing a draft here.
 
 ### Graphical assets — the 512x512 Play listing icon is already done; feature graphic and screenshots are not
 
