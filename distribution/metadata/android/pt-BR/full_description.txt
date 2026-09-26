@@ -1,6 +1,6 @@
 O Audio Blackbox guarda na memória do celular os últimos minutos de som, para você salvar algo depois que já aconteceu. Tocou um riff que quer guardar? Teve uma ideia falando sozinho? Combinou algo numa reunião da qual você participou? Toque em Salvar e esses minutos viram um arquivo de áudio.
 
-Nada é gravado no armazenamento até você tocar em Salvar, e o app não tem permissão de internet: o seu áudio fica no seu celular.
+Nada é gravado no armazenamento até você tocar em Salvar, e o app não tem permissão de internet: ele nunca envia o seu áudio para lugar nenhum.
 
 Para quem é
 • Músicos e compositores: guarde o riff ou a melodia que acabou de tocar, sem ter apertado gravar antes.
@@ -12,7 +12,7 @@ Como funciona
 • Ligue a gravação contínua. Uma notificação fica visível durante todo o tempo em que o app está gravando.
 • O áudio vai para um buffer circular na memória RAM. Quando o buffer enche, o trecho mais antigo dá lugar ao mais recente.
 • O buffer tem no mínimo 5 minutos e é ajustado de 5 em 5. Não há um máximo fixo: o app calcula quanto o seu aparelho comporta com segurança no preset de qualidade escolhido e mostra esse limite nos Ajustes.
-• Salvar grava tudo o que está no buffer em um arquivo AAC (.m4a). O salvamento seguinte começa onde o anterior terminou, então os arquivos nunca se repetem.
+• Salvar grava em um arquivo AAC (.m4a) o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez), então os arquivos nunca se repetem.
 • Ao vivo inicia uma gravação que mantém o passado do buffer e segue até você parar.
 
 Recursos
@@ -24,7 +24,7 @@ Recursos
 
 Privacidade
 • Sem permissão de internet no app. Sem conta, sem anúncios, sem analytics, sem nuvem.
-• O áudio fica na memória até você salvar. Os arquivos salvos ficam no seu celular, em Recordings/Blackbox (Music/Blackbox no Android 10 e 11).
+• O áudio fica na memória até você salvar. O app nunca envia nada: os arquivos salvos vão para a pasta Recordings/Blackbox do seu celular (Music/Blackbox no Android 10 e 11), sob o seu controle.
 • Gratuito e de código aberto (GPL-3.0), mantido ativamente, com todo o código no GitHub.
 
 Grave com responsabilidade

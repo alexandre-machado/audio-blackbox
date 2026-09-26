@@ -73,7 +73,7 @@
         "name": "Does Audio Blackbox upload anything, or does it need an internet connection?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. The INTERNET permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. Recorded audio stays on the device: in volatile RAM until you save it, and in local storage after that."
+          "text": "No. The INTERNET permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder, where you control it."
         }
       },
       {
@@ -113,7 +113,7 @@
         "name": "How is Audio Blackbox different from Google Recorder or a normal voice recorder app?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk, and nothing leaves the device, until you decide to save it."
+          "text": "A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and the app never uploads anything."
         }
       },
       {
@@ -858,6 +858,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 16px 32px;
       font-size: 0.85rem;
       color: var(--text-dim);
     }
@@ -997,6 +998,10 @@
       }
       .feature-card {
         padding: 24px 18px;
+      }
+      .footer-bottom {
+        flex-direction: column;
+        align-items: flex-start;
       }
     }
   </style>
@@ -1145,10 +1150,10 @@
           Audio Blackbox is a free, open-source Android app that continuously keeps the last minutes of sound in RAM and writes them to local storage only when you explicitly tap Save. The rolling buffer is at least 5 minutes, set in 5-minute steps, and its maximum is computed on your phone from the memory it can safely use and the quality preset you pick.
         </p>
         <p style="margin-bottom:20px;">
-          It solves a problem a normal voice recorder cannot: you only realize something mattered <em>after</em> it was already said, once the recorder button is no longer any use. Audio Blackbox is always listening into its own volatile memory, so tapping Save exports everything in the buffer as a local <code>.m4a</code> (AAC) file, no rewind needed. The next save starts where the previous one ended, so files never overlap. It is made for musicians and songwriters, for ideas and thinking out loud, for meetings and agreements you are part of, and for family moments.
+          It solves a problem a normal voice recorder cannot: you only realize something mattered <em>after</em> it was already said, once the recorder button is no longer any use. Audio Blackbox keeps recording into its own memory while its notification is showing, so tapping Save exports the buffered audio since your last save (the whole buffer the first time) as a local <code>.m4a</code> (AAC) file, no rewind needed, and files never overlap. It is made for musicians and songwriters, for ideas and thinking out loud, for meetings and agreements you are part of, and for family moments.
         </p>
         <p>
-          Unlike a normal recorder or a cloud-backed transcription app, Audio Blackbox has no <code>INTERNET</code> permission in its manifest, no analytics SDK, and no account: nothing is written to disk, and nothing leaves the device, until you decide to save it.
+          Unlike a normal recorder or a cloud-backed transcription app, Audio Blackbox has no <code>INTERNET</code> permission in its manifest, no analytics SDK, and no account: nothing is written to disk until you decide to save it, and the app never uploads anything.
         </p>
       </div>
     </div>
@@ -1167,7 +1172,7 @@
         <div class="feature-card">
           <div class="feature-icon-wrapper icon-orange">⏱</div>
           <h3>Save the Past (Lookback)</h3>
-          <p>Just played a riff worth keeping, or said an idea out loud? Tap Save and Audio Blackbox writes everything in the buffer to a local file. Live keeps the buffered past and carries on recording until you stop.</p>
+          <p>Just played a riff worth keeping, or said an idea out loud? Tap Save and Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to a local file. Live keeps the buffered past and carries on recording until you stop.</p>
         </div>
 
         <div class="feature-card">
@@ -1316,7 +1321,7 @@
         <li style="margin-bottom:14px;">Open the app and grant the <code>RECORD_AUDIO</code> permission (and, on Android 13+, <code>POST_NOTIFICATIONS</code>) when prompted.</li>
         <li style="margin-bottom:14px;">Follow the guided battery-optimization bypass so the recording service is not killed by the OEM when the screen is off.</li>
         <li style="margin-bottom:14px;">Start continuous recording. The app runs as a foreground service with a persistent notification and keeps the most recent minutes in RAM (at least 5, up to the ceiling your phone can hold), discarding older audio as new audio arrives.</li>
-        <li style="margin-bottom:14px;">When something worth keeping just happened, tap <strong>Save</strong>. Audio Blackbox writes the retained buffer to local storage as a <code>.m4a</code> (AAC) file, and nothing needs to be pre-armed or predicted.</li>
+        <li style="margin-bottom:14px;">When something worth keeping just happened, tap <strong>Save</strong>. Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to local storage as a <code>.m4a</code> (AAC) file, and nothing needs to be pre-armed or predicted.</li>
         <li>Open the in-app player to listen, seek, and share the exported recording through any Android Sharesheet target.</li>
       </ol>
     </div>
@@ -1353,7 +1358,7 @@
         </div>
         <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Does Audio Blackbox upload anything, or does it need an internet connection?</h3>
-          <p style="color:var(--text-muted); line-height:1.7;">No. The <code>INTERNET</code> permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. Recorded audio stays on the device: in volatile RAM until you save it, and in local storage after that.</p>
+          <p style="color:var(--text-muted); line-height:1.7;">No. The <code>INTERNET</code> permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder, where you control it.</p>
         </div>
         <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Does it keep recording when the screen is off?</h3>
@@ -1373,7 +1378,7 @@
         </div>
         <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">How is Audio Blackbox different from Google Recorder or a normal voice recorder app?</h3>
-          <p style="color:var(--text-muted); line-height:1.7;">A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk, and nothing leaves the device, until you decide to save it.</p>
+          <p style="color:var(--text-muted); line-height:1.7;">A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and the app never uploads anything.</p>
         </div>
         <div>
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Is it legal to record with Audio Blackbox?</h3>
@@ -1482,7 +1487,7 @@
     }
 
     function triggerSimulatedSave() {
-      alert("Mock demo: in the app, Save writes everything in the buffer to an .m4a (AAC) file in Recordings/Blackbox/.");
+      alert("Mock demo: in the app, Save writes the buffered audio since your last save (the whole buffer the first time) to an .m4a (AAC) file in Recordings/Blackbox/.");
     }
 
     // Mobile Hamburger Navigation
