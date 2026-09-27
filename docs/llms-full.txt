@@ -9,7 +9,7 @@ This file is a self-contained factual description of Audio Blackbox for language
 - Name: Audio Blackbox
 - What it is: an Android recorder that keeps the last minutes of audio in memory, so you can save something after it happened.
 - Platform: Android 10 (API level 29) and newer.
-- Price: free. No account, no ads, no analytics.
+- Price: free. The app has no account and no ads, and contains no analytics or trackers.
 - License: GNU General Public License v3.0. Full source code on GitHub.
 - Author: Alexandre Machado (https://github.com/alexandre-machado)
 - Install: https://play.google.com/store/apps/details?id=cc.machado.audioblackbox (package cc.machado.audioblackbox)
@@ -70,7 +70,8 @@ Other phones and settings will give different numbers.
 ## Privacy
 
 - The Android manifest has no INTERNET permission, so the app cannot send telemetry, ping analytics or upload audio.
-- No Firebase, no analytics or crash-reporting SDKs, no third-party trackers. The advertising ID permission is explicitly removed from the manifest.
+- The app contains no Firebase, no analytics or crash-reporting SDKs, and no third-party trackers. The advertising ID permission is explicitly removed from the manifest.
+- This website (alexandre.machado.cc/audio-blackbox) uses Google Analytics 4 and Microsoft Clarity to measure visits. That applies to the website only, not to the app.
 - Audio stays in volatile RAM until you save it. Saved files stay on your phone, where you control them.
 - Declared permissions: RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS and RECEIVE_BOOT_COMPLETED.
 - Because the source is published under GPL-3.0, anyone can verify these points in the code.
@@ -101,7 +102,7 @@ At least 5 minutes, adjustable in 5-minute steps. There is no fixed maximum: the
 
 ### Does Audio Blackbox upload anything, or does it need an internet connection?
 
-No. The INTERNET permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder, where you control it.
+No. The INTERNET permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control it.
 
 ### Does it keep recording when the screen is off?
 
@@ -117,7 +118,7 @@ Yes. It is free and licensed under the GNU General Public License v3.0, with the
 
 ### Is there a free, open-source alternative to retroactive recorder apps on Android?
 
-Yes. Audio Blackbox is free on Google Play, with no account, no ads and no analytics. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and confirm that the manifest has no INTERNET permission.
+Yes. Audio Blackbox is free on Google Play. The app has no account and no ads, and contains no analytics or trackers. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and confirm that the manifest has no INTERNET permission.
 
 ### What Android versions are supported?
 

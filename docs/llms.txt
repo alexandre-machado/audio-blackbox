@@ -5,7 +5,8 @@
 Key facts:
 
 - Package name: cc.machado.audioblackbox
-- Price: free, with no account, no ads and no analytics.
+- Price: free. The app has no account and no ads, and contains no analytics or trackers.
+- This website uses Google Analytics 4 and Microsoft Clarity to measure visits. That applies to the website only, not to the app.
 - License: GNU General Public License v3.0, source on GitHub.
 - Platform: Android 10 (API 29) and newer.
 - Save writes the buffered audio since the last save (the whole buffer the first time) to an AAC (.m4a) file in Recordings/Blackbox (Music/Blackbox on Android 10 and 11).
