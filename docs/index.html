@@ -29,23 +29,47 @@
   <meta name="twitter:description" content="Save the last minutes you just heard. A rolling RAM buffer sized to your phone, no internet permission, free and open source.">
   <meta name="twitter:image" content="https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png">
 
-  <!-- Structured Data: SoftwareApplication -->
+  <!-- Structured Data: MobileApplication (a schema.org subtype of SoftwareApplication) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
+    "@type": "MobileApplication",
     "name": "Audio Blackbox",
+    "alternateName": "Audio Blackbox: Past Recorder for Android",
     "url": "https://alexandre.machado.cc/audio-blackbox/",
     "description": "Audio Blackbox is a free, open-source Android app that continuously keeps the last minutes of sound in a RAM ring buffer (at least 5 minutes, in 5-minute steps, with the maximum computed on the device from its free memory and the chosen quality preset) and writes them to local storage only when the user taps Save. The Android manifest carries no INTERNET permission, so the app cannot upload audio or telemetry to any server.",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Android 10+",
+    "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+    "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+    "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+    "screenshot": [
+      "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+      "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+      "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+    ],
+    "inLanguage": ["en", "pt-BR", "es", "fr", "de", "it"],
+    "featureList": [
+      "Rolling RAM buffer of the last minutes of audio: at least 5 minutes, in 5-minute steps, with the maximum computed on the device",
+      "Save writes the buffered audio since the last save (the whole buffer the first time) to a local .m4a (AAC) file",
+      "Live recording that keeps the buffered past and continues until stopped",
+      "Three quality presets: Voice (16 kHz mono), Balanced (32 kHz mono), High fidelity (44.1 kHz stereo)",
+      "Foreground service with a visible notification, with Save, Live and Stop actions",
+      "Home-screen widget to start or stop recording with one tap",
+      "Pauses when another app takes the microphone, such as a phone call, and resumes when it is free",
+      "Built-in player to listen, seek, share and delete saved recordings",
+      "The app has no INTERNET permission, no account and no ads, and contains no analytics or trackers"
+    ],
     "author": {
       "@type": "Person",
       "name": "Alexandre Machado",
       "url": "https://github.com/alexandre-machado"
     },
     "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
-    "sameAs": "https://github.com/alexandre-machado/audio-blackbox",
+    "sameAs": [
+      "https://github.com/alexandre-machado/audio-blackbox",
+      "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+    ],
     "offers": {
       "@type": "Offer",
       "price": "0",
@@ -62,6 +86,30 @@
     "mainEntity": [
       {
         "@type": "Question",
+        "name": "Is there an Android app that records the last 5 minutes of audio?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Audio Blackbox keeps the last minutes of sound in your phone's RAM while its notification is showing. The buffer is at least 5 minutes, set in 5-minute steps, and can be longer: the app computes the maximum on your phone from the memory it can safely use and the quality preset you pick. Tap Save and the buffered audio since your last save (the whole buffer the first time) becomes a local .m4a (AAC) file."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How can I save audio from before I pressed record?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Nothing is written to storage until you tap Save."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is a retroactive or always-on buffer recorder?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "It is a recorder that keeps capturing into a fixed-size memory buffer, so you can save what was already said instead of only what comes after you press record. Audio Blackbox works this way on Android: it runs as a foreground service with a persistent notification, holds the last minutes of audio in RAM, and discards the oldest audio as new audio arrives. Save exports the buffered audio, and Live keeps the buffered past and continues recording until you stop it."
+        }
+      },
+      {
+        "@type": "Question",
         "name": "How long is the audio buffer, and how much RAM does it use?",
         "acceptedAnswer": {
           "@type": "Answer",
@@ -73,7 +121,7 @@
         "name": "Does Audio Blackbox upload anything, or does it need an internet connection?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. The INTERNET permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder, where you control it."
+          "text": "No. The INTERNET permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control it."
         }
       },
       {
@@ -86,10 +134,26 @@
       },
       {
         "@type": "Question",
+        "name": "Does an always-on recorder drain the battery?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Audio Blackbox was measured on a Samsung Galaxy S25 recording continuously at the Voice preset: with the screen off it used about 1.0% to 1.5% of the battery per hour and under 1% CPU, with no disk writes while buffering. Other phones and settings will give different numbers."
+        }
+      },
+      {
+        "@type": "Question",
         "name": "Is Audio Blackbox free and open source?",
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "Yes. It is free and licensed under the GNU General Public License v3.0, with the full source code published on GitHub."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is there a free, open-source alternative to retroactive recorder apps on Android?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Audio Blackbox is free on Google Play. The app has no account and no ads, and contains no analytics or trackers. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and confirm that the manifest has no INTERNET permission."
         }
       },
       {
@@ -1353,20 +1417,40 @@
       </div>
       <div style="max-width:760px; margin:0 auto;">
         <div style="margin-bottom:28px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Is there an Android app that records the last 5 minutes of audio?</h3>
+          <p style="color:var(--text-muted); line-height:1.7;">Yes. Audio Blackbox keeps the last minutes of sound in your phone's RAM while its notification is showing. The buffer is at least 5 minutes, set in 5-minute steps, and can be longer: the app computes the maximum on your phone from the memory it can safely use and the quality preset you pick. Tap Save and the buffered audio since your last save (the whole buffer the first time) becomes a local .m4a (AAC) file.</p>
+        </div>
+        <div style="margin-bottom:28px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">How can I save audio from before I pressed record?</h3>
+          <p style="color:var(--text-muted); line-height:1.7;">A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Nothing is written to storage until you tap Save.</p>
+        </div>
+        <div style="margin-bottom:28px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">What is a retroactive or always-on buffer recorder?</h3>
+          <p style="color:var(--text-muted); line-height:1.7;">It is a recorder that keeps capturing into a fixed-size memory buffer, so you can save what was already said instead of only what comes after you press record. Audio Blackbox works this way on Android: it runs as a foreground service with a persistent notification, holds the last minutes of audio in RAM, and discards the oldest audio as new audio arrives. Save exports the buffered audio, and Live keeps the buffered past and continues recording until you stop it.</p>
+        </div>
+        <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">How long is the audio buffer, and how much RAM does it use?</h3>
           <p style="color:var(--text-muted); line-height:1.7;">At least 5 minutes, adjustable in 5-minute steps. There is no fixed maximum: the app computes the ceiling on your phone from the memory it can safely use and the quality preset you pick, and shows it in Settings. At the default Voice preset (16,000 Hz mono) each minute takes about 1.8 MB of RAM, so 30 minutes is about 55 MB. Balanced (32,000 Hz mono) uses twice that per minute and High fidelity (44,100 Hz stereo) about 5.5 times, so the same phone holds a shorter buffer at higher quality. The calculator in the Memory Architecture section of this page shows the RAM for any window and preset.</p>
         </div>
         <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Does Audio Blackbox upload anything, or does it need an internet connection?</h3>
-          <p style="color:var(--text-muted); line-height:1.7;">No. The <code>INTERNET</code> permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder, where you control it.</p>
+          <p style="color:var(--text-muted); line-height:1.7;">No. The <code>INTERNET</code> permission is strictly absent from the app's Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control it.</p>
         </div>
         <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Does it keep recording when the screen is off?</h3>
           <p style="color:var(--text-muted); line-height:1.7;">Yes. Audio Blackbox runs as a foreground service with a persistent notification, and it includes a guided flow to bypass manufacturer battery optimization, so capture continues uninterrupted with the screen locked.</p>
         </div>
         <div style="margin-bottom:28px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Does an always-on recorder drain the battery?</h3>
+          <p style="color:var(--text-muted); line-height:1.7;">Audio Blackbox was measured on a Samsung Galaxy S25 recording continuously at the Voice preset: with the screen off it used about 1.0% to 1.5% of the battery per hour and under 1% CPU, with no disk writes while buffering. Other phones and settings will give different numbers.</p>
+        </div>
+        <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Is Audio Blackbox free and open source?</h3>
           <p style="color:var(--text-muted); line-height:1.7;">Yes. It is free and licensed under the GNU General Public License v3.0, with the full source code published on GitHub.</p>
+        </div>
+        <div style="margin-bottom:28px;">
+          <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">Is there a free, open-source alternative to retroactive recorder apps on Android?</h3>
+          <p style="color:var(--text-muted); line-height:1.7;">Yes. Audio Blackbox is free on Google Play. The app has no account and no ads, and contains no analytics or trackers. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and confirm that the manifest has no INTERNET permission.</p>
         </div>
         <div style="margin-bottom:28px;">
           <h3 style="font-size:1.1rem; color:var(--text-main); margin-bottom:8px;">What Android versions are supported?</h3>

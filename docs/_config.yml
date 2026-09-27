@@ -4,7 +4,7 @@ description: "Avionics themed documentation for Audio Blackbox"
 # Exclude third-party themes by explicitly specifying empty or omitting.
 # GitHub Pages will respect standard Jekyll layouts if _layouts/default.html is present.
 theme: null
-url: "https://alexandre-machado.github.io"
+url: "https://alexandre.machado.cc"
 baseurl: "/audio-blackbox"
 google_analytics: "G-YKTG4D25Q6"
 clarity_id: "e813l34u4t"

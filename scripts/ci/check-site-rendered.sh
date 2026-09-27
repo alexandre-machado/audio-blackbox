@@ -16,6 +16,8 @@
 # and if the production analytics blocks did not render: every page in ANALYTICS_PAGES must
 # carry both the GA4 (googletagmanager.com/gtag/js) and Clarity (clarity.ms/tag) script tags.
 # That catches a missing JEKYLL_ENV=production, which the Liquid scan alone would not.
+# It also fails if index.html's JSON-LD does not parse or its FAQPage drifts from the visible
+# FAQ (#425). That part needs `ruby` on PATH, which pages.yml provides for the Jekyll build.
 #
 # Why: pages.yml used to upload raw docs/ with no Jekyll build, and it raced the legacy
 # Pages builder. Whenever it won, the live hotsite showed `--- ---` and `{% if ... %}` as
@@ -96,8 +98,57 @@ for page in "${ANALYTICS_PAGES[@]}"; do
   done
 done
 
+# Structured data on the landing page (#425): every application/ld+json block must parse as
+# JSON, and the FAQPage Question/Answer pairs must equal the visible #faq text (tags stripped,
+# entities decoded), because search engines penalise FAQ markup that does not match the page.
+# Ruby, not python3: the Pages build job only guarantees the conda-forge Ruby it installs for
+# Jekyll (setup-jekyll-ruby.sh), and json/cgi are in Ruby's stdlib.
+JSONLD_PAGE="${site_dir}/index.html"
+if ! command -v ruby >/dev/null 2>&1; then
+  echo "::error::ruby not on PATH; cannot validate JSON-LD in ${JSONLD_PAGE}"
+  exit 1
+fi
+rc=0
+ruby - "$JSONLD_PAGE" <<'RUBY' || rc=$?
+require "json"
+require "cgi"
+
+f = ARGV[0]
+fail_with = ->(msg) { puts "::error file=#{f}::#{msg}"; exit 1 }
+fail_with.("page missing from built site") unless File.file?(f)
+s = File.read(f, encoding: "UTF-8")
+
+blocks = s.scan(%r{<script type="application/ld\+json">(.*?)</script>}m).map(&:first)
+fail_with.("no application/ld+json blocks found") if blocks.empty?
+parsed = blocks.each_with_index.map do |b, i|
+  JSON.parse(b)
+rescue JSON::ParserError => e
+  fail_with.("JSON-LD block #{i + 1} of #{blocks.size} does not parse: #{e.message.lines.first.to_s.strip[0, 200]}")
+end
+
+faqs = parsed.select { |b| b.is_a?(Hash) && b["@type"] == "FAQPage" }
+fail_with.("expected exactly one FAQPage block, found #{faqs.size}") unless faqs.size == 1
+ld = Array(faqs[0]["mainEntity"]).map { |e| [e["name"], e.dig("acceptedAnswer", "text")] }
+
+start = s.index('<section id="faq">') or fail_with.("no <section id=\"faq\"> in page")
+sec = s[start...(s.index("</section>", start) || s.size)]
+strip = ->(t) { CGI.unescapeHTML(t.gsub(/<[^>]+>/, "")).strip }
+visible = sec.scan(%r{<h3[^>]*>(.*?)</h3>\s*<p[^>]*>(.*?)</p>}m).map { |q, a| [strip.(q), strip.(a)] }
+fail_with.("no visible FAQ entries found in #faq") if visible.empty?
+
+if visible != ld
+  fail_with.("FAQPage JSON-LD has #{ld.size} entries, visible FAQ has #{visible.size}") if visible.size != ld.size
+  i = visible.each_index.find { |k| visible[k] != ld[k] }
+  fail_with.("FAQ entry #{i + 1} differs. visible: #{visible[i].inspect} JSON-LD: #{ld[i].inspect}")
+end
+puts "JSON-LD OK: #{blocks.size} blocks parse; #{ld.size} FAQPage entries match the visible FAQ."
+RUBY
+if [ "$rc" -ne 0 ]; then
+  leaks=1
+fi
+
 if [ "$leaks" -ne 0 ]; then
-  echo "Liquid-leak guard FAILED: '$site_dir' contains unrendered Jekyll source or is missing analytics."
+  echo "Liquid-leak guard FAILED: '$site_dir' contains unrendered Jekyll source, is missing analytics, or has invalid/mismatched JSON-LD."
   exit 1
 fi
 
