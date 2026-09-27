@@ -119,14 +119,14 @@ class ScreenshotCaptureTest {
      * `createConfigurationContext` sidesteps all of it. The locale comes from this file, the AVD's
      * state is irrelevant, and the result is reproducible on any device or emulator.
      *
-     * ## Why both locales are captured in one test
+     * ## Why all locales are captured in one test
      * So the last assertion can exist. The realistic failure here is not a crash, it is the two
      * locales coming out byte-identical -- which is exactly what happened once before and was caught
      * only by running `md5sum` by hand afterwards. Comparing them inside the test makes that a build
      * failure instead of something a human has to remember to check.
      */
     @Test
-    fun capturesShowcaseInBothLocalesAndTheyDiffer() {
+    fun capturesShowcaseInAllLocalesAndTheyDiffer() {
         enableCockpitEdgeToEdge()
 
         // showcaseDashboardFixture is CaptureState.Recording, which renders an infinite pulse
@@ -156,7 +156,7 @@ class ScreenshotCaptureTest {
         // has no effect on any pixel captured here, and setting it would be a no-op dressed up as a
         // safeguard. If locale-sensitive formatting is ever introduced, this is the place to add it
         // back -- with a capture that demonstrably changes, not on the assumption that it must.
-        for (tag in listOf(LOCALE_EN, LOCALE_PT)) {
+        for (tag in STORE_LOCALES) {
             localeTag = tag
             for ((dest, name) in DESTINATIONS) {
                 destination = dest
@@ -172,13 +172,15 @@ class ScreenshotCaptureTest {
         // the wrong language. Compared per screen rather than in aggregate so the message names
         // which screen failed to translate.
         for ((_, name) in DESTINATIONS) {
-            val en = written.getValue("$LOCALE_EN-$name")
-            val pt = written.getValue("$LOCALE_PT-$name")
-            assertFalse(
-                "$name rendered byte-identically in $LOCALE_EN and $LOCALE_PT -- the locale was not " +
-                    "applied, and one of these would ship to the wrong store listing",
-                en.contentEquals(pt),
-            )
+            for ((index, first) in STORE_LOCALES.withIndex()) {
+                for (second in STORE_LOCALES.drop(index + 1)) {
+                    assertFalse(
+                        "$name rendered byte-identically in $first and $second -- the locale was not " +
+                            "applied, and one of these would ship to the wrong store listing",
+                        written.getValue("$first-$name").contentEquals(written.getValue("$second-$name")),
+                    )
+                }
+            }
         }
     }
 
@@ -226,7 +228,7 @@ class ScreenshotCaptureTest {
 
         /** Must match the directory names under `distribution/metadata/android/`. */
         const val LOCALE_EN = "en-US"
-        const val LOCALE_PT = "pt-BR"
+        val STORE_LOCALES = listOf(LOCALE_EN, "pt-BR", "es-ES", "fr-FR", "de-DE", "it-IT")
 
         /** Long enough to be well past any entry transition, so the frame is a settled one. */
         const val ANIMATION_SETTLE_MILLIS = 2_000L

@@ -1,0 +1,135 @@
+menu_label: Abrir ou fechar o menu de navegação
+nav_overview: O que é
+nav_features: Recursos
+nav_specs: Especificações
+nav_usage: Como usar
+nav_download: Download
+nav_faq: Perguntas
+nav_design: 🎛️ Modelo de design
+badge: 100% privado • Sem tráfego de saída • GPL-3.0
+hero_title: O Audio Blackbox para Android
+hero_lead: Guarde o riff que acabou de tocar, a ideia que acabou de falar em voz alta ou o que foi combinado numa reunião da qual você participou. O app mantém os últimos minutos de som na RAM, na medida do seu celular, e grava no armazenamento <strong>só quando você toca em Salvar</strong>.
+get_play: Baixe no Google Play
+design_model: Modelo de design
+open_source_badge: Código aberto (GPL-3.0)
+engine_active: MOTOR ATIVO
+buffer_status: Estado do buffer circular
+mic_input: ENTRADA DO MIC (VU)
+buffer_retention: Retenção do buffer
+demo_save: 💾 Salvar áudio recente (.m4a)
+demo_live: ⏺ Iniciar gravação contínua ao vivo
+overview_tag: Visão geral
+overview_title: O que é o Audio Blackbox?
+overview_intro: O Audio Blackbox é um app Android gratuito e de código aberto que mantém continuamente os últimos minutos de som na RAM e só os grava no armazenamento local quando você toca em Salvar. O buffer circular tem no mínimo 5 minutos, ajustáveis de 5 em 5, e seu máximo é calculado no celular a partir da memória que pode usar com segurança e do preset de qualidade escolhido.
+overview_detail: >-
+  Ele resolve um problema que um gravador comum não resolve: você só percebe que algo importava <em>depois</em> de ter sido dito, quando apertar gravar já não adianta. O Audio Blackbox continua gravando na própria memória enquanto a notificação aparece. Tocar em Salvar exporta o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) para um arquivo local <code>.m4a</code> (AAC), sem precisar voltar no tempo e sem sobreposição entre os arquivos. Foi feito para músicos e compositores, ideias e pensamentos em voz alta, reuniões e combinados dos quais você participa e momentos em família.
+overview_privacy: >-
+  Diferente de um gravador comum ou app de transcrição na nuvem, o Audio Blackbox não tem permissão <code>INTERNET</code> no manifesto, SDK de analytics nem conta: nada é gravado em disco até você decidir salvar, e o app nunca envia nada.
+features_tag: Recursos
+features_title: Feito para privacidade total e recuperação imediata
+features_intro: Captura contínua do ambiente sem desgastar o SSD, esgotar a bateria ou enviar um único byte para a nuvem.
+feature_lookback: Salvar o passado (Lookback)
+feature_lookback_desc: Acabou de tocar um riff que vale guardar ou falar uma ideia em voz alta? Toque em Salvar e o Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo local. Ao vivo mantém o passado do buffer e continua gravando até você parar.
+feature_network: Sem permissão de rede
+feature_network_desc: A permissão <code>INTERNET</code> está ausente do manifesto do app. Ele não pode enviar telemetria, acionar analytics nem enviar áudio. Funcionamento totalmente offline garantido.
+feature_capture: Loop dedicado de captura
+feature_capture_desc: Zero E/S de disco e zero alocações de IPC na thread de captura de áudio. A sincronização garantida com um único escritor elimina falhas e pausas de coleta de lixo.
+feature_interrupt: Detecta outras capturas
+feature_interrupt_desc: Quando outro app em primeiro plano assume o microfone, o Android silencia nosso fluxo em vez de encerrá-lo com erro. O serviço detecta isso diretamente e pausa, retomando assim que o microfone fica livre. A lacuna é mantida como silêncio real, para que os tempos exportados não se desloquem.
+feature_battery: Proteção contra otimização de bateria
+feature_battery_desc: O serviço em primeiro plano, com notificação ativa e orientação para dispensar a otimização de bateria do fabricante, mantém a gravação sem interrupções mesmo com a tela apagada.
+feature_player: Player de áudio integrado
+feature_player_desc: Ouça, avance, apague e compartilhe as gravações <code>.m4a</code> (AAC) pela folha de compartilhamento do Android. Um widget na tela inicial liga ou desliga a gravação com um toque.
+design_tag: Sistema de design da aviação dos EUA
+design_title: Protótipo vivo de design aviônico
+design_desc: 'Teste o simulador interativo de cockpit no navegador: medidor VU em tempo real, luzes de estado Korry, etiqueta de segurança "REMOVE BEFORE FLIGHT" e buffer de memória em fita de voo.'
+design_launch: Abrir modelo de design →
+memory_tag: Arquitetura de memória
+memory_title: Uso previsível de RAM
+memory_desc: O Audio Blackbox aloca seu buffer circular antecipadamente, então o custo de RAM é conhecido antes da gravação. Só redimensiona um buffer em uso quando há memória. Arraste para ver quanta RAM cada janela usa em cada preset.
+retention_label: Janela de retenção (ilustrativa)
+minutes_initial: 30 minutos
+retention_aria: Janela de retenção ilustrativa em minutos
+quality_label: Preset de qualidade
+format_initial: PCM de 16 bits · Mono
+preset_voice: Voz — 16.000 Hz mono (31,3 KB/s)
+preset_balanced: Equilibrado — 32.000 Hz mono (62,5 KB/s)
+preset_fidelity: Alta fidelidade — 44.100 Hz estéreo (172,3 KB/s)
+preset_note: '* Estes são os três presets do app. Voz é o padrão: 16 kHz mono é suficiente para fala, o que um gravador de ambiente quase sempre captura, e oferece uma janela muito mais longa. Alta fidelidade é estéreo, o que também permite usar mais de um microfone nos aparelhos com vários.'
+slider_note: '* O controle é ilustrativo. O app não tem uma janela máxima fixa: o limite real é calculado no celular com base na memória que pode usar com segurança e no preset escolhido, e aparece nos Ajustes. O controle para em 120 minutos por facilidade de uso, não porque o app pare aí.'
+ram_label: Alocação do buffer na RAM
+throughput_initial: 31,3 KB/s de fluxo contínuo
+visuals_tag: Imagens
+visuals_title: Interface de instrumentos aviônicos
+visuals_desc: Feita com Jetpack Compose e Material 3, com uma paleta fixa de cockpit — laranja internacional FED-STD-595, verde NVIS e âmbar de anunciadores Korry — para ler o estado do gravador de relance.
+dashboard_alt: Tela do painel
+gallery_alt: Tela de gravações
+settings_alt: Tela de ajustes
+privacy_title: Privacidade na própria arquitetura
+privacy_desc: Muitos gravadores exigem login na nuvem, analytics em segundo plano e sincronização periódica. O Audio Blackbox <strong>não tem permissão de internet</strong> no manifesto Android, <strong>não tem SDKs de analytics</strong> e nunca acessa servidores remotos. Sua voz fica na memória volátil até você salvar no armazenamento local.
+usage_tag: Uso
+usage_title: Como usar o Audio Blackbox
+usage_intro: 'Depois de instalado, o app é um serviço em segundo plano que você raramente abre: ele escuta, e você toca em Salvar quando algo vale guardar.'
+usage_1: Abra o app e conceda a permissão <code>RECORD_AUDIO</code> (e, no Android 13+, <code>POST_NOTIFICATIONS</code>) quando solicitado.
+usage_2: Siga a orientação para dispensar a otimização de bateria, para que o fabricante não encerre o serviço de gravação com a tela apagada.
+usage_3: Inicie a gravação contínua. O app roda como serviço em primeiro plano com uma notificação persistente e mantém os últimos minutos na RAM (pelo menos 5, até o limite do celular), descartando o áudio antigo conforme chega o novo.
+usage_4: Quando algo que vale guardar acabou de acontecer, toque em <strong>Salvar</strong>. O Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) no armazenamento local como arquivo <code>.m4a</code> (AAC), sem precisar preparar ou prever nada.
+usage_5: Abra o player do app para ouvir, avançar e compartilhar a gravação exportada por qualquer destino da folha de compartilhamento do Android.
+download_tag: Download
+download_title: Baixe o Audio Blackbox no Google Play
+download_intro: Gratuito, de código aberto e disponível para Android 10 ou mais recente.
+install_title: Instale pela Play Store
+install_desc: Abra a página no seu Android e toque em Instalar. Sem cadastro de conta nem convites.
+open_play: Abrir Play Store →
+faq_tag: Perguntas
+faq_title: Perguntas frequentes
+footer_desc: Gravador contínuo do ambiente em memória para Android. Feito com Kotlin, Jetpack Compose e Material 3.
+documentation: Documentação
+design_link: Modelo vivo de design aviônico
+architecture_link: Especificações de arquitetura
+invariants_link: AGENTS.md e invariantes
+privacy_link: Política de privacidade (em inglês)
+open_source: Código aberto
+repo_link: Repositório no GitHub
+license_link: Licença GPL-3.0
+copyright: © 2026 Alexandre Machado. Licenciado sob GNU GPL v3.0.
+consent: 'Use para as suas próprias conversas e ideias. Gravar outras pessoas pode exigir o consentimento delas: consulte as leis de gravação do seu local.'
+title: 'Audio Blackbox: gravador do passado para Android'
+description: O Audio Blackbox é um gravador Android gratuito e de código aberto que guarda os últimos minutos de som na RAM para você salvar o riff, a ideia ou a reunião que acabou de ouvir. Nada é gravado até tocar em Salvar, e o app não tem permissão de internet.
+social_description: Salve os últimos minutos que acabou de ouvir. Buffer circular na RAM na medida do seu celular, sem permissão de internet, gratuito e de código aberto.
+image_alt: 'Arte do Audio Blackbox: um buffer contínuo de áudio ambiente para Android com visual de painel de instrumentos de aviação.'
+language_label: Idioma
+minutes: minutos
+mono: Mono
+stereo: Estéreo
+pcm: PCM de 16 bits
+mb: MB
+throughput: KB/s de fluxo contínuo
+demo_alert: 'Demonstração: no app, Salvar grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo .m4a (AAC) em Recordings/Blackbox/.'
+faq:
+  - q: Existe um app Android que grava os últimos 5 minutos de áudio?
+    a: Sim. O Audio Blackbox mantém os últimos minutos de som na RAM do celular enquanto a notificação aparece. O buffer tem no mínimo 5 minutos, ajustáveis de 5 em 5, e pode ser maior. O app calcula o máximo no celular a partir da memória que pode usar com segurança e do preset de qualidade escolhido. Toque em Salvar e o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) vira um arquivo local .m4a (AAC).
+  - q: Como salvar áudio de antes de eu apertar gravar?
+    a: Um gravador comum não faz isso, porque só começa a capturar quando você aperta gravar. Com o Audio Blackbox, você liga a gravação contínua uma vez e ele mantém os minutos mais recentes em um buffer circular na RAM, substituindo o áudio mais antigo pelo mais novo. Quando algo que vale guardar acabou de acontecer, toque em Salvar para gravar esses minutos em um arquivo. Nada vai para o armazenamento até você tocar em Salvar.
+  - q: O que é um gravador retroativo ou de buffer sempre ativo?
+    a: É um gravador que captura continuamente em um buffer de memória de tamanho fixo, para salvar o que já foi dito, além do que vem depois de apertar gravar. O Audio Blackbox funciona assim no Android, como serviço em primeiro plano com notificação persistente. Ele mantém os últimos minutos na RAM e descarta o áudio mais antigo conforme chega o novo. Salvar exporta o áudio do buffer; Ao vivo mantém o passado do buffer e continua gravando até você parar.
+  - q: Qual é a duração do buffer e quanta RAM ele usa?
+    a: Pelo menos 5 minutos, ajustáveis de 5 em 5. Não há máximo fixo. O app calcula o limite no celular a partir da memória que pode usar com segurança e do preset escolhido, e o mostra nos Ajustes. No preset padrão Voz (16.000 Hz mono), cada minuto usa cerca de 1,8 MB de RAM, então 30 minutos usam cerca de 55 MB. Equilibrado (32.000 Hz mono) usa o dobro por minuto e Alta fidelidade (44.100 Hz estéreo) cerca de 5,5 vezes mais. Assim, o mesmo celular comporta um buffer menor com qualidade maior. A calculadora na seção Arquitetura de memória mostra a RAM para qualquer janela e preset.
+  - q: O Audio Blackbox envia algo ou precisa de internet?
+    a: Não. A permissão INTERNET está ausente do manifesto Android do app, então ele não pode enviar telemetria, acionar analytics nem enviar áudio. O app nunca envia nada. O áudio fica na RAM volátil até você salvar e vai para a pasta Recordings/Blackbox do celular (Music/Blackbox no Android 10 e 11), sob seu controle.
+  - q: Ele continua gravando com a tela apagada?
+    a: Sim. O Audio Blackbox roda como serviço em primeiro plano com notificação persistente e inclui orientação para dispensar a otimização de bateria do fabricante, mantendo a captura sem interrupções com a tela bloqueada.
+  - q: Um gravador sempre ativo esgota a bateria?
+    a: O Audio Blackbox foi medido em um Samsung Galaxy S25 gravando continuamente no preset Voz. Com a tela apagada, usou cerca de 1,0% a 1,5% da bateria por hora e menos de 1% de CPU, sem escritas em disco durante o preenchimento do buffer. Outros celulares e ajustes terão resultados diferentes.
+  - q: O Audio Blackbox é gratuito e de código aberto?
+    a: Sim. É gratuito e licenciado sob GNU General Public License v3.0, com todo o código-fonte publicado no GitHub.
+  - q: Existe uma alternativa gratuita e de código aberto a gravadores retroativos no Android?
+    a: Sim. O Audio Blackbox é gratuito no Google Play. O app não tem conta nem anúncios, analytics ou rastreadores. É licenciado sob GNU General Public License v3.0 e todo o código está no GitHub. Qualquer pessoa pode verificar como funcionam o buffer e o salvamento e confirmar que o manifesto não tem permissão INTERNET.
+  - q: Quais versões do Android são compatíveis?
+    a: Android 10 (API 29) ou mais recente.
+  - q: Como baixar o Audio Blackbox?
+    a: O Audio Blackbox é gratuito no Google Play. Abra a página na Play Store pelo seu Android e toque em Instalar. O link está na seção Download desta página.
+  - q: Qual é a diferença entre o Audio Blackbox e o Google Recorder ou um gravador de voz comum?
+    a: Um gravador comum só captura depois de apertar gravar, então tudo que foi dito antes se perde. O Audio Blackbox grava continuamente em um buffer circular na RAM e só escreve no armazenamento quando você toca em Salvar. Assim, você pode guardar os últimos minutos de algo que já aconteceu. Nada é gravado em disco até você decidir salvar, e o app nunca envia nada.
+  - q: É permitido gravar com o Audio Blackbox?
+    a: Depende de onde você está. Use o Audio Blackbox para as suas próprias conversas e ideias. Gravar outras pessoas pode exigir o consentimento delas, e as regras variam entre países e estados. Consulte as leis de gravação do seu local antes de gravar. O uso do app é de sua responsabilidade.

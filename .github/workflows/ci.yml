@@ -342,17 +342,29 @@ jobs:
             distribution/metadata/android/pt-BR/images/phoneScreenshots/1_dashboard.png
             distribution/metadata/android/pt-BR/images/phoneScreenshots/2_gallery.png
             distribution/metadata/android/pt-BR/images/phoneScreenshots/3_settings.png
+            distribution/metadata/android/es-ES/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/es-ES/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/es-ES/images/phoneScreenshots/3_settings.png
+            distribution/metadata/android/fr-FR/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/fr-FR/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/fr-FR/images/phoneScreenshots/3_settings.png
+            distribution/metadata/android/de-DE/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/de-DE/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/de-DE/images/phoneScreenshots/3_settings.png
+            distribution/metadata/android/it-IT/images/phoneScreenshots/1_dashboard.png
+            distribution/metadata/android/it-IT/images/phoneScreenshots/2_gallery.png
+            distribution/metadata/android/it-IT/images/phoneScreenshots/3_settings.png
             docs/assets/screenshot_dashboard.png
             docs/assets/screenshot_gallery.png
             docs/assets/screenshot_settings.png
           )
 
-          if git diff --quiet --exit-code -- "${SCREENSHOT_PATHS[@]}"; then
+          # New locale captures are initially untracked: git diff alone would miss them.
+          CHANGED="$(git ls-files --modified --others --exclude-standard -- "${SCREENSHOT_PATHS[@]}" | sort -u)"
+          if [[ -z "$CHANGED" ]]; then
             echo "Committed screenshots already match this run's captures. No drift." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-
-          CHANGED="$(git diff --name-only -- "${SCREENSHOT_PATHS[@]}")"
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             {
@@ -364,7 +376,7 @@ jobs:
             # This checkout is on the merge ref (restored above per PR #233 `@rev` finding #1), so
             # the refreshed bytes in SCREENSHOT_PATHS right now are I(R), R = merge(head, main) --
             # the same commit `build` validates. R itself isn't a branch we can push to, so the
-            # nine refreshed files are transplanted onto the real PR head branch H below.
+            # refreshed files are transplanted onto the real PR head branch H below.
             #
             # Issue #301: this used to be a `git commit -c commit.gpgsign=false` + `git push`, on a
             # second worktree checked out from H. The runner holds no signing key, so that commit
@@ -372,8 +384,8 @@ jobs:
             # of any PR carrying it (this happened for real on PR #300 and had to be hand-rewritten,
             # see #301). The commit is created through the GitHub GraphQL API instead
             # (`createCommitOnBranch`), which GitHub signs with its own key -- no key on the runner,
-            # commit lands verified. Read directly from the nine files as they sit in this (merge-ref)
-            # checkout right now and send exactly those nine as `additions`: nothing else from this
+            # commit lands verified. Read directly from the listed files in this (merge-ref)
+            # checkout and send exactly those files as `additions`: nothing else from this
             # tree, in particular nothing from main that H doesn't already have, crosses over. That
             # invariant used to be enforced twice (the transplant loop's destinations and the `git
             # add`'s explicit path list); it's now enforced by construction -- the additions array

@@ -1,0 +1,5 @@
+Neu:
+• Aufeinanderfolgende Speicherungen überschneiden sich nicht mehr: Jede beginnt, wo die vorherige endete
+• Die Puffergrenze wird für dein Handy und Qualitätsprofil berechnet und in den Einstellungen angezeigt
+• Startbildschirm-Widget zum Starten oder Stoppen der Aufnahme mit einem Tippen
+• Weiterhin vollständig offline: keine Internetberechtigung, keine Analytik

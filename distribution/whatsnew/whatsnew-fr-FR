@@ -1,0 +1,5 @@
+Nouveautés :
+• Les sauvegardes successives ne se chevauchent plus : chacune commence où la précédente s'est terminée
+• La limite du tampon est calculée pour votre téléphone et préréglage de qualité, puis affichée dans les Paramètres
+• Widget sur l'écran d'accueil pour démarrer ou arrêter l'enregistrement d'un geste
+• Toujours hors ligne : aucune autorisation internet ni analytique

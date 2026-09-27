@@ -1,0 +1,5 @@
+Novedades:
+• Los guardados consecutivos ya no se solapan: cada uno empieza donde terminó el anterior
+• El límite del búfer se calcula para tu móvil y perfil de calidad y se muestra en Ajustes
+• Widget en la pantalla de inicio para iniciar o detener la grabación con un toque
+• Sigue funcionando sin conexión: sin permiso de internet ni analítica

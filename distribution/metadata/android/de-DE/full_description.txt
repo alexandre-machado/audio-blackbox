@@ -1,0 +1,31 @@
+Audio Blackbox hält die letzten Minuten Ton im Arbeitsspeicher deines Handys, damit du sie im Nachhinein speichern kannst. Gerade ein Riff gespielt, das du behalten möchtest? Eine Idee laut ausgesprochen? In einem Meeting, an dem du teilgenommen hast, etwas vereinbart? Tippe auf Speichern und diese Minuten werden zu einer Audiodatei.
+
+Erst wenn du auf Speichern tippst, wird etwas in den Gerätespeicher geschrieben. Die App hat keine Internetberechtigung und lädt dein Audio daher niemals irgendwo hoch.
+
+Gedacht für
+• Musiker und Songwriter: Behalte das gerade gespielte Riff oder die Melodie, ohne vorher die Aufnahme gestartet zu haben.
+• Ideen und lautes Nachdenken: Speichere den Gedanken, bevor er dir entwischt.
+• Meetings und Vereinbarungen, an denen du beteiligt bist: Behalte das gerade Vereinbarte.
+• Familienmomente: das erste Wort, der lustige Satz, das Lied am Esstisch.
+
+So funktioniert es
+• Schalte die kontinuierliche Aufnahme ein. Eine Benachrichtigung bleibt während der gesamten Aufnahme sichtbar.
+• Audio gelangt in einen Ringpuffer im RAM. Ist er voll, ersetzt das neueste Audio das älteste.
+• Der Puffer umfasst mindestens 5 Minuten und lässt sich in 5-Minuten-Schritten einstellen. Es gibt kein festes Maximum: Die App berechnet, wie viel dein Handy mit dem gewählten Qualitätsprofil sicher aufnehmen kann, und zeigt die Grenze in den Einstellungen an.
+• Speichern schreibt das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) in eine AAC-Datei (.m4a). So überschneiden sich deine Dateien nie.
+• Live startet eine Aufnahme, die die Vergangenheit im Puffer behält und weiterläuft, bis du sie stoppst.
+
+Funktionen
+• Drei Qualitätsprofile: Sprache (16 kHz mono, der längste Puffer), Ausgewogen (32 kHz mono) und Hohe Klangtreue (44,1 kHz stereo, kann auf entsprechend ausgestatteten Handys mehrere Mikrofone nutzen). Höhere Qualität benötigt mehr Speicher pro Minute, der Puffer wird also kürzer.
+• Startbildschirm-Widget zum Starten oder Stoppen der Aufnahme mit einem Tippen.
+• Speichern, Live und Stopp direkt in der Benachrichtigung.
+• Pausiert, wenn eine andere App das Mikrofon belegt, etwa bei einem Anruf, und setzt die Aufnahme automatisch fort, sobald es frei ist.
+• Integrierter Player zum Anhören, Spulen, Teilen und Löschen gespeicherter Aufnahmen.
+
+Datenschutz
+• Keine Internetberechtigung in der App. Kein Konto, keine Werbung, keine Analytik, keine Cloud.
+• Audio bleibt bis zum Speichern im Arbeitsspeicher. Die App lädt nie etwas hoch: Dateien landen im Ordner Recordings/Blackbox auf deinem Handy (Music/Blackbox unter Android 10 und 11), unter deiner Kontrolle.
+• Kostenlos und quelloffen unter GPL-3.0, aktiv gepflegt, mit dem vollständigen Quellcode auf GitHub.
+
+Verantwortungsvoll aufnehmen
+Nutze Audio Blackbox für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern. Die Regeln unterscheiden sich je nach Land und Bundesstaat. Prüfe vor der Aufnahme die örtlichen Gesetze zu Tonaufnahmen. Du bist für deine Nutzung der App verantwortlich.

@@ -1,0 +1,18 @@
+- lang: en
+  path: /
+  name: English
+- lang: pt-BR
+  path: /pt-br/
+  name: Português (Brasil)
+- lang: es
+  path: /es/
+  name: Español
+- lang: fr
+  path: /fr/
+  name: Français
+- lang: de
+  path: /de/
+  name: Deutsch
+- lang: it
+  path: /it/
+  name: Italiano
