@@ -1,5 +1,7 @@
 # Audio Blackbox
 
+**Audio Blackbox is a free, open-source Android app that records the last minutes of audio into RAM, so you can save something after it happened.** It is for anyone who realizes too late that a moment was worth keeping: musicians and songwriters, people thinking out loud, meetings and agreements you are part of, and family moments. The rolling buffer is at least 5 minutes, set in 5-minute steps, with the maximum computed on your phone; nothing is written to storage until you tap Save, and the app has no internet permission. It runs on Android 10 (API 29) and newer, costs nothing, and is licensed under GPL-3.0. **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)** · [Project site](https://alexandre.machado.cc/audio-blackbox/)
+
 <p align="center">
   <img src="docs/design/store/feature_graphic_1024x500.png" alt="Audio Blackbox Banner" width="800">
 </p>

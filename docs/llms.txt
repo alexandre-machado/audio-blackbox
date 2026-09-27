@@ -1,0 +1,38 @@
+# Audio Blackbox
+
+> Audio Blackbox is a free, open-source (GPL-3.0) Android app that keeps the last minutes of sound in a rolling RAM buffer and writes them to local storage only when the user taps Save. The buffer is at least 5 minutes, set in 5-minute steps, with the maximum computed on the device. The app has no INTERNET permission, so it never uploads audio. It runs on Android 10 (API 29) and newer and is free on Google Play.
+
+Key facts:
+
+- Package name: cc.machado.audioblackbox
+- Price: free, with no account, no ads and no analytics.
+- License: GNU General Public License v3.0, source on GitHub.
+- Platform: Android 10 (API 29) and newer.
+- Save writes the buffered audio since the last save (the whole buffer the first time) to an AAC (.m4a) file in Recordings/Blackbox (Music/Blackbox on Android 10 and 11).
+- Recording runs as a foreground service with a visible notification the whole time.
+- Recording other people may require their consent, and the rules differ between countries and states. Users are responsible for checking their local recording laws.
+
+## Product
+
+- [Project site](https://alexandre.machado.cc/audio-blackbox/): overview, features, RAM calculator per quality preset, and FAQ
+- [Google Play listing](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox): install the app (free)
+- [Full description for LLMs](https://alexandre.machado.cc/audio-blackbox/llms-full.txt): self-contained factual description, including how the buffer works and the FAQ
+- [Privacy policy](https://alexandre.machado.cc/audio-blackbox/release/privacy-policy): privacy policy for the app
+
+## Source code
+
+- [GitHub repository](https://github.com/alexandre-machado/audio-blackbox): full source code and README
+- [License (GPL-3.0)](https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE): license text
+- [Android manifest](https://github.com/alexandre-machado/audio-blackbox/blob/main/app/src/main/AndroidManifest.xml): declared permissions, with no INTERNET permission
+
+## Feature docs
+
+- [Capture and memory core](https://alexandre.machado.cc/audio-blackbox/features/01-capture-and-memory-core.html): RAM ring buffer, raw PCM capture and configuration
+- [Android integration and background survival](https://alexandre.machado.cc/audio-blackbox/features/02-android-integration.html): microphone foreground service, persistent notification, audio interruptions, permissions and battery optimization
+- [Export engine](https://alexandre.machado.cc/audio-blackbox/features/03-export-engine.html): how buffered audio is read and written from RAM to a file, including silence gaps
+- [User interface](https://alexandre.machado.cc/audio-blackbox/features/04-user-interface.html): dashboard, main action button, gallery, embedded player and sharing
+
+## Optional
+
+- [Living design model](https://alexandre.machado.cc/audio-blackbox/design/): interactive prototype of the app's avionics-themed design system
+- [Documentation index](https://github.com/alexandre-machado/audio-blackbox/blob/main/docs/README.md): architecture and engineering docs
