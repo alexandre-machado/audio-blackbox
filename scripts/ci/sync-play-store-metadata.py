@@ -4,12 +4,17 @@ Syncs store listing metadata (titles, short/full descriptions, icon, feature gra
 from distribution/metadata/android/<language>/ to the Google Play Developer API (androidpublisher v3).
 """
 
+import argparse
+import hashlib
 import os
 import sys
 import json
 import glob
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--force", action="store_true", help="Upload all metadata and commit even if unchanged")
+    args = parser.parse_args()
     package_name = os.getenv("PACKAGE_NAME", "cc.machado.audioblackbox")
     service_account_json = os.getenv("PLAY_STORE_JSON_KEY")
     
@@ -40,6 +45,13 @@ def main():
 
     service = build("androidpublisher", "v3", credentials=credentials, cache_discovery=False)
 
+    sync_metadata(service, package_name, MediaFileUpload, force=args.force)
+
+
+def sync_metadata(service, package_name, media_upload,
+                  metadata_base="distribution/metadata/android", force=False):
+    from googleapiclient.errors import HttpError
+
     print(f"Starting Google Play Store metadata sync for package: {package_name}")
 
     # 1. Create a new edit session
@@ -47,14 +59,15 @@ def main():
     edit_id = edit_response["id"]
     print(f"Created Play Developer edit session ID: {edit_id}")
 
-    metadata_base = "distribution/metadata/android"
     if not os.path.isdir(metadata_base):
         print(f"Metadata directory '{metadata_base}' not found. Nothing to sync.")
+        service.edits().delete(packageName=package_name, editId=edit_id).execute()
         return
 
     languages = [d for d in os.listdir(metadata_base) if os.path.isdir(os.path.join(metadata_base, d))]
     print(f"Found languages in repository: {languages}")
 
+    changed = False
     for lang in languages:
         lang_dir = os.path.join(metadata_base, lang)
         print(f"\n--- Processing language: {lang} ---")
@@ -76,71 +89,58 @@ def main():
                 listing_body["fullDescription"] = f.read().strip()
 
         if listing_body:
-            print(f"Updating store listing text for '{lang}' (title: '{listing_body.get('title')}')")
-            service.edits().listings().update(
-                packageName=package_name,
-                editId=edit_id,
-                language=lang,
-                body=listing_body
-            ).execute()
+            try:
+                remote = service.edits().listings().get(
+                    packageName=package_name, editId=edit_id, language=lang
+                ).execute()
+            except HttpError as error:
+                if error.resp.status != 404:
+                    raise
+                remote = None
+            text_changed = remote is None or any(
+                value != remote.get(key, "").strip() for key, value in listing_body.items()
+            )
+            print(f"{lang}/text: {'changed' if text_changed else 'unchanged'}"
+                  + (" (forced sync)" if force else ""))
+            if force or text_changed:
+                service.edits().listings().update(
+                    packageName=package_name, editId=edit_id,
+                    language=lang, body=listing_body
+                ).execute()
+                changed = True
 
-        # 3. Icon (512x512 PNG)
-        icon_file = os.path.join(lang_dir, "images", "icon.png")
-        if os.path.isfile(icon_file):
-            print(f"Uploading app icon for '{lang}'...")
-            media = MediaFileUpload(icon_file, mimetype="image/png")
-            service.edits().images().upload(
-                packageName=package_name,
-                editId=edit_id,
-                language=lang,
-                imageType="icon",
-                media_body=media
-            ).execute()
+        # Keep the existing image type and sorted screenshot upload order.
+        image_files = {
+            "icon": glob.glob(os.path.join(lang_dir, "images", "icon.png")),
+            "featureGraphic": glob.glob(os.path.join(lang_dir, "images", "featureGraphic.png")),
+            "phoneScreenshots": sorted(glob.glob(os.path.join(lang_dir, "images", "phoneScreenshots", "*.png"))),
+        }
+        for image_type, files in image_files.items():
+            params = dict(packageName=package_name, editId=edit_id,
+                          language=lang, imageType=image_type)
+            remote_images = service.edits().images().list(**params).execute()
+            local_hashes = set()
+            for filename in files:
+                with open(filename, "rb") as image:
+                    local_hashes.add(hashlib.sha256(image.read()).hexdigest())
+            remote_hashes = {image.get("sha256") for image in remote_images.get("images", [])}
+            images_changed = local_hashes != remote_hashes
+            print(f"{lang}/{image_type}: {'changed' if images_changed else 'unchanged'}"
+                  + (" (forced sync)" if force else ""))
+            if force or images_changed:
+                service.edits().images().deleteall(**params).execute()
+                for filename in files:
+                    media = media_upload(filename, mimetype="image/png")
+                    service.edits().images().upload(**params, media_body=media).execute()
+                changed = True
 
-        # 4. Feature Graphic (1024x500 PNG)
-        fg_file = os.path.join(lang_dir, "images", "featureGraphic.png")
-        if os.path.isfile(fg_file):
-            print(f"Uploading feature graphic for '{lang}'...")
-            media = MediaFileUpload(fg_file, mimetype="image/png")
-            service.edits().images().upload(
-                packageName=package_name,
-                editId=edit_id,
-                language=lang,
-                imageType="featureGraphic",
-                media_body=media
-            ).execute()
-
-        # 5. Phone Screenshots
-        screenshots_dir = os.path.join(lang_dir, "images", "phoneScreenshots")
-        if os.path.isdir(screenshots_dir):
-            screenshots = sorted(glob.glob(os.path.join(screenshots_dir, "*.png")))
-            if screenshots:
-                print(f"Found {len(screenshots)} phone screenshots for '{lang}'. Refreshing...")
-                try:
-                    service.edits().images().deleteall(
-                        packageName=package_name,
-                        editId=edit_id,
-                        language=lang,
-                        imageType="phoneScreenshots"
-                    ).execute()
-                except Exception as e:
-                    print(f"Notice: deleteall screenshots returned {e}")
-
-                for shot in screenshots:
-                    print(f"  Uploading screenshot: {os.path.basename(shot)}")
-                    media = MediaFileUpload(shot, mimetype="image/png")
-                    service.edits().images().upload(
-                        packageName=package_name,
-                        editId=edit_id,
-                        language=lang,
-                        imageType="phoneScreenshots",
-                        media_body=media
-                    ).execute()
-
-    # 6. Commit the entire edit session
-    print("\nCommitting changes to Google Play Developer API...")
-    commit_response = service.edits().commit(packageName=package_name, editId=edit_id).execute()
-    print(f"Successfully committed Play Store metadata edit! Commit ID: {commit_response.get('id', edit_id)}")
+    if changed or force:
+        print("\nCommitting changes to Google Play Developer API...")
+        commit_response = service.edits().commit(packageName=package_name, editId=edit_id).execute()
+        print(f"Successfully committed Play Store metadata edit! Commit ID: {commit_response.get('id', edit_id)}")
+    else:
+        service.edits().delete(packageName=package_name, editId=edit_id).execute()
+        print("No listing change found; deleted edit. Nothing was committed.")
 
 if __name__ == "__main__":
     main()
