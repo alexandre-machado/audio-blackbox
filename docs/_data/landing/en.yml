@@ -1,0 +1,133 @@
+menu_label: Toggle navigation menu
+nav_overview: What is it
+nav_features: Features
+nav_specs: Specifications
+nav_usage: How to Use
+nav_download: Download
+nav_faq: FAQ
+nav_design: 🎛️ Design Model
+badge: 100% Private • Zero Network Egress • GPL-3.0
+hero_title: The Audio Blackbox for Android
+hero_lead: Save the riff you just played, the idea you just said out loud, or what was just agreed in a meeting you were part of. It keeps the last minutes of sound in RAM, sized to your phone, and writes to storage <strong>only when you tap Save</strong>.
+get_play: Get it on Google Play
+design_model: Design Model
+open_source_badge: Open Source (GPL-3.0)
+engine_active: ENGINE ACTIVE
+buffer_status: Rolling Buffer Status
+mic_input: MIC INPUT (VU)
+buffer_retention: Buffer Retention
+demo_save: 💾 Save Recent Audio (.m4a)
+demo_live: ⏺ Start Continuous Live Record
+overview_tag: Overview
+overview_title: What is Audio Blackbox?
+overview_intro: Audio Blackbox is a free, open-source Android app that continuously keeps the last minutes of sound in RAM and writes them to local storage only when you explicitly tap Save. The rolling buffer is at least 5 minutes, set in 5-minute steps, and its maximum is computed on your phone from the memory it can safely use and the quality preset you pick.
+overview_detail: 'It solves a problem a normal voice recorder cannot: you only realize something mattered <em>after</em> it was already said, once the recorder button is no longer any use. Audio Blackbox keeps recording into its own memory while its notification is showing, so tapping Save exports the buffered audio since your last save (the whole buffer the first time) as a local <code>.m4a</code> (AAC) file, no rewind needed, and files never overlap. It is made for musicians and songwriters, for ideas and thinking out loud, for meetings and agreements you are part of, and for family moments.'
+overview_privacy: 'Unlike a normal recorder or a cloud-backed transcription app, Audio Blackbox has no <code>INTERNET</code> permission in its manifest, no analytics SDK, and no account: nothing is written to disk until you decide to save it, and the app never uploads anything.'
+features_tag: Capabilities
+features_title: Designed for Total Privacy & Instant Recall
+features_intro: Continuous ambient capture without wearing out your SSD, draining your battery, or uploading a single byte to the cloud.
+feature_lookback: Save the Past (Lookback)
+feature_lookback_desc: Just played a riff worth keeping, or said an idea out loud? Tap Save and Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to a local file. Live keeps the buffered past and carries on recording until you stop.
+feature_network: Zero Network Permission
+feature_network_desc: <code>INTERNET</code> permission is strictly absent from the application manifest. It cannot send telemetry, ping analytics, or upload sound. Full offline guarantee.
+feature_capture: Dedicated Capture Loop
+feature_capture_desc: Zero disk I/O and zero IPC allocations on the audio capture thread. Guaranteed single-writer synchronization eliminates dropouts and GC pauses.
+feature_interrupt: Concurrent Capture Aware
+feature_interrupt_desc: When another foreground app takes the microphone, Android silences our stream rather than failing it. The service detects that directly and pauses, then resumes the moment the mic is free. The gap is preserved as true silence, so exported timestamps never drift.
+feature_battery: OEM Battery Survival
+feature_battery_desc: Foreground service with active notification and guided manufacturer battery-optimization bypass keeps recording uninterrupted even with the screen off.
+feature_player: In-App Audio Player
+feature_player_desc: Listen, seek, delete, and share your saved <code>.m4a</code> (AAC) recordings through the Android share sheet. A home-screen widget starts or stops recording with one tap.
+design_tag: US Aviation Design System
+design_title: Avionics Living Design Prototype
+design_desc: 'Test the interactive cockpit simulator: real-time VU meter, Korry annunciator status lights, "REMOVE BEFORE FLIGHT" safety tag, and flight tape memory buffer in your browser.'
+design_launch: Launch Design Model <span>→</span>
+memory_tag: Memory Architecture
+memory_title: Predictable RAM Footprint
+memory_desc: Audio Blackbox allocates its circular buffer up front, so its RAM cost is known before recording starts, and it only resizes a running buffer when the memory is there. Slide to see the RAM a window takes at each preset.
+retention_label: Retention Window (illustrative)
+minutes_initial: 30 minutes
+retention_aria: Illustrative retention window in minutes
+quality_label: Quality Preset
+format_initial: 16-bit PCM · Mono
+preset_voice: Voice — 16,000 Hz mono (31.3 KB/s)
+preset_balanced: Balanced — 32,000 Hz mono (62.5 KB/s)
+preset_fidelity: High fidelity — 44,100 Hz stereo (172.3 KB/s)
+preset_note: '* These are the app''s three shipped presets. Voice is the default: 16 kHz mono is ample for speech, which is what an ambient recorder almost always captures, and it buys the longest window by a wide margin. High fidelity is stereo, which is also what engages more than one microphone on devices that have an array.'
+slider_note: '* The slider is illustrative. The app has no fixed maximum window: your phone''s real ceiling is computed on the device from the memory it can safely use and the preset you pick, and shown in Settings. The slider stops at 120 minutes to stay usable, not because the app does.'
+ram_label: RAM Buffer Allocation
+throughput_initial: 31.3 KB/sec continuous throughput
+visuals_tag: Visuals
+visuals_title: Avionics Instrument Interface
+visuals_desc: Built on Jetpack Compose and Material 3, dressed in a fixed cockpit palette — FED-STD-595 International Orange, NVIS green, Korry annunciator amber — so the state of the recorder reads at a glance.
+dashboard_alt: Dashboard Screen
+gallery_alt: Gallery Screen
+settings_alt: Settings Screen
+privacy_title: Architecturally Private by Design
+privacy_desc: Many recording apps require cloud logins, background analytics, and periodic syncing. Audio Blackbox contains <strong>no internet permission</strong> in its Android manifest, has <strong>no analytics SDKs</strong>, and never touches remote servers. Your voice stays in volatile memory until you save it to local storage.
+usage_tag: Usage
+usage_title: How to Use Audio Blackbox
+usage_intro: 'Once installed, the app is a background service you rarely open: it listens, and you tap Save when something is worth keeping.'
+usage_1: Open the app and grant the <code>RECORD_AUDIO</code> permission (and, on Android 13+, <code>POST_NOTIFICATIONS</code>) when prompted.
+usage_2: Follow the guided battery-optimization bypass so the recording service is not killed by the OEM when the screen is off.
+usage_3: Start continuous recording. The app runs as a foreground service with a persistent notification and keeps the most recent minutes in RAM (at least 5, up to the ceiling your phone can hold), discarding older audio as new audio arrives.
+usage_4: When something worth keeping just happened, tap <strong>Save</strong>. Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to local storage as a <code>.m4a</code> (AAC) file, and nothing needs to be pre-armed or predicted.
+usage_5: Open the in-app player to listen, seek, and share the exported recording through any Android Sharesheet target.
+download_tag: Download
+download_title: Get Audio Blackbox on Google Play
+download_intro: Free, open source, and available now for Android 10 and newer.
+install_title: Install from the Play Store
+install_desc: Open the listing on your Android device and tap Install. No account sign-ups, no invitations.
+open_play: Open Play Store &rarr;
+faq_tag: FAQ
+faq_title: Frequently Asked Questions
+footer_desc: Continuous ambient memory recorder for Android. Built with Kotlin, Jetpack Compose, and Material 3.
+documentation: Documentation
+design_link: Avionics Living Design Model
+architecture_link: Architecture Specs
+invariants_link: AGENTS.md & Invariants
+privacy_link: Privacy Policy
+open_source: Open Source
+repo_link: GitHub Repository
+license_link: GPL-3.0 License
+copyright: '&copy; 2026 Alexandre Machado. Licensed under GNU GPL v3.0.'
+consent: 'Use it for your own conversations and ideas. Recording others may require their consent: check your local recording laws.'
+title: 'Audio Blackbox: Past Recorder for Android'
+description: Audio Blackbox is a free, open-source Android recorder that keeps the last minutes of sound in RAM, so you can save the riff, idea or meeting you just heard. Nothing is written until you tap Save, and the app has no internet permission.
+social_description: Save the last minutes you just heard. A rolling RAM buffer sized to your phone, no internet permission, free and open source.
+image_alt: 'Audio Blackbox feature graphic: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel.'
+language_label: Language
+minutes: minutes
+mono: Mono
+stereo: Stereo
+pcm: 16-bit PCM
+mb: MB
+throughput: KB/sec continuous throughput
+demo_alert: 'Mock demo: in the app, Save writes the buffered audio since your last save (the whole buffer the first time) to an .m4a (AAC) file in Recordings/Blackbox/.'
+faq:
+- q: Is there an Android app that records the last 5 minutes of audio?
+  a: 'Yes. Audio Blackbox keeps the last minutes of sound in your phone''s RAM while its notification is showing. The buffer is at least 5 minutes, set in 5-minute steps, and can be longer: the app computes the maximum on your phone from the memory it can safely use and the quality preset you pick. Tap Save and the buffered audio since your last save (the whole buffer the first time) becomes a local .m4a (AAC) file.'
+- q: How can I save audio from before I pressed record?
+  a: A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Nothing is written to storage until you tap Save.
+- q: What is a retroactive or always-on buffer recorder?
+  a: 'It is a recorder that keeps capturing into a fixed-size memory buffer, so you can save what was already said instead of only what comes after you press record. Audio Blackbox works this way on Android: it runs as a foreground service with a persistent notification, holds the last minutes of audio in RAM, and discards the oldest audio as new audio arrives. Save exports the buffered audio, and Live keeps the buffered past and continues recording until you stop it.'
+- q: How long is the audio buffer, and how much RAM does it use?
+  a: 'At least 5 minutes, adjustable in 5-minute steps. There is no fixed maximum: the app computes the ceiling on your phone from the memory it can safely use and the quality preset you pick, and shows it in Settings. At the default Voice preset (16,000 Hz mono) each minute takes about 1.8 MB of RAM, so 30 minutes is about 55 MB. Balanced (32,000 Hz mono) uses twice that per minute and High fidelity (44,100 Hz stereo) about 5.5 times, so the same phone holds a shorter buffer at higher quality. The calculator in the Memory Architecture section of this page shows the RAM for any window and preset.'
+- q: Does Audio Blackbox upload anything, or does it need an internet connection?
+  a: 'No. The INTERNET permission is strictly absent from the app''s Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone''s Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control it.'
+- q: Does it keep recording when the screen is off?
+  a: Yes. Audio Blackbox runs as a foreground service with a persistent notification, and it includes a guided flow to bypass manufacturer battery optimization, so capture continues uninterrupted with the screen locked.
+- q: Does an always-on recorder drain the battery?
+  a: 'Audio Blackbox was measured on a Samsung Galaxy S25 recording continuously at the Voice preset: with the screen off it used about 1.0% to 1.5% of the battery per hour and under 1% CPU, with no disk writes while buffering. Other phones and settings will give different numbers.'
+- q: Is Audio Blackbox free and open source?
+  a: Yes. It is free and licensed under the GNU General Public License v3.0, with the full source code published on GitHub.
+- q: Is there a free, open-source alternative to retroactive recorder apps on Android?
+  a: Yes. Audio Blackbox is free on Google Play. The app has no account and no ads, and contains no analytics or trackers. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and confirm that the manifest has no INTERNET permission.
+- q: What Android versions are supported?
+  a: Android 10 (API level 29) and newer.
+- q: How do I get Audio Blackbox?
+  a: Audio Blackbox is free on Google Play. Open its Play Store listing on your Android device and tap Install; the link is in the Download section of this page.
+- q: How is Audio Blackbox different from Google Recorder or a normal voice recorder app?
+  a: A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and the app never uploads anything.
+- q: Is it legal to record with Audio Blackbox?
+  a: It depends on where you are. Use Audio Blackbox for your own conversations and ideas. Recording other people may require their consent, and the rules differ between countries and states. Check your local recording laws before you record; you are responsible for how you use the app.

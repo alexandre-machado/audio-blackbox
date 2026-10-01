@@ -1,0 +1,31 @@
+Audio Blackbox conserve les dernières minutes de son dans la mémoire de votre téléphone pour les sauvegarder après coup. Vous venez de jouer un riff à garder ? D'exprimer une idée à voix haute ? De convenir de quelque chose lors d'une réunion à laquelle vous participiez ? Touchez Sauvegarder : ces minutes deviennent un fichier audio.
+
+Rien n'est écrit dans le stockage avant de toucher Sauvegarder. L'app n'a pas d'autorisation internet et n'envoie donc jamais votre audio où que ce soit.
+
+Pour qui ?
+• Musiciens et auteurs-compositeurs : gardez le riff ou la mélodie que vous venez de jouer, sans avoir lancé l'enregistrement au préalable.
+• Idées et réflexions à voix haute : sauvegardez l'idée avant qu'elle ne vous échappe.
+• Réunions et accords auxquels vous participez : gardez ce qui vient d'être convenu.
+• Moments en famille : le premier mot, la phrase amusante, la chanson à table.
+
+Fonctionnement
+• Activez l'enregistrement continu. Une notification reste visible pendant toute la durée de l'enregistrement.
+• L'audio va dans un tampon circulaire en RAM. Une fois plein, l'audio le plus ancien est remplacé par le plus récent.
+• Le tampon dure au moins 5 minutes et se règle par pas de 5 minutes. Il n'y a pas de maximum fixe : l'app calcule ce que votre téléphone peut contenir sans risque avec le préréglage de qualité choisi et affiche cette limite dans les Paramètres.
+• Sauvegarder écrit l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier AAC (.m4a). Les fichiers ne se chevauchent donc jamais.
+• Direct lance un enregistrement qui conserve le passé du tampon et continue jusqu'à ce que vous l'arrêtiez.
+
+Fonctionnalités
+• Trois préréglages de qualité : Voix (16 kHz mono, le tampon le plus long), Équilibré (32 kHz mono) et Haute fidélité (44,1 kHz stéréo, qui peut utiliser plusieurs microphones sur les téléphones qui en disposent). Une qualité supérieure utilise plus de mémoire par minute et raccourcit le tampon.
+• Widget sur l'écran d'accueil pour démarrer ou arrêter l'enregistrement d'un geste.
+• Sauvegarder, Direct et Arrêter depuis la notification.
+• Pause quand une autre app utilise le microphone, par exemple lors d'un appel, puis reprise automatique quand il est libre.
+• Lecteur intégré pour écouter, parcourir, partager et supprimer les enregistrements sauvegardés.
+
+Confidentialité
+• Aucune autorisation internet dans l'app. Ni compte, ni publicité, ni analytique, ni cloud.
+• L'audio reste en mémoire jusqu'à sa sauvegarde. L'app n'envoie jamais rien : les fichiers vont dans le dossier Recordings/Blackbox du téléphone (Music/Blackbox sur Android 10 et 11), sous votre contrôle.
+• Gratuite et open source sous GPL-3.0, activement maintenue, avec tout le code sur GitHub.
+
+Enregistrez de manière responsable
+Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays et les États. Consultez les lois locales sur l'enregistrement avant d'enregistrer. Vous êtes responsable de votre utilisation de l'app.

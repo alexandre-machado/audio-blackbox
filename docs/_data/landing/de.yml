@@ -1,0 +1,135 @@
+menu_label: Navigationsmenü öffnen oder schließen
+nav_overview: Überblick
+nav_features: Funktionen
+nav_specs: Technische Daten
+nav_usage: Verwendung
+nav_download: Download
+nav_faq: FAQ
+nav_design: 🎛️ Designmodell
+badge: 100 % privat • Kein ausgehender Netzwerkverkehr • GPL-3.0
+hero_title: Audio Blackbox für Android
+hero_lead: Behalte das gerade gespielte Riff, die laut ausgesprochene Idee oder das, was in einem Meeting vereinbart wurde, an dem du teilgenommen hast. Die App hält die letzten Minuten Ton im RAM, passend zur Kapazität deines Handys, und schreibt <strong>erst beim Tippen auf Speichern</strong> in den Gerätespeicher.
+get_play: Bei Google Play herunterladen
+design_model: Designmodell
+open_source_badge: Quelloffen (GPL-3.0)
+engine_active: AUFNAHMEMODUL AKTIV
+buffer_status: Ringpufferstatus
+mic_input: MIKROFONEINGANG (VU)
+buffer_retention: Pufferdauer
+demo_save: 💾 Letztes Audio speichern (.m4a)
+demo_live: ⏺ Kontinuierliche Live-Aufnahme starten
+overview_tag: Überblick
+overview_title: Was ist Audio Blackbox?
+overview_intro: Audio Blackbox ist eine kostenlose, quelloffene Android-App, die kontinuierlich die letzten Minuten Ton im RAM hält und erst beim ausdrücklichen Tippen auf Speichern in den lokalen Gerätespeicher schreibt. Der Ringpuffer umfasst mindestens 5 Minuten und lässt sich in 5-Minuten-Schritten einstellen. Sein Maximum wird auf deinem Handy anhand des sicher nutzbaren Speichers und des gewählten Qualitätsprofils berechnet.
+overview_detail: >-
+  Die App löst ein Problem, das ein normaler Sprachrekorder nicht lösen kann: Du erkennst erst <em>nach</em> dem Gesagten, dass es wichtig war, wenn die Aufnahmetaste nichts mehr nützt. Audio Blackbox nimmt in den eigenen Arbeitsspeicher auf, solange die Benachrichtigung angezeigt wird. Speichern exportiert das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) als lokale <code>.m4a</code>-Datei (AAC), ohne Zurückspulen und ohne Überschneidungen zwischen den Dateien. Die App ist für Musiker und Songwriter, Ideen und lautes Nachdenken, Meetings und Vereinbarungen, an denen du beteiligt bist, sowie Familienmomente gedacht.
+overview_privacy: >-
+  Anders als ein normaler Rekorder oder eine Transkriptions-App mit Cloud hat Audio Blackbox keine <code>INTERNET</code>-Berechtigung im Manifest, kein Analyse-SDK und kein Konto: Erst wenn du dich zum Speichern entscheidest, wird etwas auf den Datenträger geschrieben. Die App lädt nie etwas hoch.
+features_tag: Funktionen
+features_title: Für vollständige Privatsphäre und sofortigen Rückblick
+features_intro: Kontinuierliche Aufnahme der Umgebung, ohne deine SSD zu verschleißen, deinen Akku zu leeren oder ein einziges Byte in die Cloud hochzuladen.
+feature_lookback: Vergangenheit speichern (Lookback)
+feature_lookback_desc: Gerade ein Riff gespielt, das du behalten möchtest, oder eine Idee laut ausgesprochen? Tippe auf Speichern und Audio Blackbox schreibt das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) in eine lokale Datei. Live behält die Vergangenheit im Puffer und nimmt weiter auf, bis du stoppst.
+feature_network: Keine Netzwerkberechtigung
+feature_network_desc: Die <code>INTERNET</code>-Berechtigung fehlt vollständig im App-Manifest. Die App kann keine Telemetrie senden, Analysedienste kontaktieren oder Ton hochladen. Vollständig offline garantiert.
+feature_capture: Eigene Aufnahmeschleife
+feature_capture_desc: Keine Datenträger-E/A und keine IPC-Allokationen im Audio-Aufnahmethread. Garantierte Synchronisierung mit genau einem Schreiber verhindert Aussetzer und Pausen durch die Speicherbereinigung.
+feature_interrupt: Erkennt gleichzeitige Aufnahmen
+feature_interrupt_desc: Belegt eine andere App im Vordergrund das Mikrofon, schaltet Android unseren Audiostream stumm, statt ihn mit einem Fehler zu beenden. Der Dienst erkennt dies direkt und pausiert. Sobald das Mikrofon frei ist, setzt er die Aufnahme fort. Die Lücke bleibt als echte Stille erhalten, damit exportierte Zeitstempel nicht abweichen.
+feature_battery: Schutz vor Akkuoptimierung des Herstellers
+feature_battery_desc: Ein Vordergrunddienst mit aktiver Benachrichtigung und einer Anleitung zum Ausnehmen der App von der Akkuoptimierung des Herstellers hält die Aufnahme auch bei ausgeschaltetem Bildschirm ohne Unterbrechung am Laufen.
+feature_player: Integrierter Audioplayer
+feature_player_desc: Höre deine gespeicherten <code>.m4a</code>-Aufnahmen (AAC) an, spule, lösche und teile sie über das Android-Teilen-Menü. Ein Startbildschirm-Widget startet oder stoppt die Aufnahme mit einem Tippen.
+design_tag: Designsystem der US-Luftfahrt
+design_title: Interaktiver Avionik-Designprototyp
+design_desc: 'Teste den interaktiven Cockpit-Simulator im Browser: VU-Meter in Echtzeit, Korry-Statusleuchten, Sicherheitsanhänger "REMOVE BEFORE FLIGHT" und Speicherpuffer als Flugbandanzeige.'
+design_launch: Designmodell öffnen →
+memory_tag: Speicherarchitektur
+memory_title: Vorhersehbarer RAM-Bedarf
+memory_desc: Audio Blackbox reserviert den Ringpuffer im Voraus. Der RAM-Bedarf ist daher vor Aufnahmestart bekannt. Ein laufender Puffer wird nur bei verfügbarem Speicher vergrößert oder verkleinert. Bewege den Regler, um den RAM-Bedarf je Dauer und Profil zu sehen.
+retention_label: Aufbewahrungsdauer (Beispiel)
+minutes_initial: 30 Minuten
+retention_aria: Beispielhafte Aufbewahrungsdauer in Minuten
+quality_label: Qualitätsprofil
+format_initial: 16-Bit-PCM · Mono
+preset_voice: Sprache — 16.000 Hz mono (31,3 KB/s)
+preset_balanced: Ausgewogen — 32.000 Hz mono (62,5 KB/s)
+preset_fidelity: Hohe Klangtreue — 44.100 Hz stereo (172,3 KB/s)
+preset_note: '* Dies sind die drei Profile der App. Sprache ist der Standard: 16 kHz mono reicht für Sprache, die ein Umgebungsrekorder fast immer aufnimmt, und ermöglicht mit Abstand die längste Dauer. Hohe Klangtreue ist stereo und nutzt dadurch auch mehrere Mikrofone auf entsprechend ausgestatteten Geräten.'
+slider_note: '* Der Regler dient der Veranschaulichung. Die App hat keine feste Höchstdauer: Die tatsächliche Grenze wird auf deinem Handy aus dem sicher nutzbaren Speicher und dem gewählten Profil berechnet und in den Einstellungen angezeigt. Der Regler endet bei 120 Minuten, damit er gut bedienbar bleibt, nicht weil die App dort aufhört.'
+ram_label: RAM für den Puffer
+throughput_initial: 31,3 KB/s kontinuierlicher Datendurchsatz
+visuals_tag: Bilder
+visuals_title: Oberfläche im Stil von Avionikinstrumenten
+visuals_desc: Entwickelt mit Jetpack Compose und Material 3, mit einer festen Cockpitpalette aus FED-STD-595 International Orange, NVIS-Grün und Korry-Anzeigegelb. So lässt sich der Aufnahmestatus auf einen Blick erkennen.
+dashboard_alt: Cockpit-Bildschirm
+gallery_alt: Aufnahmen-Bildschirm
+settings_alt: Einstellungen-Bildschirm
+privacy_title: Datenschutz in der Architektur verankert
+privacy_desc: Viele Aufnahme-Apps verlangen Cloud-Anmeldungen, Analysen im Hintergrund und regelmäßige Synchronisierung. Audio Blackbox hat <strong>keine Internetberechtigung</strong> im Android-Manifest, enthält <strong>keine Analyse-SDKs</strong> und greift nie auf entfernte Server zu. Deine Stimme bleibt im flüchtigen Arbeitsspeicher, bis du sie lokal speicherst.
+usage_tag: Verwendung
+usage_title: So verwendest du Audio Blackbox
+usage_intro: 'Nach der Installation läuft die App als Hintergrunddienst, den du selten öffnest: Sie hört zu, und du tippst auf Speichern, wenn etwas behalten werden soll.'
+usage_1: Öffne die App und erteile auf Nachfrage die Berechtigung <code>RECORD_AUDIO</code> (unter Android 13+ auch <code>POST_NOTIFICATIONS</code>).
+usage_2: Folge der Anleitung zum Ausnehmen der App von der Akkuoptimierung, damit der Hersteller den Aufnahmedienst bei ausgeschaltetem Bildschirm nicht beendet.
+usage_3: Starte die kontinuierliche Aufnahme. Die App läuft als Vordergrunddienst mit dauerhafter Benachrichtigung und hält die letzten Minuten im RAM (mindestens 5, bis zur Grenze deines Handys). Älteres Audio wird verworfen, sobald neues hinzukommt.
+usage_4: Wenn gerade etwas passiert ist, das du behalten möchtest, tippe auf <strong>Speichern</strong>. Audio Blackbox schreibt das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) als <code>.m4a</code>-Datei (AAC) in den lokalen Gerätespeicher. Du musst nichts vorbereiten oder vorhersehen.
+usage_5: Öffne den integrierten Player, um die exportierte Aufnahme anzuhören, zu spulen und über ein beliebiges Ziel im Android-Teilen-Menü zu teilen.
+download_tag: Download
+download_title: Audio Blackbox bei Google Play herunterladen
+download_intro: Kostenlos, quelloffen und jetzt für Android 10 und neuer verfügbar.
+install_title: Aus dem Play Store installieren
+install_desc: Öffne den Eintrag auf deinem Android-Gerät und tippe auf Installieren. Keine Kontoanmeldung, keine Einladung.
+open_play: Play Store öffnen →
+faq_tag: FAQ
+faq_title: Häufige Fragen
+footer_desc: Kontinuierlicher Umgebungsrekorder im Arbeitsspeicher für Android. Entwickelt mit Kotlin, Jetpack Compose und Material 3.
+documentation: Dokumentation
+design_link: Interaktives Avionik-Designmodell
+architecture_link: Architekturspezifikationen
+invariants_link: AGENTS.md und Invarianten
+privacy_link: Datenschutzerklärung (Englisch)
+open_source: Quelloffen
+repo_link: GitHub-Repository
+license_link: GPL-3.0-Lizenz
+copyright: © 2026 Alexandre Machado. Lizenziert unter GNU GPL v3.0.
+consent: 'Nutze die App für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern: Prüfe die örtlichen Gesetze zu Tonaufnahmen.'
+title: 'Audio Blackbox: Vergangenes auf Android aufnehmen'
+description: Audio Blackbox ist ein kostenloser, quelloffener Android-Rekorder, der die letzten Minuten Ton im RAM hält, um das gerade gehörte Riff, die Idee oder das Meeting zu speichern. Erst beim Tippen auf Speichern wird geschrieben. Die App hat keine Internetberechtigung.
+social_description: Speichere die gerade gehörten letzten Minuten. Ein RAM-Ringpuffer passend zu deinem Handy, ohne Internetberechtigung, kostenlos und quelloffen.
+image_alt: 'Audio-Blackbox-Grafik: ein kontinuierlicher Puffer für Umgebungsgeräusche auf Android im Stil eines Cockpit-Instrumentenbretts.'
+language_label: Sprache
+minutes: Minuten
+mono: Mono
+stereo: Stereo
+pcm: 16-Bit-PCM
+mb: MB
+throughput: KB/s kontinuierlicher Datendurchsatz
+demo_alert: 'Demonstration: In der App schreibt Speichern das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) als .m4a-Datei (AAC) nach Recordings/Blackbox/.'
+faq:
+  - q: Gibt es eine Android-App, die die letzten 5 Minuten Audio aufnimmt?
+    a: Ja. Audio Blackbox hält die letzten Minuten Ton im RAM deines Handys, solange die Benachrichtigung angezeigt wird. Der Puffer umfasst mindestens 5 Minuten, einstellbar in 5-Minuten-Schritten, und kann länger sein. Die App berechnet das Maximum auf deinem Handy anhand des sicher nutzbaren Speichers und des gewählten Qualitätsprofils. Tippe auf Speichern, und das Audio im Puffer seit dem letzten Speichern (beim ersten Mal der ganze Puffer) wird zu einer lokalen .m4a-Datei (AAC).
+  - q: Wie kann ich Audio von vor dem Drücken der Aufnahmetaste speichern?
+    a: Ein normaler Rekorder kann das nicht, weil er erst beim Drücken der Aufnahmetaste beginnt. Bei Audio Blackbox schaltest du die kontinuierliche Aufnahme einmal ein. Die letzten Minuten bleiben in einem Ringpuffer im RAM, wobei das neueste Audio das älteste ersetzt. Ist gerade etwas passiert, das du behalten möchtest, tippe auf Speichern, um diese Minuten in eine Datei zu schreiben. Bis du auf Speichern tippst, wird nichts in den Gerätespeicher geschrieben.
+  - q: Was ist ein rückwirkender Rekorder oder ein Rekorder mit ständig aktivem Puffer?
+    a: Er nimmt fortlaufend in einen Speicherpuffer fester Größe auf. So kannst du bereits Gesagtes speichern, statt nur das, was nach dem Drücken der Aufnahmetaste kommt. Audio Blackbox arbeitet so auf Android, als Vordergrunddienst mit dauerhafter Benachrichtigung. Die letzten Minuten bleiben im RAM; älteres Audio wird verworfen, sobald neues hinzukommt. Speichern exportiert das Audio im Puffer. Live behält die Vergangenheit im Puffer und nimmt weiter auf, bis du stoppst.
+  - q: Wie lang ist der Audiopuffer und wie viel RAM benötigt er?
+    a: Mindestens 5 Minuten, einstellbar in 5-Minuten-Schritten. Es gibt kein festes Maximum. Die App berechnet die Grenze auf deinem Handy anhand des sicher nutzbaren Speichers und des gewählten Profils und zeigt sie in den Einstellungen an. Beim Standardprofil Sprache (16.000 Hz mono) benötigt jede Minute etwa 1,8 MB RAM, also etwa 55 MB für 30 Minuten. Ausgewogen (32.000 Hz mono) benötigt pro Minute doppelt so viel, Hohe Klangtreue (44.100 Hz stereo) etwa das 5,5-Fache. Dasselbe Handy hält bei höherer Qualität daher einen kürzeren Puffer. Der Rechner im Abschnitt Speicherarchitektur zeigt den RAM-Bedarf für jede Dauer und jedes Profil.
+  - q: Lädt Audio Blackbox etwas hoch oder braucht es eine Internetverbindung?
+    a: Nein. Die INTERNET-Berechtigung fehlt vollständig im Android-Manifest der App. Sie kann deshalb keine Telemetrie senden, Analysedienste kontaktieren oder Ton hochladen. Die App lädt nie etwas hoch. Audio bleibt bis zum Speichern im flüchtigen RAM und wird dann in den Ordner Recordings/Blackbox auf deinem Handy geschrieben (Music/Blackbox unter Android 10 und 11), unter deiner Kontrolle.
+  - q: Läuft die Aufnahme bei ausgeschaltetem Bildschirm weiter?
+    a: Ja. Audio Blackbox läuft als Vordergrunddienst mit dauerhafter Benachrichtigung. Eine Anleitung hilft dabei, die App von der Akkuoptimierung des Herstellers auszunehmen, damit die Aufnahme auch bei gesperrtem Bildschirm ohne Unterbrechung weiterläuft.
+  - q: Leert ein ständig aktiver Rekorder den Akku?
+    a: Audio Blackbox wurde auf einem Samsung Galaxy S25 bei kontinuierlicher Aufnahme mit dem Profil Sprache gemessen. Bei ausgeschaltetem Bildschirm benötigte es etwa 1,0 % bis 1,5 % Akku pro Stunde und weniger als 1 % CPU, ohne Schreibzugriffe auf den Datenträger während der Pufferung. Andere Handys und Einstellungen liefern andere Werte.
+  - q: Ist Audio Blackbox kostenlos und quelloffen?
+    a: Ja. Es ist kostenlos und unter der GNU General Public License v3.0 lizenziert. Der vollständige Quellcode ist auf GitHub veröffentlicht.
+  - q: Gibt es eine kostenlose, quelloffene Alternative zu rückwirkenden Aufnahme-Apps auf Android?
+    a: Ja. Audio Blackbox ist kostenlos bei Google Play erhältlich. Die App hat kein Konto und keine Werbung und enthält weder Analytik noch Tracker. Sie ist unter der GNU General Public License v3.0 lizenziert, und ihr vollständiger Quellcode ist auf GitHub. Jeder kann prüfen, wie Puffer und Speichern funktionieren, und bestätigen, dass das Manifest keine INTERNET-Berechtigung enthält.
+  - q: Welche Android-Versionen werden unterstützt?
+    a: Android 10 (API-Level 29) und neuer.
+  - q: Wie bekomme ich Audio Blackbox?
+    a: Audio Blackbox ist kostenlos bei Google Play erhältlich. Öffne den Play-Store-Eintrag auf deinem Android-Gerät und tippe auf Installieren. Den Link findest du im Download-Abschnitt dieser Seite.
+  - q: Wie unterscheidet sich Audio Blackbox von Google Recorder oder einem normalen Sprachrekorder?
+    a: Ein normaler Rekorder nimmt erst nach dem Drücken der Aufnahmetaste auf. Alles zuvor Gesagte geht verloren. Audio Blackbox nimmt kontinuierlich in einen Ringpuffer im RAM auf und schreibt erst beim Tippen auf Speichern in den Gerätespeicher. So kannst du die letzten Minuten von etwas speichern, das bereits passiert ist. Bis zu deiner Entscheidung zum Speichern wird nichts auf den Datenträger geschrieben, und die App lädt nie etwas hoch.
+  - q: Was ist beim Aufnehmen mit Audio Blackbox rechtlich zu beachten?
+    a: Das hängt davon ab, wo du bist. Nutze Audio Blackbox für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern. Die Regeln unterscheiden sich je nach Land und Bundesstaat. Prüfe vor der Aufnahme die örtlichen Gesetze zu Tonaufnahmen. Du bist für deine Nutzung der App verantwortlich.

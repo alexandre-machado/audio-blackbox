@@ -1,0 +1,135 @@
+menu_label: Ouvrir ou fermer le menu de navigation
+nav_overview: Présentation
+nav_features: Fonctionnalités
+nav_specs: Caractéristiques
+nav_usage: Utilisation
+nav_download: Télécharger
+nav_faq: FAQ
+nav_design: 🎛️ Modèle de design
+badge: 100 % privé • Aucun trafic sortant • GPL-3.0
+hero_title: Audio Blackbox pour Android
+hero_lead: Gardez le riff que vous venez de jouer, l'idée exprimée à voix haute ou ce qui vient d'être convenu lors d'une réunion à laquelle vous participiez. L'app conserve les dernières minutes de son en RAM, selon la capacité du téléphone, et écrit dans le stockage <strong>uniquement lorsque vous touchez Sauvegarder</strong>.
+get_play: Disponible sur Google Play
+design_model: Modèle de design
+open_source_badge: Open source (GPL-3.0)
+engine_active: MOTEUR ACTIF
+buffer_status: État du tampon circulaire
+mic_input: ENTRÉE MICRO (VU)
+buffer_retention: Durée du tampon
+demo_save: 💾 Sauvegarder l'audio récent (.m4a)
+demo_live: ⏺ Démarrer l'enregistrement continu en direct
+overview_tag: Présentation
+overview_title: Qu'est-ce qu'Audio Blackbox ?
+overview_intro: Audio Blackbox est une app Android gratuite et open source qui conserve en continu les dernières minutes de son en RAM et ne les écrit dans le stockage local que lorsque vous touchez Sauvegarder. Le tampon circulaire dure au moins 5 minutes, se règle par pas de 5 minutes et son maximum est calculé sur le téléphone selon la mémoire utilisable sans risque et le préréglage de qualité choisi.
+overview_detail: >-
+  Elle résout un problème qu'un enregistreur ordinaire ne peut pas résoudre : vous ne réalisez l'importance de quelque chose qu'<em>après</em> l'avoir entendu, quand lancer l'enregistrement ne sert plus à rien. Audio Blackbox continue d'enregistrer dans sa mémoire tant que sa notification s'affiche. Toucher Sauvegarder exporte l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier local <code>.m4a</code> (AAC), sans rembobinage ni chevauchement des fichiers. Elle s'adresse aux musiciens et auteurs-compositeurs, aux idées et réflexions à voix haute, aux réunions et accords auxquels vous participez et aux moments en famille.
+overview_privacy: >-
+  Contrairement à un enregistreur ordinaire ou à une app de transcription dans le cloud, Audio Blackbox n'a ni autorisation <code>INTERNET</code> dans son manifeste, ni SDK d'analytique, ni compte : rien n'est écrit sur disque avant votre décision de sauvegarder, et l'app n'envoie jamais rien.
+features_tag: Fonctionnalités
+features_title: Confidentialité totale et récupération immédiate
+features_intro: Capture continue du son ambiant sans user votre SSD, épuiser votre batterie ni envoyer un seul octet dans le cloud.
+feature_lookback: Sauvegarder le passé (Lookback)
+feature_lookback_desc: Vous venez de jouer un riff à garder ou d'exprimer une idée à voix haute ? Touchez Sauvegarder et Audio Blackbox écrit l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier local. Direct conserve le passé du tampon et poursuit l'enregistrement jusqu'à votre arrêt.
+feature_network: Aucune autorisation réseau
+feature_network_desc: L'autorisation <code>INTERNET</code> est absente du manifeste de l'app. Elle ne peut ni envoyer de télémétrie, ni contacter des services d'analytique, ni envoyer du son. Fonctionnement entièrement hors ligne garanti.
+feature_capture: Boucle de capture dédiée
+feature_capture_desc: Aucune E/S disque ni allocation IPC sur le thread de capture audio. La synchronisation garantie avec un seul écrivain élimine les coupures et les pauses du ramasse-miettes.
+feature_interrupt: Détection des captures concurrentes
+feature_interrupt_desc: Quand une autre app au premier plan utilise le microphone, Android rend notre flux silencieux au lieu de le faire échouer. Le service le détecte directement et se met en pause, puis reprend dès que le micro est libre. L'intervalle est conservé comme un vrai silence pour éviter tout décalage des horodatages exportés.
+feature_battery: Protection face aux optimisations de batterie
+feature_battery_desc: Le service au premier plan, avec notification active et guide d'exclusion des optimisations de batterie du fabricant, maintient l'enregistrement sans interruption même lorsque l'écran est éteint.
+feature_player: Lecteur audio intégré
+feature_player_desc: Écoutez, parcourez, supprimez et partagez vos enregistrements <code>.m4a</code> (AAC) via le panneau de partage Android. Un widget sur l'écran d'accueil démarre ou arrête l'enregistrement d'un geste.
+design_tag: Système de design de l'aviation américaine
+design_title: Prototype vivant du design avionique
+design_desc: 'Testez le simulateur interactif de cockpit dans votre navigateur : vumètre en temps réel, voyants d’état Korry, étiquette de sécurité "REMOVE BEFORE FLIGHT" et tampon mémoire sous forme de bande de vol.'
+design_launch: Ouvrir le modèle de design →
+memory_tag: Architecture mémoire
+memory_title: Consommation de RAM prévisible
+memory_desc: Audio Blackbox alloue son tampon circulaire à l'avance. Son coût en RAM est donc connu avant l'enregistrement, et un tampon actif n'est redimensionné que si la mémoire est disponible. Déplacez le curseur pour voir la RAM nécessaire à chaque durée et préréglage.
+retention_label: Durée de rétention (illustration)
+minutes_initial: 30 minutes
+retention_aria: Durée de rétention illustrative en minutes
+quality_label: Préréglage de qualité
+format_initial: PCM 16 bits · Mono
+preset_voice: Voix — 16 000 Hz mono (31,3 Ko/s)
+preset_balanced: Équilibré — 32 000 Hz mono (62,5 Ko/s)
+preset_fidelity: Haute fidélité — 44 100 Hz stéréo (172,3 Ko/s)
+preset_note: '* Voici les trois préréglages de l’app. Voix est le réglage par défaut : 16 kHz mono suffit largement à la parole, presque toujours captée par un enregistreur ambiant, et offre de loin la plus longue durée. Haute fidélité est en stéréo, ce qui active aussi plusieurs microphones sur les appareils qui en disposent.'
+slider_note: '* Le curseur est illustratif. L’app n’a pas de durée maximale fixe : la limite réelle est calculée sur le téléphone selon la mémoire utilisable sans risque et le préréglage choisi, puis affichée dans les Paramètres. Le curseur s’arrête à 120 minutes pour rester pratique, pas parce que l’app s’y limite.'
+ram_label: Allocation du tampon en RAM
+throughput_initial: Débit continu de 31,3 Ko/s
+visuals_tag: Images
+visuals_title: Interface d'instruments avioniques
+visuals_desc: Construite avec Jetpack Compose et Material 3, habillée d'une palette fixe de cockpit — orange international FED-STD-595, vert NVIS et ambre des voyants Korry — pour lire l'état de l'enregistreur d'un coup d'œil.
+dashboard_alt: Écran du tableau de bord
+gallery_alt: Écran des enregistrements
+settings_alt: Écran des paramètres
+privacy_title: Confidentialité inscrite dans l'architecture
+privacy_desc: De nombreuses apps d'enregistrement exigent une connexion au cloud, de l'analytique en arrière-plan et des synchronisations périodiques. Audio Blackbox n'a <strong>aucune autorisation internet</strong> dans son manifeste Android, <strong>aucun SDK d'analytique</strong> et ne contacte jamais de serveurs distants. Votre voix reste en mémoire volatile jusqu'à sa sauvegarde dans le stockage local.
+usage_tag: Utilisation
+usage_title: Comment utiliser Audio Blackbox
+usage_intro: 'Une fois installée, l’app est un service en arrière-plan que vous ouvrez rarement : elle écoute et vous touchez Sauvegarder quand quelque chose mérite d’être gardé.'
+usage_1: Ouvrez l'app et accordez l'autorisation <code>RECORD_AUDIO</code> (et, sur Android 13+, <code>POST_NOTIFICATIONS</code>) à la demande.
+usage_2: Suivez le guide d'exclusion des optimisations de batterie pour que le fabricant ne ferme pas le service d'enregistrement lorsque l'écran est éteint.
+usage_3: Démarrez l'enregistrement continu. L'app fonctionne comme un service au premier plan avec une notification persistante et conserve les dernières minutes en RAM (au moins 5, jusqu'à la limite du téléphone), en remplaçant l'audio ancien par le nouveau.
+usage_4: Quand quelque chose à garder vient de se produire, touchez <strong>Sauvegarder</strong>. Audio Blackbox écrit l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans le stockage local sous forme de fichier <code>.m4a</code> (AAC), sans préparation ni anticipation.
+usage_5: Ouvrez le lecteur intégré pour écouter, parcourir et partager l'enregistrement exporté vers toute destination du panneau de partage Android.
+download_tag: Télécharger
+download_title: Obtenez Audio Blackbox sur Google Play
+download_intro: Gratuite, open source et disponible dès maintenant pour Android 10 et versions ultérieures.
+install_title: Installer depuis le Play Store
+install_desc: Ouvrez la fiche sur votre Android et touchez Installer. Ni création de compte ni invitation.
+open_play: Ouvrir le Play Store →
+faq_tag: FAQ
+faq_title: Questions fréquentes
+footer_desc: Enregistreur continu du son ambiant en mémoire pour Android. Développé avec Kotlin, Jetpack Compose et Material 3.
+documentation: Documentation
+design_link: Modèle vivant du design avionique
+architecture_link: Spécifications d'architecture
+invariants_link: AGENTS.md et invariants
+privacy_link: Politique de confidentialité (en anglais)
+open_source: Open source
+repo_link: Dépôt GitHub
+license_link: Licence GPL-3.0
+copyright: © 2026 Alexandre Machado. Sous licence GNU GPL v3.0.
+consent: 'Utilisez l’app pour vos propres conversations et idées. Enregistrer d’autres personnes peut nécessiter leur consentement : consultez les lois locales sur l’enregistrement.'
+title: 'Audio Blackbox : enregistrez le passé sur Android'
+description: Audio Blackbox est un enregistreur Android gratuit et open source qui conserve les dernières minutes de son en RAM pour sauvegarder le riff, l'idée ou la réunion que vous venez d'entendre. Rien n'est écrit avant de toucher Sauvegarder et l'app n'a pas d'autorisation internet.
+social_description: Sauvegardez les dernières minutes entendues. Un tampon circulaire en RAM adapté à votre téléphone, sans autorisation internet, gratuit et open source.
+image_alt: 'Visuel Audio Blackbox : un tampon continu de son ambiant pour Android, au style de tableau de bord d’aviation.'
+language_label: Langue
+minutes: minutes
+mono: Mono
+stereo: Stéréo
+pcm: PCM 16 bits
+mb: Mo
+throughput: Ko/s en continu
+demo_alert: 'Démonstration : dans l’app, Sauvegarder écrit l’audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier .m4a (AAC) dans Recordings/Blackbox/.'
+faq:
+  - q: Existe-t-il une app Android qui enregistre les 5 dernières minutes d'audio ?
+    a: Oui. Audio Blackbox conserve les dernières minutes de son dans la RAM du téléphone tant que sa notification s'affiche. Le tampon dure au moins 5 minutes, se règle par pas de 5 minutes et peut être plus long. L'app calcule le maximum sur votre téléphone selon la mémoire utilisable sans risque et le préréglage de qualité choisi. Touchez Sauvegarder et l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) devient un fichier local .m4a (AAC).
+  - q: Comment sauvegarder l'audio d'avant le début de l'enregistrement ?
+    a: Un enregistreur ordinaire ne le peut pas, car il ne capture qu'une fois l'enregistrement lancé. Avec Audio Blackbox, vous activez une fois l'enregistrement continu, qui conserve les dernières minutes dans un tampon circulaire en RAM, remplaçant l'audio ancien par le nouveau. Quand quelque chose à garder vient de se produire, touchez Sauvegarder pour écrire ces minutes dans un fichier. Rien n'est écrit dans le stockage avant de toucher Sauvegarder.
+  - q: Qu'est-ce qu'un enregistreur rétroactif ou à tampon toujours actif ?
+    a: C'est un enregistreur qui capture en continu dans un tampon mémoire de taille fixe, pour sauvegarder ce qui a déjà été dit, pas seulement ce qui suit le lancement de l'enregistrement. Audio Blackbox fonctionne ainsi sur Android, comme un service au premier plan avec notification persistante. Il conserve les dernières minutes en RAM et supprime l'audio ancien à mesure que le nouveau arrive. Sauvegarder exporte l'audio du tampon ; Direct conserve le passé du tampon et poursuit l'enregistrement jusqu'à votre arrêt.
+  - q: Quelle est la durée du tampon et combien de RAM utilise-t-il ?
+    a: Au moins 5 minutes, réglables par pas de 5 minutes. Il n'y a pas de maximum fixe. L'app calcule la limite sur votre téléphone selon la mémoire utilisable sans risque et le préréglage choisi, puis l'affiche dans les Paramètres. Avec Voix, le préréglage par défaut (16 000 Hz mono), chaque minute utilise environ 1,8 Mo de RAM, soit environ 55 Mo pour 30 minutes. Équilibré (32 000 Hz mono) en utilise deux fois plus par minute et Haute fidélité (44 100 Hz stéréo) environ 5,5 fois plus. Le même téléphone conserve donc un tampon plus court à qualité supérieure. Le calculateur de la section Architecture mémoire montre la RAM pour chaque durée et préréglage.
+  - q: Audio Blackbox envoie-t-il des données ou nécessite-t-il internet ?
+    a: Non. L'autorisation INTERNET est absente du manifeste Android de l'app, qui ne peut donc ni envoyer de télémétrie, ni contacter des services d'analytique, ni envoyer du son. L'app n'envoie jamais rien. L'audio reste en RAM volatile jusqu'à sa sauvegarde dans le dossier Recordings/Blackbox du téléphone (Music/Blackbox sur Android 10 et 11), sous votre contrôle.
+  - q: L'enregistrement continue-t-il quand l'écran est éteint ?
+    a: Oui. Audio Blackbox fonctionne comme un service au premier plan avec notification persistante et propose un guide d'exclusion des optimisations de batterie du fabricant, pour poursuivre la capture sans interruption lorsque l'écran est verrouillé.
+  - q: Un enregistreur toujours actif épuise-t-il la batterie ?
+    a: Audio Blackbox a été mesuré sur un Samsung Galaxy S25 enregistrant en continu avec le préréglage Voix. Écran éteint, il utilisait environ 1,0 % à 1,5 % de batterie par heure et moins de 1 % du processeur, sans écriture disque pendant la mise en tampon. Les résultats varient selon les téléphones et les réglages.
+  - q: Audio Blackbox est-il gratuit et open source ?
+    a: Oui. Il est gratuit et distribué sous GNU General Public License v3.0, avec l'intégralité du code source publiée sur GitHub.
+  - q: Existe-t-il une alternative gratuite et open source aux apps d'enregistrement rétroactif sur Android ?
+    a: Oui. Audio Blackbox est gratuit sur Google Play. L'app n'a ni compte ni publicité, et ne contient ni analytique ni traceurs. Elle est sous GNU General Public License v3.0 et tout son code est sur GitHub. Chacun peut vérifier le fonctionnement du tampon et de la sauvegarde, et confirmer l'absence d'autorisation INTERNET dans le manifeste.
+  - q: Quelles versions d'Android sont prises en charge ?
+    a: Android 10 (niveau d'API 29) et versions ultérieures.
+  - q: Comment obtenir Audio Blackbox ?
+    a: Audio Blackbox est gratuit sur Google Play. Ouvrez sa fiche Play Store sur votre Android et touchez Installer. Le lien se trouve dans la section Télécharger de cette page.
+  - q: En quoi Audio Blackbox diffère-t-il de Google Recorder ou d'un enregistreur vocal ordinaire ?
+    a: Un enregistreur ordinaire ne capture qu'après le lancement de l'enregistrement ; tout ce qui a été dit avant est perdu. Audio Blackbox enregistre en continu dans un tampon circulaire en RAM et n'écrit dans le stockage que lorsque vous touchez Sauvegarder. Vous pouvez ainsi garder les dernières minutes de quelque chose qui s'est déjà produit. Rien n'est écrit sur disque avant votre décision de sauvegarder et l'app n'envoie jamais rien.
+  - q: Que dit la loi sur l'enregistrement avec Audio Blackbox ?
+    a: Cela dépend de l'endroit où vous êtes. Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays et les États. Consultez les lois locales sur l'enregistrement avant d'enregistrer. Vous êtes responsable de votre utilisation de l'app.

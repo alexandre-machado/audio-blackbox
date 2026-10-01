@@ -5,10 +5,10 @@
 # emulator into build/screen-captures/ (see ScreenshotCaptureTest.kt:225-229's own comment: "Must
 # match the directory names under distribution/metadata/android/" -- that contract existed before
 # this script did, it was just never enforced). This script is the enforcement: it copies those
-# captures onto the nine committed destinations that the Play Store listing
+# captures onto the 21 committed destinations that the Play Store listing
 # (scripts/ci/sync-play-store-metadata.py) and the hotsite (docs/index.html) are built from.
 #
-# Nine destinations, six distinct sources -- the hotsite set intentionally reuses the en-US
+# 21 destinations, 18 distinct sources -- the hotsite set intentionally reuses the en-US
 # showcase captures rather than having its own, so this table is the only place that fact needs to
 # be known (verified against the images committed by #227 and #230; see issue #231's own
 # measurement of the mapping before trusting this comment blindly).
@@ -42,6 +42,18 @@ MAPPING=(
   "pt-BR-01-dashboard.png:distribution/metadata/android/pt-BR/images/phoneScreenshots/1_dashboard.png"
   "pt-BR-02-gallery.png:distribution/metadata/android/pt-BR/images/phoneScreenshots/2_gallery.png"
   "pt-BR-03-settings.png:distribution/metadata/android/pt-BR/images/phoneScreenshots/3_settings.png"
+  "es-ES-01-dashboard.png:distribution/metadata/android/es-ES/images/phoneScreenshots/1_dashboard.png"
+  "es-ES-02-gallery.png:distribution/metadata/android/es-ES/images/phoneScreenshots/2_gallery.png"
+  "es-ES-03-settings.png:distribution/metadata/android/es-ES/images/phoneScreenshots/3_settings.png"
+  "fr-FR-01-dashboard.png:distribution/metadata/android/fr-FR/images/phoneScreenshots/1_dashboard.png"
+  "fr-FR-02-gallery.png:distribution/metadata/android/fr-FR/images/phoneScreenshots/2_gallery.png"
+  "fr-FR-03-settings.png:distribution/metadata/android/fr-FR/images/phoneScreenshots/3_settings.png"
+  "de-DE-01-dashboard.png:distribution/metadata/android/de-DE/images/phoneScreenshots/1_dashboard.png"
+  "de-DE-02-gallery.png:distribution/metadata/android/de-DE/images/phoneScreenshots/2_gallery.png"
+  "de-DE-03-settings.png:distribution/metadata/android/de-DE/images/phoneScreenshots/3_settings.png"
+  "it-IT-01-dashboard.png:distribution/metadata/android/it-IT/images/phoneScreenshots/1_dashboard.png"
+  "it-IT-02-gallery.png:distribution/metadata/android/it-IT/images/phoneScreenshots/2_gallery.png"
+  "it-IT-03-settings.png:distribution/metadata/android/it-IT/images/phoneScreenshots/3_settings.png"
   "en-US-01-dashboard.png:docs/assets/screenshot_dashboard.png"
   "en-US-02-gallery.png:docs/assets/screenshot_gallery.png"
   "en-US-03-settings.png:docs/assets/screenshot_settings.png"

@@ -20,6 +20,17 @@ Key facts:
 - [Full description for LLMs](https://alexandre.machado.cc/audio-blackbox/llms-full.txt): self-contained factual description, including how the buffer works and the FAQ
 - [Privacy policy](https://alexandre.machado.cc/audio-blackbox/release/privacy-policy): privacy policy for the app
 
+## Language versions
+
+- [English](https://alexandre.machado.cc/audio-blackbox/)
+- [Português (Brasil)](https://alexandre.machado.cc/audio-blackbox/pt-br/)
+- [Español](https://alexandre.machado.cc/audio-blackbox/es/)
+- [Français](https://alexandre.machado.cc/audio-blackbox/fr/)
+- [Deutsch](https://alexandre.machado.cc/audio-blackbox/de/)
+- [Italiano](https://alexandre.machado.cc/audio-blackbox/it/)
+
+All versions link to the English-only privacy policy.
+
 ## Source code
 
 - [GitHub repository](https://github.com/alexandre-machado/audio-blackbox): full source code and README

@@ -1,0 +1,5 @@
+Novità:
+• I salvataggi consecutivi non si sovrappongono più: ognuno inizia dove è terminato il precedente
+• Il limite del buffer è calcolato per il telefono e il profilo di qualità e compare nelle Impostazioni
+• Widget sulla schermata iniziale per avviare o fermare la registrazione con un tocco
+• Sempre completamente offline: nessun permesso internet, nessuna analisi

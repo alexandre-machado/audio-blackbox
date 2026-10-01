@@ -1,0 +1,31 @@
+Audio Blackbox conserva los últimos minutos de sonido en la memoria de tu móvil para que puedas guardarlos después de que ocurran. ¿Has tocado un riff que quieres conservar? ¿Has dicho una idea en voz alta? ¿Habéis acordado algo en una reunión en la que participabas? Toca Guardar y esos minutos se convierten en un archivo de audio.
+
+No se escribe nada en el almacenamiento hasta que tocas Guardar. La app no tiene permiso de internet, así que nunca sube tu audio a ningún sitio.
+
+Pensada para
+• Músicos y compositores: conserva el riff o la melodía que acabas de tocar sin haber pulsado grabar antes.
+• Ideas y pensamientos en voz alta: guarda la idea antes de que se te escape.
+• Reuniones y acuerdos en los que participas: conserva lo que acabáis de acordar.
+• Momentos en familia: la primera palabra, la frase divertida, la canción durante la cena.
+
+Cómo funciona
+• Activa la grabación continua. Una notificación permanece visible durante todo el tiempo que la app graba.
+• El audio va a un búfer circular en RAM. Cuando se llena, el audio más antiguo se sustituye por el más reciente.
+• El búfer tiene un mínimo de 5 minutos y se ajusta en pasos de 5 minutos. No hay un máximo fijo: la app calcula cuánto puede almacenar tu móvil de forma segura con el perfil de calidad elegido y muestra ese límite en Ajustes.
+• Guardar escribe el audio del búfer desde el último guardado (todo el búfer la primera vez) en un archivo AAC (.m4a), de modo que los archivos nunca se solapan.
+• Directo inicia una grabación que conserva el pasado del búfer y continúa hasta que la detienes.
+
+Funciones
+• Tres perfiles de calidad: Voz (16 kHz mono, el búfer más largo), Equilibrado (32 kHz mono) y Alta fidelidad (44,1 kHz estéreo, que puede usar más de un micrófono en los móviles que los tengan). Una mayor calidad usa más memoria por minuto, por lo que el búfer se acorta.
+• Widget en la pantalla de inicio para iniciar o detener la grabación con un toque.
+• Guardar, Directo y Detener desde la notificación.
+• Se pausa cuando otra app ocupa el micrófono, por ejemplo durante una llamada, y se reanuda sola cuando queda libre.
+• Reproductor integrado para escuchar, desplazarte por el audio, compartir y eliminar las grabaciones guardadas.
+
+Privacidad
+• Sin permiso de internet en la app. Sin cuenta, anuncios, analítica ni nube.
+• El audio permanece en la memoria hasta que lo guardas. La app nunca sube nada: los archivos se guardan en la carpeta Recordings/Blackbox del móvil (Music/Blackbox en Android 10 y 11), bajo tu control.
+• Gratuita y de código abierto con licencia GPL-3.0, con mantenimiento activo y todo el código en GitHub.
+
+Graba con responsabilidad
+Usa Audio Blackbox para tus propias conversaciones e ideas. Grabar a otras personas puede requerir su consentimiento, y las normas varían entre países y estados. Consulta la legislación local sobre grabaciones antes de grabar. Eres responsable del uso que hagas de la app.
