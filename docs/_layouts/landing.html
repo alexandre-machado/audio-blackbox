@@ -1014,6 +1014,7 @@
       </button>
       <ul class="nav-links" id="nav-links">
         <li><a href="#what-is">{{ t.nav_overview }}</a></li>
+        <li><a href="#use-cases">{{ t.nav_usecases }}</a></li>
         <li><a href="#features">{{ t.nav_features }}</a></li>
         <li><a href="#specs">{{ t.nav_specs }}</a></li>
         <li><a href="#how-to-use">{{ t.nav_usage }}</a></li>
@@ -1130,6 +1131,29 @@
           {{ t.overview_privacy }}
         </p>
       </div>
+    </div>
+  </section>
+
+  <!-- Use cases: the niches the listing and outreach target -->
+  <section id="use-cases">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">{{ t.usecases_tag }}</span>
+        <h2 class="section-title">{{ t.usecases_title }}</h2>
+        <p class="section-desc">{{ t.usecases_intro }}</p>
+      </div>
+
+      <div class="features-grid">
+        {% for uc in t.usecases %}
+        <div class="feature-card">
+          <div class="feature-icon-wrapper icon-orange">{{ uc.icon }}</div>
+          <h3>{{ uc.title }}</h3>
+          <p>{{ uc.desc }}</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <p class="section-desc" style="margin-top: 24px; font-size: 0.85rem;">{{ t.usecases_note }}</p>
     </div>
   </section>
 

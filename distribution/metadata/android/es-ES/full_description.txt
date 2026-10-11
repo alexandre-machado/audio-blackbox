@@ -1,12 +1,14 @@
-Audio Blackbox conserva los últimos minutos de sonido en la memoria de tu móvil para que puedas guardarlos después de que ocurran. ¿Has tocado un riff que quieres conservar? ¿Has dicho una idea en voz alta? ¿Habéis acordado algo en una reunión en la que participabas? Toca Guardar y esos minutos se convierten en un archivo de audio.
+Audio Blackbox es un grabador retroactivo: una dashcam de audio que conserva los últimos minutos de sonido en la memoria de tu móvil para que puedas grabar el pasado después de que ocurra. ¿Has tocado un riff que quieres conservar? ¿Te has perdido el inicio de una cita o de una explicación en clase? ¿Acabas de oír instrucciones que volverás a necesitar? Toca Guardar y esos minutos se convierten en un archivo de audio. Funciona como grabadora de voz en segundo plano con búfer circular, siempre con una notificación visible.
 
 No se escribe nada en el almacenamiento hasta que tocas Guardar. La app no tiene permiso de internet, así que nunca sube tu audio a ningún sitio.
 
 Pensada para
-• Músicos y compositores: conserva el riff o la melodía que acabas de tocar sin haber pulsado grabar antes.
-• Ideas y pensamientos en voz alta: guarda la idea antes de que se te escape.
-• Reuniones y acuerdos en los que participas: conserva lo que acabáis de acordar.
-• Momentos en familia: la primera palabra, la frase divertida, la canción durante la cena.
+• Músicos y compositores: conserva el riff o la melodía que acabas de improvisar sin haber pulsado grabar antes.
+• Periodistas y entrevistas: una copia de seguridad para la cita que llegó antes de pulsar grabar en tu grabadora principal.
+• Estudiantes: conserva la explicación que se te acaba de escapar, en las clases donde se permite grabar.
+• Apoyo a la memoria: vuelve a escuchar instrucciones o detalles que te acaban de decir. Útil para quien pierde el hilo de la información hablada, por ejemplo personas con TDAH. No es un dispositivo médico.
+• Dashcam de audio de bolsillo: si ocurre algo inesperado en el tráfico o en la calle, guarda los minutos previos.
+• Ideas, reuniones en las que participas y momentos en familia: la idea dicha en voz alta, lo que se acaba de acordar, la primera palabra.
 
 Cómo funciona
 • Activa la grabación continua. Una notificación permanece visible durante todo el tiempo que la app graba.

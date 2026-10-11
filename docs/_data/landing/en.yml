@@ -1,5 +1,6 @@
 menu_label: Toggle navigation menu
 nav_overview: What is it
+nav_usecases: "Use cases"
 nav_features: Features
 nav_specs: Specifications
 nav_usage: How to Use
@@ -8,7 +9,7 @@ nav_faq: FAQ
 nav_design: 🎛️ Design Model
 badge: 100% Private • Zero Network Egress • GPL-3.0
 hero_title: The Audio Blackbox for Android
-hero_lead: Save the riff you just played, the idea you just said out loud, or what was just agreed in a meeting you were part of. It keeps the last minutes of sound in RAM, sized to your phone, and writes to storage <strong>only when you tap Save</strong>.
+hero_lead: "An audio dashcam for your pocket. Save the riff you just played, the quote you almost missed, or the instructions you were just given. It keeps the last minutes of sound in RAM, sized to your phone, and writes to storage <strong>only when you tap Save</strong>."
 get_play: Get it on Google Play
 design_model: Design Model
 open_source_badge: Open Source (GPL-3.0)
@@ -93,7 +94,7 @@ license_link: GPL-3.0 License
 copyright: '&copy; 2026 Alexandre Machado. Licensed under GNU GPL v3.0.'
 consent: 'Use it for your own conversations and ideas. Recording others may require their consent: check your local recording laws.'
 title: 'Audio Blackbox: Past Recorder for Android'
-description: Audio Blackbox is a free, open-source Android recorder that keeps the last minutes of sound in RAM, so you can save the riff, idea or meeting you just heard. Nothing is written until you tap Save, and the app has no internet permission.
+description: "Audio Blackbox is a free, open-source retroactive audio recorder for Android: an audio dashcam that keeps the last minutes of sound in RAM, so you can save the riff, quote or instructions you just heard. Nothing is written until you tap Save, and the app has no internet permission."
 social_description: Save the last minutes you just heard. A rolling RAM buffer sized to your phone, no internet permission, free and open source.
 image_alt: 'Audio Blackbox feature graphic: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel.'
 language_label: Language
@@ -104,6 +105,29 @@ pcm: 16-bit PCM
 mb: MB
 throughput: KB/sec continuous throughput
 demo_alert: 'Mock demo: in the app, Save writes the buffered audio since your last save (the whole buffer the first time) to an .m4a (AAC) file in Recordings/Blackbox/.'
+usecases_tag: "Use Cases"
+usecases_title: "An Audio Dashcam for Your Pocket"
+usecases_intro: "You only know something mattered after it was said. These are the moments Audio Blackbox is built for."
+usecases_note: "Recording other people may require their consent, and the rules differ between countries and states. The notification stays visible the whole time the app is recording."
+usecases:
+  - icon: "🎸"
+    title: "Musicians & Songwriters"
+    desc: "Keep the riff or melody you just improvised, without having pressed record first."
+  - icon: "🎙"
+    title: "Journalists & Interviews"
+    desc: "A backup for the quote that came before you hit record on your main recorder."
+  - icon: "🎓"
+    title: "Students & Lectures"
+    desc: "Keep the explanation you just missed, in classes where recording is allowed."
+  - icon: "🧠"
+    title: "Memory Aid"
+    desc: "Replay instructions, directions or details you were just told. Helpful for anyone who loses track of spoken information, for example people with ADHD. Not a medical device."
+  - icon: "🚗"
+    title: "Pocket Audio Dashcam"
+    desc: "If something unexpected happens in traffic or on the street, save the minutes leading up to it."
+  - icon: "💡"
+    title: "Ideas & Family Moments"
+    desc: "The thought you said out loud, what was just agreed in a meeting you were part of, the first word at the dinner table."
 faq:
 - q: Is there an Android app that records the last 5 minutes of audio?
   a: 'Yes. Audio Blackbox keeps the last minutes of sound in your phone''s RAM while its notification is showing. The buffer is at least 5 minutes, set in 5-minute steps, and can be longer: the app computes the maximum on your phone from the memory it can safely use and the quality preset you pick. Tap Save and the buffered audio since your last save (the whole buffer the first time) becomes a local .m4a (AAC) file.'
@@ -129,5 +153,11 @@ faq:
   a: Audio Blackbox is free on Google Play. Open its Play Store listing on your Android device and tap Install; the link is in the Download section of this page.
 - q: How is Audio Blackbox different from Google Recorder or a normal voice recorder app?
   a: A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and the app never uploads anything.
+- q: "Is there an audio dashcam app for Android?"
+  a: "Yes. Audio Blackbox works like a dashcam for sound: it keeps the last minutes in a rolling RAM buffer and writes them to a file only when you tap Save, so you can keep what happened just before. Unlike a hidden recorder, it always shows a notification while it is recording. Recording other people may require their consent, so check your local laws."
+- q: "Can I recover a quote or a lecture explanation I forgot to record?"
+  a: "If Audio Blackbox was running, yes. Tap Save and the buffered minutes (at least 5, up to what your phone can hold) are written to an .m4a file, even though you never pressed record. Journalists can use it as a backup to their main recorder, and students can keep an explanation they just missed in classes where recording is allowed."
+- q: "Can Audio Blackbox help me remember spoken instructions?"
+  a: "It can work as a memory aid. If you just heard directions, instructions or details and lost track of them, save the last minutes and replay them in the built-in player. This can help anyone who often loses track of spoken information, for example people with ADHD. Audio Blackbox is not a medical device."
 - q: Is it legal to record with Audio Blackbox?
   a: It depends on where you are. Use Audio Blackbox for your own conversations and ideas. Recording other people may require their consent, and the rules differ between countries and states. Check your local recording laws before you record; you are responsible for how you use the app.

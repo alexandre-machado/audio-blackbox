@@ -1,5 +1,6 @@
 menu_label: Abrir ou fechar o menu de navegação
 nav_overview: O que é
+nav_usecases: "Para quem é"
 nav_features: Recursos
 nav_specs: Especificações
 nav_usage: Como usar
@@ -8,7 +9,7 @@ nav_faq: Perguntas
 nav_design: 🎛️ Modelo de design
 badge: 100% privado • Sem tráfego de saída • GPL-3.0
 hero_title: O Audio Blackbox para Android
-hero_lead: Guarde o riff que acabou de tocar, a ideia que acabou de falar em voz alta ou o que foi combinado numa reunião da qual você participou. O app mantém os últimos minutos de som na RAM, na medida do seu celular, e grava no armazenamento <strong>só quando você toca em Salvar</strong>.
+hero_lead: "Uma dashcam de áudio no seu bolso. Salve o riff que acabou de tocar, a citação que quase perdeu ou as instruções que acabou de receber. Ele guarda os últimos minutos de som na RAM, na medida do seu celular, e só grava no armazenamento <strong>quando você toca em Salvar</strong>."
 get_play: Baixe no Google Play
 design_model: Modelo de design
 open_source_badge: Código aberto (GPL-3.0)
@@ -95,7 +96,7 @@ license_link: Licença GPL-3.0
 copyright: © 2026 Alexandre Machado. Licenciado sob GNU GPL v3.0.
 consent: 'Use para as suas próprias conversas e ideias. Gravar outras pessoas pode exigir o consentimento delas: consulte as leis de gravação do seu local.'
 title: 'Audio Blackbox: gravador do passado para Android'
-description: O Audio Blackbox é um gravador Android gratuito e de código aberto que guarda os últimos minutos de som na RAM para você salvar o riff, a ideia ou a reunião que acabou de ouvir. Nada é gravado até tocar em Salvar, e o app não tem permissão de internet.
+description: "O Audio Blackbox é um gravador retroativo gratuito e de código aberto para Android: uma dashcam de áudio que guarda os últimos minutos de som na RAM, para você salvar o riff, a citação ou as instruções que acabou de ouvir. Nada é gravado até você tocar em Salvar, e o app não tem permissão de internet."
 social_description: Salve os últimos minutos que acabou de ouvir. Buffer circular na RAM na medida do seu celular, sem permissão de internet, gratuito e de código aberto.
 image_alt: 'Arte do Audio Blackbox: um buffer contínuo de áudio ambiente para Android com visual de painel de instrumentos de aviação.'
 language_label: Idioma
@@ -106,6 +107,29 @@ pcm: PCM de 16 bits
 mb: MB
 throughput: KB/s de fluxo contínuo
 demo_alert: 'Demonstração: no app, Salvar grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo .m4a (AAC) em Recordings/Blackbox/.'
+usecases_tag: "Casos de uso"
+usecases_title: "Uma dashcam de áudio no seu bolso"
+usecases_intro: "Você só percebe que algo importava depois que foi dito. O Audio Blackbox foi feito para esses momentos."
+usecases_note: "Gravar outras pessoas pode exigir o consentimento delas, e as regras mudam de país para país. A notificação fica visível durante todo o tempo em que o app está gravando."
+usecases:
+  - icon: "🎸"
+    title: "Músicos e compositores"
+    desc: "Guarde o riff ou a melodia que acabou de improvisar, sem ter apertado gravar antes."
+  - icon: "🎙"
+    title: "Jornalistas e entrevistas"
+    desc: "Um backup para a citação que veio antes de você apertar gravar no gravador principal."
+  - icon: "🎓"
+    title: "Estudantes e aulas"
+    desc: "Guarde a explicação que acabou de perder, nas aulas em que gravar é permitido."
+  - icon: "🧠"
+    title: "Apoio à memória"
+    desc: "Ouça de novo instruções, orientações ou detalhes que acabaram de lhe passar. Útil para quem perde o fio de informações faladas, como pessoas com TDAH. Não é um dispositivo médico."
+  - icon: "🚗"
+    title: "Dashcam de áudio de bolso"
+    desc: "Se algo inesperado acontecer no trânsito ou na rua, salve os minutos que levaram até ali."
+  - icon: "💡"
+    title: "Ideias e momentos em família"
+    desc: "A ideia que você falou em voz alta, o que acabou de ser combinado numa reunião da qual participou, a primeira palavra no jantar."
 faq:
   - q: Existe um app Android que grava os últimos 5 minutos de áudio?
     a: Sim. O Audio Blackbox mantém os últimos minutos de som na RAM do celular enquanto a notificação aparece. O buffer tem no mínimo 5 minutos, ajustáveis de 5 em 5, e pode ser maior. O app calcula o máximo no celular a partir da memória que pode usar com segurança e do preset de qualidade escolhido. Toque em Salvar e o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) vira um arquivo local .m4a (AAC).
@@ -131,5 +155,11 @@ faq:
     a: O Audio Blackbox é gratuito no Google Play. Abra a página na Play Store pelo seu Android e toque em Instalar. O link está na seção Download desta página.
   - q: Qual é a diferença entre o Audio Blackbox e o Google Recorder ou um gravador de voz comum?
     a: Um gravador comum só captura depois de apertar gravar, então tudo que foi dito antes se perde. O Audio Blackbox grava continuamente em um buffer circular na RAM e só escreve no armazenamento quando você toca em Salvar. Assim, você pode guardar os últimos minutos de algo que já aconteceu. Nada é gravado em disco até você decidir salvar, e o app nunca envia nada.
+  - q: "Existe um app de dashcam de áudio para Android?"
+    a: "Sim. O Audio Blackbox funciona como uma dashcam para o som: guarda os últimos minutos em um buffer circular na RAM e só grava em arquivo quando você toca em Salvar, para você guardar o que aconteceu logo antes. Diferente de um gravador escondido, ele sempre mostra uma notificação enquanto grava. Gravar outras pessoas pode exigir o consentimento delas, então consulte as leis do seu local."
+  - q: "Consigo recuperar uma citação ou explicação de aula que esqueci de gravar?"
+    a: "Se o Audio Blackbox estava ligado, sim. Toque em Salvar e os minutos do buffer (pelo menos 5, até o que o seu celular comporta) são gravados em um arquivo .m4a, mesmo sem você ter apertado gravar. Jornalistas podem usá-lo como backup do gravador principal, e estudantes podem guardar uma explicação que acabaram de perder nas aulas em que gravar é permitido."
+  - q: "O Audio Blackbox pode me ajudar a lembrar instruções faladas?"
+    a: "Ele pode servir de apoio à memória. Se você acabou de ouvir orientações, instruções ou detalhes e perdeu o fio, salve os últimos minutos e ouça de novo no player integrado. Isso pode ajudar quem costuma perder informações faladas, como pessoas com TDAH. O Audio Blackbox não é um dispositivo médico."
   - q: É permitido gravar com o Audio Blackbox?
     a: Depende de onde você está. Use o Audio Blackbox para as suas próprias conversas e ideias. Gravar outras pessoas pode exigir o consentimento delas, e as regras variam entre países e estados. Consulte as leis de gravação do seu local antes de gravar. O uso do app é de sua responsabilidade.

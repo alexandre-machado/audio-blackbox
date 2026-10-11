@@ -1,5 +1,6 @@
 menu_label: Navigationsmenü öffnen oder schließen
 nav_overview: Überblick
+nav_usecases: "Für wen"
 nav_features: Funktionen
 nav_specs: Technische Daten
 nav_usage: Verwendung
@@ -8,7 +9,7 @@ nav_faq: FAQ
 nav_design: 🎛️ Designmodell
 badge: 100 % privat • Kein ausgehender Netzwerkverkehr • GPL-3.0
 hero_title: Audio Blackbox für Android
-hero_lead: Behalte das gerade gespielte Riff, die laut ausgesprochene Idee oder das, was in einem Meeting vereinbart wurde, an dem du teilgenommen hast. Die App hält die letzten Minuten Ton im RAM, passend zur Kapazität deines Handys, und schreibt <strong>erst beim Tippen auf Speichern</strong> in den Gerätespeicher.
+hero_lead: "Eine Audio-Dashcam für die Hosentasche. Behalte das gerade gespielte Riff, das Zitat, das dir fast entgangen wäre, oder die Anweisungen, die du gerade bekommen hast. Die App hält die letzten Minuten Ton im RAM, passend zu deinem Handy, und schreibt <strong>erst beim Tippen auf Speichern</strong> in den Gerätespeicher."
 get_play: Bei Google Play herunterladen
 design_model: Designmodell
 open_source_badge: Quelloffen (GPL-3.0)
@@ -95,7 +96,7 @@ license_link: GPL-3.0-Lizenz
 copyright: © 2026 Alexandre Machado. Lizenziert unter GNU GPL v3.0.
 consent: 'Nutze die App für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern: Prüfe die örtlichen Gesetze zu Tonaufnahmen.'
 title: 'Audio Blackbox: Vergangenes auf Android aufnehmen'
-description: Audio Blackbox ist ein kostenloser, quelloffener Android-Rekorder, der die letzten Minuten Ton im RAM hält, um das gerade gehörte Riff, die Idee oder das Meeting zu speichern. Erst beim Tippen auf Speichern wird geschrieben. Die App hat keine Internetberechtigung.
+description: "Audio Blackbox ist ein kostenloser, quelloffener Rückwirkend-Rekorder für Android: eine Audio-Dashcam, die die letzten Minuten Ton im RAM hält, damit du das Riff, das Zitat oder die Anweisungen speichern kannst, die du gerade gehört hast. Erst beim Tippen auf Speichern wird etwas geschrieben, und die App hat keine Internetberechtigung."
 social_description: Speichere die gerade gehörten letzten Minuten. Ein RAM-Ringpuffer passend zu deinem Handy, ohne Internetberechtigung, kostenlos und quelloffen.
 image_alt: 'Audio-Blackbox-Grafik: ein kontinuierlicher Puffer für Umgebungsgeräusche auf Android im Stil eines Cockpit-Instrumentenbretts.'
 language_label: Sprache
@@ -106,6 +107,29 @@ pcm: 16-Bit-PCM
 mb: MB
 throughput: KB/s kontinuierlicher Datendurchsatz
 demo_alert: 'Demonstration: In der App schreibt Speichern das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) als .m4a-Datei (AAC) nach Recordings/Blackbox/.'
+usecases_tag: "Anwendungsfälle"
+usecases_title: "Eine Audio-Dashcam für die Hosentasche"
+usecases_intro: "Dass etwas wichtig war, merkst du erst, nachdem es gesagt wurde. Für genau diese Momente ist Audio Blackbox gemacht."
+usecases_note: "Die Aufnahme anderer Personen kann deren Einwilligung erfordern, und die Regeln unterscheiden sich je nach Land. Die Benachrichtigung bleibt während der gesamten Aufnahme sichtbar."
+usecases:
+  - icon: "🎸"
+    title: "Musiker und Songwriter"
+    desc: "Behalte das Riff oder die Melodie, die du gerade improvisiert hast, ohne vorher die Aufnahme gestartet zu haben."
+  - icon: "🎙"
+    title: "Journalisten und Interviews"
+    desc: "Ein Backup für das Zitat, das fiel, bevor du dein Hauptaufnahmegerät gestartet hast."
+  - icon: "🎓"
+    title: "Studierende und Vorlesungen"
+    desc: "Behalte die Erklärung, die dir gerade entgangen ist, in Veranstaltungen, in denen Aufnehmen erlaubt ist."
+  - icon: "🧠"
+    title: "Gedächtnisstütze"
+    desc: "Hör dir Anweisungen, Wegbeschreibungen oder Details noch einmal an, die man dir gerade gesagt hat. Hilfreich für alle, die bei gesprochenen Informationen den Faden verlieren, zum Beispiel Menschen mit ADHS. Kein Medizinprodukt."
+  - icon: "🚗"
+    title: "Audio-Dashcam für unterwegs"
+    desc: "Wenn im Verkehr oder auf der Straße etwas Unerwartetes passiert, speichere die Minuten davor."
+  - icon: "💡"
+    title: "Ideen und Familienmomente"
+    desc: "Der laut ausgesprochene Gedanke, das gerade Vereinbarte in einem Meeting, an dem du teilgenommen hast, das erste Wort am Esstisch."
 faq:
   - q: Gibt es eine Android-App, die die letzten 5 Minuten Audio aufnimmt?
     a: Ja. Audio Blackbox hält die letzten Minuten Ton im RAM deines Handys, solange die Benachrichtigung angezeigt wird. Der Puffer umfasst mindestens 5 Minuten, einstellbar in 5-Minuten-Schritten, und kann länger sein. Die App berechnet das Maximum auf deinem Handy anhand des sicher nutzbaren Speichers und des gewählten Qualitätsprofils. Tippe auf Speichern, und das Audio im Puffer seit dem letzten Speichern (beim ersten Mal der ganze Puffer) wird zu einer lokalen .m4a-Datei (AAC).
@@ -131,5 +155,11 @@ faq:
     a: Audio Blackbox ist kostenlos bei Google Play erhältlich. Öffne den Play-Store-Eintrag auf deinem Android-Gerät und tippe auf Installieren. Den Link findest du im Download-Abschnitt dieser Seite.
   - q: Wie unterscheidet sich Audio Blackbox von Google Recorder oder einem normalen Sprachrekorder?
     a: Ein normaler Rekorder nimmt erst nach dem Drücken der Aufnahmetaste auf. Alles zuvor Gesagte geht verloren. Audio Blackbox nimmt kontinuierlich in einen Ringpuffer im RAM auf und schreibt erst beim Tippen auf Speichern in den Gerätespeicher. So kannst du die letzten Minuten von etwas speichern, das bereits passiert ist. Bis zu deiner Entscheidung zum Speichern wird nichts auf den Datenträger geschrieben, und die App lädt nie etwas hoch.
+  - q: "Gibt es eine Audio-Dashcam-App für Android?"
+    a: "Ja. Audio Blackbox funktioniert wie eine Dashcam für Ton: Die App hält die letzten Minuten in einem Ringpuffer im RAM und schreibt sie erst in eine Datei, wenn du auf Speichern tippst, damit du behältst, was gerade passiert ist. Anders als ein versteckter Rekorder zeigt sie während der Aufnahme immer eine Benachrichtigung an. Die Aufnahme anderer Personen kann deren Einwilligung erfordern, prüfe daher die Gesetze vor Ort."
+  - q: "Kann ich ein Zitat oder eine Erklärung aus der Vorlesung retten, die ich nicht aufgenommen habe?"
+    a: "Wenn Audio Blackbox lief, ja. Tippe auf Speichern und die gepufferten Minuten (mindestens 5, bis zu dem, was dein Handy halten kann) werden in eine .m4a-Datei geschrieben, auch wenn du nie die Aufnahme gestartet hast. Journalisten können die App als Backup zu ihrem Hauptaufnahmegerät nutzen, und Studierende können eine gerade verpasste Erklärung behalten, wenn Aufnehmen in der Veranstaltung erlaubt ist."
+  - q: "Kann mir Audio Blackbox helfen, mir gesprochene Anweisungen zu merken?"
+    a: "Die App kann als Gedächtnisstütze dienen. Wenn du gerade Wegbeschreibungen, Anweisungen oder Details gehört und den Faden verloren hast, speichere die letzten Minuten und hör sie im integrierten Player noch einmal an. Das kann allen helfen, die gesprochene Informationen oft verlieren, zum Beispiel Menschen mit ADHS. Audio Blackbox ist kein Medizinprodukt."
   - q: Was ist beim Aufnehmen mit Audio Blackbox rechtlich zu beachten?
     a: Das hängt davon ab, wo du bist. Nutze Audio Blackbox für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern. Die Regeln unterscheiden sich je nach Land und Bundesstaat. Prüfe vor der Aufnahme die örtlichen Gesetze zu Tonaufnahmen. Du bist für deine Nutzung der App verantwortlich.

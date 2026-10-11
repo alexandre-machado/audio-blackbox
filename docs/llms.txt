@@ -13,6 +13,15 @@ Key facts:
 - Recording runs as a foreground service with a visible notification the whole time.
 - Recording other people may require their consent, and the rules differ between countries and states. Users are responsible for checking their local recording laws.
 
+## Use cases
+
+- Musicians & Songwriters: Keep the riff or melody you just improvised, without having pressed record first.
+- Journalists & Interviews: A backup for the quote that came before you hit record on your main recorder.
+- Students & Lectures: Keep the explanation you just missed, in classes where recording is allowed.
+- Memory Aid: Replay instructions, directions or details you were just told. Helpful for anyone who loses track of spoken information, for example people with ADHD. Not a medical device.
+- Pocket Audio Dashcam: If something unexpected happens in traffic or on the street, save the minutes leading up to it.
+- Ideas & Family Moments: The thought you said out loud, what was just agreed in a meeting you were part of, the first word at the dinner table.
+
 ## Product
 
 - [Project site](https://alexandre.machado.cc/audio-blackbox/): overview, features, RAM calculator per quality preset, and FAQ
