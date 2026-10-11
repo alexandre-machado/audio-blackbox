@@ -1,12 +1,14 @@
-Audio Blackbox keeps the last minutes of sound in your phone's memory, so you can save something after it happened. Played a riff you want to keep? Said an idea out loud? Agreed on something in a meeting you were part of? Tap Save and those minutes become an audio file.
+Audio Blackbox is a retroactive audio recorder: an audio dashcam that keeps the last minutes of sound in your phone's memory, so you can record past audio after it happened. Played a riff you want to keep? Missed the start of a quote or a lecture? Just heard instructions you need again? Tap Save and those minutes become an audio file. It runs as a background voice recorder with a rolling buffer, always with a visible notification.
 
 Nothing is written to storage until you tap Save, and the app has no internet permission, so it never uploads your audio anywhere.
 
 Made for
-• Musicians and songwriters: keep the riff or melody you just played, without having pressed record first.
-• Ideas and thinking out loud: save the thought before it slips away.
-• Meetings and agreements you are part of: keep what was just agreed.
-• Family moments: the first word, the funny line, the song at the dinner table.
+• Musicians and songwriters: keep the riff or melody you just improvised, without having pressed record first.
+• Journalists and interviews: a backup for the quote that came before you hit record on your main recorder.
+• Students: keep the explanation you just missed, in classes where recording is allowed.
+• Memory aid: replay instructions or details you were just told. Helpful for anyone who loses track of spoken information, for example people with ADHD. Not a medical device.
+• Pocket audio dashcam: if something unexpected happens in traffic or on the street, save the minutes leading up to it.
+• Ideas, meetings you are part of and family moments: the thought you said out loud, what was just agreed, the first word.
 
 How it works
 • Turn on continuous recording. A visible notification stays up the whole time the app is recording.

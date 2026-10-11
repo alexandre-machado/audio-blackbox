@@ -1,5 +1,6 @@
 menu_label: Ouvrir ou fermer le menu de navigation
 nav_overview: Présentation
+nav_usecases: "Pour qui"
 nav_features: Fonctionnalités
 nav_specs: Caractéristiques
 nav_usage: Utilisation
@@ -8,7 +9,7 @@ nav_faq: FAQ
 nav_design: 🎛️ Modèle de design
 badge: 100 % privé • Aucun trafic sortant • GPL-3.0
 hero_title: Audio Blackbox pour Android
-hero_lead: Gardez le riff que vous venez de jouer, l'idée exprimée à voix haute ou ce qui vient d'être convenu lors d'une réunion à laquelle vous participiez. L'app conserve les dernières minutes de son en RAM, selon la capacité du téléphone, et écrit dans le stockage <strong>uniquement lorsque vous touchez Sauvegarder</strong>.
+hero_lead: "Une dashcam audio dans votre poche. Gardez le riff que vous venez de jouer, la citation que vous avez failli manquer ou les consignes que l'on vient de vous donner. L'app conserve les dernières minutes de son en RAM, à la mesure de votre téléphone, et n'écrit dans le stockage <strong>que lorsque vous touchez Sauvegarder</strong>."
 get_play: Disponible sur Google Play
 design_model: Modèle de design
 open_source_badge: Open source (GPL-3.0)
@@ -95,7 +96,7 @@ license_link: Licence GPL-3.0
 copyright: © 2026 Alexandre Machado. Sous licence GNU GPL v3.0.
 consent: 'Utilisez l’app pour vos propres conversations et idées. Enregistrer d’autres personnes peut nécessiter leur consentement : consultez les lois locales sur l’enregistrement.'
 title: 'Audio Blackbox : enregistrez le passé sur Android'
-description: Audio Blackbox est un enregistreur Android gratuit et open source qui conserve les dernières minutes de son en RAM pour sauvegarder le riff, l'idée ou la réunion que vous venez d'entendre. Rien n'est écrit avant de toucher Sauvegarder et l'app n'a pas d'autorisation internet.
+description: "Audio Blackbox est un enregistreur rétroactif gratuit et open source pour Android : une dashcam audio qui conserve les dernières minutes de son en RAM pour sauvegarder le riff, la citation ou les consignes que vous venez d'entendre. Rien n'est écrit avant de toucher Sauvegarder, et l'app n'a pas d'autorisation internet."
 social_description: Sauvegardez les dernières minutes entendues. Un tampon circulaire en RAM adapté à votre téléphone, sans autorisation internet, gratuit et open source.
 image_alt: 'Visuel Audio Blackbox : un tampon continu de son ambiant pour Android, au style de tableau de bord d’aviation.'
 language_label: Langue
@@ -106,6 +107,29 @@ pcm: PCM 16 bits
 mb: Mo
 throughput: Ko/s en continu
 demo_alert: 'Démonstration : dans l’app, Sauvegarder écrit l’audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier .m4a (AAC) dans Recordings/Blackbox/.'
+usecases_tag: "Cas d'usage"
+usecases_title: "Une dashcam audio dans votre poche"
+usecases_intro: "On ne sait qu'une chose comptait qu'après l'avoir entendue. Audio Blackbox est conçu pour ces moments-là."
+usecases_note: "Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays. La notification reste visible pendant tout l'enregistrement."
+usecases:
+  - icon: "🎸"
+    title: "Musiciens et auteurs-compositeurs"
+    desc: "Gardez le riff ou la mélodie que vous venez d'improviser, sans avoir lancé l'enregistrement au préalable."
+  - icon: "🎙"
+    title: "Journalistes et interviews"
+    desc: "Une sauvegarde pour la citation arrivée avant que vous ne lanciez votre enregistreur principal."
+  - icon: "🎓"
+    title: "Étudiants et cours"
+    desc: "Gardez l'explication que vous venez de manquer, dans les cours où l'enregistrement est autorisé."
+  - icon: "🧠"
+    title: "Aide-mémoire"
+    desc: "Réécoutez des consignes, des indications ou des détails que l'on vient de vous donner. Utile à toute personne qui perd le fil des informations orales, par exemple avec un TDAH. Ce n'est pas un dispositif médical."
+  - icon: "🚗"
+    title: "Dashcam audio de poche"
+    desc: "Si quelque chose d'inattendu se produit dans la circulation ou dans la rue, sauvegardez les minutes qui ont précédé."
+  - icon: "💡"
+    title: "Idées et moments en famille"
+    desc: "La pensée exprimée à voix haute, ce qui vient d'être convenu lors d'une réunion à laquelle vous participiez, le premier mot au dîner."
 faq:
   - q: Existe-t-il une app Android qui enregistre les 5 dernières minutes d'audio ?
     a: Oui. Audio Blackbox conserve les dernières minutes de son dans la RAM du téléphone tant que sa notification s'affiche. Le tampon dure au moins 5 minutes, se règle par pas de 5 minutes et peut être plus long. L'app calcule le maximum sur votre téléphone selon la mémoire utilisable sans risque et le préréglage de qualité choisi. Touchez Sauvegarder et l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) devient un fichier local .m4a (AAC).
@@ -131,5 +155,11 @@ faq:
     a: Audio Blackbox est gratuit sur Google Play. Ouvrez sa fiche Play Store sur votre Android et touchez Installer. Le lien se trouve dans la section Télécharger de cette page.
   - q: En quoi Audio Blackbox diffère-t-il de Google Recorder ou d'un enregistreur vocal ordinaire ?
     a: Un enregistreur ordinaire ne capture qu'après le lancement de l'enregistrement ; tout ce qui a été dit avant est perdu. Audio Blackbox enregistre en continu dans un tampon circulaire en RAM et n'écrit dans le stockage que lorsque vous touchez Sauvegarder. Vous pouvez ainsi garder les dernières minutes de quelque chose qui s'est déjà produit. Rien n'est écrit sur disque avant votre décision de sauvegarder et l'app n'envoie jamais rien.
+  - q: "Existe-t-il une application de dashcam audio pour Android ?"
+    a: "Oui. Audio Blackbox fonctionne comme une dashcam pour le son : il conserve les dernières minutes dans un tampon circulaire en RAM et ne les écrit dans un fichier que lorsque vous touchez Sauvegarder, pour garder ce qui vient de se passer. Contrairement à un enregistreur caché, il affiche toujours une notification pendant l'enregistrement. Enregistrer d'autres personnes peut nécessiter leur consentement : vérifiez les lois locales."
+  - q: "Puis-je récupérer une citation ou une explication de cours que j'ai oublié d'enregistrer ?"
+    a: "Si Audio Blackbox était actif, oui. Touchez Sauvegarder et les minutes du tampon (au moins 5, jusqu'à ce que votre téléphone peut contenir) sont écrites dans un fichier .m4a, même sans avoir lancé l'enregistrement. Les journalistes peuvent l'utiliser en secours de leur enregistreur principal, et les étudiants peuvent garder une explication qu'ils viennent de manquer dans les cours où l'enregistrement est autorisé."
+  - q: "Audio Blackbox peut-il m'aider à retenir des consignes orales ?"
+    a: "Il peut servir d'aide-mémoire. Si vous venez d'entendre des indications, des consignes ou des détails et en avez perdu le fil, sauvegardez les dernières minutes et réécoutez-les dans le lecteur intégré. Cela peut aider toute personne qui perd souvent les informations orales, par exemple avec un TDAH. Audio Blackbox n'est pas un dispositif médical."
   - q: Que dit la loi sur l'enregistrement avec Audio Blackbox ?
     a: Cela dépend de l'endroit où vous êtes. Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays et les États. Consultez les lois locales sur l'enregistrement avant d'enregistrer. Vous êtes responsable de votre utilisation de l'app.

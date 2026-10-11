@@ -1,12 +1,14 @@
-O Audio Blackbox guarda na memória do celular os últimos minutos de som, para você salvar algo depois que já aconteceu. Tocou um riff que quer guardar? Teve uma ideia falando sozinho? Combinou algo numa reunião da qual você participou? Toque em Salvar e esses minutos viram um arquivo de áudio.
+O Audio Blackbox é um gravador retroativo: uma dashcam de áudio que guarda na memória do celular os últimos minutos de som, para você gravar o passado depois que ele aconteceu. Tocou um riff que quer guardar? Perdeu o começo de uma citação ou de uma explicação na aula? Acabou de ouvir instruções que vai precisar de novo? Toque em Salvar e esses minutos viram um arquivo de áudio. Ele funciona como gravador de voz em segundo plano com buffer circular, sempre com uma notificação visível.
 
 Nada é gravado no armazenamento até você tocar em Salvar, e o app não tem permissão de internet: ele nunca envia o seu áudio para lugar nenhum.
 
 Para quem é
-• Músicos e compositores: guarde o riff ou a melodia que acabou de tocar, sem ter apertado gravar antes.
-• Ideias e pensamentos em voz alta: salve a ideia antes que ela escape.
-• Reuniões e combinados dos quais você participa: guarde o que acabou de ser acertado.
-• Momentos em família: a primeira palavra, a frase engraçada, a música na mesa do jantar.
+• Músicos e compositores: guarde o riff ou a melodia que acabou de improvisar, sem ter apertado gravar antes.
+• Jornalistas e entrevistas: um backup para a citação que veio antes de você apertar gravar no gravador principal.
+• Estudantes: guarde a explicação que acabou de perder, nas aulas em que gravar é permitido.
+• Apoio à memória: ouça de novo instruções ou detalhes que acabaram de lhe passar. Útil para quem perde o fio de informações faladas, como pessoas com TDAH. Não é um dispositivo médico.
+• Dashcam de áudio de bolso: se algo inesperado acontecer no trânsito ou na rua, salve os minutos que levaram até ali.
+• Ideias, reuniões das quais você participa e momentos em família: a ideia falada em voz alta, o que acabou de ser combinado, a primeira palavra.
 
 Como funciona
 • Ligue a gravação contínua. Uma notificação fica visível durante todo o tempo em que o app está gravando.

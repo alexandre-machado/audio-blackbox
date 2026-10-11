@@ -1,12 +1,14 @@
-Audio Blackbox conserve les dernières minutes de son dans la mémoire de votre téléphone pour les sauvegarder après coup. Vous venez de jouer un riff à garder ? D'exprimer une idée à voix haute ? De convenir de quelque chose lors d'une réunion à laquelle vous participiez ? Touchez Sauvegarder : ces minutes deviennent un fichier audio.
+Audio Blackbox est un enregistreur rétroactif : une dashcam audio qui conserve les dernières minutes de son dans la mémoire de votre téléphone, pour enregistrer le passé après coup. Vous venez de jouer un riff à garder ? Vous avez manqué le début d'une citation ou d'une explication en cours ? Vous venez d'entendre des consignes dont vous aurez besoin ? Touchez Sauvegarder : ces minutes deviennent un fichier audio. Il fonctionne comme un enregistreur vocal en arrière-plan avec tampon circulaire, toujours avec une notification visible.
 
 Rien n'est écrit dans le stockage avant de toucher Sauvegarder. L'app n'a pas d'autorisation internet et n'envoie donc jamais votre audio où que ce soit.
 
 Pour qui ?
-• Musiciens et auteurs-compositeurs : gardez le riff ou la mélodie que vous venez de jouer, sans avoir lancé l'enregistrement au préalable.
-• Idées et réflexions à voix haute : sauvegardez l'idée avant qu'elle ne vous échappe.
-• Réunions et accords auxquels vous participez : gardez ce qui vient d'être convenu.
-• Moments en famille : le premier mot, la phrase amusante, la chanson à table.
+• Musiciens et auteurs-compositeurs : gardez le riff ou la mélodie que vous venez d'improviser, sans avoir lancé l'enregistrement au préalable.
+• Journalistes et interviews : une sauvegarde pour la citation arrivée avant que vous ne lanciez votre enregistreur principal.
+• Étudiants : gardez l'explication que vous venez de manquer, dans les cours où l'enregistrement est autorisé.
+• Aide-mémoire : réécoutez des consignes ou des détails que l'on vient de vous donner. Utile à toute personne qui perd le fil des informations orales, par exemple avec un TDAH. Ce n'est pas un dispositif médical.
+• Dashcam audio de poche : si quelque chose d'inattendu se produit dans la circulation ou dans la rue, sauvegardez les minutes qui ont précédé.
+• Idées, réunions auxquelles vous participez et moments en famille : la pensée exprimée à voix haute, ce qui vient d'être convenu, le premier mot.
 
 Fonctionnement
 • Activez l'enregistrement continu. Une notification reste visible pendant toute la durée de l'enregistrement.

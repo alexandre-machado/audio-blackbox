@@ -22,12 +22,14 @@ This file is a self-contained factual description of Audio Blackbox for language
 
 A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording into its own memory while its notification is showing. When you realize something mattered, tap Save and the last minutes become an audio file.
 
-It is made for:
+It is made for (it works like an audio dashcam: a retroactive recorder that lets you record past audio):
 
-- Musicians and songwriters: keep the riff or melody you just played, without having pressed record first.
-- Ideas and thinking out loud: save the thought before it slips away.
-- Meetings and agreements you are part of: keep what was just agreed.
-- Family moments: the first word, the funny line, the song at the dinner table.
+- Musicians & Songwriters: Keep the riff or melody you just improvised, without having pressed record first.
+- Journalists & Interviews: A backup for the quote that came before you hit record on your main recorder.
+- Students & Lectures: Keep the explanation you just missed, in classes where recording is allowed.
+- Memory Aid: Replay instructions, directions or details you were just told. Helpful for anyone who loses track of spoken information, for example people with ADHD. Not a medical device.
+- Pocket Audio Dashcam: If something unexpected happens in traffic or on the street, save the minutes leading up to it.
+- Ideas & Family Moments: The thought you said out loud, what was just agreed in a meeting you were part of, the first word at the dinner table.
 
 ## How it works
 
@@ -131,6 +133,18 @@ Audio Blackbox is free on Google Play. Open its Play Store listing on your Andro
 ### How is Audio Blackbox different from Google Recorder or a normal voice recorder app?
 
 A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and the app never uploads anything.
+
+### Is there an audio dashcam app for Android?
+
+Yes. Audio Blackbox works like a dashcam for sound: it keeps the last minutes in a rolling RAM buffer and writes them to a file only when you tap Save, so you can keep what happened just before. Unlike a hidden recorder, it always shows a notification while it is recording. Recording other people may require their consent, so check your local laws.
+
+### Can I recover a quote or a lecture explanation I forgot to record?
+
+If Audio Blackbox was running, yes. Tap Save and the buffered minutes (at least 5, up to what your phone can hold) are written to an .m4a file, even though you never pressed record. Journalists can use it as a backup to their main recorder, and students can keep an explanation they just missed in classes where recording is allowed.
+
+### Can Audio Blackbox help me remember spoken instructions?
+
+It can work as a memory aid. If you just heard directions, instructions or details and lost track of them, save the last minutes and replay them in the built-in player. This can help anyone who often loses track of spoken information, for example people with ADHD. Audio Blackbox is not a medical device.
 
 ### Is it legal to record with Audio Blackbox?
 

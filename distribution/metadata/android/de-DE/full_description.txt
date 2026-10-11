@@ -1,12 +1,14 @@
-Audio Blackbox hält die letzten Minuten Ton im Arbeitsspeicher deines Handys, damit du sie im Nachhinein speichern kannst. Gerade ein Riff gespielt, das du behalten möchtest? Eine Idee laut ausgesprochen? In einem Meeting, an dem du teilgenommen hast, etwas vereinbart? Tippe auf Speichern und diese Minuten werden zu einer Audiodatei.
+Audio Blackbox ist ein rückwirkender Audiorekorder: eine Audio-Dashcam, die die letzten Minuten Ton im Arbeitsspeicher deines Handys hält, damit du Vergangenes im Nachhinein aufnehmen kannst. Gerade ein Riff gespielt, das du behalten möchtest? Den Anfang eines Zitats oder einer Erklärung in der Vorlesung verpasst? Gerade Anweisungen gehört, die du noch einmal brauchst? Tippe auf Speichern und diese Minuten werden zu einer Audiodatei. Die App arbeitet als Sprachrekorder im Hintergrund mit Ringpuffer, immer mit sichtbarer Benachrichtigung.
 
 Erst wenn du auf Speichern tippst, wird etwas in den Gerätespeicher geschrieben. Die App hat keine Internetberechtigung und lädt dein Audio daher niemals irgendwo hoch.
 
 Gedacht für
-• Musiker und Songwriter: Behalte das gerade gespielte Riff oder die Melodie, ohne vorher die Aufnahme gestartet zu haben.
-• Ideen und lautes Nachdenken: Speichere den Gedanken, bevor er dir entwischt.
-• Meetings und Vereinbarungen, an denen du beteiligt bist: Behalte das gerade Vereinbarte.
-• Familienmomente: das erste Wort, der lustige Satz, das Lied am Esstisch.
+• Musiker und Songwriter: Behalte das gerade improvisierte Riff oder die Melodie, ohne vorher die Aufnahme gestartet zu haben.
+• Journalisten und Interviews: ein Backup für das Zitat, das fiel, bevor du dein Hauptaufnahmegerät gestartet hast.
+• Studierende: Behalte die Erklärung, die dir gerade entgangen ist, in Veranstaltungen, in denen Aufnehmen erlaubt ist.
+• Gedächtnisstütze: Hör dir Anweisungen oder Details noch einmal an, die man dir gerade gesagt hat. Hilfreich für alle, die bei gesprochenen Informationen den Faden verlieren, zum Beispiel Menschen mit ADHS. Kein Medizinprodukt.
+• Audio-Dashcam für unterwegs: Wenn im Verkehr oder auf der Straße etwas Unerwartetes passiert, speichere die Minuten davor.
+• Ideen, Meetings, an denen du teilnimmst, und Familienmomente: der laut ausgesprochene Gedanke, das gerade Vereinbarte, das erste Wort.
 
 So funktioniert es
 • Schalte die kontinuierliche Aufnahme ein. Eine Benachrichtigung bleibt während der gesamten Aufnahme sichtbar.
