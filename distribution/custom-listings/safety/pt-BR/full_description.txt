@@ -5,6 +5,7 @@ Nada é gravado no armazenamento até você tocar em Salvar, e o app não tem pe
 Como funciona
 • Ligue a gravação contínua. Uma notificação fica visível durante todo o tempo em que o app está gravando.
 • O áudio vai para um buffer circular na memória RAM. Quando o buffer enche, o trecho mais antigo dá lugar ao mais recente, então ele roda sem ir lotando o armazenamento.
+• Leve na bateria: medido em um Samsung Galaxy S25 gravando continuamente no preset Voz, com a tela apagada, usou cerca de 1,0% a 1,5% da bateria por hora. Outros celulares e ajustes terão resultados diferentes.
 • O buffer tem no mínimo 5 minutos e é ajustado de 5 em 5. Não há um máximo fixo: o app calcula quanto o seu aparelho comporta com segurança no preset de qualidade escolhido e mostra esse limite nos Ajustes.
 • Salvar grava em um arquivo AAC (.m4a) o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez), então os arquivos nunca se repetem.
 • Ao vivo inicia uma gravação que mantém o passado do buffer e segue até você parar.

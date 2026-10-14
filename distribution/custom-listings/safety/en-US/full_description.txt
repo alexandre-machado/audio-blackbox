@@ -5,6 +5,7 @@ Nothing is written to storage until you tap Save, and the app has no internet pe
 How it works
 • Turn on continuous recording. A visible notification stays up the whole time the app is recording.
 • Audio goes into a rolling buffer in RAM. When the buffer is full, the oldest audio is replaced by the newest, so it keeps running without filling your storage.
+• Light on the battery: measured on a Samsung Galaxy S25 recording continuously at the Voice preset with the screen off, it used about 1.0% to 1.5% of the battery per hour. Other phones and settings will give different numbers.
 • The buffer is at least 5 minutes, set in 5-minute steps. There is no fixed maximum: the app works out how much your phone can safely hold for the quality preset you picked, and shows that limit in Settings.
 • Save writes the buffered audio since your last save (the whole buffer the first time) to an AAC (.m4a) file, so your files never overlap.
 • Live starts a recording that keeps the buffered past and continues until you stop it.
