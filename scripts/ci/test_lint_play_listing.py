@@ -125,6 +125,15 @@ class LintPlayListingTest(unittest.TestCase):
         self.assertTrue(real.is_dir(), real)
         self.assertEqual(lint.lint_root(str(real)), [])
 
+    def test_real_custom_listing_trees_pass(self):
+        # Each distribution/custom-listings/<slug>/ is its own listing root, same layout as the
+        # default listing. Zero slugs is valid (nothing to lint), so this loops instead of
+        # asserting a count.
+        custom = REPO_ROOT / "distribution" / "custom-listings"
+        for slug_root in sorted(p for p in custom.glob("*") if p.is_dir()):
+            with self.subTest(slug=slug_root.name):
+                self.assertEqual(lint.lint_root(str(slug_root)), [])
+
 
 if __name__ == "__main__":
     unittest.main()

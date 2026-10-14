@@ -87,8 +87,16 @@ jobs:
       - name: Test Play listing lint
         run: python3 -m unittest discover -s scripts/ci -p 'test_lint_play_listing.py' -v
 
+      - name: Test custom listing diff
+        run: python3 -m unittest discover -s scripts/ci -p 'test_custom_listing_diff.py' -v
+
+      # Lints the default listing plus every custom store listing root
+      # (distribution/custom-listings/<slug>/). nullglob: with zero slugs the glob expands to
+      # nothing instead of a literal "*/" path the linter would report as missing.
       - name: Lint Play listing text
-        run: python3 scripts/ci/lint-play-listing.py
+        run: |
+          shopt -s nullglob
+          python3 scripts/ci/lint-play-listing.py distribution/metadata/android distribution/custom-listings/*/
 
       - name: Set up JDK 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -558,6 +566,44 @@ jobs:
           name: screen-captures
           path: build/screen-captures/
           if-no-files-found: ignore
+
+  # Custom store listings (distribution/custom-listings/) have no Play API: edits.listings is keyed
+  # only by package/edit/language, so it can only ever write the DEFAULT listing. The owner pastes
+  # this text into Play Console by hand; this job posts the paste-ready text as one PR comment
+  # (upserted, keyed by the <!-- custom-listing-diff --> marker). It never talks to Play, holds no
+  # Play secrets, and nothing depends on it: not `build`, not `instrumented-tests`, not deploy.
+  custom-listing-diff:
+    runs-on: self-hosted
+    # Same fork guard as the other jobs, and pull_request only (there is no PR to comment on
+    # otherwise).
+    if: github.repository == 'alexandre-machado/audio-blackbox' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    # Scoped to this job only; the workflow default stays contents: read.
+    permissions:
+      contents: read
+      pull-requests: write
+    # One run per PR at a time, so two pushes in quick succession cannot both POST a new comment.
+    concurrency:
+      group: custom-listing-diff-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Full history so both base.sha and head.sha (the merge ref's two parents) and their
+          # merge-base are present for `git diff base...head`.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Post custom listing text to the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 scripts/ci/custom-listing-diff.py --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --post --repo "$REPO" --pr "$PR_NUMBER"
 
   # Issue #399: this job used to live in its own playstore.yml, triggered independently by the
   # same push[main] event as `build`/`instrumented-tests` above, with no `needs:` between them --
