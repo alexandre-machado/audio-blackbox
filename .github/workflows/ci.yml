@@ -84,6 +84,12 @@ jobs:
       - name: Test Play listing sync
         run: python3 -m unittest discover -s scripts/ci -p 'test_sync_play_store_metadata.py' -v
 
+      - name: Test Play listing lint
+        run: python3 -m unittest discover -s scripts/ci -p 'test_lint_play_listing.py' -v
+
+      - name: Lint Play listing text
+        run: python3 scripts/ci/lint-play-listing.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
