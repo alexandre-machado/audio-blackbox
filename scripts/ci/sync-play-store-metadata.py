@@ -11,6 +11,17 @@ import sys
 import json
 import glob
 
+
+def read_listing_text(path):
+    """Return a listing text file exactly as it is sent to the Play API.
+
+    Shared with lint-play-listing.py so the pre-merge length check measures the
+    same string that edits.listings().update receives.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="Upload all metadata and commit even if unchanged")
@@ -79,14 +90,11 @@ def sync_metadata(service, package_name, media_upload,
 
         listing_body = {}
         if os.path.isfile(title_file):
-            with open(title_file, "r", encoding="utf-8") as f:
-                listing_body["title"] = f.read().strip()
+            listing_body["title"] = read_listing_text(title_file)
         if os.path.isfile(short_desc_file):
-            with open(short_desc_file, "r", encoding="utf-8") as f:
-                listing_body["shortDescription"] = f.read().strip()
+            listing_body["shortDescription"] = read_listing_text(short_desc_file)
         if os.path.isfile(full_desc_file):
-            with open(full_desc_file, "r", encoding="utf-8") as f:
-                listing_body["fullDescription"] = f.read().strip()
+            listing_body["fullDescription"] = read_listing_text(full_desc_file)
 
         if listing_body:
             try:
