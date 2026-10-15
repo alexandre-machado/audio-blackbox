@@ -1,6 +1,6 @@
 Audio Blackbox is a retroactive audio recorder: an audio dashcam that keeps the last minutes of sound in your phone's memory, so you can record past audio after it happened. Played a riff you want to keep? Missed the start of a quote or a lecture? Just heard instructions you need again? Tap Save and those minutes become an audio file. It runs as a background voice recorder with a rolling buffer, always with a visible notification.
 
-Nothing is written to storage until you tap Save, and the app has no internet permission, so it never uploads your audio anywhere.
+Nothing is written to storage until you tap Save, and your recordings never leave your phone: the app never uploads your audio anywhere.
 
 Made for
 • Musicians and songwriters: keep the riff or melody you just improvised, without having pressed record first.
@@ -15,7 +15,7 @@ How it works
 • Audio goes into a rolling buffer in RAM. When the buffer is full, the oldest audio is replaced by the newest.
 • The buffer is at least 5 minutes, set in 5-minute steps. There is no fixed maximum: the app works out how much your phone can safely hold for the quality preset you picked, and shows that limit in Settings.
 • Save writes the buffered audio since your last save (the whole buffer the first time) to an AAC (.m4a) file, so your files never overlap.
-• Live starts a recording that keeps the buffered past and continues until you stop it.
+• Live starts a recording that keeps the buffered past and continues until you stop it. The free version saves a live recording automatically at 2 hours. The optional one-time Pro unlock removes that limit.
 
 Features
 • Three quality presets: Voice (16 kHz mono, the longest buffer), Balanced (32 kHz mono) and High fidelity (44.1 kHz stereo, which can use more than one microphone on phones that have them). Higher quality uses more memory per minute, so the buffer gets shorter.
@@ -25,9 +25,9 @@ Features
 • Built-in player to listen, seek, share and delete your saved recordings.
 
 Privacy
-• No internet permission in the app. No account, no ads, no analytics, no cloud.
-• Audio stays in memory until you save it. The app never uploads anything: saved files go to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control them.
-• Free and open source under GPL-3.0, actively maintained, with the full source code on GitHub.
+• Recorded audio never leaves your phone. No account, no ads, no analytics, no cloud. The only network use is Google Play's own billing library, for the optional Pro purchase.
+• Audio stays in memory until you save it. Your recordings are never uploaded: saved files go to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control them.
+• Open source under GPL-3.0, actively maintained, with the full source code on GitHub.
 
 Record responsibly
 Use Audio Blackbox for your own conversations and ideas. Recording other people may require their consent, and the rules differ between countries and states. Check your local recording laws before you record. You are responsible for how you use the app.

@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -77,6 +78,9 @@ import androidx.compose.foundation.clickable
 import cc.machado.audioblackbox.audio.QualityPreset
 import kotlinx.coroutines.launch
 
+/** Test tag on the "Support the project" row (issue #444). */
+const val SETTINGS_SUPPORT_ROW_TEST_TAG = "settings_support_row"
+
 /**
  * Hosts [SettingsViewModel] and renders [SettingsScreen] against its live state -- same
  * Route/Screen seam as [cc.machado.audioblackbox.ui.dashboard.DashboardRoute], so every visual
@@ -97,6 +101,7 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val (proState, onPurchase) = cc.machado.audioblackbox.ui.rememberProPurchase()
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     // Issue #388 / PR #390 `@rev` finding 1: guards against a double-tap launching two concurrent
@@ -107,6 +112,8 @@ fun SettingsRoute(
     }
     SettingsScreen(
         uiState = uiState,
+        proState = proState,
+        onPurchase = onPurchase,
         onSelectQualityPreset = viewModel::selectQualityPreset,
         onDecrement = viewModel::decrementPending,
         onIncrement = viewModel::incrementPending,
@@ -129,6 +136,8 @@ fun SettingsRoute(
             }
         },
         isExportingDiagnosticLog = isExportingDiagnosticLog,
+        // Issue #444: the Route owns the Intent; the Screen only reports the tap.
+        onSupportClick = { launchSupportLink(context) },
         modifier = modifier,
     )
 }
@@ -145,6 +154,9 @@ fun SettingsScreen(
     isExportingDiagnosticLog: Boolean = false,
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
+    proState: cc.machado.audioblackbox.ui.ProCardState = cc.machado.audioblackbox.ui.ProCardState(),
+    onPurchase: () -> Unit = {},
+    onSupportClick: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -155,6 +167,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         SettingsHeader()
+        cc.machado.audioblackbox.ui.ProCard(proState, onPurchase)
         QualityPresetSection(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,
@@ -166,7 +179,7 @@ fun SettingsScreen(
             onExportDiagnosticLog = onExportDiagnosticLog,
             isExporting = isExportingDiagnosticLog,
         )
-        PrivacySection(versionName = versionName)
+        PrivacySection(versionName = versionName, onSupportClick = onSupportClick)
     }
     uiState.clampNotice?.let { notice ->
         ClampNoticeDialog(notice = notice, onAcknowledge = onAcknowledgeClampNotice)
@@ -609,6 +622,7 @@ private fun DiagnosticsSection(
 @Composable
 private fun PrivacySection(
     versionName: String = BuildConfig.VERSION_NAME,
+    onSupportClick: () -> Unit = {},
     buildDate: String = BuildConfig.BUILD_DATE,
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -672,6 +686,30 @@ private fun PrivacySection(
                 )
                 Text(
                     text = privacyPolicyDisplayUrl,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
+                    color = FlightOrange,
+                )
+            }
+            HorizontalDivider(color = CockpitBorder)
+            // Issue #444: same secondary clickable-row style as the website/privacy rows above
+            // (not a card-level FlightOrange CTA, AGENTS.md section 5). The Route launches the
+            // Intent; this row only reports the tap through onSupportClick.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSupportClick)
+                    .testTag(SETTINGS_SUPPORT_ROW_TEST_TAG),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_support_label),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = SUPPORT_URL.removePrefix("https://"),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,

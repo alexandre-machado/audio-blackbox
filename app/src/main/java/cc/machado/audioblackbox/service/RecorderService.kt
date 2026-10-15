@@ -43,6 +43,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -139,6 +141,18 @@ class RecorderService : Service() {
 
     private val forwardRecordingEngine by lazy {
         ForwardRecordingEngine(
+            // Issue #443: elapsedRealtime is monotonic and keeps counting in deep sleep, so the cap
+            // measures real session length regardless of wall-clock changes. Entitlement is read
+            // live on the drain thread each iteration (a StateFlow value, no billing work), so a
+            // purchase mid-session lifts the cap; a repository not yet built reads as Unknown,
+            // which is never capped.
+            monotonicClock = android.os.SystemClock::elapsedRealtime,
+            entitlement = {
+                (application as? cc.machado.audioblackbox.AudioBlackboxApplication)
+                    ?.proEntitlementRepository?.entitlement?.value
+                    ?: cc.machado.audioblackbox.billing.Entitlement.Unknown
+            },
+            freeCapMillis = cc.machado.audioblackbox.export.liveRecordingCapMillis(),
             configProvider = { captureConfig },
             readSinceProvider = { cursor, maxBytes -> engine.readSince(cursor, maxBytes) },
             writeCursorProvider = { engine.writeCursor() },
@@ -267,11 +281,34 @@ class RecorderService : Service() {
             forwardRecordingEngine.state.collect { state ->
                 _forwardRecordingState.value = state
                 refreshNotification()
-                if (state is ForwardRecordingState.Success || state is ForwardRecordingState.Error) {
+                // Issue #443: a session stopped by the free limit keeps its terminal state (and so
+                // its notification text and dashboard notice) until the next session starts, or the
+                // entitlement becomes Pro (clearFreeLimitNoticeOnPro below). Two hours in, the user
+                // is rarely looking during an 8 s window.
+                val stoppedAtFreeLimit = state is ForwardRecordingState.Success && state.freeLimitReached
+                if (!stoppedAtFreeLimit &&
+                    (state is ForwardRecordingState.Success || state is ForwardRecordingState.Error)
+                ) {
                     delay(EXPORT_OUTCOME_VISIBLE_MILLIS)
                     forwardRecordingEngine.acknowledgeTerminalState()
                 }
             }
+        }
+        // PR #447 `@rev` finding 5: "Pro removes this limit" stops being true once the user is Pro,
+        // so the cap notice is cleared from both the notification and the dashboard then. The
+        // repository is built asynchronously; until it exists the entitlement reads as Unknown,
+        // which never clears anything.
+        serviceScope.launch {
+            val app = application as? cc.machado.audioblackbox.AudioBlackboxApplication
+            @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+            val entitlement = app?.billingRepository
+                ?.flatMapLatest { it?.entitlement ?: flowOf(cc.machado.audioblackbox.billing.Entitlement.Unknown) }
+                ?: flowOf(cc.machado.audioblackbox.billing.Entitlement.Unknown)
+            clearFreeLimitNoticeOnPro(
+                forwardRecordingEngine.state,
+                entitlement,
+                forwardRecordingEngine::acknowledgeTerminalState,
+            )
         }
     }
 

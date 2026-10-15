@@ -11,12 +11,12 @@ The listing text lives in `distribution/metadata/android/{en-US,pt-BR}/` and is 
 | Field | Play limit | `en-US` | `pt-BR` |
 | :--- | :--- | :--- | :--- |
 | Title (`title.txt`) | 30 | `Audio Blackbox: Past Recorder` (29) | `Audio Blackbox: Gravador` (24) |
-| Short description (`short_description.txt`) | 80 | `Save the last minutes you just heard. Stays on your phone, no internet access.` (78) | `Salve os minutos que você acabou de ouvir. Fica no seu celular, sem internet.` (77) |
+| Short description (`short_description.txt`) | 80 | `Audio dashcam: save the last minutes you just heard. Audio stays on your phone.` (79) | `Dashcam de áudio: salve o que acabou de ouvir. O áudio fica no seu celular.` (75) |
 | Full description (`full_description.txt`) | 4000 | see file | see file |
 
 Rules the copy must keep (issue #419):
 
-- **Truthful to the shipped app.** The buffer is at least 5 minutes, in 5-minute steps, with no fixed maximum: the ceiling is computed per device and per quality preset (`DeviceMemoryBudget`, #298). Save always exports the whole buffer (#121), and the next save starts where the previous one ended (#410). Export is AAC (`.m4a`). The merged manifest has no `INTERNET` permission (`ManifestPermissionSecurityTest`). Never quote a fixed set of windows or a fixed maximum.
+- **Truthful to the shipped app.** The buffer is at least 5 minutes, in 5-minute steps, with no fixed maximum: the ceiling is computed per device and per quality preset (`DeviceMemoryBudget`, #298). Save always exports the whole buffer (#121), and the next save starts where the previous one ended (#410). Export is AAC (`.m4a`). Since the optional Pro unlock (#440/#441), the merged manifest declares `INTERNET`, `ACCESS_NETWORK_STATE` and `com.android.vending.BILLING`, all from Google Play Billing (exact allowlist in `ManifestPermissionSecurityTest`). Never claim "no internet permission", "zero network", "100% offline", "costs nothing" or "completely free"; the truthful claim is that recorded audio never leaves the device, with no ads, no analytics, no account and no cloud. Free live recordings stop and save at 2 hours; Pro (one-time) removes that limit. Never quote a fixed set of windows or a fixed maximum.
 - **Use cases, in this order:** musicians and songwriters, ideas and thinking out loud, meetings and agreements the user is part of, family moments.
 - **Never** use "secret", "stealth", "hidden", "spy" or "record without them knowing"; never suggest recording conversations the user is not part of; never claim "court-admissible", "legal evidence" or "legal everywhere".
 - **Do** say "your own conversations and ideas", mention the visible notification while recording, say the audio stays on the phone, and tell users to check their local recording laws. Keep the consent disclaimer in both languages.
@@ -47,7 +47,7 @@ Copy-pasteable questionnaire responses for Google Play Console:
    - **Is this data required or optional?**: `Required` (Core functionality of the app).
    - **Purposes**: `App functionality`.
 3. **Data transfer and security practices**:
-   - **Is data transferred over a secure connection?**: `N/A - Data is never transferred off the device (Zero network egress)`.
+   - **Is data transferred over a secure connection?**: audio is never transferred off the device. **Open (#446):** Google Play Billing's own library telemetry does leave the app process; whether it must be declared here is the owner's call with the Play SDK Index entry open (see the #441 verdict). Do not answer "zero network egress".
    - **Can users request data deletion?**: `Yes` (Users can delete exported files at any time via the in-app Gallery or standard file managers. In-memory buffer is discarded when recording is stopped or the app is uninstalled).
 
 ---
@@ -72,7 +72,7 @@ Because `targetSdk` is 36, Google Play requires a specific declaration for `FORE
 - **Category**: `Tools` / `Audio & Video`.
 - **Target Audience**: `18 and over` (or `13 and over`).
 - **Contains Ads**: `No`.
-- **Pricing**: `Free`.
+- **Pricing**: `Free`, with one in-app product (`pro_unlock`, non-consumable). Play shows "Contains in-app purchases" automatically.
 
 ---
 
@@ -84,6 +84,6 @@ Google Play Console requires all apps targeting Android 13+ (API 33+) to declare
 - **Answer**: **`No`** (**`Não`**)
 
 ### Rationale & Invariants
-1. Audio Blackbox contains zero advertisements, zero monetization SDKs, and zero telemetry trackers.
+1. Audio Blackbox contains zero advertisements and zero analytics or tracking SDKs. Its only monetization is the optional Pro unlock through Google Play Billing.
 2. The `com.google.android.gms.permission.AD_ID` permission is **not requested or merged** anywhere in the app.
-3. The app is 100% offline with zero network permissions (`android.permission.INTERNET` is completely absent, as verified by `ManifestPermissionSecurityTest`).
+3. Google Play Billing adds `INTERNET` and `ACCESS_NETWORK_STATE` for its own telemetry, but no advertising ID is involved (`ManifestPermissionSecurityTest` keeps the permission set to an exact allowlist).

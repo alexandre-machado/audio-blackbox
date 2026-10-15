@@ -734,11 +734,12 @@ class DashboardViewModel(
                 ForwardRecordingUiState.Recording(
                     displayName = forwardState.displayName,
                     elapsedMillis = elapsedMillis,
+                    freeRemainingMillis = forwardState.freeRemainingMillis,
                 )
             }
             is ForwardRecordingState.Success ->
                 if (forwardState == dismissed) ForwardRecordingUiState.Idle
-                else ForwardRecordingUiState.Success(forwardState.displayName, forwardState.bytesWritten)
+                else ForwardRecordingUiState.Success(forwardState.displayName, forwardState.bytesWritten, forwardState.freeLimitReached)
             is ForwardRecordingState.Error ->
                 if (forwardState == dismissed) {
                     ForwardRecordingUiState.Idle

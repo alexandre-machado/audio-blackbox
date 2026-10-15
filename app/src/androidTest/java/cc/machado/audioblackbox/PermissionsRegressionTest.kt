@@ -3,29 +3,32 @@ package cc.machado.audioblackbox
 import android.content.pm.PackageManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Regression test for issue #119: no data of any kind may leave the device.
+ * On-device twin of the JVM `ManifestPermissionSecurityTest` allowlist: the installed APK must
+ * request exactly the owner-approved permission set, nothing more and nothing less.
  *
- * Lifted, unmodified in substance, from the closed PR #122
- * (`privacy/119-remove-firebase-analytics`) per issue #129's requirement to reuse the reviewed
- * implementation rather than rewrite it.
+ * History: this test was born for issue #119 ("no data of any kind may leave the device"), lifted
+ * from the closed PR #122 per issue #129, and asserted that `INTERNET` and
+ * `ACCESS_NETWORK_STATE` were absent. Issue #441 supersedes that rule, it does not delete it: the
+ * optional Pro unlock uses Google Play Billing, whose library manifest merges in `INTERNET`,
+ * `ACCESS_NETWORK_STATE` and `com.android.vending.BILLING`. Those three are now approved, and
+ * every other network-adjacent permission (`ACCESS_WIFI_STATE`, `CHANGE_NETWORK_STATE`, `AD_ID`,
+ * ...) stays forbidden because exact set equality rejects anything not listed.
  *
- * `app/src/main/AndroidManifest.xml` never declared `INTERNET` itself; the permission that made
- * "no network egress" false was merged in by Firebase's own library manifest at build time. A
- * source-manifest-only check is therefore vacuous here -- it would have passed even while Firebase
- * Analytics was linked, since the source manifest never mentioned INTERNET in the first place.
+ * Why this lives on device and not only in the JVM test: [PackageManager.getPackageInfo] reads
+ * the permissions actually baked into the installed APK, i.e. the real output of manifest merging
+ * for the variant CI installs, not the source `AndroidManifest.xml`. The source manifest never
+ * declared `INTERNET` itself even while Firebase was linked (#119), so a source-only check is
+ * vacuous for library-merged permissions.
  *
- * [PackageManager.getPackageInfo] reads the permissions actually baked into the installed APK,
- * i.e. the real output of manifest merging (the same content emitted under the
- * `app/build/intermediates/merged_manifest` directory tree), not the source
- * `AndroidManifest.xml`. That makes this the durable form of the assertion: if any future
- * dependency merges `INTERNET` or
- * `ACCESS_NETWORK_STATE` back in, this test fails loudly instead of leaving the privacy claim
- * silently false again.
+ * The androidx `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` is namespaced by the applicationId, which
+ * carries the debug build type's suffix on the installed test target. It is derived from the real
+ * [android.content.Context.getPackageName] rather than hardcoded, so this test checks the same set
+ * as the JVM release allowlist regardless of which suffix the variant uses.
  */
 @RunWith(AndroidJUnit4::class)
 class PermissionsRegressionTest {
@@ -33,23 +36,32 @@ class PermissionsRegressionTest {
     private val context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
+    // Oracle: any permission merged into, or dropped from, the installed APK (relative to the
+    // #441 approved list) fails this equality, with both sets in the message.
     @Test
-    fun installedManifestDeclaresNoNetworkPermissions() {
-        val info = context.packageManager.getPackageInfo(
-            context.packageName,
-            PackageManager.GET_PERMISSIONS,
-        )
-        val requestedPermissions = info.requestedPermissions?.toList().orEmpty()
+    fun installedManifestRequestsExactlyApprovedPermissions() {
+        val packageName = context.packageName
+        val info = context.packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+        val requestedPermissions = info.requestedPermissions?.toSet().orEmpty()
 
-        assertFalse(
-            "merged manifest must not declare INTERNET -- no data may leave the device " +
-                "(issue #119); requested permissions were: $requestedPermissions",
-            requestedPermissions.contains(android.Manifest.permission.INTERNET),
+        val expectedPermissions = setOf(
+            android.Manifest.permission.INTERNET,
+            android.Manifest.permission.ACCESS_NETWORK_STATE,
+            "com.android.vending.BILLING",
+            android.Manifest.permission.RECORD_AUDIO,
+            "android.permission.POST_NOTIFICATIONS",
+            android.Manifest.permission.FOREGROUND_SERVICE,
+            "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+            android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            android.Manifest.permission.RECEIVE_BOOT_COMPLETED,
+            "$packageName.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
         )
-        assertFalse(
-            "merged manifest must not declare ACCESS_NETWORK_STATE -- no data may leave the " +
-                "device (issue #119); requested permissions were: $requestedPermissions",
-            requestedPermissions.contains(android.Manifest.permission.ACCESS_NETWORK_STATE),
+
+        assertEquals(
+            "installed APK permissions must exactly match the approved allowlist (#441, " +
+                "superseding #119's no-network rule)",
+            expectedPermissions,
+            requestedPermissions,
         )
     }
 }
