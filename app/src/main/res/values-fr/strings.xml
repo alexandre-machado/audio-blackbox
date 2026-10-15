@@ -249,7 +249,7 @@
     <string name="settings_specs_persistence_label">Mode de persistance</string>
     <string name="settings_specs_persistence_value">MediaStore (stockage local)</string>
     <string name="settings_privacy_title">Confidentialité &amp; traitement local</string>
-    <string name="settings_privacy_explanation">Audio Blackbox fonctionne entièrement en local sur votre appareil. L\'audio du micro est conservé temporairement en RAM et écrasé automatiquement. Aucune télémétrie, aucun rapport de plantage ni aucun flux audio n\'est jamais envoyé à des serveurs distants.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox garde votre audio sur votre appareil. L\'audio du micro est conservé temporairement en RAM et écrasé automatiquement, et les enregistrements ne quittent jamais le téléphone. Pas de publicité, pas d\'analytique, pas de compte, pas de cloud. Le seul usage réseau est la télémétrie propre à la bibliothèque Google Play Billing pour l\'achat facultatif de Pro.</string>
     <string name="settings_retention_title">Fenêtre de conservation de la mémoire tampon</string>
     <string name="settings_retention_explanation">Quantité d\'audio que la mémoire tampon garde dans la mémoire de l\'appareil. Une valeur plus élevée utilise plus de mémoire. Les modifications s\'appliquent automatiquement peu après votre dernier réglage.</string>
     <string name="settings_retention_value">%1$d min (~%2$d Mo)</string>
@@ -319,6 +319,8 @@
     <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
     <string name="settings_privacy_policy_label">Politique de confidentialité</string>
     <string name="settings_privacy_policy_url">https://alexandre.machado.cc/audio-blackbox/release/privacy-policy</string>
+    <string name="settings_support_label">Soutenir le projet</string>
+    <string name="settings_support_no_browser">Aucun navigateur n\'est disponible pour ouvrir la page de soutien.</string>
 
     <!-- Full Diagnostic Log export (issue #388) -->
     <string name="settings_card_diagnostics_label">JOURNAL DE DIAGNOSTIC</string>

@@ -244,7 +244,7 @@
     <string name="settings_specs_persistence_label">Modalità di persistenza</string>
     <string name="settings_specs_persistence_value">MediaStore (memoria locale)</string>
     <string name="settings_privacy_title">Privacy &amp; elaborazione locale</string>
-    <string name="settings_privacy_explanation">Audio Blackbox funziona interamente in locale sul tuo dispositivo. L\'audio del microfono viene mantenuto in RAM temporanea e sovrascritto automaticamente. Nessuna telemetria, nessun rapporto sugli arresti anomali e nessun flusso audio viene mai inviato a server remoti.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox tiene il tuo audio sul dispositivo. L\'audio del microfono resta in RAM temporanea e viene sovrascritto automaticamente, e le registrazioni non lasciano mai il telefono. Niente pubblicità, niente analytics, nessun account, nessun cloud. L\'unico uso della rete è la telemetria della libreria Google Play Billing per l\'acquisto facoltativo di Pro.</string>
     <string name="settings_retention_title">Finestra di conservazione del buffer</string>
     <string name="settings_retention_explanation">Quanto audio il buffer conserva nella memoria del dispositivo. Un valore più alto usa più memoria. Le modifiche vengono applicate automaticamente poco dopo che smetti di regolare.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
@@ -314,6 +314,8 @@
     <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
     <string name="settings_privacy_policy_label">Informativa sulla privacy</string>
     <string name="settings_privacy_policy_url">https://alexandre.machado.cc/audio-blackbox/release/privacy-policy</string>
+    <string name="settings_support_label">Sostieni il progetto</string>
+    <string name="settings_support_no_browser">Nessun browser disponibile per aprire la pagina di sostegno.</string>
 
     <!-- Full Diagnostic Log export (issue #388) -->
     <string name="settings_card_diagnostics_label">LOG DI DIAGNOSTICA</string>

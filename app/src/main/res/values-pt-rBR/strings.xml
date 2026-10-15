@@ -251,7 +251,7 @@
     <string name="settings_specs_persistence_label">Modo de persistência</string>
     <string name="settings_specs_persistence_value">MediaStore (Armazenamento local)</string>
     <string name="settings_privacy_title">Privacidade e processamento local</string>
-    <string name="settings_privacy_explanation">O Audio Blackbox opera puramente local no seu aparelho. O áudio do microfone é mantido em memória RAM temporária e sobrescrito automaticamente. Zero telemetria, relatórios de falha ou fluxos de áudio são enviados para servidores remotos.</string>
+    <string name="settings_privacy_explanation">O Audio Blackbox mantém seu áudio no seu aparelho. O áudio do microfone fica em memória RAM temporária e é sobrescrito automaticamente, e as gravações nunca saem do celular. Sem anúncios, sem analytics, sem conta, sem nuvem. O único uso de rede é a telemetria da própria biblioteca do Google Play Billing para a compra opcional do Pro.</string>
     <string name="settings_retention_title">Janela de retenção do buffer</string>
     <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. As mudanças são aplicadas automaticamente pouco depois de você parar de ajustar.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
@@ -334,6 +334,8 @@
     <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
     <string name="settings_privacy_policy_label">Política de privacidade</string>
     <string name="settings_privacy_policy_url">https://alexandre.machado.cc/audio-blackbox/release/privacy-policy</string>
+    <string name="settings_support_label">Apoie o projeto</string>
+    <string name="settings_support_no_browser">Nenhum navegador disponível para abrir a página de apoio.</string>
 
     <!-- Full Diagnostic Log export (issue #388) -->
     <string name="settings_card_diagnostics_label">LOG DE DIAGNÓSTICO</string>
