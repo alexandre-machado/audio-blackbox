@@ -390,6 +390,7 @@
     <string name="pro_explanation">No plano grátis, cada gravação ao vivo dura até 2 horas. Desbloqueie o Pro com uma compra única para gravar sem limite.</string>
     <string name="pro_unlock">Desbloquear Pro</string>
     <string name="pro_store_unavailable">Loja indisponível</string>
+    <string name="pro_price_loading">Consultando preço…</string>
     <string name="pro_pending">Compra pendente</string>
     <string name="pro_active">Pro ativo. Obrigado!</string>
     <string name="pro_early">Pro incluído para quem chegou primeiro. Obrigado!</string>

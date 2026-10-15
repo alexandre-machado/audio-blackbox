@@ -111,5 +111,3 @@ class PlayBillingSource(context: Context) : BillingSource {
         }
     }
 }
-
-private class BillingFailure(code: Int) : Exception("Play Billing response: $code")

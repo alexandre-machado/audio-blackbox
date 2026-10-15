@@ -1598,10 +1598,10 @@ private fun DashboardScreenSaveErrorPreview() {
     }
 }
 
-/** Test tag for the continuous recording engine switch control. */
 /** Issue #443: the live card starts showing remaining free time inside this final window. */
 const val FREE_CAP_WARNING_MILLIS = 10 * 60 * 1000L
 
+/** Test tag for the continuous recording engine switch control. */
 const val ENGINE_SWITCH_TEST_TAG = "dashboard_engine_switch"
 
 /** Test tag for the "Save recent audio" primary CTA button. */

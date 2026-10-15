@@ -375,6 +375,7 @@
     <string name="pro_explanation">Les enregistrements en direct gratuits durent jusqu’à 2 heures par session. Débloquez Pro en un seul achat pour enregistrer sans limite.</string>
     <string name="pro_unlock">Débloquer Pro</string>
     <string name="pro_store_unavailable">Boutique indisponible</string>
+    <string name="pro_price_loading">Vérification du prix…</string>
     <string name="pro_pending">Achat en attente</string>
     <string name="pro_active">Pro actif. Merci\u00A0!</string>
     <string name="pro_early">Pro offert aux premiers utilisateurs. Merci\u00A0!</string>

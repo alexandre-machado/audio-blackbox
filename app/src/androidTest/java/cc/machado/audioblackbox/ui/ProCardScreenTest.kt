@@ -27,7 +27,7 @@ class ProCardScreenTest {
             setLocale(java.util.Locale.forLanguageTag("pt-BR"))
         }
         val localized = rule.activity.createConfigurationContext(configuration)
-        var state by mutableStateOf(ProCardState(ProCardStatus.FREE, "R$ 19,90"))
+        var state by mutableStateOf(ProCardState(ProCardStatus.FREE, cc.machado.audioblackbox.billing.PriceState.Available("R$ 19,90")))
         var purchases = 0
         rule.setContent {
             CompositionLocalProvider(LocalContext provides localized, LocalConfiguration provides configuration) {
@@ -46,7 +46,20 @@ class ProCardScreenTest {
         val button = rule.onNodeWithText(unlock).getUnclippedBoundsInRoot()
         val bar = rule.onNodeWithTag(FLOATING_BOTTOM_BAR_TEST_TAG).getUnclippedBoundsInRoot()
         assertTrue("Purchase action must end above the floating bar", button.bottom <= bar.top)
-        rule.runOnIdle { assertEquals(1, purchases); state = ProCardState(ProCardStatus.FREE) }
+        // Finding 6: a price query still in flight reads as loading, never as "store unavailable";
+        // only a finished query without a price says the store is unavailable. CTA disabled in both.
+        rule.runOnIdle {
+            assertEquals(1, purchases)
+            state = ProCardState(ProCardStatus.FREE, cc.machado.audioblackbox.billing.PriceState.Loading)
+        }
+        rule.onNodeWithText(localized.getString(R.string.pro_price_loading)).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(localized.getString(R.string.pro_store_unavailable)).assertDoesNotExist()
+        rule.onNodeWithText(unlock).assertIsNotEnabled()
+        rule.runOnIdle {
+            state = ProCardState(ProCardStatus.FREE, cc.machado.audioblackbox.billing.PriceState.Unavailable)
+        }
+        rule.onNodeWithText(localized.getString(R.string.pro_store_unavailable)).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(localized.getString(R.string.pro_price_loading)).assertDoesNotExist()
         rule.onNodeWithText(unlock).assertIsNotEnabled()
         for ((status, message) in listOf(
             ProCardStatus.PENDING to R.string.pro_pending,
@@ -78,7 +91,7 @@ class ProCardScreenTest {
                             onToggleEngine = {}, onSaveRecent = {}, onDismissSaveNotice = {},
                             onStartForwardRecording = {}, onStopForwardRecording = {},
                             onDismissForwardNotice = {},
-                            proState = ProCardState(ProCardStatus.FREE, "R$ 19,90"),
+                            proState = ProCardState(ProCardStatus.FREE, cc.machado.audioblackbox.billing.PriceState.Available("R$ 19,90")),
                             onPurchase = { purchases++ },
                         )
                     }

@@ -370,6 +370,7 @@
     <string name="pro_explanation">Las grabaciones en directo gratuitas duran hasta 2 horas por sesión. Desbloquea Pro con un único pago para grabar sin límite.</string>
     <string name="pro_unlock">Desbloquear Pro</string>
     <string name="pro_store_unavailable">Tienda no disponible</string>
+    <string name="pro_price_loading">Consultando precio…</string>
     <string name="pro_pending">Compra pendiente</string>
     <string name="pro_active">Pro activo. ¡Gracias!</string>
     <string name="pro_early">Pro incluido para los primeros usuarios. ¡Gracias!</string>

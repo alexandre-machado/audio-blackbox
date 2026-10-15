@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.AudioBlackboxApplication
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.billing.Entitlement
+import cc.machado.audioblackbox.billing.PriceState
 import cc.machado.audioblackbox.billing.ProEntitlementRepository
 import cc.machado.audioblackbox.billing.ProSource
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
@@ -51,14 +52,22 @@ import kotlinx.coroutines.launch
  */
 enum class ProCardStatus { UNKNOWN, FREE, PENDING, PURCHASED, GRANDFATHERED }
 
-/** [price] is `ProductDetails.formattedPrice`, verbatim from Play; null means unavailable. */
-data class ProCardState(val status: ProCardStatus = ProCardStatus.UNKNOWN, val price: String? = null) {
-    val canPurchase: Boolean get() = status == ProCardStatus.FREE && price != null
+/**
+ * [price] carries `ProductDetails.formattedPrice` verbatim from Play when [PriceState.Available].
+ * [PriceState.Loading] (the default, also used before the repository exists) means the query has
+ * not finished yet; only [PriceState.Unavailable] means it finished without a price (#175: the
+ * card must not claim the store is down while it is merely still being asked).
+ */
+data class ProCardState(
+    val status: ProCardStatus = ProCardStatus.UNKNOWN,
+    val price: PriceState = PriceState.Loading,
+) {
+    val canPurchase: Boolean get() = status == ProCardStatus.FREE && price is PriceState.Available
     val isPro: Boolean get() = status == ProCardStatus.PURCHASED || status == ProCardStatus.GRANDFATHERED
 }
 
 /** Pure mapping, shared by the ViewModel and its test. Ownership wins over a pending purchase. */
-internal fun proCardStateOf(entitlement: Entitlement, pending: Boolean, price: String?): ProCardState =
+internal fun proCardStateOf(entitlement: Entitlement, pending: Boolean, price: PriceState): ProCardState =
     ProCardState(
         when {
             entitlement is Entitlement.Pro ->
@@ -140,7 +149,11 @@ fun ProCard(state: ProCardState, onPurchase: () -> Unit, modifier: Modifier = Mo
             )
             if (state.status == ProCardStatus.FREE || state.status == ProCardStatus.UNKNOWN) {
                 Text(
-                    text = state.price ?: stringResource(R.string.pro_store_unavailable),
+                    text = when (val price = state.price) {
+                        is PriceState.Available -> price.formatted
+                        PriceState.Loading -> stringResource(R.string.pro_price_loading)
+                        PriceState.Unavailable -> stringResource(R.string.pro_store_unavailable)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

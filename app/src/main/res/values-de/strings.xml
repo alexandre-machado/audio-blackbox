@@ -370,6 +370,7 @@
     <string name="pro_explanation">Kostenlose Live-Aufnahmen dauern bis zu 2 Stunden pro Sitzung. Schalte Pro einmalig frei, um ohne Zeitlimit aufzunehmen.</string>
     <string name="pro_unlock">Pro freischalten</string>
     <string name="pro_store_unavailable">Store nicht verfügbar</string>
+    <string name="pro_price_loading">Preis wird abgerufen…</string>
     <string name="pro_pending">Kauf ausstehend</string>
     <string name="pro_active">Pro ist aktiv. Vielen Dank!</string>
     <string name="pro_early">Pro ist für Nutzer der ersten Stunde enthalten. Vielen Dank!</string>

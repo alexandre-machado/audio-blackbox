@@ -43,6 +43,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -280,8 +282,9 @@ class RecorderService : Service() {
                 _forwardRecordingState.value = state
                 refreshNotification()
                 // Issue #443: a session stopped by the free limit keeps its terminal state (and so
-                // its notification text and dashboard notice) until the next session starts or the
-                // user dismisses it. Two hours in, the user is rarely looking during an 8 s window.
+                // its notification text and dashboard notice) until the next session starts, or the
+                // entitlement becomes Pro (clearFreeLimitNoticeOnPro below). Two hours in, the user
+                // is rarely looking during an 8 s window.
                 val stoppedAtFreeLimit = state is ForwardRecordingState.Success && state.freeLimitReached
                 if (!stoppedAtFreeLimit &&
                     (state is ForwardRecordingState.Success || state is ForwardRecordingState.Error)
@@ -290,6 +293,22 @@ class RecorderService : Service() {
                     forwardRecordingEngine.acknowledgeTerminalState()
                 }
             }
+        }
+        // PR #447 `@rev` finding 5: "Pro removes this limit" stops being true once the user is Pro,
+        // so the cap notice is cleared from both the notification and the dashboard then. The
+        // repository is built asynchronously; until it exists the entitlement reads as Unknown,
+        // which never clears anything.
+        serviceScope.launch {
+            val app = application as? cc.machado.audioblackbox.AudioBlackboxApplication
+            @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+            val entitlement = app?.billingRepository
+                ?.flatMapLatest { it?.entitlement ?: flowOf(cc.machado.audioblackbox.billing.Entitlement.Unknown) }
+                ?: flowOf(cc.machado.audioblackbox.billing.Entitlement.Unknown)
+            clearFreeLimitNoticeOnPro(
+                forwardRecordingEngine.state,
+                entitlement,
+                forwardRecordingEngine::acknowledgeTerminalState,
+            )
         }
     }
 

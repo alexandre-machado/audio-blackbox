@@ -28,14 +28,16 @@ class ProCardViewModelTest {
     // (billing still resolving) must stay disabled even if a price is known, ownership must win
     // over a stale pending flag, and both Pro sources map to their own thank-you card.
     @Test fun mappingGatesPurchaseOnFreeWithPrice() {
-        assertTrue(proCardStateOf(Entitlement.Free, false, "€4,99").canPurchase)
-        assertFalse(proCardStateOf(Entitlement.Free, false, null).canPurchase)
-        assertFalse(proCardStateOf(Entitlement.Unknown, false, "€4,99").canPurchase)
-        assertEquals(ProCardStatus.UNKNOWN, proCardStateOf(Entitlement.Unknown, false, null).status)
-        assertEquals(ProCardStatus.PENDING, proCardStateOf(Entitlement.Free, true, "€4,99").status)
-        assertFalse(proCardStateOf(Entitlement.Free, true, "€4,99").canPurchase)
-        assertEquals(ProCardStatus.PURCHASED, proCardStateOf(Entitlement.Pro(ProSource.PURCHASE), true, null).status)
-        assertEquals(ProCardStatus.GRANDFATHERED, proCardStateOf(Entitlement.Pro(ProSource.GRANDFATHERED), false, null).status)
+        assertTrue(proCardStateOf(Entitlement.Free, false, PriceState.Available("€4,99")).canPurchase)
+        assertFalse(proCardStateOf(Entitlement.Free, false, PriceState.Unavailable).canPurchase)
+        assertFalse(proCardStateOf(Entitlement.Unknown, false, PriceState.Available("€4,99")).canPurchase)
+        assertEquals(ProCardStatus.UNKNOWN, proCardStateOf(Entitlement.Unknown, false, PriceState.Loading).status)
+        // Still loading is not a price: Free with a pending price query stays disabled too.
+        assertFalse(proCardStateOf(Entitlement.Free, false, PriceState.Loading).canPurchase)
+        assertEquals(ProCardStatus.PENDING, proCardStateOf(Entitlement.Free, true, PriceState.Available("€4,99")).status)
+        assertFalse(proCardStateOf(Entitlement.Free, true, PriceState.Available("€4,99")).canPurchase)
+        assertEquals(ProCardStatus.PURCHASED, proCardStateOf(Entitlement.Pro(ProSource.PURCHASE), true, PriceState.Unavailable).status)
+        assertEquals(ProCardStatus.GRANDFATHERED, proCardStateOf(Entitlement.Pro(ProSource.GRANDFATHERED), false, PriceState.Unavailable).status)
     }
 
     // Oracle: real repository ownership/pending changes select the corresponding card,
@@ -64,11 +66,12 @@ class ProCardViewModelTest {
             models += model
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.state.collect {} }
             runCurrent()
-            assertEquals(ProCardState(ProCardStatus.FREE, "R$ 19,90"), model.state.value)
+            assertEquals(ProCardState(ProCardStatus.FREE, PriceState.Available("R$ 19,90")), model.state.value)
             assertTrue(model.state.value.canPurchase)
             source.price = null
             repo.refresh(); runCurrent()
             assertFalse("Unavailable product details must disable purchase", model.state.value.canPurchase)
+            assertEquals(PriceState.Unavailable, model.state.value.price)
             source.purchases = listOf(OwnedPurchase(listOf(PRO_PRODUCT_ID), "token", PurchaseState.PENDING, false))
             repo.refresh(); runCurrent()
             assertEquals(ProCardStatus.PENDING, model.state.value.status)

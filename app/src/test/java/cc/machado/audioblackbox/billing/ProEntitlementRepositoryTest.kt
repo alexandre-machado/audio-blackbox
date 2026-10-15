@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
@@ -36,8 +37,12 @@ class ProEntitlementRepositoryTest {
         var ackFailure: Exception? = null
         var ackGate: CompletableDeferred<Unit>? = null
         var queries = 0
+        var connects = 0
+        var price: String? = null
+        var priceGate: CompletableDeferred<Unit>? = null
         val acknowledged = mutableListOf<String>()
-        override suspend fun connect() { failure?.let { throw it } }
+        override suspend fun connect() { connects++; failure?.let { throw it } }
+        override suspend fun queryFormattedPrice(): String? { priceGate?.await(); return price }
         override suspend fun queryOwnedPurchases(): List<OwnedPurchase> {
             queries++
             failure?.let { throw it }
@@ -72,8 +77,9 @@ class ProEntitlementRepositoryTest {
         assertTrue(source.acknowledged.isEmpty())
     }
 
-    // Oracle: no Pro before acknowledgement completes, exact token acknowledged, then persisted Pro.
-    @Test fun unacknowledgedPurchaseWaitsForAcknowledgement() = runTest {
+    // Oracle: grant first, then acknowledge. While the acknowledgement of the exact token is still
+    // in flight, purchased Pro is already published and persisted.
+    @Test fun unacknowledgedPurchaseGrantsBeforeAcknowledgementCompletes() = runTest {
         val gate = CompletableDeferred<Unit>()
         val source = FakeBilling().apply {
             purchases = listOf(purchase(false)); ackGate = gate
@@ -82,26 +88,106 @@ class ProEntitlementRepositoryTest {
         val repository = repository(source, store)
         runCurrent()
         assertEquals(listOf("purchase-token"), source.acknowledged)
-        assertEquals(Entitlement.Free, repository.entitlement.value)
-        assertNull(store.read())
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), repository.entitlement.value)
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), store.read())
         gate.complete(Unit)
         runCurrent()
         assertEquals(Entitlement.Pro(ProSource.PURCHASE), repository.entitlement.value)
-        assertEquals(repository.entitlement.value, store.read())
     }
 
-    // Oracle: acknowledgement failure cannot grant Pro; a later successful retry can.
-    @Test fun failedAcknowledgementRetriesWithoutGranting() = runTest {
+    // Oracle (PR #447 `@rev` finding 3): an acknowledge that throws must leave the buyer
+    // Pro(PURCHASE), both published and persisted, and the acknowledgement (not the grant) is
+    // retried by the backoff loop until it succeeds. Under the old ack-then-grant order the
+    // buyer stays Free here and the first assertion fails.
+    @Test fun acknowledgeFailureStillGrantsAndPersistsPro() = runTest {
         val source = FakeBilling().apply {
-            purchases = listOf(purchase(false)); ackFailure = IOException("offline")
+            purchases = listOf(purchase(false)); ackFailure = BillingFailure(SERVICE_UNAVAILABLE)
         }
+        val store = DataStoreEntitlementStore(MemoryDataStore())
+        val repository = repository(source, store)
+        runCurrent()
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), repository.entitlement.value)
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), store.read())
+        assertEquals(1, source.acknowledged.size)
+        source.ackFailure = null
+        advanceTimeBy(1000); runCurrent()
+        assertEquals("the acknowledgement must be retried", 2, source.acknowledged.size)
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), repository.entitlement.value)
+    }
+
+    // Oracle (finding 4): write before publish. A failing store write must not publish the new
+    // value (the flow stays at the pre-query Free), and at the moment of a successful write the
+    // flow still holds the old value. Swapping write and publish fails both checks.
+    @Test fun storeWriteFailureDoesNotPublishNewEntitlement() = runTest {
+        val source = FakeBilling().apply { purchases = listOf(purchase()) }
+        lateinit var repository: ProEntitlementRepository
+        val publishedAtWrite = mutableListOf<Entitlement>()
+        val store = object : EntitlementStore {
+            var failWrites = true
+            var saved: Entitlement? = null
+            override suspend fun read(): Entitlement? = saved
+            override suspend fun write(entitlement: Entitlement, checkedAtMillis: Long) {
+                publishedAtWrite += repository.entitlement.value
+                if (failWrites) throw IOException("disk full")
+                saved = entitlement
+            }
+        }
+        repository = repository(source, store)
+        runCurrent()
+        assertEquals(Entitlement.Free, repository.entitlement.value)
+        assertNull(store.saved)
+        store.failWrites = false
+        advanceTimeBy(1000); runCurrent()
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), repository.entitlement.value)
+        assertEquals(Entitlement.Pro(ProSource.PURCHASE), store.saved)
+        assertEquals(listOf<Entitlement>(Entitlement.Free, Entitlement.Free), publishedAtWrite)
+    }
+
+    // Oracle (finding 4, retry policy): a permanent code (here BILLING_UNAVAILABLE, i.e. no Play)
+    // makes exactly one attempt, however much virtual time passes, until refresh() is called.
+    // Each refresh() then makes exactly one more attempt.
+    @Test fun permanentFailureStopsBackoffUntilRefresh() = runTest {
+        for (code in BillingFailure.PERMANENT_RESPONSE_CODES) {
+            val source = FakeBilling().apply { failure = BillingFailure(code) }
+            val repository = repository(source)
+            runCurrent()
+            advanceTimeBy(10 * 60_000L); runCurrent()
+            assertEquals("code $code must not be retried on a timer", 1, source.connects)
+            repository.refresh(); runCurrent()
+            advanceTimeBy(10 * 60_000L); runCurrent()
+            assertEquals("refresh() must make exactly one new attempt for code $code", 2, source.connects)
+            assertEquals(Entitlement.Free, repository.entitlement.value)
+        }
+    }
+
+    // Oracle: a transient code keeps exponential backoff (1 s, then 2 s), so it is retried on a timer.
+    @Test fun transientFailureKeepsBackoff() = runTest {
+        val source = FakeBilling().apply { failure = BillingFailure(SERVICE_UNAVAILABLE) }
+        repository(source)
+        runCurrent()
+        assertEquals(1, source.connects)
+        advanceTimeBy(1000); runCurrent()
+        assertEquals(2, source.connects)
+        advanceTimeBy(1999); runCurrent()
+        assertEquals("second retry waits the doubled 2 s", 2, source.connects)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(3, source.connects)
+    }
+
+    // Oracle (finding 6): the price reads Loading until the price query finishes, then
+    // Unavailable when it finished without a price, or Available with Play's string verbatim.
+    @Test fun priceIsLoadingUntilQueryFinishes() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val source = FakeBilling().apply { priceGate = gate }
         val repository = repository(source)
         runCurrent()
         assertEquals(Entitlement.Free, repository.entitlement.value)
-        source.ackFailure = null
-        advanceTimeBy(1000); runCurrent()
-        assertEquals(2, source.acknowledged.size)
-        assertEquals(Entitlement.Pro(ProSource.PURCHASE), repository.entitlement.value)
+        assertEquals(PriceState.Loading, repository.formattedPrice.value)
+        gate.complete(Unit); runCurrent()
+        assertEquals(PriceState.Unavailable, repository.formattedPrice.value)
+        source.price = "R$ 19,90"
+        repository.refresh(); runCurrent()
+        assertEquals(PriceState.Available("R$ 19,90"), repository.formattedPrice.value)
     }
 
     // Oracle: PENDING is observable but neither acknowledged nor granted; update triggers reconciliation.
