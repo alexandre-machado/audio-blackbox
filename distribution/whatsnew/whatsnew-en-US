@@ -1,5 +1,6 @@
 What's new:
-• Consecutive saves no longer overlap: each save starts where the previous one ended
-• The buffer limit is now worked out for your phone and quality preset, and shown in Settings
-• Home-screen widget to start or stop recording with one tap
-• Still fully offline: no internet permission, no analytics
+• Pro: an optional one-time unlock for unlimited live recording. Everything else stays free
+• In the free version, live recordings save automatically at 2 hours
+• Installed before this update? Pro is already yours, at no cost
+• New "Support the project" link in Settings
+• Recorded audio still never leaves your phone. The app now has network access, used only by Google Play's billing library

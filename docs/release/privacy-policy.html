@@ -6,7 +6,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Privacy Policy — Audio Blackbox</title>
-  <meta name="description" content="Audio Blackbox privacy policy: zero network egress, zero remote servers, 100% on-device audio handling. English and Portuguese (Brazil).">
+  <meta name="description" content="Audio Blackbox privacy policy: recorded audio never leaves the device, no account, no ads, no analytics. English and Portuguese (Brazil).">
   <link rel="icon" type="image/png" href="../assets/icon.png">
   <link rel="canonical" href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy">
   <link rel="sitemap" type="application/xml" href="../sitemap.xml">
@@ -17,7 +17,7 @@
   <meta property="og:site_name" content="Audio Blackbox">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Privacy Policy — Audio Blackbox">
-  <meta property="og:description" content="Audio Blackbox privacy policy: zero network egress, zero remote servers, 100% on-device audio handling. English and Portuguese (Brazil).">
+  <meta property="og:description" content="Audio Blackbox privacy policy: recorded audio never leaves the device, no account, no ads, no analytics. English and Portuguese (Brazil).">
   <meta property="og:image" content="https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png">
   <meta property="og:image:width" content="1024">
   <meta property="og:image:height" content="500">
@@ -26,7 +26,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Privacy Policy — Audio Blackbox">
-  <meta name="twitter:description" content="Zero network egress, zero remote servers, 100% on-device audio handling.">
+  <meta name="twitter:description" content="Recorded audio never leaves the device. No account, no ads, no analytics.">
   <meta name="twitter:image" content="https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png">
 
   <!--
@@ -522,7 +522,7 @@
     <div class="container">
       <span class="badge-pill">Legal // Data Handling</span>
       <h1>Privacy Policy</h1>
-      <p class="lead">Audio Blackbox is built for zero network egress: no remote servers, no accounts, no analytics SDKs. This document explains exactly how the app handles data, in English and Portuguese (Brazil).</p>
+      <p class="lead">Audio Blackbox keeps your audio on your device: no remote servers of its own, no accounts, no ads, no analytics SDKs. This document explains exactly how the app handles data, in English and Portuguese (Brazil).</p>
     </div>
   </header>
 
@@ -541,7 +541,7 @@
       <h1>Privacy Policy for Audio Blackbox</h1>
 
       <div class="policy-meta">
-        Effective Date: September 18, 2026<br>
+        Effective Date: October 15, 2026<br>
         App: Audio Blackbox (<code>cc.machado.audioblackbox</code>)<br>
         Developer / Publisher: Alexandre Machado<br>
         Contact: <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>
@@ -549,10 +549,11 @@
 
       <p>Audio Blackbox is developed and published by Alexandre Machado. Audio Blackbox was built with a fundamental commitment to privacy: <strong>your audio never leaves your device</strong>. This Privacy Policy explains how Audio Blackbox handles data when you use the app.</p>
 
-      <h2>1. Summary: Zero Network Egress &amp; 100% On-Device</h2>
+      <h2>1. Summary: Your Audio Stays On Your Device</h2>
       <ul>
-        <li><strong>No Remote Servers:</strong> Audio Blackbox contains no network code, no remote servers, and no third-party analytics SDKs.</li>
-        <li><strong>No Internet Access:</strong> The application does not request the <code>android.permission.INTERNET</code> permission. It is physically impossible for the app to send data over the network.</li>
+        <li><strong>Audio Never Leaves the Device:</strong> Audio Blackbox has no upload path for audio. Recordings are never sent to any server, including the developer's.</li>
+        <li><strong>No Remote Servers, No Ads, No Analytics:</strong> Audio Blackbox operates no servers of its own and contains no advertising, analytics or crash-reporting SDKs. The advertising ID permission is removed from the app.</li>
+        <li><strong>Network Access Only for Google Play Billing:</strong> Audio Blackbox offers one optional in-app purchase (a one-time Pro unlock). To support it, the app includes Google Play Billing, which adds the <code>android.permission.INTERNET</code> and <code>ACCESS_NETWORK_STATE</code> permissions. The app's own code makes no network calls; Google's billing library sends its own usage and error diagnostics to Google from the app. That data is handled by Google under the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a> and never includes your audio.</li>
         <li><strong>No User Accounts:</strong> You do not need to create an account, log in, or provide any personal details (such as your name, email address, or phone number) to use Audio Blackbox.</li>
       </ul>
 
@@ -564,6 +565,11 @@
         <li><strong>Local Storage:</strong> Audio is only written to device storage (as an <code>.m4a</code> / AAC file in your device's Recordings or Music directory) when you explicitly tap the save action or initiate forward recording.</li>
         <li><strong>Third-Party Access:</strong> Audio Blackbox never shares, sells, or transmits your audio recordings to any third party.</li>
       </ul>
+      <p><strong>Purchases (Optional Pro Unlock)</strong></p>
+      <ul>
+        <li><strong>Payment:</strong> The purchase is processed entirely by Google Play. Audio Blackbox never sees your payment details.</li>
+        <li><strong>Local Entitlement:</strong> The app stores, on your device only, whether Pro is unlocked, so the unlock keeps working offline. Nothing about the purchase is sent to the developer.</li>
+      </ul>
 
       <h2>3. Permissions Requested</h2>
       <ol>
@@ -572,6 +578,7 @@
         <li><code>FOREGROUND_SERVICE</code> / <code>FOREGROUND_SERVICE_MICROPHONE</code>: Required on modern Android versions to allow the rolling buffer to remain active in RAM while using other apps or with the screen turned off.</li>
         <li><code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code>: Lets the app ask the system not to suspend or throttle the background recording service to save battery, so the rolling buffer keeps running reliably while the app is not in the foreground.</li>
         <li><code>RECEIVE_BOOT_COMPLETED</code>: Lets the app detect a device restart or app update. Audio Blackbox does <strong>not</strong> automatically resume recording on boot; it only posts a notification prompting you to tap and resume recording if it was active before the restart. Capture never starts without that explicit tap.</li>
+        <li><code>com.android.vending.BILLING</code>, <code>INTERNET</code> and <code>ACCESS_NETWORK_STATE</code>: Added by Google Play Billing for the optional Pro purchase. They are never used to send audio.</li>
       </ol>
 
       <h2>4. Data Storage and Deletion</h2>
@@ -583,7 +590,7 @@
       </ul>
 
       <h2>5. Children's Privacy</h2>
-      <p>Audio Blackbox does not collect, store, or transmit personal data from anyone, including children under the age of 13.</p>
+      <p>Audio Blackbox itself does not collect, store, or transmit personal data from anyone, including children under the age of 13. Google Play Billing diagnostics are described in section 1.</p>
 
       <h2>6. Changes to this Policy</h2>
       <p>If this Privacy Policy is updated, the revised version will be published in this repository with an updated effective date.</p>
@@ -597,7 +604,7 @@
       <h1>Política de Privacidade do Audio Blackbox</h1>
 
       <div class="policy-meta">
-        Data de Vigência: 18 de setembro de 2026<br>
+        Data de Vigência: 15 de outubro de 2026<br>
         Aplicativo: Audio Blackbox (<code>cc.machado.audioblackbox</code>)<br>
         Desenvolvedor / Publicador: Alexandre Machado<br>
         Contato: <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>
@@ -605,10 +612,11 @@
 
       <p>O Audio Blackbox é desenvolvido e publicado por Alexandre Machado. O Audio Blackbox foi desenvolvido com um compromisso fundamental com a privacidade: <strong>seu áudio nunca sai do seu dispositivo</strong>. Esta Política de Privacidade explica como o Audio Blackbox trata os dados quando você usa o aplicativo.</p>
 
-      <h2>1. Resumo: Zero Tráfego de Rede e 100% no Dispositivo</h2>
+      <h2>1. Resumo: Seu Áudio Fica no Seu Dispositivo</h2>
       <ul>
-        <li><strong>Sem Servidores Remotos:</strong> O Audio Blackbox não contém código de rede, servidores remotos, nem SDKs de análise de terceiros.</li>
-        <li><strong>Sem Acesso à Internet:</strong> O aplicativo não solicita a permissão <code>android.permission.INTERNET</code>. É fisicamente impossível para o app enviar dados pela rede.</li>
+        <li><strong>O Áudio Nunca Sai do Dispositivo:</strong> O Audio Blackbox não tem nenhum caminho de envio de áudio. As gravações nunca são enviadas a nenhum servidor, nem ao do desenvolvedor.</li>
+        <li><strong>Sem Servidores Remotos, Sem Anúncios, Sem Analytics:</strong> O Audio Blackbox não opera servidores próprios e não contém SDKs de anúncios, de análise nem de relatório de falhas. A permissão do ID de publicidade é removida do app.</li>
+        <li><strong>Acesso à Rede Apenas para o Google Play Billing:</strong> O Audio Blackbox oferece uma compra opcional no app (um desbloqueio Pro de pagamento único). Para isso, o app inclui o Google Play Billing, que adiciona as permissões <code>android.permission.INTERNET</code> e <code>ACCESS_NETWORK_STATE</code>. O código do próprio app não faz chamadas de rede; a biblioteca de cobrança do Google envia ao Google, a partir do app, os próprios diagnósticos de uso e de erros. Esses dados são tratados pelo Google conforme a <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Política de Privacidade do Google</a> e nunca incluem o seu áudio.</li>
         <li><strong>Sem Contas de Usuário:</strong> Você não precisa criar uma conta, fazer login, ou fornecer qualquer dado pessoal (como nome, e-mail ou telefone) para usar o Audio Blackbox.</li>
       </ul>
 
@@ -620,6 +628,11 @@
         <li><strong>Armazenamento Local:</strong> O áudio só é gravado no armazenamento do dispositivo (como um arquivo <code>.m4a</code> / AAC no diretório Recordings ou Music do seu dispositivo) quando você toca explicitamente na ação de salvar ou inicia a gravação contínua para frente.</li>
         <li><strong>Acesso de Terceiros:</strong> O Audio Blackbox nunca compartilha, vende ou transmite suas gravações de áudio a terceiros.</li>
       </ul>
+      <p><strong>Compras (Desbloqueio Pro Opcional)</strong></p>
+      <ul>
+        <li><strong>Pagamento:</strong> A compra é processada inteiramente pelo Google Play. O Audio Blackbox nunca vê os seus dados de pagamento.</li>
+        <li><strong>Desbloqueio Guardado no Aparelho:</strong> O app guarda, apenas no seu dispositivo, se o Pro está desbloqueado, para que o desbloqueio funcione offline. Nada sobre a compra é enviado ao desenvolvedor.</li>
+      </ul>
 
       <h2>3. Permissões Solicitadas</h2>
       <ol>
@@ -628,6 +641,7 @@
         <li><code>FOREGROUND_SERVICE</code> / <code>FOREGROUND_SERVICE_MICROPHONE</code>: Necessária nas versões modernas do Android para permitir que o buffer circular permaneça ativo na RAM enquanto você usa outros aplicativos ou com a tela desligada.</li>
         <li><code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code>: Permite que o app solicite ao sistema que não suspenda nem limite o serviço de gravação em segundo plano para economizar bateria, mantendo o buffer circular funcionando de forma confiável enquanto o app não está em primeiro plano.</li>
         <li><code>RECEIVE_BOOT_COMPLETED</code>: Permite que o app detecte uma reinicialização do dispositivo ou uma atualização do aplicativo. O Audio Blackbox <strong>não</strong> retoma a gravação automaticamente ao reiniciar; ele apenas exibe uma notificação convidando você a tocar para retomar a gravação, caso ela estivesse ativa antes da reinicialização. A captura nunca é iniciada sem esse toque explícito.</li>
+        <li><code>com.android.vending.BILLING</code>, <code>INTERNET</code> e <code>ACCESS_NETWORK_STATE</code>: Adicionadas pelo Google Play Billing para a compra opcional do Pro. Nunca são usadas para enviar áudio.</li>
       </ol>
 
       <h2>4. Armazenamento e Exclusão de Dados</h2>
@@ -639,7 +653,7 @@
       </ul>
 
       <h2>5. Privacidade Infantil</h2>
-      <p>O Audio Blackbox não coleta, armazena ou transmite dados pessoais de ninguém, incluindo crianças menores de 13 anos.</p>
+      <p>O próprio Audio Blackbox não coleta, armazena ou transmite dados pessoais de ninguém, incluindo crianças menores de 13 anos. Os diagnósticos do Google Play Billing estão descritos na seção 1.</p>
 
       <h2>6. Alterações a Esta Política</h2>
       <p>Se esta Política de Privacidade for atualizada, a versão revisada será publicada neste repositório com uma data de vigência atualizada.</p>

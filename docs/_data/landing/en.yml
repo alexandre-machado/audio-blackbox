@@ -7,7 +7,7 @@ nav_usage: How to Use
 nav_download: Download
 nav_faq: FAQ
 nav_design: 🎛️ Design Model
-badge: 100% Private • Zero Network Egress • GPL-3.0
+badge: "Audio Stays On Device • No Ads • GPL-3.0"
 hero_title: The Audio Blackbox for Android
 hero_lead: "An audio dashcam for your pocket. Save the riff you just played, the quote you almost missed, or the instructions you were just given. It keeps the last minutes of sound in RAM, sized to your phone, and writes to storage <strong>only when you tap Save</strong>."
 get_play: Get it on Google Play
@@ -21,16 +21,16 @@ demo_save: 💾 Save Recent Audio (.m4a)
 demo_live: ⏺ Start Continuous Live Record
 overview_tag: Overview
 overview_title: What is Audio Blackbox?
-overview_intro: Audio Blackbox is a free, open-source Android app that continuously keeps the last minutes of sound in RAM and writes them to local storage only when you explicitly tap Save. The rolling buffer is at least 5 minutes, set in 5-minute steps, and its maximum is computed on your phone from the memory it can safely use and the quality preset you pick.
+overview_intro: Audio Blackbox is an open-source Android app that continuously keeps the last minutes of sound in RAM and writes them to local storage only when you explicitly tap Save. The rolling buffer is at least 5 minutes, set in 5-minute steps, and its maximum is computed on your phone from the memory it can safely use and the quality preset you pick.
 overview_detail: 'It solves a problem a normal voice recorder cannot: you only realize something mattered <em>after</em> it was already said, once the recorder button is no longer any use. Audio Blackbox keeps recording into its own memory while its notification is showing, so tapping Save exports the buffered audio since your last save (the whole buffer the first time) as a local <code>.m4a</code> (AAC) file, no rewind needed, and files never overlap. It is made for musicians and songwriters, for ideas and thinking out loud, for meetings and agreements you are part of, and for family moments.'
-overview_privacy: 'Unlike a normal recorder or a cloud-backed transcription app, Audio Blackbox has no <code>INTERNET</code> permission in its manifest, no analytics SDK, and no account: nothing is written to disk until you decide to save it, and the app never uploads anything.'
+overview_privacy: "Unlike a normal recorder or a cloud-backed transcription app, Audio Blackbox has no account, no cloud, no ads and no analytics SDK: nothing is written to disk until you decide to save it, and your recordings never leave your phone."
 features_tag: Capabilities
 features_title: Designed for Total Privacy & Instant Recall
-features_intro: Continuous ambient capture without wearing out your SSD, draining your battery, or uploading a single byte to the cloud.
+features_intro: Continuous ambient capture without wearing out your SSD, draining your battery, or uploading your audio to the cloud.
 feature_lookback: Save the Past (Lookback)
-feature_lookback_desc: Just played a riff worth keeping, or said an idea out loud? Tap Save and Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to a local file. Live keeps the buffered past and carries on recording until you stop.
-feature_network: Zero Network Permission
-feature_network_desc: <code>INTERNET</code> permission is strictly absent from the application manifest. It cannot send telemetry, ping analytics, or upload sound. Full offline guarantee.
+feature_lookback_desc: Just played a riff worth keeping, or said an idea out loud? Tap Save and Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to a local file. Live keeps the buffered past and carries on recording until you stop (up to 2 hours per session in the free version, unlimited with Pro).
+feature_network: "Audio Never Leaves the Phone"
+feature_network_desc: "There is no upload path for your audio anywhere in the app: no account, no cloud, no ads, no analytics SDK. The only network use is Google Play Billing's own library, for the optional Pro purchase."
 feature_capture: Dedicated Capture Loop
 feature_capture_desc: Zero disk I/O and zero IPC allocations on the audio capture thread. Guaranteed single-writer synchronization eliminates dropouts and GC pauses.
 feature_interrupt: Concurrent Capture Aware
@@ -65,7 +65,7 @@ dashboard_alt: Dashboard Screen
 gallery_alt: Gallery Screen
 settings_alt: Settings Screen
 privacy_title: Architecturally Private by Design
-privacy_desc: Many recording apps require cloud logins, background analytics, and periodic syncing. Audio Blackbox contains <strong>no internet permission</strong> in its Android manifest, has <strong>no analytics SDKs</strong>, and never touches remote servers. Your voice stays in volatile memory until you save it to local storage.
+privacy_desc: "Many recording apps require cloud logins, background analytics, and periodic syncing. Audio Blackbox has <strong>no account</strong>, <strong>no ads</strong> and <strong>no analytics SDKs</strong>, and your recordings never leave the device. Your voice stays in volatile memory until you save it to local storage. The only network access the app declares belongs to Google Play Billing, for the optional Pro purchase."
 usage_tag: Usage
 usage_title: How to Use Audio Blackbox
 usage_intro: 'Once installed, the app is a background service you rarely open: it listens, and you tap Save when something is worth keeping.'
@@ -76,7 +76,7 @@ usage_4: When something worth keeping just happened, tap <strong>Save</strong>. 
 usage_5: Open the in-app player to listen, seek, and share the exported recording through any Android Sharesheet target.
 download_tag: Download
 download_title: Get Audio Blackbox on Google Play
-download_intro: Free, open source, and available now for Android 10 and newer.
+download_intro: "Free to use, with an optional one-time Pro unlock. Open source and available now for Android 10 and newer."
 install_title: Install from the Play Store
 install_desc: Open the listing on your Android device and tap Install. No account sign-ups, no invitations.
 open_play: Open Play Store &rarr;
@@ -94,8 +94,8 @@ license_link: GPL-3.0 License
 copyright: '&copy; 2026 Alexandre Machado. Licensed under GNU GPL v3.0.'
 consent: 'Use it for your own conversations and ideas. Recording others may require their consent: check your local recording laws.'
 title: 'Audio Blackbox: Past Recorder for Android'
-description: "Audio Blackbox is a free, open-source retroactive audio recorder for Android: an audio dashcam that keeps the last minutes of sound in RAM, so you can save the riff, quote or instructions you just heard. Nothing is written until you tap Save, and the app has no internet permission."
-social_description: Save the last minutes you just heard. A rolling RAM buffer sized to your phone, no internet permission, free and open source.
+description: "Audio Blackbox is an open-source retroactive audio recorder for Android: an audio dashcam that keeps the last minutes of sound in RAM, so you can save the riff, quote or instructions you just heard. Nothing is written until you tap Save, and your recordings never leave your phone."
+social_description: "Save the last minutes you just heard. A rolling RAM buffer sized to your phone, audio that stays on the device, open source."
 image_alt: 'Audio Blackbox feature graphic: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel.'
 language_label: Language
 minutes: minutes
@@ -134,25 +134,25 @@ faq:
 - q: How can I save audio from before I pressed record?
   a: A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Nothing is written to storage until you tap Save.
 - q: What is a retroactive or always-on buffer recorder?
-  a: 'It is a recorder that keeps capturing into a fixed-size memory buffer, so you can save what was already said instead of only what comes after you press record. Audio Blackbox works this way on Android: it runs as a foreground service with a persistent notification, holds the last minutes of audio in RAM, and discards the oldest audio as new audio arrives. Save exports the buffered audio, and Live keeps the buffered past and continues recording until you stop it.'
+  a: 'It is a recorder that keeps capturing into a fixed-size memory buffer, so you can save what was already said instead of only what comes after you press record. Audio Blackbox works this way on Android: it runs as a foreground service with a persistent notification, holds the last minutes of audio in RAM, and discards the oldest audio as new audio arrives. Save exports the buffered audio, and Live keeps the buffered past and continues recording until you stop it (up to 2 hours per session in the free version, unlimited with Pro).'
 - q: How long is the audio buffer, and how much RAM does it use?
   a: 'At least 5 minutes, adjustable in 5-minute steps. There is no fixed maximum: the app computes the ceiling on your phone from the memory it can safely use and the quality preset you pick, and shows it in Settings. At the default Voice preset (16,000 Hz mono) each minute takes about 1.8 MB of RAM, so 30 minutes is about 55 MB. Balanced (32,000 Hz mono) uses twice that per minute and High fidelity (44,100 Hz stereo) about 5.5 times, so the same phone holds a shorter buffer at higher quality. The calculator in the Memory Architecture section of this page shows the RAM for any window and preset.'
 - q: Does Audio Blackbox upload anything, or does it need an internet connection?
-  a: 'No. The INTERNET permission is strictly absent from the app''s Android manifest, so it cannot send telemetry, ping analytics, or upload sound. The app never uploads anything: audio is kept in volatile RAM until you save it, then written to your phone''s Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control it.'
+  a: "No, your audio is never uploaded. It is kept in volatile RAM until you save it, then written to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control it. Recording and saving work without a connection. The app has no account, no ads and no analytics SDK. Its only network access comes from Google Play Billing, whose library handles the optional Pro purchase and sends its own usage telemetry to Google."
 - q: Does it keep recording when the screen is off?
   a: Yes. Audio Blackbox runs as a foreground service with a persistent notification, and it includes a guided flow to bypass manufacturer battery optimization, so capture continues uninterrupted with the screen locked.
 - q: Does an always-on recorder drain the battery?
   a: 'Audio Blackbox was measured on a Samsung Galaxy S25 recording continuously at the Voice preset: with the screen off it used about 1.0% to 1.5% of the battery per hour and under 1% CPU, with no disk writes while buffering. Other phones and settings will give different numbers.'
 - q: Is Audio Blackbox free and open source?
-  a: Yes. It is free and licensed under the GNU General Public License v3.0, with the full source code published on GitHub.
-- q: Is there a free, open-source alternative to retroactive recorder apps on Android?
-  a: Yes. Audio Blackbox is free on Google Play. The app has no account and no ads, and contains no analytics or trackers. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and confirm that the manifest has no INTERNET permission.
+  a: "It is open source under the GNU General Public License v3.0, with the full source code on GitHub. The app is free to install and use. The only paid option is a one-time Pro unlock that removes the 2-hour limit on a single live recording; everything else, including the retroactive buffer and all quality presets, stays free. People who installed before Pro existed get it at no cost."
+- q: "Is there an open-source alternative to retroactive recorder apps on Android?"
+  a: "Yes. Audio Blackbox is free to install on Google Play, with an optional one-time Pro unlock. The app has no account and no ads, and contains no analytics or trackers. It is licensed under the GNU General Public License v3.0 and its full source code is on GitHub, so anyone can check how the buffer and the save path work, and that audio never leaves the device."
 - q: What Android versions are supported?
   a: Android 10 (API level 29) and newer.
 - q: How do I get Audio Blackbox?
-  a: Audio Blackbox is free on Google Play. Open its Play Store listing on your Android device and tap Install; the link is in the Download section of this page.
+  a: "Audio Blackbox is free to install on Google Play. Open its Play Store listing on your Android device and tap Install; the link is in the Download section of this page."
 - q: How is Audio Blackbox different from Google Recorder or a normal voice recorder app?
-  a: A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and the app never uploads anything.
+  a: A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and only writes to storage when you tap Save, so you can save the last minutes of something that already happened. Nothing is written to disk until you decide to save it, and your recordings are never uploaded.
 - q: "Is there an audio dashcam app for Android?"
   a: "Yes. Audio Blackbox works like a dashcam for sound: it keeps the last minutes in a rolling RAM buffer and writes them to a file only when you tap Save, so you can keep what happened just before. Unlike a hidden recorder, it always shows a notification while it is recording. Recording other people may require their consent, so check your local laws."
 - q: "Can I recover a quote or a lecture explanation I forgot to record?"

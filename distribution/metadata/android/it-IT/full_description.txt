@@ -1,6 +1,6 @@
 Audio Blackbox è un registratore retroattivo: una dashcam audio che tiene gli ultimi minuti di suono nella memoria del telefono, così puoi registrare il passato dopo che è accaduto. Hai suonato un riff da tenere? Ti sei perso l'inizio di una citazione o di una spiegazione a lezione? Hai appena sentito istruzioni che ti serviranno di nuovo? Tocca Salva e quei minuti diventano un file audio. Funziona come registratore vocale in background con buffer circolare, sempre con una notifica visibile.
 
-Non viene scritto nulla nella memoria di archiviazione finché non tocchi Salva. L'app non ha il permesso di accesso a internet, quindi non carica mai il tuo audio da nessuna parte.
+Non viene scritto nulla nella memoria di archiviazione finché non tocchi Salva, e le tue registrazioni non lasciano mai il telefono: l'app non carica mai il tuo audio da nessuna parte.
 
 Pensata per
 • Musicisti e autori: conserva il riff o la melodia appena improvvisata, senza aver prima premuto registra.
@@ -15,7 +15,7 @@ Come funziona
 • L'audio va in un buffer circolare in RAM. Quando è pieno, l'audio più vecchio viene sostituito dal più recente.
 • Il buffer dura almeno 5 minuti ed è regolabile a intervalli di 5 minuti. Non c'è un massimo fisso: l'app calcola quanto il telefono può contenere in sicurezza con il profilo di qualità scelto e mostra il limite nelle Impostazioni.
 • Salva scrive l'audio nel buffer dall'ultimo salvataggio (l'intero buffer la prima volta) in un file AAC (.m4a), così i file non si sovrappongono mai.
-• Live avvia una registrazione che conserva il passato nel buffer e continua finché non la fermi.
+• Live avvia una registrazione che conserva il passato nel buffer e continua finché non la fermi. Nella versione gratuita, una registrazione live viene salvata automaticamente a 2 ore. Lo sblocco Pro facoltativo, con acquisto unico, rimuove questo limite.
 
 Funzionalità
 • Tre profili di qualità: Voce (16 kHz mono, il buffer più lungo), Bilanciato (32 kHz mono) e Alta fedeltà (44,1 kHz stereo, che può usare più di un microfono sui telefoni che ne dispongono). Una qualità superiore usa più memoria al minuto, quindi il buffer si accorcia.
@@ -25,9 +25,9 @@ Funzionalità
 • Lettore integrato per ascoltare, spostarsi nell'audio, condividere ed eliminare le registrazioni salvate.
 
 Privacy
-• Nessun permesso internet nell'app. Nessun account, pubblicità, analisi o cloud.
-• L'audio rimane in memoria finché non lo salvi. L'app non carica mai nulla: i file salvati vanno nella cartella Recordings/Blackbox del telefono (Music/Blackbox su Android 10 e 11), sotto il tuo controllo.
-• Gratuita e open source con licenza GPL-3.0, mantenuta attivamente, con tutto il codice su GitHub.
+• L'audio registrato non lascia mai il telefono. Nessun account, pubblicità, analisi o cloud. L'unico uso della rete è la libreria di fatturazione di Google Play stessa, per l'acquisto facoltativo di Pro.
+• L'audio rimane in memoria finché non lo salvi. Le tue registrazioni non vengono mai caricate: i file salvati vanno nella cartella Recordings/Blackbox del telefono (Music/Blackbox su Android 10 e 11), sotto il tuo controllo.
+• Open source con licenza GPL-3.0, mantenuta attivamente, con tutto il codice su GitHub.
 
 Registra in modo responsabile
 Usa Audio Blackbox per le tue conversazioni e idee. Registrare altre persone può richiedere il loro consenso e le regole variano tra paesi e stati. Consulta le leggi locali sulle registrazioni prima di registrare. Sei responsabile dell'uso che fai dell'app.

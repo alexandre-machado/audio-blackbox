@@ -234,6 +234,12 @@ in place first, per issue #48's own stated sequencing.
     policy so they can't be read as contradicting each other. Issue #48 flags
     inconsistency between the two as a common rejection cause; this is is the
     place to get it verbatim-consistent.
+  - **Superseded (#440/#441, 2026-10-15):** the "no networking dependency"
+    fact above is no longer true. Google Play Billing (`billing-ktx`) now
+    brings `INTERNET`/`ACCESS_NETWORK_STATE` and sends its own library
+    telemetry from the app process. Audio is still never transmitted. Whether
+    that telemetry must be declared in Data safety is open in #446; keep the
+    form and `docs/release/privacy-policy.html` consistent with each other.
   - Is data encrypted in transit: **N/A — not transmitted.**
   - Can users request deletion: **Yes** — describe as: uninstalling the app
     deletes the in-memory buffer and any saved recordings remain in the user's own

@@ -1,5 +1,6 @@
 Novedades:
-• Los guardados consecutivos ya no se solapan: cada uno empieza donde terminó el anterior
-• El límite del búfer se calcula para tu móvil y perfil de calidad y se muestra en Ajustes
-• Widget en la pantalla de inicio para iniciar o detener la grabación con un toque
-• Sigue funcionando sin conexión: sin permiso de internet ni analítica
+• Pro: desbloqueo opcional de pago único para grabación en directo ilimitada. Todo lo demás sigue siendo gratis
+• En la versión gratuita, la grabación en directo se guarda sola al llegar a 2 horas
+• ¿Instalaste antes de esta actualización? Ya tienes Pro, sin coste
+• Nuevo enlace "Apoya el proyecto" en Ajustes
+• El audio grabado sigue sin salir del móvil. La app ahora tiene acceso a la red, usado solo por la facturación de Google Play
