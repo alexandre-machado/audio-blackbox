@@ -18,7 +18,8 @@
         tools:node="remove" />
 
     <!--
-      Privacy invariant: Audio Blackbox is 100% offline, contains zero network egress, zero tracking, and zero advertisements.
+      Privacy invariant: recorded audio never leaves the device. The only network use is
+      Google Play Billing's own library telemetry. No ads, no analytics SDK, no AD_ID.
     -->
 
     <!--

@@ -8,6 +8,8 @@ For stack binding, project metadata, and canonical commands, see [`.agents/team.
 
 ## 1. Stack Binding & Validation Command
 
+- **Privacy supersession (#441/#440, 2026-10-15):** the former "zero network egress / no internet permission" rule is superseded by the owner-accepted Play Billing 9.x integration. The app declares `INTERNET` and `ACCESS_NETWORK_STATE` solely for Billing's transitive datatransport telemetry, and `com.android.vending.BILLING` for Play purchases. The guarded invariant is now **exact permission allowlist + audio never leaves the device**. No ads, analytics SDK, or AD_ID.
+
 - **Stack Context**: Defined authoritatively in [`.agents/team.toml`](.agents/team.toml) (Kotlin, Jetpack Compose, Material 3 1.4.0, Gradle Kotlin DSL, `minSdk 29`, `targetSdk 36`).
 - **Primary Validation Command**:
   ```bash

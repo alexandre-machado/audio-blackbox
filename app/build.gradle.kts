@@ -216,6 +216,7 @@ dependencies {
     // Retention-window setting persistence (issue #45) -- DataStore, not SharedPreferences, for
     // new persisted state (see RetentionWindowPreferences's class doc for why).
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.billing.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -254,7 +255,7 @@ tasks.withType<Test> {
 }
 
 // Issue #148: Ensure the release merged manifest is always generated before unit tests run,
-// allowing ManifestPermissionSecurityTest to deterministically assert zero network permissions.
+// allowing ManifestPermissionSecurityTest to assert the exact approved permission allowlist.
 tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
     dependsOn("processReleaseMainManifest")
     inputs.file(layout.buildDirectory.file("intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"))

@@ -1,6 +1,13 @@
 package cc.machado.audioblackbox
 
 import android.app.Application
+import cc.machado.audioblackbox.billing.DataStoreEntitlementStore
+import cc.machado.audioblackbox.billing.PlayBillingSource
+import cc.machado.audioblackbox.billing.ProEntitlementRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.redactSensitivePaths
 import cc.machado.audioblackbox.export.sensitiveRootsFor
@@ -27,6 +34,10 @@ import kotlinx.coroutines.runBlocking
  * selector) reads it reactively via [RetentionWindowPreferences.bufferDurationMinutesFlow].
  */
 class AudioBlackboxApplication : Application() {
+    private val billingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile
+    var proEntitlementRepository: ProEntitlementRepository? = null
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -51,6 +62,21 @@ class AudioBlackboxApplication : Application() {
         ErrorLogFileHolder.file = java.io.File(applicationContext.filesDir, "export_errors.log")
 
         installCrashLogHandler()
+        // One process-owned repository, following the application initialization idiom above.
+        // PackageManager, BillingClient construction and DataStore all stay off the main thread.
+        billingScope.launch {
+            val firstInstallTime = try {
+                packageManager.getPackageInfo(packageName, 0).firstInstallTime
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                Long.MAX_VALUE // Unknown installation date must not grant grandfathering.
+            }
+            proEntitlementRepository = ProEntitlementRepository(
+                PlayBillingSource(this@AudioBlackboxApplication),
+                DataStoreEntitlementStore(this@AudioBlackboxApplication),
+                firstInstallTime,
+                billingScope,
+            )
+        }
     }
 
     /**
