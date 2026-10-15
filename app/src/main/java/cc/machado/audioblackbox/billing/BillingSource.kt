@@ -18,4 +18,6 @@ interface BillingSource {
     suspend fun connect()
     suspend fun queryOwnedPurchases(): List<OwnedPurchase>
     suspend fun acknowledge(token: String)
+    suspend fun queryFormattedPrice(): String? = null
+    suspend fun launchPurchase(activity: android.app.Activity): Boolean = false
 }

@@ -5,6 +5,7 @@ import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.FormatSegment
 import cc.machado.audioblackbox.audio.PauseGap
 import cc.machado.audioblackbox.audio.ReadSinceResult
+import cc.machado.audioblackbox.billing.Entitlement
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -16,11 +17,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Issue #443: the free tier's per-session limit on live (forward) recording, in milliseconds of
+ * monotonic session time. The single source of truth; debug builds may shorten it for Tier 2
+ * device testing via `liveRecordingCapMillis()` (src/debug only), release builds cannot.
+ */
+const val FREE_LIVE_RECORDING_CAP = 2 * 60 * 60 * 1000L
+
 /** Observable lifecycle of forward recording (issue #54). */
 sealed interface ForwardRecordingState {
     data object Idle : ForwardRecordingState
-    data class Recording(val displayName: String, val bytesWritten: Long) : ForwardRecordingState
-    data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingState
+
+    /** [freeRemainingMillis] is null when the session is uncapped (Pro or Unknown, issue #443). */
+    data class Recording(val displayName: String, val bytesWritten: Long, val freeRemainingMillis: Long? = null) : ForwardRecordingState
+
+    /** [freeLimitReached] is true only when the free cap, not the user, ended the session. */
+    data class Success(val displayName: String, val bytesWritten: Long, val freeLimitReached: Boolean = false) : ForwardRecordingState
     data class Error(val reason: ForwardRecordingFailureReason, val message: String, val exception: Throwable? = null) : ForwardRecordingState
 }
 
@@ -120,6 +132,9 @@ class ForwardRecordingEngine(
     // un-retried first read. Blocking inside this hook until the state mutation is complete closes
     // both at once, since it runs strictly between them.
     private val onEnteringCleanStopDrain: () -> Unit = {},
+    private val monotonicClock: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val entitlement: () -> Entitlement = { Entitlement.Unknown },
+    private val freeCapMillis: Long = FREE_LIVE_RECORDING_CAP,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -236,6 +251,7 @@ class ForwardRecordingEngine(
             activeWriter = writer
 
             val sessionStartMillis = clock()
+            val sessionStartElapsed = monotonicClock()
             val initialGaps = gapsProvider()
 
             stateValue = ForwardRecordingState.Recording(displayName, 0L)
@@ -244,7 +260,7 @@ class ForwardRecordingEngine(
                 // `currentConfig` is the format the writer above was configured with, i.e. the
                 // format this file declares -- so it is also the format every drained chunk must
                 // be converted into (issue #322).
-                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer)
+                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer, sessionStartElapsed)
             }, "ForwardRecordingDrain")
             drainThread.isDaemon = true
             activeDrainThread = drainThread
@@ -432,9 +448,22 @@ class ForwardRecordingEngine(
         initialGaps: List<PauseGap>,
         sessionConfig: AudioConfig,
         floorAdvancer: ((Long) -> Unit)?,
+        sessionStartElapsed: Long,
     ) {
         var cursor = initialCursor
         var totalBytesDrained = 0L
+        var freeLimitReached = false
+        // Issue #443: raw time left before the free cap, or null when this session is uncapped.
+        // Only Entitlement.Free is capped: Pro (either source) never is, and neither is Unknown,
+        // so a paying user is never cut off while Play Billing is still connecting. Re-read on
+        // every call, so an entitlement change mid-session (a purchase) applies immediately.
+        fun rawFreeRemaining(): Long? =
+            if (entitlement() == Entitlement.Free) freeCapMillis - (monotonicClock() - sessionStartElapsed) else null
+        // Published value: whole seconds, rounded up, so the state only changes once a second
+        // instead of on every poll, and never shows 0:00 while the session is still recording.
+        fun publishedFreeRemaining(raw: Long?): Long? =
+            raw?.let { ((it.coerceAtLeast(0L) + 999L) / 1000L) * 1000L }
+        fun remaining(): Long? = publishedFreeRemaining(rawFreeRemaining())
         val handledGaps = initialGaps.toMutableSet()
         var lastRefinalizeAtNanos = System.nanoTime()
         val reconciler = ForwardFormatReconciler(sessionConfig, segmentsProvider)
@@ -483,6 +512,23 @@ class ForwardRecordingEngine(
 
         try {
             while (!stopRequested.get() && !cancelRequested.get()) {
+                // Issue #443: the free cap. Elapsed >= cap (remaining <= 0) ends the live loop and
+                // falls through to the exact clean-stop path stop() uses: final drain to the write
+                // head, converter flush, writer/target finish, Success. Nothing is discarded. The
+                // drain thread never calls stop() itself, since stop() joins this very thread.
+                val freeRemaining = rawFreeRemaining()
+                if (freeRemaining != null && freeRemaining <= 0L) {
+                    freeLimitReached = true
+                    stopRequested.set(true)
+                    break
+                }
+                synchronized(lock) {
+                    if (_state.value is ForwardRecordingState.Recording) {
+                        stateValue = ForwardRecordingState.Recording(
+                            displayName, totalBytesDrained, publishedFreeRemaining(freeRemaining),
+                        )
+                    }
+                }
                 // Check and inject any completed pause gaps that occurred since session start
                 val currentGaps = gapsProvider()
                 for (gap in currentGaps) {
@@ -557,7 +603,7 @@ class ForwardRecordingEngine(
                             cursor = result.nextCursor
                             synchronized(lock) {
                                 if (_state.value is ForwardRecordingState.Recording) {
-                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained)
+                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained, remaining())
                                 }
                             }
                         }
@@ -704,7 +750,7 @@ class ForwardRecordingEngine(
             floorAdvancer?.invoke(cursor)
 
             synchronized(lock) {
-                stateValue = ForwardRecordingState.Success(displayName, totalBytesDrained)
+                stateValue = ForwardRecordingState.Success(displayName, totalBytesDrained, freeLimitReached)
             }
         } catch (t: Throwable) {
             synchronized(lock) {

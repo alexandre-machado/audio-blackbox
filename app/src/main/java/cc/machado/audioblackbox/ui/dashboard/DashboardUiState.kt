@@ -113,8 +113,8 @@ sealed interface SaveUiState {
 /** Observable lifecycle of forward continuous recording on the dashboard. */
 sealed interface ForwardRecordingUiState {
     data object Idle : ForwardRecordingUiState
-    data class Recording(val displayName: String, val elapsedMillis: Long) : ForwardRecordingUiState
-    data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingUiState
+    data class Recording(val displayName: String, val elapsedMillis: Long, val freeRemainingMillis: Long? = null) : ForwardRecordingUiState
+    data class Success(val displayName: String, val bytesWritten: Long, val freeLimitReached: Boolean = false) : ForwardRecordingUiState
 
     /** See [SaveUiState.Error]'s doc for why [timestampMillis]/[capacityMillis]/[qualityPreset] are
      * a frozen snapshot rather than read live off [DashboardUiState] -- the same drift defect

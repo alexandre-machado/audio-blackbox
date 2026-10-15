@@ -26,6 +26,37 @@ class PlayBillingSource(context: Context) : BillingSource {
 
     private var connectedOnce = false
 
+    private suspend fun productDetails(): com.android.billingclient.api.ProductDetails? =
+        suspendCancellableCoroutine { continuation ->
+            val product = com.android.billingclient.api.QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRO_PRODUCT_ID).setProductType(BillingClient.ProductType.INAPP).build()
+            client.queryProductDetailsAsync(
+                com.android.billingclient.api.QueryProductDetailsParams.newBuilder()
+                    .setProductList(listOf(product)).build(),
+            ) { result, details ->
+                if (continuation.isActive) {
+                    if (result.responseCode == BillingClient.BillingResponseCode.OK)
+                        continuation.resume(details.productDetailsList.firstOrNull { it.productId == PRO_PRODUCT_ID })
+                    else continuation.resumeWithException(BillingFailure(result.responseCode))
+                }
+            }
+        }
+
+    override suspend fun queryFormattedPrice(): String? =
+        productDetails()?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
+
+    override suspend fun launchPurchase(activity: android.app.Activity): Boolean {
+        // Query again instead of retaining stale ProductDetails between visits to Settings.
+        val details = productDetails() ?: return false
+        val offer = details.oneTimePurchaseOfferDetailsList?.firstOrNull() ?: return false
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            val product = com.android.billingclient.api.BillingFlowParams.ProductDetailsParams.newBuilder()
+                .setProductDetails(details).apply { offer.offerToken?.let { setOfferToken(it) } }.build()
+            client.launchBillingFlow(activity, com.android.billingclient.api.BillingFlowParams.newBuilder()
+                .setProductDetailsParamsList(listOf(product)).build()).responseCode == BillingClient.BillingResponseCode.OK
+        }
+    }
+
     override suspend fun connect() {
         // After initial setup, API calls invoke BillingClient's automatic reconnection.
         if (connectedOnce) return

@@ -97,6 +97,7 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val (proState, onPurchase) = cc.machado.audioblackbox.ui.rememberProPurchase()
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     // Issue #388 / PR #390 `@rev` finding 1: guards against a double-tap launching two concurrent
@@ -107,6 +108,8 @@ fun SettingsRoute(
     }
     SettingsScreen(
         uiState = uiState,
+        proState = proState,
+        onPurchase = onPurchase,
         onSelectQualityPreset = viewModel::selectQualityPreset,
         onDecrement = viewModel::decrementPending,
         onIncrement = viewModel::incrementPending,
@@ -145,6 +148,8 @@ fun SettingsScreen(
     isExportingDiagnosticLog: Boolean = false,
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
+    proState: cc.machado.audioblackbox.ui.ProCardState = cc.machado.audioblackbox.ui.ProCardState(),
+    onPurchase: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -155,6 +160,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
     ) {
         SettingsHeader()
+        cc.machado.audioblackbox.ui.ProCard(proState, onPurchase)
         QualityPresetSection(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,

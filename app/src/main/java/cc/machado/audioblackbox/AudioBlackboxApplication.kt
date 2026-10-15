@@ -35,9 +35,11 @@ import kotlinx.coroutines.runBlocking
  */
 class AudioBlackboxApplication : Application() {
     private val billingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    @Volatile
-    var proEntitlementRepository: ProEntitlementRepository? = null
-        private set
+    // Single holder: the StateFlow lets UI observe the repository appearing (it is built off the
+    // main thread), and the plain getter serves non-UI readers such as RecorderService's drain.
+    private val mutableBillingRepository = kotlinx.coroutines.flow.MutableStateFlow<ProEntitlementRepository?>(null)
+    val billingRepository: kotlinx.coroutines.flow.StateFlow<ProEntitlementRepository?> = mutableBillingRepository
+    val proEntitlementRepository: ProEntitlementRepository? get() = mutableBillingRepository.value
 
     override fun onCreate() {
         super.onCreate()
@@ -70,7 +72,7 @@ class AudioBlackboxApplication : Application() {
             } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
                 Long.MAX_VALUE // Unknown installation date must not grant grandfathering.
             }
-            proEntitlementRepository = ProEntitlementRepository(
+            mutableBillingRepository.value = ProEntitlementRepository(
                 PlayBillingSource(this@AudioBlackboxApplication),
                 DataStoreEntitlementStore(this@AudioBlackboxApplication),
                 firstInstallTime,

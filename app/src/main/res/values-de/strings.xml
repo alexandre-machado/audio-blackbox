@@ -364,4 +364,15 @@
     <string name="gallery_details_quality">Qualität</string>
     <string name="gallery_details_storage">Speicherort</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="pro_title">Pro</string>
+    <string name="pro_explanation">Kostenlose Live-Aufnahmen dauern bis zu 2 Stunden pro Sitzung. Schalte Pro einmalig frei, um ohne Zeitlimit aufzunehmen.</string>
+    <string name="pro_unlock">Pro freischalten</string>
+    <string name="pro_store_unavailable">Store nicht verfügbar</string>
+    <string name="pro_pending">Kauf ausstehend</string>
+    <string name="pro_active">Pro ist aktiv. Vielen Dank!</string>
+    <string name="pro_early">Pro ist für Nutzer der ersten Stunde enthalten. Vielen Dank!</string>
+    <string name="pro_limit_saved">%1$s wurde gespeichert, weil das kostenlose Limit von 2 Stunden erreicht wurde. Pro hebt dieses Limit auf.</string>
+    <string name="pro_remaining">noch %1$s gratis</string>
+    <string name="pro_card_label">Unbegrenzte Live-Aufnahme</string>
+    <string name="pro_remaining_cd">Verbleibende kostenlose Live-Aufnahmezeit: %1$s</string>
 </resources>

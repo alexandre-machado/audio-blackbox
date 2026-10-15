@@ -147,6 +147,7 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("long", "DEBUG_FREE_LIVE_CAP_MILLIS", "${providers.gradleProperty("freeLiveCapMillis").orNull?.toLong() ?: 0L}L")
             applicationIdSuffix = ".staging"
         }
         release {

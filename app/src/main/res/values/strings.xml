@@ -426,4 +426,15 @@
     <string name="gallery_details_quality">Quality</string>
     <string name="gallery_details_storage">Storage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="pro_title">Pro</string>
+    <string name="pro_explanation">Free live recordings last up to 2 hours per session. Unlock Pro once for unlimited live recording.</string>
+    <string name="pro_unlock">Unlock Pro</string>
+    <string name="pro_store_unavailable">Store unavailable</string>
+    <string name="pro_pending">Purchase pending</string>
+    <string name="pro_active">Pro active. Thank you!</string>
+    <string name="pro_early">Pro included for early users. Thank you!</string>
+    <string name="pro_limit_saved">%1$s was saved because the free 2-hour limit was reached. Pro removes this limit.</string>
+    <string name="pro_remaining">%1$s free left</string>
+    <string name="pro_card_label">Unlimited live recording</string>
+    <string name="pro_remaining_cd">Free live recording time remaining: %1$s</string>
 </resources>

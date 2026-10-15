@@ -121,10 +121,13 @@ fun DashboardRoute(
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val (proState, onPurchase) = cc.machado.audioblackbox.ui.rememberProPurchase()
     val errorLogUiState by viewModel.errorLogUiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     DashboardScreen(
         uiState = uiState,
+        proState = proState,
+        onPurchase = onPurchase,
         onToggleEngine = viewModel::toggleEngine,
         onSaveRecent = viewModel::requestSave,
         onDismissSaveNotice = viewModel::dismissSaveNotice,
@@ -168,6 +171,8 @@ fun DashboardScreen(
     onConfirmClearErrorLog: () -> Unit = {},
     onCopyErrorLogPage: (List<ErrorLogEntry>) -> Unit = {},
     modifier: Modifier = Modifier,
+    proState: cc.machado.audioblackbox.ui.ProCardState = cc.machado.audioblackbox.ui.ProCardState(),
+    onPurchase: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -226,6 +231,11 @@ fun DashboardScreen(
                 onDismiss = onDismissForwardNotice,
                 onRetry = onStartForwardRecording,
             )
+        }
+        // Issue #443: the cap notice links to the same purchase flow as Settings. Shown only for
+        // a session the engine itself reports as stopped at the free limit, never inferred here.
+        if ((uiState.forwardRecordingState as? ForwardRecordingUiState.Success)?.freeLimitReached == true) {
+            cc.machado.audioblackbox.ui.ProCard(state = proState, onPurchase = onPurchase)
         }
     }
 }
@@ -780,7 +790,14 @@ private fun ActionPanelRow(
     } else {
         stringResource(R.string.dashboard_panel_live_label)
     }
-    val liveCaption = if (elapsedClock != null) {
+    // Issue #443: the engine's own countdown (null for Pro/Unknown, i.e. uncapped), shown only
+    // inside the final FREE_CAP_WARNING_MILLIS so the caption is not a permanent upsell.
+    val freeRemainingClock = (forwardState as? ForwardRecordingUiState.Recording)?.freeRemainingMillis
+        ?.takeIf { it < FREE_CAP_WARNING_MILLIS }
+        ?.let { formatMillisAsClock(it) }
+    val liveCaption = if (freeRemainingClock != null) {
+        stringResource(R.string.pro_remaining, freeRemainingClock)
+    } else if (elapsedClock != null) {
         stringResource(R.string.dashboard_panel_live_caption_recording, elapsedClock)
     } else {
         stringResource(R.string.dashboard_panel_live_caption_idle)
@@ -800,7 +817,11 @@ private fun ActionPanelRow(
     val liveCd = if (elapsedClock != null) {
         stringResource(
             R.string.dashboard_forward_live_announcement,
-            stringResource(R.string.dashboard_forward_elapsed_cd, elapsedClock),
+            if (freeRemainingClock != null) {
+                stringResource(R.string.pro_remaining_cd, freeRemainingClock)
+            } else {
+                stringResource(R.string.dashboard_forward_elapsed_cd, elapsedClock)
+            },
             stringResource(R.string.dashboard_forward_stop_button),
         )
     } else {
@@ -1013,7 +1034,8 @@ private fun ForwardOutcomeNotice(
     when (forwardState) {
         is ForwardRecordingUiState.Success -> {
             titleRes = R.string.dashboard_forward_success_title
-            body = stringResource(R.string.dashboard_forward_success_body, forwardState.displayName)
+            body = if (forwardState.freeLimitReached) stringResource(R.string.pro_limit_saved, forwardState.displayName)
+                else stringResource(R.string.dashboard_forward_success_body, forwardState.displayName)
         }
         is ForwardRecordingUiState.Error -> {
             titleRes = R.string.dashboard_forward_error_title
@@ -1577,6 +1599,9 @@ private fun DashboardScreenSaveErrorPreview() {
 }
 
 /** Test tag for the continuous recording engine switch control. */
+/** Issue #443: the live card starts showing remaining free time inside this final window. */
+const val FREE_CAP_WARNING_MILLIS = 10 * 60 * 1000L
+
 const val ENGINE_SWITCH_TEST_TAG = "dashboard_engine_switch"
 
 /** Test tag for the "Save recent audio" primary CTA button. */

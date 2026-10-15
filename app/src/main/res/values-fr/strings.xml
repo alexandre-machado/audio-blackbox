@@ -369,4 +369,15 @@
     <string name="gallery_details_quality">Qualité</string>
     <string name="gallery_details_storage">Stockage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="pro_title">Pro</string>
+    <string name="pro_explanation">Les enregistrements en direct gratuits durent jusqu’à 2 heures par session. Débloquez Pro en un seul achat pour enregistrer sans limite.</string>
+    <string name="pro_unlock">Débloquer Pro</string>
+    <string name="pro_store_unavailable">Boutique indisponible</string>
+    <string name="pro_pending">Achat en attente</string>
+    <string name="pro_active">Pro actif. Merci\u00A0!</string>
+    <string name="pro_early">Pro offert aux premiers utilisateurs. Merci\u00A0!</string>
+    <string name="pro_limit_saved">%1$s a été enregistré, car la limite gratuite de 2\u00A0heures a été atteinte. Pro supprime cette limite.</string>
+    <string name="pro_remaining">reste %1$s gratuit</string>
+    <string name="pro_card_label">Enregistrement en direct illimité</string>
+    <string name="pro_remaining_cd">Temps d\'enregistrement en direct gratuit restant\u00A0: %1$s</string>
 </resources>

@@ -364,4 +364,15 @@
     <string name="gallery_details_quality">Qualità</string>
     <string name="gallery_details_storage">Archiviazione</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="pro_title">Pro</string>
+    <string name="pro_explanation">Le registrazioni dal vivo gratuite durano fino a 2 ore per sessione. Sblocca Pro con un acquisto unico per registrare senza limiti.</string>
+    <string name="pro_unlock">Sblocca Pro</string>
+    <string name="pro_store_unavailable">Store non disponibile</string>
+    <string name="pro_pending">Acquisto in sospeso</string>
+    <string name="pro_active">Pro attivo. Grazie!</string>
+    <string name="pro_early">Pro incluso per i primi utenti. Grazie!</string>
+    <string name="pro_limit_saved">Registrazione %1$s salvata: è stato raggiunto il limite gratuito di 2 ore. Pro rimuove questo limite.</string>
+    <string name="pro_remaining">%1$s gratis rimasti</string>
+    <string name="pro_card_label">Registrazione live illimitata</string>
+    <string name="pro_remaining_cd">Tempo di registrazione live gratuito rimanente: %1$s</string>
 </resources>

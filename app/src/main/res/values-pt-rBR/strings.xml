@@ -384,4 +384,15 @@
     <string name="gallery_details_quality">Qualidade</string>
     <string name="gallery_details_storage">Armazenamento</string>
     <string name="gallery_details_storage_value">Gravações / Blackbox</string>
+    <string name="pro_title">Pro</string>
+    <string name="pro_explanation">No plano grátis, cada gravação ao vivo dura até 2 horas. Desbloqueie o Pro com uma compra única para gravar sem limite.</string>
+    <string name="pro_unlock">Desbloquear Pro</string>
+    <string name="pro_store_unavailable">Loja indisponível</string>
+    <string name="pro_pending">Compra pendente</string>
+    <string name="pro_active">Pro ativo. Obrigado!</string>
+    <string name="pro_early">Pro incluído para quem chegou primeiro. Obrigado!</string>
+    <string name="pro_limit_saved">Gravação %1$s salva: o limite grátis de 2 horas foi atingido. O Pro remove esse limite.</string>
+    <string name="pro_remaining">restam %1$s grátis</string>
+    <string name="pro_card_label">Gravação ao vivo sem limite</string>
+    <string name="pro_remaining_cd">Tempo restante de gravação ao vivo grátis: %1$s</string>
 </resources>

@@ -31,6 +31,8 @@ class ProEntitlementRepository(
     val entitlement = mutableEntitlement.asStateFlow()
     private val mutablePending = MutableStateFlow(false)
     val pending = mutablePending.asStateFlow()
+    private val mutablePrice = MutableStateFlow<String?>(null)
+    val formattedPrice = mutablePrice.asStateFlow()
     private val refreshes = Channel<Unit>(Channel.CONFLATED)
 
     init {
@@ -59,12 +61,31 @@ class ProEntitlementRepository(
                         backoffMillis = (backoffMillis * 2).coerceAtMost(60_000L)
                     }
                 }
+                // Issue #443: the price is display-only, so it is queried after (and independently
+                // of) entitlement. A product-details failure must never hold entitlement in a retry
+                // loop; it just leaves the purchase CTA disabled until the next refresh.
+                mutablePrice.value = try {
+                    withTimeout(30_000) { billing.queryFormattedPrice() }
+                } catch (e: Exception) {
+                    if (e is CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+                    null
+                }
             }
         }
     }
 
     /** Also available for a future foreground/restore trigger; no billing work on the caller. */
     fun refresh() { refreshes.trySend(Unit) }
+
+    suspend fun launchPurchase(activity: android.app.Activity) {
+        if (entitlement.value != Entitlement.Free || pending.value) return
+        try {
+            if (!billing.launchPurchase(activity)) mutablePrice.value = null
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            mutablePrice.value = null
+        }
+    }
 
     private suspend fun reconcile(purchases: List<OwnedPurchase>) {
         val matching = purchases.filter { PRO_PRODUCT_ID in it.products }
