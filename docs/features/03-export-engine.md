@@ -4,10 +4,10 @@
 
 Tracked in [#5](https://github.com/alexandre-machado/audio-blackbox/issues/5).
 
-## Safe Buffer Reading
-Extract the byte array representing the last *X* minutes **without dropping incoming write
-frames** — capture continues uninterrupted while the file is written, and the copy-out does
-not block the capture thread for a perceptible time.
+## Safe Buffer Reading (Lookback Save & Continuous Live Recording)
+`Save` (`ExportEngine.kt`) exports the buffered audio accumulated since the last save (or the entire buffer on the first save). The old fixed-window selector was retired in `#121`, and each successful save advances the ring buffer's export floor (`#410`) to the end of the saved window so consecutive saves never overlap. `Live` (`ForwardRecordingEngine.kt`) starts a forward recording that drains the buffered past first and then continues encoding newly captured audio into the same file until stopped, advancing the export floor when it finishes.
+
+Both paths drain the ring buffer in bounded 4 KB chunks via `readSince` (`#72`) rather than allocating a second full-window copy, so capture continues uninterrupted while the file is written and the capture thread is never blocked for more than a single chunk copy.
 
 ## PCM to File Conversion
 Encapsulate the raw memory bytes into a playable file format, via a pluggable `PayloadEncoder`
@@ -39,5 +39,7 @@ API 29-30 (the top-level `Recordings/` root does not exist below API 31, and `mi
 deliberately — see issue #3). Decided from the running OS (`Build.VERSION.SDK_INT`), never
 `targetSdk`. `IS_PENDING` is used during the write so no half-written file is ever visible. Files
 already sitting in the app's pre-issue-#33 `Music/Recordings/` location are not migrated or
-deleted. Naming scheme: `blackbox_<date>_<time>_<window>.<extension>` (`.m4a` by default, `.wav`
-if `WavPayloadEncoder` is used).
+deleted. Naming scheme (`ExportEngine.kt`, `ForwardRecordingEngine.kt`, `MediaStoreSink.kt`):
+`blackbox_<yyyy-MM-dd_HH-mm-ss>_<N>min.<extension>` (or `_<N>s.<extension>` for sub-minute saves, and
+`blackbox_<yyyy-MM-dd_HH-mm-ss>_forward.<extension>` for `Live` forward recordings; `.m4a` by default,
+`.wav` if `WavPayloadEncoder` is used).

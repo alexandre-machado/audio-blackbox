@@ -24,13 +24,13 @@ the S25 in the first place.
 - **Sitemap:** https://alexandre.machado.cc/audio-blackbox/sitemap.xml (`docs/sitemap.xml`), linked from
   `docs/index.html` via `<link rel="sitemap">`. Submit this URL directly in Search Console and Bing
   Webmaster Tools — there is no discovery crawl to rely on otherwise.
-- **`robots.txt` is intentionally not shipped here.** The custom domain `alexandre.machado.cc` is bound
-  to a *different* GitHub Pages site (the account's user Pages site); this repository only serves the
-  `/audio-blackbox/` sub-path under it. A `robots.txt` placed at `docs/robots.txt` would resolve to
-  `.../audio-blackbox/robots.txt`, which no crawler reads (`robots.txt` is only honoured from the domain
-  root). The apex `https://alexandre.machado.cc/robots.txt` currently returns the GitHub Pages 404, which
-  crawlers treat as allow-all, so nothing is blocking indexing today. Changing that is outside this
-  repo's control and belongs to whoever owns the apex Pages site.
+- **`robots.txt` is served at the domain apex, not from `docs/`.** The custom domain `alexandre.machado.cc` is bound
+  to the account's user GitHub Pages site, and this repository serves the `/audio-blackbox/` sub-path under it. A
+  `robots.txt` placed at `docs/robots.txt` would resolve to `.../audio-blackbox/robots.txt`, which crawlers ignore
+  (`robots.txt` is only honoured from the domain root), so `docs/` intentionally does not ship a sub-path `robots.txt`.
+  The apex `https://alexandre.machado.cc/robots.txt` and `https://alexandre.machado.cc/llms.txt` are live (`200 OK`),
+  allow all crawlers (`Allow: /`), and point directly to `https://alexandre.machado.cc/audio-blackbox/sitemap.xml`
+  and `https://alexandre.machado.cc/audio-blackbox/llms.txt`.
 - Search Console / Bing Webmaster verification and backlink work are tracked in the companion
   discoverability issue, not here.
 
