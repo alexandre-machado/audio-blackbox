@@ -1,6 +1,6 @@
 # Audio Blackbox
 
-**Audio Blackbox is a free, open-source Android app that records the last minutes of audio into RAM, so you can save something after it happened.** It is for anyone who realizes too late that a moment was worth keeping: musicians and songwriters, people thinking out loud, meetings and agreements you are part of, and family moments. The rolling buffer is at least 5 minutes, set in 5-minute steps, with the maximum computed on your phone; nothing is written to storage until you tap Save, and the app has no internet permission. It runs on Android 10 (API 29) and newer, costs nothing, and is licensed under GPL-3.0. **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)** · [Project site](https://alexandre.machado.cc/audio-blackbox/)
+**Audio Blackbox is a free, open-source Android app that records the last minutes of audio into RAM, so you can save something after it happened.** It is for anyone who realizes too late that a moment was worth keeping: musicians and songwriters, journalists and interviews, students and lectures, a memory aid for spoken instructions, a pocket audio dashcam, and ideas and family moments. The rolling buffer is at least 5 minutes, set in 5-minute steps, with the maximum computed on your phone; nothing is written to storage until you tap Save, and the app has no internet permission. It runs on Android 10 (API 29) and newer, costs nothing, and is licensed under GPL-3.0. **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)** · [Project site](https://alexandre.machado.cc/audio-blackbox/)
 
 <p align="center">
   <img src="docs/design/store/feature_graphic_1024x500.png" alt="Audio Blackbox Banner" width="800">
@@ -24,7 +24,7 @@
 
 **Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio in device RAM (**at least 5 minutes, in 5-minute steps, with no fixed upper bound** -- the ceiling is sized automatically per device and per quality preset from how much memory it can safely hold) and writes to storage **only when you explicitly ask it to**.
 
-Nothing touches your disk until you press save, and the app has no internet permission, so it never uploads anything; saved files go to your phone's `Recordings/Blackbox` folder, where you control them. It is made for the moments you only know mattered *after* they happened: the riff you just played, an idea you said out loud, what was just agreed in a meeting you were part of, or a family moment.
+Nothing touches your disk until you press save, and the app has no internet permission, so it never uploads anything; saved files go to your phone's `Recordings/Blackbox` folder, where you control them. It is made for the moments you only know mattered *after* they happened: the riff or melody you just improvised (musicians and songwriters), the quote before you hit record (journalists and interviews), the lecture explanation you just missed (students and lectures), spoken instructions or directions you need to replay (memory aid), unexpected incidents in traffic or on the street (pocket audio dashcam), and ideas, agreements in meetings you are part of, or family moments.
 
 ---
 
