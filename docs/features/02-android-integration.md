@@ -12,7 +12,7 @@ Tracked in [#3](https://github.com/alexandre-machado/audio-blackbox/issues/3)
 An ongoing `Service` declared with the mandatory `foregroundServiceType="microphone"`
 flag, tied to the app's lifecycle. It owns the capture engine and the ring buffer, so the
 buffer survives Activity destruction. This is the single highest-risk failure mode of the
-product: without it, "the last 30 minutes" silently becomes "the last few seconds".
+product: without it, "the last minutes" silently becomes "the last few seconds".
 
 ## Persistent Notification & Home-Screen Widget
 The required status bar notification indicating active recording runs on a dedicated

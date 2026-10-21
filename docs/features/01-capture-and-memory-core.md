@@ -5,7 +5,7 @@
 Tracked in [#2](https://github.com/alexandre-machado/audio-blackbox/issues/2).
 
 ## Ring Buffer Implementation
-`RingBuffer.kt` pre-allocates 16-bit PCM memory in 1 MiB chunks (`CHUNK_BYTES = 1_048_576`) and manages continuous read/write cursors that wrap around and overwrite the oldest audio once the window is full.
+`RingBuffer.kt` pre-allocates 16-bit PCM memory in 1 MiB chunks (`RingBuffer.DEFAULT_CHUNK_SIZE_BYTES = 1 * 1024 * 1024`) and manages continuous read/write cursors that wrap around and overwrite the oldest audio once the window is full.
 
 All chunks for the configured window are allocated up front when the buffer is constructed, so the capture thread never allocates on the hot path. When the user changes the retention window or quality preset in Settings while recording (`#223`, `#272`), `RingBuffer.resize` checks `DeviceMemoryBudget` against the net growth (plus two chunks of slack) and copies the retained audio into the new layout one 1 MiB chunk at a time, releasing each old chunk as it goes so peak memory stays near `max(old, new) + 1 chunk` instead of `old + new` (`#277`). If the device does not have enough headroom for the resize, `RingBuffer.resize` returns `ResizeOutcome.Refused`, leaves the existing buffer untouched, and surfaces a visible "Setting not applied" notice in the UI.
 

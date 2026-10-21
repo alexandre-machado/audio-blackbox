@@ -205,7 +205,11 @@ end
   features/04-user-interface.html
 ].each do |doc_page|
   f = File.join(site_dir, doc_page)
-  next unless File.file?(f)
+  # A missing page must fail, not be skipped: skipping would let this guard pass vacuously.
+  unless File.file?(f)
+    puts "::error file=#{f}::doc page missing from built site"
+    exit 1
+  end
   s = File.read(f, encoding: "UTF-8")
   if s.include?("&amp;amp;")
     puts "::error file=#{f}::double-escaped HTML entity (&amp;amp;) found"
