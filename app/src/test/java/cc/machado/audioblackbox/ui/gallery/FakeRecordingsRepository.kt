@@ -22,7 +22,12 @@ class FakeRecordingsRepository(initial: List<RecordingRow>) : RecordingsReposito
      * not crash on (PR #61 review finding). */
     var deleteThrows: Boolean = false
 
-    override fun queryRecordings(): List<RecordingRow> = rows
+    var queryFailure: Exception? = null
+
+    override fun queryRecordings(): List<RecordingRow> {
+        queryFailure?.let { throw it }
+        return rows
+    }
 
     override fun delete(uri: Uri): Boolean {
         deleted += uri

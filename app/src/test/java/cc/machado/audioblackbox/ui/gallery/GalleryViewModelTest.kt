@@ -1,6 +1,9 @@
 package cc.machado.audioblackbox.ui.gallery
 
 import android.net.Uri
+import android.util.Log
+import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.RecordingRow
 import java.io.Closeable
@@ -20,6 +23,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.mockito.MockedStatic
+import org.mockito.Mockito.mockStatic
 import org.mockito.kotlin.mock
 
 /**
@@ -39,14 +44,18 @@ import org.mockito.kotlin.mock
  */
 class GalleryViewModelTest {
 
+    private lateinit var log: MockedStatic<Log>
+
     @Before
     fun setUp() {
+        log = mockStatic(Log::class.java)
         Dispatchers.setMain(StandardTestDispatcher())
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        log.close()
     }
 
     private fun row(name: String, uri: Uri = mock()) = RecordingRow(
@@ -63,7 +72,7 @@ class GalleryViewModelTest {
         runCurrent()
     }
 
-    // Oracle: the first completed query is baseline, never a save notification.
+    // Oracle: without a success event, the initial query never produces a save notification.
     @Test
     fun `initial load does not flag existing recordings`() = runTest {
         val repository = FakeRecordingsRepository(listOf(row("existing.m4a")))
@@ -73,16 +82,21 @@ class GalleryViewModelTest {
         assertNull("initial load must not flag a save", vm.uiState.value.newlySavedKey)
     }
 
-    // Oracle: a repository insertion after an empty baseline survives without UI subscribers,
+    // Oracle: a successful export survives delayed row visibility without UI subscribers,
     // including later metadata emissions, and is delivered on the first gallery visit.
     @Test
-    fun `new key is flagged even before gallery subscribes`() = runTest {
+    fun `export success waits for row even before gallery subscribes`() = runTest {
         val repository = FakeRecordingsRepository(emptyList())
         val observer = FakeRecordingsChangeObserver()
+        val export = MutableStateFlow<ExportState>(ExportState.Idle)
         val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined,
-            changeObserver = observer)
+            changeObserver = observer, exportState = export)
         runCurrent()
         val saved = row("saved.m4a")
+        export.value = ExportState.Success(saved.displayName, 1000)
+        runCurrent()
+        export.value = ExportState.Idle
+        runCurrent()
         repository.rows = listOf(saved)
         observer.fireChange()
         runCurrent()
@@ -96,16 +110,18 @@ class GalleryViewModelTest {
     // Oracle: an existing live row finishing flags that URI, even behind a newer capture;
     // adding the unfinished row itself must not announce a completed save.
     @Test
-    fun `live completion flags existing key at nonzero index`() = runTest {
+    fun `row before Recording is not saved until Success`() = runTest {
         val repository = FakeRecordingsRepository(emptyList())
         val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
         val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined,
             forwardRecordingState = forward)
         subscribe(vm)
         val live = row("live.m4a").copy(dateAddedMillis = 1L)
-        forward.value = ForwardRecordingState.Recording(live.displayName, bytesWritten = 4096L)
         repository.rows = listOf(live)
         vm.refresh()
+        runCurrent()
+        assertNull("row before Recording is not a save", vm.uiState.value.newlySavedKey)
+        forward.value = ForwardRecordingState.Recording(live.displayName, bytesWritten = 4096L)
         runCurrent()
         assertTrue(vm.uiState.value.items.single().isInProgress)
         assertNull("starting live is not a completed save", vm.uiState.value.newlySavedKey)
@@ -113,13 +129,130 @@ class GalleryViewModelTest {
         repository.rows = listOf(live, newer)
         vm.refresh()
         runCurrent()
-        vm.acknowledgeNewlySaved(newer.uri)
+        assertNull("unrelated row visibility is not saved", vm.uiState.value.newlySavedKey)
         runCurrent()
         forward.value = ForwardRecordingState.Success(live.displayName, bytesWritten = 48_000L)
         runCurrent()
         assertEquals(live.uri, vm.uiState.value.items[1].recording.uri)
         assertFalse(vm.uiState.value.items[1].isInProgress)
         assertEquals("finishing live must flag its existing key", live.uri, vm.uiState.value.newlySavedKey)
+    }
+
+    // Oracle: an error ending a live session cannot announce its surviving partial file.
+    @Test
+    fun `Recording to Error never flags partial row`() = runTest {
+        val live = row("partial.m4a")
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording(live.displayName, 100))
+        val vm = GalleryViewModel(FakeRecordingsRepository(listOf(live)), FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined, forwardRecordingState = forward)
+        subscribe(vm)
+        assertTrue(vm.uiState.value.items.single().isInProgress)
+        forward.value = ForwardRecordingState.Error(ForwardRecordingFailureReason.WRITE_FAILED, "failed")
+        runCurrent()
+        assertFalse(vm.uiState.value.items.single().isInProgress)
+        assertNull("WRITE_FAILED is not saved", vm.uiState.value.newlySavedKey)
+    }
+
+    // Oracle: restored/rescanned rows without engine success never produce a save signal.
+    @Test
+    fun `row without Success never flags`() = runTest {
+        val repository = FakeRecordingsRepository(emptyList())
+        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(vm)
+        repository.rows = listOf(row("restored.m4a"))
+        vm.refresh()
+        runCurrent()
+        assertEquals(1, vm.uiState.value.items.size)
+        assertNull("visibility alone is not saved", vm.uiState.value.newlySavedKey)
+    }
+
+    // Oracle: both initial terminal values are ignored, but a later success is still delivered.
+    @Test
+    fun `initial Success values do not flag`() = runTest {
+        val live = row("live.m4a")
+        val past = row("past.m4a")
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Success(live.displayName, 100))
+        val export = MutableStateFlow<ExportState>(ExportState.Success(past.displayName, 100))
+        val vm = GalleryViewModel(FakeRecordingsRepository(listOf(live, past)), FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined, forwardRecordingState = forward, exportState = export)
+        subscribe(vm)
+        assertNull("initial successes are not transitions", vm.uiState.value.newlySavedKey)
+        export.value = ExportState.Exporting
+        runCurrent()
+        export.value = ExportState.Success(past.displayName, 100)
+        runCurrent()
+        assertEquals(past.uri, vm.uiState.value.newlySavedKey)
+    }
+
+    // Oracle: a success after construction but before scheduled collection is not dropped.
+    @Test
+    fun `success before collector starts is delivered`() = runTest {
+        val saved = row("saved.m4a")
+        val export = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = GalleryViewModel(FakeRecordingsRepository(listOf(saved)), FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined, exportState = export)
+        export.value = ExportState.Success(saved.displayName, 100)
+        subscribe(vm)
+        assertEquals(saved.uri, vm.uiState.value.newlySavedKey)
+    }
+
+    // Oracle: provider exceptions must not escape the VM, clear its list, or leave refresh stuck.
+    @Test
+    fun `refresh failure keeps previous list and recovers`() = runTest {
+        val saved = row("existing.m4a")
+        val repository = FakeRecordingsRepository(listOf(saved))
+        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(vm)
+        repository.queryFailure = IllegalStateException("provider unavailable")
+        vm.refresh()
+        runCurrent()
+        assertEquals(saved.uri, vm.uiState.value.items.single().recording.uri)
+        assertFalse(vm.uiState.value.isRefreshing)
+        repository.queryFailure = null
+        repository.rows = emptyList()
+        vm.refresh()
+        runCurrent()
+        assertTrue(vm.uiState.value.items.isEmpty())
+    }
+
+    // Oracle: a missing row cannot grow a queue or later steal focus from a newer success.
+    @Test
+    fun `newer success replaces unmatched pending name`() = runTest {
+        val repository = FakeRecordingsRepository(emptyList())
+        val export = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined,
+            exportState = export)
+        subscribe(vm)
+        export.value = ExportState.Success("missing.m4a", 100)
+        runCurrent()
+        assertNull(vm.uiState.value.newlySavedKey)
+        val latest = row("latest.m4a")
+        export.value = ExportState.Success(latest.displayName, 100)
+        runCurrent()
+        repository.rows = listOf(latest)
+        vm.refresh()
+        runCurrent()
+        assertEquals(latest.uri, vm.uiState.value.newlySavedKey)
+        vm.acknowledgeNewlySaved(latest.uri)
+        repository.rows = listOf(latest, row("missing.m4a"))
+        vm.refresh()
+        runCurrent()
+        assertNull("superseded pending save must not replay", vm.uiState.value.newlySavedKey)
+    }
+
+    // Oracle: even the eager launch query may fail safely and a later refresh can recover.
+    @Test
+    fun `initial query failure does not crash`() = runTest {
+        val repository = FakeRecordingsRepository(emptyList())
+        repository.queryFailure = IllegalStateException("provider unavailable at launch")
+        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        subscribe(vm)
+        assertTrue(vm.uiState.value.items.isEmpty())
+        assertFalse(vm.uiState.value.isRefreshing)
+        repository.queryFailure = null
+        vm.refresh()
+        runCurrent()
+        assertFalse(vm.uiState.value.isLoading)
     }
 
     // Oracle: removing a row does not flag the surviving row.
@@ -141,11 +274,14 @@ class GalleryViewModelTest {
     @Test
     fun `acknowledge clears only the matching save without replay`() = runTest {
         val repository = FakeRecordingsRepository(emptyList())
-        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined)
+        val export = MutableStateFlow<ExportState>(ExportState.Idle)
+        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined,
+            exportState = export)
         subscribe(vm)
         val saved = row("saved.m4a")
         repository.rows = listOf(saved)
         vm.refresh()
+        export.value = ExportState.Success(saved.displayName, 1000)
         runCurrent()
         assertEquals(saved.uri, vm.uiState.value.newlySavedKey)
         vm.acknowledgeNewlySaved(mock())

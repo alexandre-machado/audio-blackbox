@@ -177,9 +177,13 @@ fun GalleryScreen(
     val savedIndex = uiState.items.indexOfFirst { it.recording.uri == savedKey }
     LaunchedEffect(savedKey, savedIndex) {
         if (savedKey != null && savedIndex >= 0) {
-            listState.animateScrollToItem(savedIndex)
             highlightedKey = savedKey
-            acknowledge(savedKey)
+            try {
+                listState.animateScrollToItem(savedIndex)
+            } finally {
+                // User input can cancel the animation; never leave a surprise scroll pending.
+                acknowledge(savedKey)
+            }
         }
     }
     // Separate from acknowledgement: clearing the pending flag must not cancel the highlight.
