@@ -29,3 +29,5 @@ certificates/
 /_site/
 /docs/_site/
 /docs/.jekyll-cache/
+/cloudflare/.staged/
+/cloudflare/.wrangler/

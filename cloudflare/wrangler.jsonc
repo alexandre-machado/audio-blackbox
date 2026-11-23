@@ -1,0 +1,19 @@
+{
+  "name": "audio-blackbox-site",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./.staged",
+    "binding": "ASSETS",
+    // Mixed canonical forms: directories end in /, documents keep .html,
+    // and the Play Console privacy-policy URL has no extension.
+    "html_handling": "none",
+    "not_found_handling": "404-page",
+    "run_worker_first": true
+  },
+  "routes": [
+    { "pattern": "alexandre.machado.cc/audio-blackbox*", "zone_name": "machado.cc" }
+  ]
+}

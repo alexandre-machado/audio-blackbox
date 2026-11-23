@@ -9,6 +9,8 @@ on:
       - '.github/workflows/pages.yml'
       - 'scripts/ci/check-site-rendered.sh'
       - 'scripts/ci/setup-jekyll-ruby.sh'
+      - 'scripts/ci/stage-cloudflare-site.sh'
+      - 'cloudflare/**'
   workflow_dispatch:
 
 # Minimum by default; each job widens only what it needs.
@@ -23,9 +25,10 @@ concurrency:
 # runs only on a push to main and on manual dispatch, neither of which a fork can cause. The
 # repository guard on each job still blocks it in a fork.
 #
-# Two jobs (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
+# Build isolation (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
 # read-only token and no Pages/OIDC credentials. `deploy` holds pages: write + id-token: write
 # and runs only first-party actions plus the IndexNow curl.
+# `deploy-cloudflare` consumes the same artifact and is inert until credentials are set.
 jobs:
   build:
     runs-on: self-hosted
@@ -74,6 +77,26 @@ jobs:
       # front matter, or if the production analytics tags are missing on the analytics pages.
       - name: Guard against unrendered Liquid
         run: bash scripts/ci/check-site-rendered.sh _site
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Validate Cloudflare site without credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ''
+          CLOUDFLARE_ACCOUNT_ID: ''
+          CLOUDFLARE_API_KEY: ''
+          CLOUDFLARE_EMAIL: ''
+          WRANGLER_SEND_METRICS: 'false'
+          # Isolate any OAuth login persisted on the self-hosted runner.
+          XDG_CONFIG_HOME: ${{ runner.temp }}/cloudflare-validation-config
+        run: |
+          set -euo pipefail
+          bash scripts/ci/stage-cloudflare-site.sh _site
+          node --test cloudflare/worker.test.mjs
+          npx --yes wrangler@4.160.0 deploy --dry-run --config cloudflare/wrangler.jsonc --outdir "${RUNNER_TEMP}/cloudflare-dry-run"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
@@ -138,3 +161,63 @@ jobs:
             *) echo "::warning::IndexNow submission returned HTTP ${http_code} (non-fatal)" ;;
           esac
           exit 0
+
+  deploy-cloudflare:
+    needs: build
+    runs-on: self-hosted
+    if: github.repository == 'alexandre-machado/audio-blackbox'
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - name: Check Cloudflare settings
+        id: settings
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare credentials missing; skipping Cloudflare deploy. GitHub Pages stays active."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.settings.outputs.ready == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download Pages artifact
+        if: steps.settings.outputs.ready == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/cloudflare-pages-artifact
+
+      # The staging guard uses Ruby's stdlib; no gem install or Jekyll rebuild here.
+      - name: Set up Ruby for artifact validation
+        if: steps.settings.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          bin_dir="$(bash scripts/ci/setup-jekyll-ruby.sh "${RUNNER_TOOL_CACHE}/jekyll-ruby" | tail -n 1)"
+          echo "$bin_dir" >> "$GITHUB_PATH"
+
+      - name: Extract and stage Pages artifact
+        if: steps.settings.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          site_dir="$(mktemp -d "${RUNNER_TEMP}/cloudflare-site.XXXXXX")"
+          tar -xf "${RUNNER_TEMP}/cloudflare-pages-artifact/artifact.tar" -C "$site_dir"
+          bash scripts/ci/stage-cloudflare-site.sh "$site_dir"
+
+      - name: Set up Node
+        if: steps.settings.outputs.ready == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Deploy Cloudflare Worker and assets
+        if: steps.settings.outputs.ready == 'true'
+        run: npx --yes wrangler@4.160.0 deploy --config cloudflare/wrangler.jsonc
