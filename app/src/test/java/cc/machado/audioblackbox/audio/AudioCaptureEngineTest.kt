@@ -476,6 +476,11 @@ class AudioCaptureEngineTest {
 
             clockMillis.addAndGet(45_000L) // simulate a 45s phone call
 
+            // Oracle: live checkpoints can see an open pause before resume publishes it;
+            // snapshotting must not close or mutate that pause.
+            assertEquals(listOf(PauseGap(1_000_000L, 1_045_000L)), engine.forwardRecordingGaps())
+            assertTrue(engine.gaps.value.isEmpty())
+
             engine.resume() // simulates AudioRecordingCallback observing isClientSilenced == false
             awaitState(engine, description = "Recording after the mic is released") { it is CaptureState.Recording }
 
@@ -485,6 +490,7 @@ class AudioCaptureEngineTest {
             assertEquals(1_000_000L, gap.startTimestampMillis)
             assertEquals(1_045_000L, gap.endTimestampMillis)
             assertEquals(45_000L, gap.durationMillis)
+            assertEquals(gaps, engine.forwardRecordingGaps())
 
             engine.stop()
         }

@@ -143,6 +143,7 @@ object RecorderNotification {
             is ExportState.Error -> context.getString(R.string.recorder_notification_export_error)
         }
 
+        // Per file by design: this is what the next Save writes, not session elapsed time.
         val forwardElapsedMillis = if (bytesPerSecond > 0 && forwardRecordingState is ForwardRecordingState.Recording) {
             (forwardRecordingState.bytesWritten * 1000L) / bytesPerSecond
         } else {

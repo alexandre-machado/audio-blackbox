@@ -741,6 +741,7 @@ class DashboardViewModel(
         ): ForwardRecordingUiState = when (forwardState) {
             is ForwardRecordingState.Idle -> ForwardRecordingUiState.Idle
             is ForwardRecordingState.Recording -> {
+                // Per file by design: this is what the next Save writes, not session elapsed time.
                 val elapsedMillis = if (bytesPerSecond > 0) {
                     (forwardState.bytesWritten * 1000L) / bytesPerSecond
                 } else {

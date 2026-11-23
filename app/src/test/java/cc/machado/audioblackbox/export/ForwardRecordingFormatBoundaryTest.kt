@@ -458,6 +458,7 @@ class ForwardRecordingFormatBoundaryTest {
         private val discarded = ByteArrayOutputStream()
         override val outputStream: OutputStream get() = discarded
         override fun finish() = Unit
+        override fun abort() = Unit
         override fun refinalizeMetadata() = Unit
         override fun close() = Unit
     }

@@ -85,6 +85,9 @@ interface StreamingExportTarget : Closeable, AutoCloseable {
      */
     fun finish()
 
+    /** Discard an unused row when writer construction fails, before any audio is written. */
+    fun abort()
+
     /**
      * Re-finalizes this row's `SIZE`/`DURATION` metadata to reflect what has actually been written
      * so far (issue #140). Issue #53's early commit clears `IS_PENDING` as soon as the row is

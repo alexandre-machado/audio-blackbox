@@ -478,6 +478,11 @@ class AudioCaptureEngine(
         }
     }
 
+    /** Live export needs the elapsed part of an open pause when a file rotates. */
+    fun forwardRecordingGaps(): List<PauseGap> = synchronized(lock) {
+        if (paused) _gaps.value + PauseGap(pauseStartMillis, clock()) else _gaps.value
+    }
+
     /** Suspends writes into the ring buffer without closing `AudioRecord` (Module 2: phone
      * call interruption). No-op unless currently [CaptureState.Recording]. Records the wall-clock
      * start of the gap; see [resume] for where it is closed out. */

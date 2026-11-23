@@ -5,7 +5,6 @@ import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.FormatSegment
 import cc.machado.audioblackbox.audio.PauseGap
 import cc.machado.audioblackbox.audio.ReadSinceResult
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -120,6 +119,10 @@ class ForwardRecordingEngine(
     // un-retried first read. Blocking inside this hook until the state mutation is complete closes
     // both at once, since it runs strictly between them.
     private val onEnteringCleanStopDrain: () -> Unit = {},
+    // Deterministic ordering seam for checkpoint/stop races; production leaves it unset.
+    private val onStopRequested: () -> Unit = {},
+    // Include an open pause only at a checkpoint, without changing normal completed-gap drain.
+    private val checkpointGapsProvider: () -> List<PauseGap> = gapsProvider,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -136,6 +139,7 @@ class ForwardRecordingEngine(
         oldestCursorProvider = { engine.oldestCursor() },
         exportFloorAdvancerProvider = { engine.exportFloorAdvancer() },
         gapsProvider = { engine.gaps.value },
+        checkpointGapsProvider = { engine.forwardRecordingGaps() },
         sink = sink,
         writerFactory = writerFactory,
         clock = clock,
@@ -159,7 +163,8 @@ class ForwardRecordingEngine(
     private var activeDrainThread: Thread? = null
     private var activeTarget: StreamingExportTarget? = null
     private var activeWriter: StreamingAudioWriter? = null
-    private var checkpointRequested: CountDownLatch? = null
+    private class CheckpointSession(var requested: CountDownLatch? = null)
+    private var checkpointSession = CheckpointSession()
     private val stopRequested = AtomicBoolean(false)
     private val cancelRequested = AtomicBoolean(false)
     private var wakeUpLatch = CountDownLatch(0)
@@ -238,6 +243,8 @@ class ForwardRecordingEngine(
 
             val sessionStartMillis = clock()
             val initialGaps = gapsProvider()
+            val session = CheckpointSession()
+            checkpointSession = session
 
             stateValue = ForwardRecordingState.Recording(displayName, 0L)
 
@@ -245,7 +252,7 @@ class ForwardRecordingEngine(
                 // `currentConfig` is the format the writer above was configured with, i.e. the
                 // format this file declares -- so it is also the format every drained chunk must
                 // be converted into (issue #322).
-                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer)
+                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer, session)
             }, "ForwardRecordingDrain")
             drainThread.isDaemon = true
             activeDrainThread = drainThread
@@ -266,6 +273,7 @@ class ForwardRecordingEngine(
                 return _state.value
             }
             stopRequested.set(true)
+            onStopRequested()
             wakeUpLatch.countDown()
             threadToJoin = activeDrainThread
         }
@@ -278,15 +286,18 @@ class ForwardRecordingEngine(
      * rotation begins. Never wait while holding lock: the drain owns all writer operations.
      */
     fun checkpoint(): ForwardRecordingState {
-        val completion = synchronized(lock) {
-            if (stateValue !is ForwardRecordingState.Recording || stopRequested.get()) return stateValue
-            checkpointRequested ?: CountDownLatch(1).also {
-                checkpointRequested = it
-                wakeUpLatch.countDown()
-            }
-        }
+        val completion = requestCheckpoint() ?: return state.value
         completion.await()
-        return stateValue
+        return state.value
+    }
+
+    /** Non-blocking/coalescing service entry point; all I/O stays on the drain thread. */
+    fun requestCheckpoint(): CountDownLatch? = synchronized(lock) {
+        if (stateValue !is ForwardRecordingState.Recording || stopRequested.get()) return null
+        checkpointSession.requested ?: CountDownLatch(1).also {
+            checkpointSession.requested = it
+            wakeUpLatch.countDown()
+        }
     }
 
     /**
@@ -300,6 +311,7 @@ class ForwardRecordingEngine(
             }
             cancelRequested.set(true)
             stopRequested.set(true)
+            onStopRequested()
             wakeUpLatch.countDown()
             threadToJoin = activeDrainThread
         }
@@ -449,6 +461,7 @@ class ForwardRecordingEngine(
         initialGaps: List<PauseGap>,
         sessionConfig: AudioConfig,
         floorAdvancer: ((Long) -> Unit)?,
+        session: CheckpointSession,
     ) {
         var displayName = displayName
         var target = target
@@ -457,30 +470,25 @@ class ForwardRecordingEngine(
         val usedDisplayNames = mutableSetOf(displayName)
         var cursor = initialCursor
         var totalBytesDrained = 0L
-        val handledGaps = initialGaps.toMutableSet()
+        var fileStartMillis = sessionStartMillis
+        val handledGaps = initialGaps.associate { it.startTimestampMillis to it.endTimestampMillis }.toMutableMap()
         var lastRefinalizeAtNanos = System.nanoTime()
         val reconciler = ForwardFormatReconciler(sessionConfig, segmentsProvider)
 
-        // Issue #374: a gap that started before this session but ended after it must only
-        // contribute its in-session portion to this file -- the file covers the session, not
-        // whatever preceded it. Before this fix, `writer.writeGap(gap)` used the gap's full,
-        // unclipped `durationMillis`, so a straddling gap wrote (sessionStartMillis -
-        // gap.startTimestampMillis) milliseconds of silence that predate the session into a file
-        // that should not contain it.
-        //
-        // This clips the *wall-clock start* of an already-included gap's window, which is a
-        // different operation from #328/#329: #329 removed an *end-side* clamp that discarded
-        // whole gaps -- derived from an audio-duration window -- that belonged in the retro
-        // export's plan. Here, the decision of *which* gaps are included is untouched (still the
-        // `gap.endTimestampMillis >= sessionStartMillis` wall-clock filter above/below, unchanged),
-        // and no gap is dropped: this only shortens how much of an included, straddling gap's
-        // silence lands in the file, on the wall-clock axis the forward path already reasons in.
-        // A gap that does not straddle the boundary (fully before -> excluded by the filter,
-        // fully inside -> clippedStartMillis == gap.startTimestampMillis) is unaffected, so total
-        // planned silence for those cases is exactly what it was before this change.
-        fun writeClippedGap(gap: PauseGap) {
-            val clippedStartMillis = maxOf(gap.startTimestampMillis, sessionStartMillis)
-            writer.writeGap(gap.endTimestampMillis - clippedStartMillis)
+        // #374/#451: clip silence to this file's wall-clock window. Open pauses grow between
+        // snapshots, so remember the end already emitted, not the whole PauseGap identity.
+        // Rotation clears that progress; fileStartMillis excludes everything committed in A.
+        fun injectGaps(endMillis: Long = Long.MAX_VALUE) {
+            val gaps = if (endMillis == Long.MAX_VALUE) gapsProvider() else checkpointGapsProvider()
+            for (gap in gaps.sortedBy { it.startTimestampMillis }) {
+                val start = maxOf(gap.startTimestampMillis, fileStartMillis,
+                    handledGaps[gap.startTimestampMillis] ?: Long.MIN_VALUE)
+                val end = minOf(gap.endTimestampMillis, endMillis)
+                if (end > start) {
+                    writer.writeGap(end - start)
+                    handledGaps[gap.startTimestampMillis] = end
+                }
+            }
         }
 
         // Writes `bytes` (already in sessionConfig) and keeps the reported byte count in step with
@@ -491,6 +499,39 @@ class ForwardRecordingEngine(
                 writer.write(chunk)
                 totalBytesDrained += chunk.size
             }
+        }
+
+        // One continuity/recovery policy for live, checkpoint and stop drains (#204/#218).
+        fun consume(result: ReadSinceResult?): ForwardRecordingState.Error? {
+            return when (result) {
+                null -> ForwardRecordingState.Error(ForwardRecordingFailureReason.CAPTURE_NOT_ACTIVE,
+                    "Capture stopped unexpectedly during forward recording")
+                is ReadSinceResult.Lapped -> {
+                    if (cursor == initialCursor) {
+                        cursor = result.oldestAvailableCursor
+                        null
+                    } else ForwardRecordingState.Error(ForwardRecordingFailureReason.CURSOR_LAPPED,
+                        "Forward writer fell behind: ${result.lostBytes} bytes lost")
+                }
+                is ReadSinceResult.StreamReset -> ForwardRecordingState.Error(
+                    ForwardRecordingFailureReason.STREAM_RESET, "Capture stream was reset under cursor $cursor")
+                is ReadSinceResult.Data -> {
+                    if (result.bytes.isEmpty()) return null
+                    val chunks = reconciler.reconcile(cursor, result.bytes)
+                    if (chunks == null) ForwardRecordingState.Error(ForwardRecordingFailureReason.CURSOR_LAPPED,
+                        "Recorded format at cursor $cursor is no longer described by any retained segment")
+                    else {
+                        emit(chunks)
+                        cursor = result.nextCursor
+                        null
+                    }
+                }
+            }
+        }
+
+        fun auditTruncated(error: ForwardRecordingState.Error) {
+            logExportError(errorLogFile, clock, "ForwardRecordingEngine", "TAIL_TRUNCATED",
+                "${error.reason}: ${error.message}", null, ErrorLogSeverity.AUDIT)
         }
 
         // Re-finalizes the MediaStore row's SIZE/DURATION from what has actually been written so
@@ -552,25 +593,31 @@ class ForwardRecordingEngine(
 
         try {
             while (!stopRequested.get() && !cancelRequested.get()) {
-                val checkpoint = synchronized(lock) { checkpointRequested }
+                val checkpoint = synchronized(lock) { session.requested }
                 if (checkpoint != null) {
                     // Freeze the boundary once, then drain exactly to it. Capture keeps writing.
+                    val boundaryMillis = clock()
                     val boundary = writeCursorProvider()
-                        ?: throw IOException("Capture stopped before checkpoint")
-                    while (cursor < boundary) {
+                    var failure = if (boundary == null) consume(null) else null
+                    while (failure == null && boundary != null && cursor < boundary) {
+                        injectGaps(boundaryMillis)
+                        val before = cursor
                         val limit = minOf(drainChunkSizeBytes.toLong(), boundary - cursor).toInt()
-                        val data = readSinceProvider(cursor, limit) as? ReadSinceResult.Data
-                            ?: throw IOException("Capture continuity lost before checkpoint at $cursor")
-                        if (data.bytes.isEmpty()) throw IOException("Checkpoint drain made no progress at $cursor")
-                        val chunks = reconciler.reconcile(cursor, data.bytes)
-                            ?: throw IOException("Recorded format unavailable at checkpoint cursor $cursor")
-                        emit(chunks)
-                        cursor = data.nextCursor
-                    }
-                    for (gap in gapsProvider()) {
-                        if (gap.endTimestampMillis >= sessionStartMillis && handledGaps.add(gap)) {
-                            writeClippedGap(gap)
+                        failure = consume(readSinceProvider(cursor, limit))
+                        if (failure == null && cursor <= before) {
+                            failure = ForwardRecordingState.Error(ForwardRecordingFailureReason.CURSOR_LAPPED,
+                                "Checkpoint tail unavailable at cursor $cursor")
                         }
+                    }
+                    injectGaps(boundaryMillis)
+                    if (failure != null) {
+                        // Salvage as stop does, but retain the live loop's specific terminal error.
+                        // Only initial-cursor Lapped recovery may continue into file B.
+                        auditTruncated(failure)
+                        reconciler.flush()?.let { emit(listOf(it)) }
+                        finishFile()
+                        synchronized(lock) { stateValue = failure }
+                        return
                     }
                     // Do not flush the streaming converter here: its fractional phase/held frame
                     // belongs to the continuous stream and survives into the next writer.
@@ -584,16 +631,25 @@ class ForwardRecordingEngine(
                     while (!usedDisplayNames.add(nextName)) {
                         nextName = generatedName.removeSuffix(".m4a") + "_${suffix++}.m4a"
                     }
+                    var nextTarget: StreamingExportTarget? = null
                     try {
-                        target = sink.openStreaming(nextName, StreamingAacWriter.MIME_TYPE_M4A)
-                        writer = writerFactory(target, sessionConfig)
+                        nextTarget = sink.openStreaming(nextName, StreamingAacWriter.MIME_TYPE_M4A)
+                        val nextWriter = writerFactory(nextTarget, sessionConfig)
+                        target = nextTarget
+                        writer = nextWriter
                     } catch (e: Exception) {
-                        stateValue = ForwardRecordingState.Error(
-                            ForwardRecordingFailureReason.SINK_OPEN_FAILED,
-                            "Saved $displayName; could not open the next recording: ${e.message}", e,
-                        )
+                        // No audio has reached B: delete only this unused row, never saved A.
+                        try { nextTarget?.abort() } catch (cleanup: Exception) { e.addSuppressed(cleanup) }
+                        synchronized(lock) {
+                            stateValue = ForwardRecordingState.Error(
+                                ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                                "Saved $displayName; could not open the next recording: ${e.message}", e,
+                            )
+                        }
                         return
                     }
+                    fileStartMillis = boundaryMillis
+                    handledGaps.clear()
                     displayName = nextName
                     totalBytesDrained = 0L
                     lastRefinalizeAtNanos = System.nanoTime()
@@ -601,109 +657,37 @@ class ForwardRecordingEngine(
                         activeTarget = target
                         activeWriter = writer
                         stateValue = ForwardRecordingState.Recording(displayName, 0L, lastCheckpoint)
-                        checkpointRequested = null
+                        session.requested = null
                         wakeUpLatch = CountDownLatch(if (stopRequested.get()) 0 else 1)
                         checkpoint.countDown()
                     }
                     continue
                 }
-                // Check and inject any completed pause gaps that occurred since session start
-                val currentGaps = gapsProvider()
-                for (gap in currentGaps) {
-                    if (gap.endTimestampMillis >= sessionStartMillis && handledGaps.add(gap)) {
-                        writeClippedGap(gap)
-                    }
+                // Use the same gap-before-audio ordering for every drain mode.
+                injectGaps()
+                val result = readSinceProvider(cursor, drainChunkSizeBytes)
+                val failure = consume(result)
+                if (failure != null) {
+                    synchronized(lock) { stateValue = failure }
+                    return
                 }
-
-                when (val result = readSinceProvider(cursor, drainChunkSizeBytes)) {
-                    null -> {
-                        // Capture engine stopped unexpectedly
-                        synchronized(lock) {
-                            stateValue = ForwardRecordingState.Error(
-                                ForwardRecordingFailureReason.CAPTURE_NOT_ACTIVE,
-                                "Capture stopped unexpectedly during forward recording",
-                            )
+                if (result is ReadSinceResult.Data) {
+                    synchronized(lock) {
+                        if (_state.value is ForwardRecordingState.Recording) {
+                            stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained, lastCheckpoint)
                         }
-                        return
                     }
-                    is ReadSinceResult.Lapped -> {
-                        if (cursor == initialCursor) {
-                            // If we are at the initial cursor when starting the drain, the live rolling
-                            // buffer advanced slightly while opening the sink / writer. Recover from the
-                            // oldest available surviving audio cursor (issues #204, #218).
-                            cursor = result.oldestAvailableCursor
-                            continue
-                        }
-                        synchronized(lock) {
-                            stateValue = ForwardRecordingState.Error(
-                                ForwardRecordingFailureReason.CURSOR_LAPPED,
-                                "Forward writer fell behind: ${result.lostBytes} bytes lost",
-                            )
-                        }
-                        return
-                    }
-                    is ReadSinceResult.StreamReset -> {
-                        synchronized(lock) {
-                            stateValue = ForwardRecordingState.Error(
-                                ForwardRecordingFailureReason.STREAM_RESET,
-                                "Capture stream was reset under cursor $cursor",
-                            )
-                        }
-                        return
-                    }
-                    is ReadSinceResult.Data -> {
-                        if (result.bytes.isNotEmpty()) {
-                            // A null reconcile means the segment describing these bytes was pruned
-                            // between `readSince` returning them and the reconciler resolving their
-                            // format, so there is nothing to convert *from* (issue #322, `@rev`
-                            // finding 4). Same condition, same reason and same exit as the
-                            // `Lapped` branch above -- the next `readSince` would report `Lapped`
-                            // anyway; this just surfaces it one chunk earlier, instead of writing a
-                            // chunk converted from a guessed format first.
-                            val reconciled = reconciler.reconcile(cursor, result.bytes)
-                            if (reconciled == null) {
-                                synchronized(lock) {
-                                    // Wording deliberately not the `Lapped` branch's "fell behind"
-                                    // (`@sec`, PR #323): the drain has not lost the race here, the
-                                    // segment describing these bytes was pruned out from under it.
-                                    // Same reason code, because the user-visible consequence and
-                                    // the recovery are identical, but the log must not misdescribe
-                                    // which condition actually fired.
-                                    stateValue = ForwardRecordingState.Error(
-                                        ForwardRecordingFailureReason.CURSOR_LAPPED,
-                                        "Recorded format at cursor $cursor is no longer described " +
-                                            "by any retained segment",
-                                    )
-                                }
-                                return
-                            }
-                            emit(reconciled)
-                            cursor = result.nextCursor
-                            synchronized(lock) {
-                                if (_state.value is ForwardRecordingState.Recording) {
-                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained, lastCheckpoint)
-                                }
-                            }
-                        }
 
-                        // Periodic re-finalization (#47 item 3 / issue #140): a clean stop() alone
-                        // does not protect a long recording against process death mid-session --
-                        // the whole point of a "black box" is surviving exactly that kind of
-                        // unexpected termination, and stop-time-only re-finalization would leave the
-                        // row permanently claiming near-zero size/duration in that case, the same
-                        // "leaked wrong state" class of bug #47 already ruled out for IS_PENDING.
-                        // Throttled off wall-clock time (not iteration count, since chunk size is
-                        // data-dependent) so it never turns into a MediaStore update per drain
-                        // iteration.
-                        val nowNanos = System.nanoTime()
-                        if (nowNanos - lastRefinalizeAtNanos >= REFINALIZE_INTERVAL_NANOS) {
-                            refinalize()
-                            lastRefinalizeAtNanos = nowNanos
-                        }
+                    // Periodic re-finalization (#47 item 3 / issue #140): preserve useful
+                    // metadata even on process death, throttled by time rather than chunk count.
+                    val nowNanos = System.nanoTime()
+                    if (nowNanos - lastRefinalizeAtNanos >= REFINALIZE_INTERVAL_NANOS) {
+                        refinalize()
+                        lastRefinalizeAtNanos = nowNanos
+                    }
 
-                        if (result.remainingBytes == 0L && !stopRequested.get()) {
-                            wakeUpLatch.await(POLL_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
-                        }
+                    if (result.remainingBytes == 0L && !stopRequested.get()) {
+                        wakeUpLatch.await(POLL_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
                     }
                 }
             }
@@ -723,60 +707,15 @@ class ForwardRecordingEngine(
             var finalDrainDone = false
             val deadline = System.nanoTime() + FINAL_DRAIN_TIMEOUT_NANOS
             while (!finalDrainDone && System.nanoTime() < deadline) {
-                // Inject any final gaps
-                val currentGaps = gapsProvider()
-                for (gap in currentGaps) {
-                    if (gap.endTimestampMillis >= sessionStartMillis && handledGaps.add(gap)) {
-                        writeClippedGap(gap)
-                    }
-                }
-
-                when (val result = readSinceProvider(cursor, drainChunkSizeBytes)) {
-                    is ReadSinceResult.Data -> {
-                        if (result.bytes.isNotEmpty()) {
-                            // Unresolvable format on the clean-stop path stops the drain rather
-                            // than failing the recording (issue #322, `@rev` finding 4). This
-                            // deliberately matches how this same loop already treats `Lapped` --
-                            // the `else` branch below -- because both mean "the tail is gone", and
-                            // at this point a complete, correctly-labelled file has already been
-                            // written. Turning a finished recording into an Error over a lost tail
-                            // would destroy more than it protects. What must not happen, and no
-                            // longer can, is writing that tail converted from a guessed format.
-                            val reconciled = reconciler.reconcile(cursor, result.bytes)
-                            if (reconciled == null) {
-                                // Keep the Success, but never silently: both reviewers on PR #323
-                                // landed on the same point from different sides -- for evidentiary
-                                // audio, a file that ends early with no trace anywhere is an
-                                // integrity claim the app makes without saying so (AGENTS.md 5).
-                                // The state stays Success because the file written so far is
-                                // complete and correctly labelled, and failing it over a lost tail
-                                // would destroy more than it protects; the log is what makes the
-                                // truncation auditable afterwards. Whether the *user* should also
-                                // be told, in the UI, is a product decision and is filed separately.
-                                logExportError(
-                                    errorLogFile,
-                                    clock,
-                                    "ForwardRecordingEngine",
-                                    "TAIL_TRUNCATED",
-                                    "Clean stop dropped ${result.bytes.size} bytes at cursor $cursor: " +
-                                        "no retained segment describes their recorded format",
-                                    null,
-                                    // Issue #346: the recording still ends in Success (see the
-                                    // comment above) -- AUDIT, not ERROR, so the dashboard's error
-                                    // card does not render as though this session failed.
-                                    ErrorLogSeverity.AUDIT,
-                                )
-                                finalDrainDone = true
-                            } else {
-                                emit(reconciled)
-                                cursor = result.nextCursor
-                            }
-                        }
-                        if (result.remainingBytes == 0L) {
-                            finalDrainDone = true
-                        }
-                    }
-                    else -> finalDrainDone = true
+                injectGaps()
+                val result = readSinceProvider(cursor, drainChunkSizeBytes)
+                val failure = consume(result)
+                if (failure != null) {
+                    auditTruncated(failure)
+                    finalDrainDone = true
+                } else if (result is ReadSinceResult.Data &&
+                    (result.remainingBytes == 0L || result.bytes.isEmpty())) {
+                    finalDrainDone = true
                 }
             }
 
@@ -808,11 +747,14 @@ class ForwardRecordingEngine(
                 target.close()
             } catch (_: Throwable) {}
             synchronized(lock) {
-                checkpointRequested?.countDown()
-                checkpointRequested = null
-                activeDrainThread = null
-                activeTarget = null
-                activeWriter = null
+                session.requested?.countDown()
+                session.requested = null
+                if (activeDrainThread === Thread.currentThread()) {
+                    checkpointSession.requested = null
+                    activeDrainThread = null
+                    activeTarget = null
+                    activeWriter = null
+                }
             }
         }
     }

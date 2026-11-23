@@ -378,6 +378,7 @@ class SaveAdvancesBufferFloorTest {
         override val fileDescriptor: FileDescriptor = FileDescriptor()
         override val outputStream: OutputStream = ByteArrayOutputStream()
         override fun finish() {}
+        override fun abort() {}
         override fun refinalizeMetadata() {}
         override fun close() {}
     }

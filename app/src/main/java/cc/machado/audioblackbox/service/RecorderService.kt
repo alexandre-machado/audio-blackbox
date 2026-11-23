@@ -147,6 +147,7 @@ class RecorderService : Service() {
             // the last byte it persisted, same rule as a "save the past".
             exportFloorAdvancerProvider = { engine.exportFloorAdvancer() },
             gapsProvider = { engine.gaps.value },
+            checkpointGapsProvider = { engine.forwardRecordingGaps() },
             sink = MediaStoreSink(applicationContext),
             writerFactory = { target, cfg -> StreamingAacWriter(target, cfg) },
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
@@ -504,7 +505,7 @@ class RecorderService : Service() {
      * for why the label is computed from what's actually buffered at dispatch time instead. */
     private fun handleSave() {
         if (saveUsesCheckpoint(forwardRecordingEngine.state.value)) {
-            serviceScope.launch(Dispatchers.Default) { forwardRecordingEngine.checkpoint() }
+            forwardRecordingEngine.requestCheckpoint()
             return
         }
         val requestedMinutes = captureConfig.bufferDurationMinutes

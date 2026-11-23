@@ -44,6 +44,7 @@ class ForwardRecordingStraddlingGapTest {
         val out = ByteArrayOutputStream()
         override val outputStream: OutputStream get() = out
         override fun finish() {}
+        override fun abort() {}
         override fun refinalizeMetadata() {}
         override fun close() {}
     }

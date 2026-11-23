@@ -51,6 +51,8 @@ class StreamingExportSinkTest {
         override val outputStream: OutputStream
             get() = fos
 
+        override fun abort() { close(); deleteRow() }
+
         override fun finish() {
             isFinished = true
             close()

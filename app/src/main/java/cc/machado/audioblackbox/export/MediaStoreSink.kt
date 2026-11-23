@@ -138,6 +138,11 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
                 close()
             }
 
+            override fun abort() {
+                close()
+                resolver.delete(uri, null, null)
+            }
+
             // See StreamingExportTarget.refinalizeMetadata's doc (issue #140). SIZE and DURATION are
             // platform-computed columns for audio rows -- confirmed empirically (see the PR
             // description's reproduction) that writing them directly via ContentValues.update() is

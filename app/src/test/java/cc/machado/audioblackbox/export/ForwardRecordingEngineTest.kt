@@ -36,6 +36,10 @@ class ForwardRecordingEngineTest {
         var finished = false
         var closed = false
         var refinalizeCallCount = 0
+        var deleted = false
+        var onClose: () -> Unit = {}
+
+        override fun abort() { close(); deleted = true }
 
         override fun finish() {
             finishCount++
@@ -49,6 +53,7 @@ class ForwardRecordingEngineTest {
 
         override fun close() {
             closed = true
+            onClose()
         }
     }
 
@@ -74,6 +79,7 @@ class ForwardRecordingEngineTest {
         var isFinished = false
         var isClosed = false
         val gapsInjected = mutableListOf<Long>()
+        val gapPositions = mutableListOf<Pair<Int, Long>>()
 
         override val totalBytesWritten: Long get() = totalBytesFed
         override val isSessionFinished: Boolean get() = isFinished
@@ -90,6 +96,7 @@ class ForwardRecordingEngineTest {
             check(!isClosed) { "Writer is closed" }
             check(!isFinished) { "Writer is finished" }
             gapsInjected.add(gapDurationMillis)
+            gapPositions.add(out.size() to gapDurationMillis)
             val silenceBytes = (gapDurationMillis * config.bytesPerSecond) / 1000L
             totalBytesFed += silenceBytes
         }
@@ -507,6 +514,258 @@ class ForwardRecordingEngineTest {
         } finally {
             engine.stop()
         }
+    }
+
+    /** Oracle: continuity loss in checkpoint salvages A, accounts its PCM and retains the
+     * exact live failure reason; no second file is opened after unrecoverable loss. */
+    @Test(timeout = 10_000)
+    fun checkpointLappedSalvagesFileAndReason() = checkpointFailure(
+        ReadSinceResult.Lapped(8L, 12L, 4L), ForwardRecordingFailureReason.CURSOR_LAPPED)
+
+    /** Oracle: a reset in checkpoint must finish A, never turn into WRITE_FAILED. */
+    @Test(timeout = 10_000)
+    fun checkpointResetSalvagesFileAndReason() = checkpointFailure(
+        ReadSinceResult.StreamReset(8L, 0L), ForwardRecordingFailureReason.STREAM_RESET)
+
+    /** Oracle: capture disappearing at the checkpoint boundary still commits existing PCM. */
+    @Test(timeout = 10_000)
+    fun checkpointNullCursorSalvagesFileAndReason() = checkpointFailure(
+        null, ForwardRecordingFailureReason.CAPTURE_NOT_ACTIVE)
+
+    private fun checkpointFailure(result: ReadSinceResult?, reason: ForwardRecordingFailureReason) {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val sink = FakeStreamingSink()
+        val writers = mutableListOf<FakeStreamingAudioWriter>()
+        val floor = java.util.concurrent.atomic.AtomicLong(-1L)
+        var checkpointDrain = false
+        var firstRead = true
+        val engine = ForwardRecordingEngine(
+            oldestCursorProvider = { 0L },
+            writeCursorProvider = { checkpointDrain = true; if (result == null) null else 16L },
+            readSinceProvider = { cursor, _ ->
+                if (firstRead) {
+                    firstRead = false
+                    entered.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                    ReadSinceResult.Data(byteArrayOf(1, 2, 3, 4), 0L, 4L, 0L)
+                } else if (checkpointDrain && cursor == 4L && result != null) {
+                    ReadSinceResult.Data(byteArrayOf(5, 6, 7, 8), 4L, 8L, 8L)
+                } else if (checkpointDrain) result
+                else ReadSinceResult.Data(byteArrayOf(), cursor, cursor, 0L)
+            },
+            exportFloorAdvancerProvider = { { floor.set(it) } },
+            gapsProvider = { emptyList() }, sink = sink,
+            writerFactory = { target, cfg -> FakeStreamingAudioWriter(target, cfg).also { writers.add(it) } },
+        )
+        engine.start()
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        val completion = requireNotNull(engine.requestCheckpoint())
+        release.countDown()
+        assertTrue("checkpoint must release its waiter", completion.await(5, TimeUnit.SECONDS))
+        assertTrue("saved writer must be finished", writers.single().isFinished)
+        assertEquals("saved target must be finished", 1, sink.targets.single().finishCount)
+        val savedBytes = if (result == null) 4 else 8
+        assertArrayEquals(ByteArray(savedBytes) { (it + 1).toByte() }, writers.single().out.toByteArray())
+        assertEquals("only saved bytes advance the floor", savedBytes.toLong(), floor.get())
+        assertEquals(reason, (engine.state.value as ForwardRecordingState.Error).reason)
+        assertEquals(1, sink.openCount)
+    }
+
+    /** Oracle: initial Lapped recovers from oldest surviving PCM even inside a checkpoint,
+     * preserving #204/#218 and continuing into B. */
+    @Test(timeout = 10_000)
+    fun checkpointInitialLappedRecovers() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val writers = mutableListOf<FakeStreamingAudioWriter>()
+        var checkpointDrain = false
+        var firstRead = true
+        val engine = ForwardRecordingEngine(
+            oldestCursorProvider = { 0L },
+            writeCursorProvider = { checkpointDrain = true; 8L },
+            readSinceProvider = { cursor, _ ->
+                if (firstRead) {
+                    firstRead = false; entered.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                    ReadSinceResult.Data(byteArrayOf(), 0L, 0L, 0L)
+                } else if (checkpointDrain && cursor == 0L) ReadSinceResult.Lapped(0L, 4L, 4L)
+                else if (cursor == 4L) ReadSinceResult.Data(byteArrayOf(5, 6, 7, 8), 4L, 8L, 0L)
+                else ReadSinceResult.Data(byteArrayOf(), cursor, cursor, 0L)
+            },
+            exportFloorAdvancerProvider = { null }, gapsProvider = { emptyList() },
+            sink = FakeStreamingSink(),
+            writerFactory = { target, cfg -> FakeStreamingAudioWriter(target, cfg).also { writers.add(it) } },
+        )
+        engine.start()
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        val completion = requireNotNull(engine.requestCheckpoint())
+        release.countDown()
+        assertTrue(completion.await(5, TimeUnit.SECONDS))
+        assertTrue(engine.state.value is ForwardRecordingState.Recording)
+        engine.stop()
+        assertEquals(2, writers.size)
+        assertArrayEquals(byteArrayOf(5, 6, 7, 8), writers[0].out.toByteArray())
+    }
+
+    /** Oracle: an unused B row is deleted on writer construction failure; A stays committed. */
+    @Test(timeout = 10_000)
+    fun checkpointWriterFailureDeletesOrphan() {
+        val sink = FakeStreamingSink()
+        val engine = createEngine(sink = sink, writerFactory = { target, cfg ->
+            if (sink.openCount == 2) throw IOException("encoder unavailable")
+            FakeStreamingAudioWriter(target, cfg)
+        })
+        engine.start("A.m4a")
+        val result = engine.checkpoint() as ForwardRecordingState.Error
+        assertEquals(ForwardRecordingFailureReason.SINK_OPEN_FAILED, result.reason)
+        assertEquals(1, sink.targets[0].finishCount)
+        assertFalse(sink.targets[0].deleted)
+        assertTrue("unused B row must be deleted", sink.targets[1].deleted)
+        assertTrue(sink.targets[1].closed)
+    }
+
+    /** Oracle: a late old-session finally cannot release/drop the new session's pending Save
+     * or clear the thread that stop() must join. */
+    @Test(timeout = 10_000)
+    fun oldDrainCannotClearNewCheckpoint() {
+        val oldClosing = CountDownLatch(1)
+        val releaseOld = CountDownLatch(1)
+        val newReading = CountDownLatch(1)
+        val releaseNew = CountDownLatch(1)
+        val oldThread = java.util.concurrent.atomic.AtomicReference<Thread>()
+        val sink = FakeStreamingSink()
+        val engine = createEngine(sink = sink,
+            readSinceProvider = { cursor, _ ->
+                if (sink.openCount == 1) {
+                    oldThread.set(Thread.currentThread()); null
+                } else {
+                    newReading.countDown()
+                    check(releaseNew.await(5, TimeUnit.SECONDS))
+                    ReadSinceResult.Data(byteArrayOf(), cursor, cursor, 0L)
+                }
+            },
+            writerFactory = { target, cfg ->
+                if (sink.openCount == 1) (target as FakeStreamingTarget).onClose = {
+                    oldClosing.countDown(); check(releaseOld.await(5, TimeUnit.SECONDS))
+                }
+                FakeStreamingAudioWriter(target, cfg)
+            })
+        engine.start("old.m4a")
+        assertTrue(oldClosing.await(5, TimeUnit.SECONDS))
+        engine.start("new.m4a")
+        assertTrue(newReading.await(5, TimeUnit.SECONDS))
+        val completion = requireNotNull(engine.requestCheckpoint())
+        releaseOld.countDown()
+        oldThread.get().join(5000)
+        assertFalse("old drain must have exited", oldThread.get().isAlive)
+        assertEquals("old finally must not release new checkpoint", 1L, completion.count)
+        releaseNew.countDown()
+        assertTrue("new checkpoint must still rotate", completion.await(5, TimeUnit.SECONDS))
+        assertEquals(3, sink.openCount)
+        assertTrue(engine.stop() is ForwardRecordingState.Success)
+        assertEquals(1, sink.targets[2].finishCount)
+    }
+
+    /** Oracle: stop winning after registration releases the Save waiter and finishes only A. */
+    @Test(timeout = 10_000)
+    fun registeredCheckpointLosesToStop() = registeredCheckpointLoses(false)
+
+    /** Oracle: cancel winning after registration releases the Save waiter without rotation. */
+    @Test(timeout = 10_000)
+    fun registeredCheckpointLosesToCancel() = registeredCheckpointLoses(true)
+
+    private fun registeredCheckpointLoses(cancel: Boolean) {
+        val reading = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val stopping = CountDownLatch(1)
+        val sink = FakeStreamingSink()
+        val engine = ForwardRecordingEngine(
+            readSinceProvider = { cursor, _ ->
+                reading.countDown(); check(release.await(5, TimeUnit.SECONDS))
+                ReadSinceResult.Data(byteArrayOf(), cursor, cursor, 0L)
+            }, writeCursorProvider = { 0L },
+            exportFloorAdvancerProvider = { null }, gapsProvider = { emptyList() }, sink = sink,
+            writerFactory = { target, cfg -> FakeStreamingAudioWriter(target, cfg) },
+            onStopRequested = { stopping.countDown() },
+        )
+        engine.start()
+        assertTrue(reading.await(5, TimeUnit.SECONDS))
+        val completion = requireNotNull(engine.requestCheckpoint())
+        assertTrue("repeated Save taps must coalesce", completion === engine.requestCheckpoint())
+        val stopper = Thread { if (cancel) engine.cancel() else engine.stop() }
+        stopper.start()
+        assertTrue(stopping.await(5, TimeUnit.SECONDS))
+        release.countDown()
+        assertTrue("registered Save waiter must be released", completion.await(5, TimeUnit.SECONDS))
+        stopper.join(5000)
+        assertFalse(stopper.isAlive)
+        assertEquals(1, sink.openCount)
+        assertEquals(if (cancel) 0 else 1, sink.targets.single().finishCount)
+        if (cancel) assertEquals(ForwardRecordingFailureReason.CANCELLED,
+            (engine.state.value as ForwardRecordingState.Error).reason)
+        else assertTrue(engine.state.value is ForwardRecordingState.Success)
+    }
+
+    /** Oracle: completed pre-boundary silence lands in A before post-pause drained PCM. */
+    @Test(timeout = 10_000)
+    fun checkpointGapBeforeBoundary() = checkpointGapPlacement(
+        PauseGap(1400L, 1600L), PauseGap(1400L, 1600L), 200L, 0L)
+
+    /** Oracle: post-boundary silence is written only in B, before B's PCM. */
+    @Test(timeout = 10_000)
+    fun checkpointGapAfterBoundary() = checkpointGapPlacement(
+        null, PauseGap(2200L, 2400L), 0L, 200L)
+
+    /** Oracle: an open pause's first 200ms land in A and its remaining 300ms in B;
+     * no pre-boundary silence is replayed when the completed gap is published. */
+    @Test(timeout = 10_000)
+    fun checkpointGapSpanningBoundary() = checkpointGapPlacement(
+        PauseGap(1800L, 2000L), PauseGap(1800L, 2300L), 200L, 300L)
+
+    private fun checkpointGapPlacement(atBoundary: PauseGap?, completed: PauseGap, a: Long, b: Long) {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val now = java.util.concurrent.atomic.AtomicLong(1000L)
+        val gaps = java.util.concurrent.atomic.AtomicReference<List<PauseGap>>(emptyList())
+        val sink = FakeStreamingSink()
+        val writers = mutableListOf<FakeStreamingAudioWriter>()
+        var first = true
+        val engine = ForwardRecordingEngine(
+            oldestCursorProvider = { 0L },
+            writeCursorProvider = { gaps.set(listOfNotNull(atBoundary)); 8L },
+            readSinceProvider = { cursor, maxBytes ->
+                if (first) {
+                    first = false; entered.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                    ReadSinceResult.Data(byteArrayOf(1, 2, 3, 4), 0L, 4L, 0L)
+                } else {
+                    val end = if (sink.openCount == 1) 8L else 12L
+                    val size = minOf(maxBytes.toLong(), end - cursor).toInt()
+                    ReadSinceResult.Data(ByteArray(size) { (cursor + it + 1).toByte() }, cursor, cursor + size, 0L)
+                }
+            },
+            exportFloorAdvancerProvider = { null }, sink = sink,
+            gapsProvider = { gaps.get().filter { it == completed } },
+            checkpointGapsProvider = { gaps.get() },
+            clock = now::get,
+            writerFactory = { target, cfg ->
+                if (sink.openCount == 2) gaps.set(listOf(completed))
+                FakeStreamingAudioWriter(target, cfg).also { writers.add(it) }
+            },
+        )
+        engine.start()
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        now.set(2000L)
+        val completion = requireNotNull(engine.requestCheckpoint())
+        release.countDown()
+        assertTrue(completion.await(5, TimeUnit.SECONDS))
+        assertTrue(engine.stop() is ForwardRecordingState.Success)
+        assertEquals("A silence must precede its checkpoint PCM", if (a == 0L) emptyList() else listOf(4 to a), writers[0].gapPositions)
+        assertEquals("B must contain only its own pause portion", if (b == 0L) emptyList() else listOf(0 to b), writers[1].gapPositions)
+        assertEquals("total silence must be conserved", a + b, writers.sumOf { it.gapsInjected.sum() })
+        assertArrayEquals(ByteArray(8) { (it + 1).toByte() }, writers[0].out.toByteArray())
+        assertArrayEquals(byteArrayOf(9, 10, 11, 12), writers[1].out.toByteArray())
     }
 
     /** Oracle: an idle checkpoint opens no target and preserves the exact state. */
