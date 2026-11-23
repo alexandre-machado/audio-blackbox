@@ -427,4 +427,6 @@
     <string name="gallery_details_storage">Storage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Recording saved</string>
+    <string name="dashboard_panel_save_caption_live">Saving to live file</string>
+    <string name="dashboard_save_button_cd_live">Save is not needed during live: the live file is saved as it records</string>
 </resources>

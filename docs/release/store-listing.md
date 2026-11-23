@@ -16,7 +16,7 @@ The listing text lives in `distribution/metadata/android/{en-US,pt-BR}/` and is 
 
 Rules the copy must keep (issue #419):
 
-- **Truthful to the shipped app.** The buffer is at least 5 minutes, in 5-minute steps, with no fixed maximum: the ceiling is computed per device and per quality preset (`DeviceMemoryBudget`, #298). Save always exports the whole buffer (#121), and the next save starts where the previous one ended (#410). Export is AAC (`.m4a`). The merged manifest has no `INTERNET` permission (`ManifestPermissionSecurityTest`). Never quote a fixed set of windows or a fixed maximum.
+- **Truthful to the shipped app.** The buffer is at least 5 minutes, in 5-minute steps, with no fixed maximum: the ceiling is computed per device and per quality preset (`DeviceMemoryBudget`, #298). Save always exports the whole buffer (#121), and the next save starts where the previous one ended (#410). Export is AAC: `.m4a` for Save, a single `.aac` (ADTS) file for Live (#451). The merged manifest has no `INTERNET` permission (`ManifestPermissionSecurityTest`). Never quote a fixed set of windows or a fixed maximum.
 - **Use cases, in this order:** musicians and songwriters, ideas and thinking out loud, meetings and agreements the user is part of, family moments.
 - **Never** use "secret", "stealth", "hidden", "spy" or "record without them knowing"; never suggest recording conversations the user is not part of; never claim "court-admissible", "legal evidence" or "legal everywhere".
 - **Do** say "your own conversations and ideas", mention the visible notification while recording, say the audio stays on the phone, and tell users to check their local recording laws. Keep the consent disclaimer in both languages.

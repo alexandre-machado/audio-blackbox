@@ -385,4 +385,6 @@
     <string name="gallery_details_storage">Armazenamento</string>
     <string name="gallery_details_storage_value">Gravações / Blackbox</string>
     <string name="gallery_newly_saved">Gravação salva</string>
+    <string name="dashboard_panel_save_caption_live">Gravando no arquivo do live</string>
+    <string name="dashboard_save_button_cd_live">Não é necessário salvar durante o live: o arquivo do live é salvo enquanto grava</string>
 </resources>

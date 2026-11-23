@@ -175,7 +175,7 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
                     MediaScannerConnection.scanFile(
                         context,
                         arrayOf(dataPath),
-                        arrayOf(StreamingAacWriter.MIME_TYPE_M4A),
+                        arrayOf(mimeType),
                     ) { _, _ -> latch.countDown() }
                     if (!latch.await(REFINALIZE_SCAN_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                         // The scan may still land after this returns -- the timeout bounds how long

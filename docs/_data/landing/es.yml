@@ -40,7 +40,7 @@ feature_interrupt_desc: Cuando otra app en primer plano ocupa el micrófono, And
 feature_battery: Protección ante la optimización de batería
 feature_battery_desc: Un servicio en primer plano con notificación activa y una guía para excluirlo de la optimización de batería del fabricante mantienen la grabación sin interrupciones incluso con la pantalla apagada.
 feature_player: Reproductor de audio integrado
-feature_player_desc: Escucha, recorre, elimina y comparte tus grabaciones <code>.m4a</code> (AAC) mediante el panel de compartir de Android. Un widget en la pantalla de inicio permite iniciar o detener la grabación con un toque.
+feature_player_desc: Escucha, recorre, elimina y comparte tus grabaciones <code>.m4a</code> / <code>.aac</code> (AAC) mediante el panel de compartir de Android. Un widget en la pantalla de inicio permite iniciar o detener la grabación con un toque.
 design_tag: Sistema de diseño de la aviación de EE. UU.
 design_title: Prototipo vivo de diseño de aviónica
 design_desc: 'Prueba el simulador interactivo de cabina en el navegador: medidor VU en tiempo real, indicadores de estado Korry, etiqueta de seguridad "REMOVE BEFORE FLIGHT" y búfer de memoria con formato de cinta de vuelo.'

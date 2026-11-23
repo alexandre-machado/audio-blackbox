@@ -365,4 +365,6 @@
     <string name="gallery_details_storage">Almacenamiento</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Grabación guardada</string>
+    <string name="dashboard_panel_save_caption_live">Guardando en el archivo en directo</string>
+    <string name="dashboard_save_button_cd_live">No hace falta guardar durante la grabación en directo: el archivo se guarda mientras se graba</string>
 </resources>

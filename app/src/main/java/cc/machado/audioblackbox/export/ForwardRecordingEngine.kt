@@ -60,7 +60,7 @@ enum class ForwardRecordingFailureReason {
  * and early-committed MediaStore sink (issue #54).
  *
  * Runs a dedicated writer/drain thread that continuously pulls newly captured PCM from
- * [RingBuffer.readSince] and feeds [StreamingAacWriter], while preserving the single-writer and
+ * [RingBuffer.readSince] and feeds [StreamingAdtsWriter], while preserving the single-writer and
  * zero-disk-on-capture invariants of [AudioCaptureEngine].
  *
  * ## Invariants & Threading
@@ -89,7 +89,7 @@ class ForwardRecordingEngine(
     private val gapsProvider: () -> List<PauseGap>,
     private val sink: StreamingExportSink,
     private val writerFactory: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter = { target, cfg ->
-        StreamingAacWriter(target, cfg)
+        StreamingAdtsWriter(target, cfg)
     },
     private val clock: () -> Long = System::currentTimeMillis,
     private val drainChunkSizeBytes: Int = DEFAULT_DRAIN_CHUNK_SIZE_BYTES,
@@ -126,7 +126,7 @@ class ForwardRecordingEngine(
         sink: StreamingExportSink,
         config: AudioConfig = AudioConfig(),
         writerFactory: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter = { target, cfg ->
-            StreamingAacWriter(target, cfg)
+            StreamingAdtsWriter(target, cfg)
         },
         clock: () -> Long = System::currentTimeMillis,
     ) : this(
@@ -206,7 +206,7 @@ class ForwardRecordingEngine(
 
             val displayName = customDisplayName ?: generateDisplayName(Date(clock()))
             val target = try {
-                sink.openStreaming(displayName, StreamingAacWriter.MIME_TYPE_M4A)
+                sink.openStreaming(displayName, StreamingAdtsWriter.MIME_TYPE)
             } catch (e: Exception) {
                 val err = ForwardRecordingState.Error(
                     ForwardRecordingFailureReason.SINK_OPEN_FAILED,
@@ -255,7 +255,7 @@ class ForwardRecordingEngine(
     }
 
     /**
-     * Stops the active forward recording session cleanly, flushing and finalizing the .m4a file.
+     * Stops the active forward recording session cleanly, flushing and finalizing the .aac file.
      * Blocks until the drain thread finishes finalization.
      */
     fun stop(): ForwardRecordingState {
@@ -660,40 +660,6 @@ class ForwardRecordingEngine(
             reconciler.flush()?.let { emit(listOf(it)) }
 
             writer.finish()
-            if (writer is StreamingAacWriter && writer.recoveredFromMuxerAlreadyStopped) {
-                // The file was re-read and verified complete and decodable (see
-                // MuxerStopFailurePolicy) -- state stays Success below -- but this is still worth
-                // an audit trail entry rather than disappearing silently (issue #347, same
-                // evidentiary standard already applied to TAIL_TRUNCATED above).
-                logExportError(
-                    errorLogFile,
-                    clock,
-                    "ForwardRecordingEngine",
-                    "MUXER_STOP_RECOVERED",
-                    "MediaMuxer.stop() reported an error, but the file was re-read and verified " +
-                        "complete and decodable, so it is not lost. ${writer.diagnostics()}",
-                    null,
-                    // Issue #346: same reasoning as TAIL_TRUNCATED above -- a recovered-but-
-                    // noteworthy event on a session that still succeeded, not a failure.
-                    ErrorLogSeverity.AUDIT,
-                )
-            }
-            if (writer is StreamingAacWriter && writer.timestampCorrections > 0) {
-                // Issue #378: the encoder handed out timestamps the muxer would have rejected, and
-                // the writer rewrote them. The recording is fine. This is defence in depth: the
-                // S25's actual #378 failure was the stale MediaStore descriptor (see
-                // MediaStoreSink.openStreaming), and its encoder needed no corrections.
-                logExportError(
-                    errorLogFile,
-                    clock,
-                    "ForwardRecordingEngine",
-                    "MUXER_TIMESTAMP_CORRECTED",
-                    "Rewrote ${writer.timestampCorrections} encoder timestamp(s) that did not advance; " +
-                        "the file is complete. ${writer.diagnostics()}",
-                    null,
-                    ErrorLogSeverity.AUDIT,
-                )
-            }
             target.finish()
 
             // Issue #410: the file is finished, so the next save starts after the last byte it
@@ -753,7 +719,7 @@ class ForwardRecordingEngine(
          * recorded so a future interval change is a deliberate tradeoff instead of a silent one. */
         private const val REFINALIZE_INTERVAL_NANOS = 5_000_000_000L // 5 seconds
 
-        fun generateDisplayName(date: Date, extension: String = StreamingAacWriter.FILE_EXTENSION): String {
+        fun generateDisplayName(date: Date, extension: String = StreamingAdtsWriter.FILE_EXTENSION): String {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
             return "${APP_FILE_PREFIX}${dateFormat.format(date)}_forward.$extension"
         }

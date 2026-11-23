@@ -174,24 +174,32 @@ object RecorderNotification {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
-            .addAction(
-                0,
-                saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes),
-                saveIntent,
-            )
-
         val forwardAction = forwardActionFor(forwardRecordingState)
-        builder.addAction(
-            0,
-            context.getString(forwardAction.labelRes),
-            if (forwardAction.endsRecording) stopForwardIntent else startForwardIntent,
-        )
-
-        builder.addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
+        for (action in actionsFor(forwardRecordingState)) {
+            when (action) {
+                Action.SAVE -> builder.addAction(0,
+                    saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes), saveIntent)
+                Action.LIVE, Action.SAVE_AND_END -> builder.addAction(0,
+                    context.getString(forwardAction.labelRes),
+                    if (forwardAction.endsRecording) stopForwardIntent else startForwardIntent)
+                Action.STOP -> builder.addAction(0,
+                    context.getString(R.string.recorder_notification_action_stop), stopIntent)
+            }
+        }
         return builder.build()
     }
 
     internal data class ForwardAction(val labelRes: Int, val endsRecording: Boolean)
+
+    internal enum class Action { SAVE, LIVE, SAVE_AND_END, STOP }
+
+    /** Exact ordered action set consumed by build, independent of Android notification classes. */
+    internal fun actionsFor(state: ForwardRecordingState): List<Action> =
+        if (state is ForwardRecordingState.Recording) {
+            listOf(Action.SAVE_AND_END, Action.STOP)
+        } else {
+            listOf(Action.SAVE, Action.LIVE, Action.STOP)
+        }
 
     /** Pure action selection used by [build]; keeps the title and intent on the same state branch. */
     internal fun forwardActionFor(state: ForwardRecordingState): ForwardAction {

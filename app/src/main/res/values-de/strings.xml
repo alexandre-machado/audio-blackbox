@@ -365,4 +365,6 @@
     <string name="gallery_details_storage">Speicherort</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Aufnahme gespeichert</string>
+    <string name="dashboard_panel_save_caption_live">Speichert in Live-Datei</string>
+    <string name="dashboard_save_button_cd_live">Speichern ist während der Live-Aufnahme nicht nötig: Die Live-Datei wird während der Aufnahme gespeichert</string>
 </resources>

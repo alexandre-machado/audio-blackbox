@@ -289,7 +289,7 @@ class GalleryViewModel(
         // ExportEngine.filenameFor's secondsLabel doc) -- this regex only anchors on the suffix
         // shape to find the timestamp group, so both forms must keep matching or every sub-minute
         // recording would silently fall back to DATE_ADDED sorting instead of its real capture time.
-        private val FILENAME_REGEX = Regex("""^blackbox_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_\d+(?:min|s)\.\w+$""")
+        private val FILENAME_REGEX = Regex("""^blackbox_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?:\d+(?:min|s)|forward)\.\w+$""")
 
         /** Pure oracle for "does this filename carry a capture timestamp, and if so, what is it"
          * -- `null` on any row whose name doesn't match [FILENAME_REGEX] or whose captured

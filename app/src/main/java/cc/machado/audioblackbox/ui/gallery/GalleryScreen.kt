@@ -594,6 +594,8 @@ private fun RecordingCard(
 private fun RecordingSpecificationsCard(recording: RecordingItem) {
     val formatLabel = if (recording.mimeType.contains("wav", ignoreCase = true) || recording.displayName.endsWith(".wav", ignoreCase = true)) {
         "WAV (.wav)"
+    } else if (recording.mimeType == "audio/aac" || recording.displayName.endsWith(".aac", ignoreCase = true)) {
+        "AAC (.aac)"
     } else {
         "AAC (.m4a)"
     }
