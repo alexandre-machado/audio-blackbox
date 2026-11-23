@@ -78,26 +78,6 @@ jobs:
       - name: Guard against unrendered Liquid
         run: bash scripts/ci/check-site-rendered.sh _site
 
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '24'
-
-      - name: Validate Cloudflare site without credentials
-        env:
-          CLOUDFLARE_API_TOKEN: ''
-          CLOUDFLARE_ACCOUNT_ID: ''
-          CLOUDFLARE_API_KEY: ''
-          CLOUDFLARE_EMAIL: ''
-          WRANGLER_SEND_METRICS: 'false'
-          # Isolate any OAuth login persisted on the self-hosted runner.
-          XDG_CONFIG_HOME: ${{ runner.temp }}/cloudflare-validation-config
-        run: |
-          set -euo pipefail
-          bash scripts/ci/stage-cloudflare-site.sh _site
-          node --test cloudflare/worker.test.mjs
-          npx --yes wrangler@4.160.0 deploy --dry-run --config cloudflare/wrangler.jsonc --outdir "${RUNNER_TEMP}/cloudflare-dry-run"
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
@@ -162,62 +142,143 @@ jobs:
           esac
           exit 0
 
-  deploy-cloudflare:
+  validate-cloudflare:
     needs: build
     runs-on: self-hosted
     if: github.repository == 'alexandre-machado/audio-blackbox'
     permissions:
       contents: read
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      WRANGLER_SEND_METRICS: 'false'
     steps:
-      - name: Check Cloudflare settings
-        id: settings
+      - name: Allocate fresh job directories
+        id: dirs
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::notice::Cloudflare credentials missing; skipping Cloudflare deploy. GitHub Pages stays active."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          echo "checkout=$(mktemp -d "${GITHUB_WORKSPACE}/cf-checkout.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "artifact=$(mktemp -d "${RUNNER_TEMP}/cf-artifact.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "tools=$(mktemp -d "${RUNNER_TEMP}/cf-node.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "work=$(mktemp -d "${RUNNER_TEMP}/cf-work.XXXXXX")" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout
-        if: steps.settings.outputs.ready == 'true'
+      - name: Fresh checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          path: ${{ steps.dirs.outputs.checkout }}
 
-      - name: Download Pages artifact
-        if: steps.settings.outputs.ready == 'true'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: github-pages
-          path: ${{ runner.temp }}/cloudflare-pages-artifact
-
-      # The staging guard uses Ruby's stdlib; no gem install or Jekyll rebuild here.
-      - name: Set up Ruby for artifact validation
-        if: steps.settings.outputs.ready == 'true'
-        run: |
-          set -euo pipefail
-          bin_dir="$(bash scripts/ci/setup-jekyll-ruby.sh "${RUNNER_TOOL_CACHE}/jekyll-ruby" | tail -n 1)"
-          echo "$bin_dir" >> "$GITHUB_PATH"
-
-      - name: Extract and stage Pages artifact
-        if: steps.settings.outputs.ready == 'true'
-        run: |
-          set -euo pipefail
-          site_dir="$(mktemp -d "${RUNNER_TEMP}/cloudflare-site.XXXXXX")"
-          tar -xf "${RUNNER_TEMP}/cloudflare-pages-artifact/artifact.tar" -C "$site_dir"
-          bash scripts/ci/stage-cloudflare-site.sh "$site_dir"
-
-      - name: Set up Node
-        if: steps.settings.outputs.ready == 'true'
+      - name: Set up fresh Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        env:
+          # Do not execute a Node binary cached by the gem-running build job.
+          RUNNER_TOOL_CACHE: ${{ steps.dirs.outputs.tools }}
         with:
           node-version: '24'
 
+      - name: Download Pages artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: ${{ steps.dirs.outputs.artifact }}
+
+      # The Liquid guard ran in build before upload. Artifact trust is identical to
+      # the Pages deploy: no cached Ruby or gem-running build scripts execute here.
+      - name: Stage artifact and install locked Wrangler without lifecycle scripts
+        env:
+          SOURCE_DIR: ${{ steps.dirs.outputs.checkout }}
+          ARTIFACT_DIR: ${{ steps.dirs.outputs.artifact }}
+          WORK_DIR: ${{ steps.dirs.outputs.work }}
+        run: |
+          set -euo pipefail
+          cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
+          mkdir -p "$WORK_DIR/.staged/audio-blackbox"
+          tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
+          test -f "$WORK_DIR/.staged/audio-blackbox/404.html"
+          export NPM_CONFIG_CACHE="$(mktemp -d "${RUNNER_TEMP}/cf-npm.XXXXXX")"
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-config.XXXXXX")"
+          npm ci --ignore-scripts --prefix "$WORK_DIR"
+
+      - name: Test and dry-run without credentials
+        working-directory: ${{ steps.dirs.outputs.work }}
+        env:
+          CLOUDFLARE_API_KEY: ''
+          CLOUDFLARE_EMAIL: ''
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-dry-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-dry-config.XXXXXX")"
+          node --test worker.test.mjs
+          ./node_modules/.bin/wrangler deploy --dry-run --config wrangler.jsonc --outdir "$RUNNER_TEMP/cloudflare-dry-run"
+
+  deploy-cloudflare:
+    needs: validate-cloudflare
+    runs-on: self-hosted
+    if: github.repository == 'alexandre-machado/audio-blackbox' && github.ref == 'refs/heads/main'
+    environment: cloudflare-hotsite
+    permissions:
+      contents: read
+    steps:
+      - name: Allocate fresh job directories
+        id: dirs
+        run: |
+          set -euo pipefail
+          echo "checkout=$(mktemp -d "${GITHUB_WORKSPACE}/cf-checkout.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "artifact=$(mktemp -d "${RUNNER_TEMP}/cf-artifact.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "tools=$(mktemp -d "${RUNNER_TEMP}/cf-node.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "work=$(mktemp -d "${RUNNER_TEMP}/cf-work.XXXXXX")" >> "$GITHUB_OUTPUT"
+
+      - name: Fresh checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          path: ${{ steps.dirs.outputs.checkout }}
+
+      - name: Set up fresh Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        env:
+          # Do not execute a Node binary cached by the gem-running build job.
+          RUNNER_TOOL_CACHE: ${{ steps.dirs.outputs.tools }}
+        with:
+          node-version: '24'
+
+      - name: Download Pages artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: ${{ steps.dirs.outputs.artifact }}
+
+      # The Liquid guard ran in build before upload. Artifact trust is identical to
+      # the Pages deploy: no cached Ruby or gem-running build scripts execute here.
+      - name: Stage artifact and install locked Wrangler without lifecycle scripts
+        env:
+          SOURCE_DIR: ${{ steps.dirs.outputs.checkout }}
+          ARTIFACT_DIR: ${{ steps.dirs.outputs.artifact }}
+          WORK_DIR: ${{ steps.dirs.outputs.work }}
+        run: |
+          set -euo pipefail
+          cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
+          mkdir -p "$WORK_DIR/.staged/audio-blackbox"
+          tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
+          test -f "$WORK_DIR/.staged/audio-blackbox/404.html"
+          export NPM_CONFIG_CACHE="$(mktemp -d "${RUNNER_TEMP}/cf-npm.XXXXXX")"
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-config.XXXXXX")"
+          npm ci --ignore-scripts --prefix "$WORK_DIR"
+
       - name: Deploy Cloudflare Worker and assets
-        if: steps.settings.outputs.ready == 'true'
-        run: npx --yes wrangler@4.160.0 deploy --config cloudflare/wrangler.jsonc
+        working-directory: ${{ steps.dirs.outputs.work }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_KEY: ''
+          CLOUDFLARE_EMAIL: ''
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare credentials missing; skipping Cloudflare deploy. GitHub Pages stays active."
+            exit 0
+          fi
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-deploy-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-deploy-config.XXXXXX")"
+          ./node_modules/.bin/wrangler deploy --config wrangler.jsonc

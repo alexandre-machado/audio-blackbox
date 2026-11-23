@@ -29,13 +29,23 @@ and [Worker route authorization](https://developers.cloudflare.com/workers/autho
 These were checked for the Wrangler 4 deployment on 2026-11-23. Token authorization
 and resource creation still require the owner's first authenticated deployment.
 
+Set an explicit token expiry and record a rotation date before it expires. Workers
+Scripts Edit remains account-wide and Routes Edit zone-wide. Optionally restrict
+client IPs only if the runner has a stable, known egress IP; a changing egress
+would otherwise break deployment.
+
 ## 2. Configure GitHub Actions
 
-In `alexandre-machado/audio-blackbox`, open **Settings > Secrets and variables >
-Actions**. Add repository secret `CLOUDFLARE_API_TOKEN` and repository variable
-`CLOUDFLARE_ACCOUNT_ID` (the account ID, not the zone ID).
-If either is empty, `deploy-cloudflare` emits a notice and skips all remaining
-steps successfully. The build validation and GitHub Pages deployment still run.
+In `alexandre-machado/audio-blackbox`, open **Settings > Environments** and create
+**cloudflare-hotsite**. Restrict its deployment branches to **main only** before
+adding credentials. Add `CLOUDFLARE_API_TOKEN` as an **environment secret** and
+`CLOUDFLARE_ACCOUNT_ID` as an **environment variable** (account ID, not zone ID).
+Do not store the token as a repository secret. The workflow reads
+`secrets.CLOUDFLARE_API_TOKEN` and `vars.CLOUDFLARE_ACCOUNT_ID` from this environment.
+The deploy job also checks repository identity and `refs/heads/main`.
+If either setting is empty, the final deploy step emits a notice and skips upload
+successfully; credential-free preparation still runs. Only the single Wrangler
+deploy step receives the token.
 
 ## 3. First deployment, before DNS cutover
 
@@ -44,12 +54,48 @@ a change under `docs/**` to main. Cloudflare configuration and staging-script
 changes also trigger this workflow. Do not dispatch an older branch after cutover.
 
 The build renders Jekyll in production mode, validates SEO/analytics and Liquid,
-stages `_site` under `cloudflare/.staged/audio-blackbox/`, runs the Worker tests and
-a credential-free Wrangler dry-run, then uploads the usual `github-pages` artifact.
-Both deploy jobs consume that build. Cloudflare downloads and extracts its
-`artifact.tar`, revalidates it, and deploys with pinned `wrangler@4.160.0`.
-The workflow's existing `pages` concurrency group serializes deployments without
-cancelling one in progress. There is only one IndexNow submission, in Pages.
+and uploads the `github-pages` artifact. The job graph is `build → deploy` (Pages)
+and `build → validate-cloudflare → deploy-cloudflare`. Cloudflare/npm failures
+cannot block Pages. Validation downloads the artifact, stages it, runs Worker
+tests and a credential-free dry-run. Deployment consumes the same artifact;
+its trust is identical to Pages, so it does not rerun Ruby or the Liquid guard.
+Both Cloudflare jobs use fresh checkouts, pinned setup-node with a fresh tool
+cache, fresh npm caches and temporary copies of `cloudflare/`. `npm ci
+--ignore-scripts` installs Wrangler 4.160.0 and its full locked dependency tree;
+they invoke the local binary. Dry-run isolates both HOME and XDG_CONFIG_HOME.
+The existing `pages` concurrency group serializes deployments. There is only one
+IndexNow submission, in Pages.
+
+### Pre-cutover local check (no credentials)
+
+Build Jekyll and run `bash scripts/ci/check-site-rendered.sh _site` first, then:
+
+```bash
+bash scripts/ci/stage-cloudflare-site.sh _site
+cf_work="$(mktemp -d)"
+cp -a cloudflare/. "$cf_work/"
+export HOME="$(mktemp -d)" XDG_CONFIG_HOME="$(mktemp -d)"
+export NPM_CONFIG_CACHE="$(mktemp -d)" WRANGLER_SEND_METRICS=false
+unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
+npm ci --ignore-scripts --prefix "$cf_work"
+"$cf_work/node_modules/.bin/wrangler" dev --config "$cf_work/wrangler.jsonc" --local --local-protocol https
+```
+
+In another terminal (local self-signed TLS only):
+
+```bash
+curl -ksSI https://localhost:8787/audio-blackbox/release/privacy-policy
+curl -ksSI https://localhost:8787/audio-blackbox/assets/icon.png
+curl -ksSI https://localhost:8787/audio-blackbox/llms.txt
+curl -ksSI https://localhost:8787/audio-blackbox/pt-br
+curl -ksS -D - https://localhost:8787/audio-blackbox/does-not-exist
+```
+
+Expect 200 for privacy/assets/text, a 301 absolute HTTPS Location ending in
+`/pt-br/`, and 404 with the rendered custom `<h1>404</h1>` body and `noindex`.
+All responses must carry the four security headers listed in section 5, without
+HSTS. Check image TTL and text Content-Type too. This exercises the real local
+asset binding, including custom 404 handling, before production traffic moves.
 
 Deployment creates/updates Worker **audio-blackbox-site**, its static assets, and
 zone route **alexandre.machado.cc/audio-blackbox*** in **machado.cc**.
@@ -128,12 +174,14 @@ Expect `cf-ray` through the proxy; 200 for canonical pages, the sitemap and text
 files; 301 with absolute HTTPS Location for HTTP and noncanonical slash forms;
 404 for the missing page. The privacy policy must be 200 without following a
 redirect. Feature `.html` URLs must also be 200 without redirecting.
-Asset responses must include HSTS `max-age=31536000` **without includeSubDomains**,
-`nosniff`, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and CSP
+Every Worker response (assets, redirects and 404s) must include
+`X-Content-Type-Options: nosniff`, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY` and CSP
 `frame-ancestors 'none'`. There is no script-src restriction: GA4, Clarity and
 optional Cloudflare Web Analytics remain usable. Images cache for one day and
-fonts for seven days; text files use `text/plain`. Worker-generated redirects
-do not inherit `_headers`; inspect security headers on the destination 200.
+fonts for seven days; text files use `text/plain`. These rules live directly in
+`worker.js`; there is no `_headers` file. HSTS is deliberately absent: it applies
+host-wide, including `/bootswatch`, `/drops` and `/eventos`. The owner may enable
+HSTS at the zone later after considering those sites and rollback.
 The root page should retain the user site's content and GitHub origin headers
 (such as `x-github-request-id`); `server: cloudflare`/`cf-ray` alone cannot prove
 which origin supplied a page. Compare with the direct-origin response.
@@ -146,8 +194,8 @@ rollback until their prior TTL expires (proxied Auto TTL is normally 300 seconds
 some clients cache longer). Optionally remove the Worker route to return traffic
 to GitHub even for clients still reaching the proxy. If removing it, disable the
 Cloudflare deploy job or clear its token first so the next run cannot recreate it.
-HSTS persists in browsers after rollback, so GitHub's HTTPS certificate must be
-valid at the moment you roll back. Under **Full**, a lapsed GitHub certificate goes unnoticed while proxied. Before rolling back, check its expiry in the `alexandre-machado.github.io` Pages settings. If it has lapsed, expect HTTPS errors on the GitHub-served paths until GitHub reissues it, which it starts doing once the record is DNS-only. Do not delete the CNAME or change nameservers.
+GitHub's HTTPS certificate must be valid at rollback. If the owner later enables
+zone HSTS, that browser policy persists after rollback. Under **Full**, a lapsed GitHub certificate goes unnoticed while proxied. Before rolling back, check its expiry in the `alexandre-machado.github.io` Pages settings. If it has lapsed, expect HTTPS errors on the GitHub-served paths until GitHub reissues it, which it starts doing once the record is DNS-only. Do not delete the CNAME or change nameservers.
 
 ## 7. Keep Pages during observation
 
@@ -174,4 +222,6 @@ needed. There is no robots file in this repository. The live user-site
 sitemap and `/audio-blackbox/sitemap.xml` (verified 2026-11-23); it stays outside
 the route. The locale, feature and privacy URLs above all returned GitHub 200s
 before cutover. `docs/404.html` uses the existing default layout with a neutral
-404 label and a link back to the project.
+404 label and a link back to the project, `noindex`, and no self-canonical or
+`og:url`. Other pages retain their canonical output. This operator runbook stays
+published, consistent with the other development docs.
