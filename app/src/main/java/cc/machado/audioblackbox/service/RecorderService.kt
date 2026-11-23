@@ -503,6 +503,10 @@ class RecorderService : Service() {
      * the requested capacity when less was actually buffered -- see [resolveSavedMinutes]'s doc
      * for why the label is computed from what's actually buffered at dispatch time instead. */
     private fun handleSave() {
+        if (saveUsesCheckpoint(forwardRecordingEngine.state.value)) {
+            serviceScope.launch(Dispatchers.Default) { forwardRecordingEngine.checkpoint() }
+            return
+        }
         val requestedMinutes = captureConfig.bufferDurationMinutes
         val bufferedMillis = engine.bufferedDurationMillis() ?: 0L
         val savedMinutes = resolveSavedMinutes(bufferedMillis, requestedMinutes)

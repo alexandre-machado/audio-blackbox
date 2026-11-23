@@ -113,7 +113,7 @@ sealed interface SaveUiState {
 /** Observable lifecycle of forward continuous recording on the dashboard. */
 sealed interface ForwardRecordingUiState {
     data object Idle : ForwardRecordingUiState
-    data class Recording(val displayName: String, val elapsedMillis: Long) : ForwardRecordingUiState
+    data class Recording(val displayName: String, val elapsedMillis: Long, val lastCheckpoint: Success? = null) : ForwardRecordingUiState
     data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingUiState
 
     /** See [SaveUiState.Error]'s doc for why [timestampMillis]/[capacityMillis]/[qualityPreset] are

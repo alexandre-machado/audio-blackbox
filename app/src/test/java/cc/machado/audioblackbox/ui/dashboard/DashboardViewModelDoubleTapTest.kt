@@ -4,6 +4,8 @@ import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
 import cc.machado.audioblackbox.export.ForwardRecordingState
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -56,6 +58,43 @@ class DashboardViewModelDoubleTapTest {
         forwardRecordingState = forwardRecordingState,
         onStartForwardRecording = onStartForwardRecording,
     )
+
+
+    /** Oracle: a live checkpoint remains callable after the export floor empties the buffer,
+     * deduplicates taps, releases on checkpoint completion, and dismisses only its notice. */
+    @Test
+    fun liveCheckpointReleasesSaveGuardAndKeepsRecordingWhenDismissed() = runTest {
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording("one", 3200))
+        var calls = 0
+        val viewModel = DashboardViewModel(
+            captureState = MutableStateFlow(CaptureState.Recording),
+            bufferedDurationMillisProvider = { 0L },
+            forwardRecordingState = forward,
+            exportState = MutableStateFlow(ExportState.Idle),
+            onSaveIntent = { calls++ },
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        runCurrent()
+        viewModel.requestSave()
+        viewModel.requestSave()
+        assertEquals(1, calls)
+        forward.value = ForwardRecordingState.Recording("one", 6400)
+        runCurrent()
+        viewModel.requestSave()
+        assertEquals("ordinary drain updates must not release checkpoint guard", 1, calls)
+        val saved = ForwardRecordingState.Success("one", 6400)
+        forward.value = ForwardRecordingState.Recording("two", 0, saved)
+        runCurrent()
+        val visible = viewModel.uiState.value.forwardRecordingState as ForwardRecordingUiState.Recording
+        assertEquals("one", visible.lastCheckpoint?.displayName)
+        viewModel.dismissForwardRecordingNotice()
+        assertEquals(forward.value, ForwardRecordingState.Recording("two", 0, saved))
+        runCurrent()
+        val dismissed = viewModel.uiState.value.forwardRecordingState as ForwardRecordingUiState.Recording
+        assertEquals(null, dismissed.lastCheckpoint)
+        viewModel.requestSave()
+        assertEquals("checkpoint completion must release the save guard", 2, calls)
+    }
 
     @Test
     fun `two rapid requestSave calls before the export round trip starts dispatch exactly one save intent`() = runTest {

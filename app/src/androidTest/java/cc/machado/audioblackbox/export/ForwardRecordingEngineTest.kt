@@ -59,6 +59,57 @@ class ForwardRecordingEngineTest {
         insertedUris.clear()
     }
 
+
+    /** Oracle: both rotation files are committed MediaStore rows with real, decodable audio,
+     * matching SIZE/DURATION metadata. JVM target mocks cannot prove container finalization. */
+    @Test
+    fun checkpointCommitsTwoPlayableMediaStoreFiles() {
+        val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1)
+        val ring = RingBuffer(capacityBytes = 160_000, initialConfig = config)
+        val tone = ToneGenerator.tone(1000.0, 16_000, 1500L, 1)
+        val trackingSink = object : StreamingExportSink {
+            override fun openStreaming(displayName: String, mimeType: String): StreamingExportTarget =
+                sink.openStreaming(displayName, mimeType).also { insertedUris.add(it.uri) }
+        }
+        val engine = ForwardRecordingEngine(
+            config = config,
+            readSinceProvider = ring::readSince,
+            writeCursorProvider = ring::writeCursor,
+            oldestCursorProvider = ring::oldestCursor,
+            exportFloorAdvancerProvider = { { ring.advanceExportFloor(it); Unit } },
+            gapsProvider = { emptyList() },
+            sink = trackingSink,
+        )
+        ring.write(tone)
+        engine.start("blackbox_${runId}_checkpoint.m4a")
+        try {
+            assertTrue(engine.checkpoint() is ForwardRecordingState.Recording)
+            ring.write(tone)
+            assertTrue(engine.stop() is ForwardRecordingState.Success)
+            assertEquals(2, insertedUris.size)
+            for (uri in insertedUris) {
+                val row = sink.queryRecordings().single { it.uri == uri }
+                val realSize = resolver.openFileDescriptor(uri, "r")!!.use { it.statSize }
+                assertEquals(realSize, row.sizeBytes)
+                assertTrue(row.durationMillis in (1500L - DURATION_TOLERANCE_MILLIS)..(1500L + DURATION_TOLERANCE_MILLIS))
+                val tempFile = File.createTempFile("checkpoint_", ".m4a", context.cacheDir)
+                try {
+                    resolver.openInputStream(uri)!!.use { input ->
+                        FileOutputStream(tempFile).use { input.copyTo(it) }
+                    }
+                    val decoded = AacDecodeSupport.decode(tempFile)
+                    assertEquals(16_000, decoded.sampleRateHz)
+                    assertTrue("each committed file must decode real audio", decoded.pcm.isNotEmpty())
+                    assertTrue(GoertzelDetector.energyAt(decoded.pcm, 1000.0, 16_000, 1) > 200.0)
+                } finally {
+                    tempFile.delete()
+                }
+            }
+        } finally {
+            engine.stop()
+        }
+    }
+
     @Test
     fun forwardRecording_encodesValidDecodableAudioWithGoertzelDetection() {
         val sampleRateHz = 16_000

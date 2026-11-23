@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /** Observable lifecycle of forward recording (issue #54). */
 sealed interface ForwardRecordingState {
     data object Idle : ForwardRecordingState
-    data class Recording(val displayName: String, val bytesWritten: Long) : ForwardRecordingState
+    data class Recording(val displayName: String, val bytesWritten: Long, val lastCheckpoint: Success? = null) : ForwardRecordingState
     data class Success(val displayName: String, val bytesWritten: Long) : ForwardRecordingState
     data class Error(val reason: ForwardRecordingFailureReason, val message: String, val exception: Throwable? = null) : ForwardRecordingState
 }
@@ -159,6 +159,7 @@ class ForwardRecordingEngine(
     private var activeDrainThread: Thread? = null
     private var activeTarget: StreamingExportTarget? = null
     private var activeWriter: StreamingAudioWriter? = null
+    private var checkpointRequested: CountDownLatch? = null
     private val stopRequested = AtomicBoolean(false)
     private val cancelRequested = AtomicBoolean(false)
     private var wakeUpLatch = CountDownLatch(0)
@@ -270,6 +271,22 @@ class ForwardRecordingEngine(
         }
         threadToJoin?.join()
         return _state.value
+    }
+
+    /**
+     * Rotates on the drain thread. Concurrent requests coalesce; stop wins if observed before
+     * rotation begins. Never wait while holding lock: the drain owns all writer operations.
+     */
+    fun checkpoint(): ForwardRecordingState {
+        val completion = synchronized(lock) {
+            if (stateValue !is ForwardRecordingState.Recording || stopRequested.get()) return stateValue
+            checkpointRequested ?: CountDownLatch(1).also {
+                checkpointRequested = it
+                wakeUpLatch.countDown()
+            }
+        }
+        completion.await()
+        return stateValue
     }
 
     /**
@@ -433,6 +450,11 @@ class ForwardRecordingEngine(
         sessionConfig: AudioConfig,
         floorAdvancer: ((Long) -> Unit)?,
     ) {
+        var displayName = displayName
+        var target = target
+        var writer = writer
+        var lastCheckpoint: ForwardRecordingState.Success? = null
+        val usedDisplayNames = mutableSetOf(displayName)
         var cursor = initialCursor
         var totalBytesDrained = 0L
         val handledGaps = initialGaps.toMutableSet()
@@ -481,8 +503,110 @@ class ForwardRecordingEngine(
             } catch (_: Throwable) {}
         }
 
+        fun finishFile() {
+            val finishingWriter = writer
+            finishingWriter.finish()
+            if (finishingWriter is StreamingAacWriter && finishingWriter.recoveredFromMuxerAlreadyStopped) {
+                // The file was re-read and verified complete and decodable (see
+                // MuxerStopFailurePolicy) -- state stays Success below -- but this is still worth
+                // an audit trail entry rather than disappearing silently (issue #347, same
+                // evidentiary standard already applied to TAIL_TRUNCATED above).
+                logExportError(
+                    errorLogFile,
+                    clock,
+                    "ForwardRecordingEngine",
+                    "MUXER_STOP_RECOVERED",
+                    "MediaMuxer.stop() reported an error, but the file was re-read and verified " +
+                        "complete and decodable, so it is not lost. ${finishingWriter.diagnostics()}",
+                    null,
+                    // Issue #346: same reasoning as TAIL_TRUNCATED above -- a recovered-but-
+                    // noteworthy event on a session that still succeeded, not a failure.
+                    ErrorLogSeverity.AUDIT,
+                )
+            }
+            if (finishingWriter is StreamingAacWriter && finishingWriter.timestampCorrections > 0) {
+                // Issue #378: the encoder handed out timestamps the muxer would have rejected, and
+                // the writer rewrote them. The recording is fine. This is defence in depth: the
+                // S25's actual #378 failure was the stale MediaStore descriptor (see
+                // MediaStoreSink.openStreaming), and its encoder needed no corrections.
+                logExportError(
+                    errorLogFile,
+                    clock,
+                    "ForwardRecordingEngine",
+                    "MUXER_TIMESTAMP_CORRECTED",
+                    "Rewrote ${finishingWriter.timestampCorrections} encoder timestamp(s) that did not advance; " +
+                        "the file is complete. ${finishingWriter.diagnostics()}",
+                    null,
+                    ErrorLogSeverity.AUDIT,
+                )
+            }
+            target.finish()
+
+            // Issue #410: the file is finished, so the next save starts after the last byte it
+            // contains. `cursor` is exactly that: it only ever advances past bytes that were
+            // emitted into the writer (a TAIL_TRUNCATED stop above leaves it before the dropped
+            // tail, so those bytes stay available to the next save). Before Success is published,
+            // so the UI refresh that Success triggers already sees the reduced buffer.
+            floorAdvancer?.invoke(cursor)
+
+            refinalize()
+        }
+
         try {
             while (!stopRequested.get() && !cancelRequested.get()) {
+                val checkpoint = synchronized(lock) { checkpointRequested }
+                if (checkpoint != null) {
+                    // Freeze the boundary once, then drain exactly to it. Capture keeps writing.
+                    val boundary = writeCursorProvider()
+                        ?: throw IOException("Capture stopped before checkpoint")
+                    while (cursor < boundary) {
+                        val limit = minOf(drainChunkSizeBytes.toLong(), boundary - cursor).toInt()
+                        val data = readSinceProvider(cursor, limit) as? ReadSinceResult.Data
+                            ?: throw IOException("Capture continuity lost before checkpoint at $cursor")
+                        if (data.bytes.isEmpty()) throw IOException("Checkpoint drain made no progress at $cursor")
+                        val chunks = reconciler.reconcile(cursor, data.bytes)
+                            ?: throw IOException("Recorded format unavailable at checkpoint cursor $cursor")
+                        emit(chunks)
+                        cursor = data.nextCursor
+                    }
+                    for (gap in gapsProvider()) {
+                        if (gap.endTimestampMillis >= sessionStartMillis && handledGaps.add(gap)) {
+                            writeClippedGap(gap)
+                        }
+                    }
+                    // Do not flush the streaming converter here: its fractional phase/held frame
+                    // belongs to the continuous stream and survives into the next writer.
+                    finishFile()
+                    lastCheckpoint = ForwardRecordingState.Success(displayName, totalBytesDrained)
+                    val generatedName = generateDisplayName(Date(clock()))
+                    var nextName = generatedName
+                    var suffix = 2
+                    while (!usedDisplayNames.add(nextName)) {
+                        nextName = generatedName.removeSuffix(".m4a") + "_${suffix++}.m4a"
+                    }
+                    try {
+                        target = sink.openStreaming(nextName, StreamingAacWriter.MIME_TYPE_M4A)
+                        writer = writerFactory(target, sessionConfig)
+                    } catch (e: Exception) {
+                        stateValue = ForwardRecordingState.Error(
+                            ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                            "Saved $displayName; could not open the next recording: ${e.message}", e,
+                        )
+                        return
+                    }
+                    displayName = nextName
+                    totalBytesDrained = 0L
+                    lastRefinalizeAtNanos = System.nanoTime()
+                    synchronized(lock) {
+                        activeTarget = target
+                        activeWriter = writer
+                        stateValue = ForwardRecordingState.Recording(displayName, 0L, lastCheckpoint)
+                        checkpointRequested = null
+                        wakeUpLatch = CountDownLatch(if (stopRequested.get()) 0 else 1)
+                        checkpoint.countDown()
+                    }
+                    continue
+                }
                 // Check and inject any completed pause gaps that occurred since session start
                 val currentGaps = gapsProvider()
                 for (gap in currentGaps) {
@@ -557,7 +681,7 @@ class ForwardRecordingEngine(
                             cursor = result.nextCursor
                             synchronized(lock) {
                                 if (_state.value is ForwardRecordingState.Recording) {
-                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained)
+                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained, lastCheckpoint)
                                 }
                             }
                         }
@@ -659,49 +783,7 @@ class ForwardRecordingEngine(
             // Last converter's held boundary frame, before the encoder is closed for good.
             reconciler.flush()?.let { emit(listOf(it)) }
 
-            writer.finish()
-            if (writer is StreamingAacWriter && writer.recoveredFromMuxerAlreadyStopped) {
-                // The file was re-read and verified complete and decodable (see
-                // MuxerStopFailurePolicy) -- state stays Success below -- but this is still worth
-                // an audit trail entry rather than disappearing silently (issue #347, same
-                // evidentiary standard already applied to TAIL_TRUNCATED above).
-                logExportError(
-                    errorLogFile,
-                    clock,
-                    "ForwardRecordingEngine",
-                    "MUXER_STOP_RECOVERED",
-                    "MediaMuxer.stop() reported an error, but the file was re-read and verified " +
-                        "complete and decodable, so it is not lost. ${writer.diagnostics()}",
-                    null,
-                    // Issue #346: same reasoning as TAIL_TRUNCATED above -- a recovered-but-
-                    // noteworthy event on a session that still succeeded, not a failure.
-                    ErrorLogSeverity.AUDIT,
-                )
-            }
-            if (writer is StreamingAacWriter && writer.timestampCorrections > 0) {
-                // Issue #378: the encoder handed out timestamps the muxer would have rejected, and
-                // the writer rewrote them. The recording is fine. This is defence in depth: the
-                // S25's actual #378 failure was the stale MediaStore descriptor (see
-                // MediaStoreSink.openStreaming), and its encoder needed no corrections.
-                logExportError(
-                    errorLogFile,
-                    clock,
-                    "ForwardRecordingEngine",
-                    "MUXER_TIMESTAMP_CORRECTED",
-                    "Rewrote ${writer.timestampCorrections} encoder timestamp(s) that did not advance; " +
-                        "the file is complete. ${writer.diagnostics()}",
-                    null,
-                    ErrorLogSeverity.AUDIT,
-                )
-            }
-            target.finish()
-
-            // Issue #410: the file is finished, so the next save starts after the last byte it
-            // contains. `cursor` is exactly that: it only ever advances past bytes that were
-            // emitted into the writer (a TAIL_TRUNCATED stop above leaves it before the dropped
-            // tail, so those bytes stay available to the next save). Before Success is published,
-            // so the UI refresh that Success triggers already sees the reduced buffer.
-            floorAdvancer?.invoke(cursor)
+            finishFile()
 
             synchronized(lock) {
                 stateValue = ForwardRecordingState.Success(displayName, totalBytesDrained)
@@ -726,6 +808,8 @@ class ForwardRecordingEngine(
                 target.close()
             } catch (_: Throwable) {}
             synchronized(lock) {
+                checkpointRequested?.countDown()
+                checkpointRequested = null
                 activeDrainThread = null
                 activeTarget = null
                 activeWriter = null

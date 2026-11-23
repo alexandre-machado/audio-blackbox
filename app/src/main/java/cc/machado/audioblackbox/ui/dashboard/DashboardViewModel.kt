@@ -199,6 +199,8 @@ class DashboardViewModel(
     // Idle to release this flag via the collector below. See requestSave()'s own doc for the two
     // release paths that cover both failure shapes.
     private var saveDispatchPending = false
+    private var checkpointDispatchPending = false
+    private var checkpointAtDispatch: ForwardRecordingState.Success? = null
 
     // The currently-live backstop Job scheduled by requestSave() below, or null when no dispatch
     // is pending (issue #50, `@rev` advisory on PR #43). Cancelled and cleared by every path that
@@ -262,6 +264,14 @@ class DashboardViewModel(
         // Mirrors the exportState collector above for forward recording's own Error and dispatch release (issues #206, #208).
         viewModelScope.launch {
             forwardRecordingState.collect { state ->
+                if (checkpointDispatchPending &&
+                    (state !is ForwardRecordingState.Recording || state.lastCheckpoint != checkpointAtDispatch)
+                ) {
+                    checkpointDispatchPending = false
+                    saveDispatchPending = false
+                    dispatchTimeoutJob?.cancel()
+                    dispatchTimeoutJob = null
+                }
                 if (state is ForwardRecordingState.Error) {
                     _forwardErrorSnapshot.value = freshForwardErrorSnapshot()
                 }
@@ -467,8 +477,11 @@ class DashboardViewModel(
      * Clears any previously dismissed outcome so this new export's own Success/Error is
      * guaranteed to be shown once it lands. */
     fun requestSave() {
-        if (uiState.value.bufferedMillis <= 0L) return
-        if (saveDispatchPending || exportState.value !is ExportState.Idle) return
+        val live = forwardRecordingState.value as? ForwardRecordingState.Recording
+        if (live == null && uiState.value.bufferedMillis <= 0L) return
+        if (saveDispatchPending || (live == null && exportState.value !is ExportState.Idle)) return
+        checkpointDispatchPending = live != null
+        checkpointAtDispatch = live?.lastCheckpoint
         saveDispatchPending = true
         _dismissedExportState.value = null
 
@@ -538,7 +551,9 @@ class DashboardViewModel(
 
     fun dismissForwardRecordingNotice() {
         val current = forwardRecordingState.value
-        if (current is ForwardRecordingState.Success || current is ForwardRecordingState.Error) {
+        if (current is ForwardRecordingState.Recording) {
+            _dismissedForwardRecordingState.value = current.lastCheckpoint
+        } else if (current is ForwardRecordingState.Success || current is ForwardRecordingState.Error) {
             _dismissedForwardRecordingState.value = current
         }
     }
@@ -734,6 +749,9 @@ class DashboardViewModel(
                 ForwardRecordingUiState.Recording(
                     displayName = forwardState.displayName,
                     elapsedMillis = elapsedMillis,
+                    lastCheckpoint = forwardState.lastCheckpoint?.takeUnless { it == dismissed }?.let {
+                        ForwardRecordingUiState.Success(it.displayName, it.bytesWritten)
+                    },
                 )
             }
             is ForwardRecordingState.Success ->

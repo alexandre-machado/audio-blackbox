@@ -365,4 +365,6 @@
     <string name="gallery_details_storage">Almacenamiento</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Grabación guardada</string>
+    <string name="save_continue_label">Guardar y seguir</string>
+    <string name="save_continue_cd">Guardar la grabación en directo hasta ahora y seguir grabando</string>
 </resources>

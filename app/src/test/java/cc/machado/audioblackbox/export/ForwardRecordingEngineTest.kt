@@ -11,6 +11,7 @@ import java.io.IOException
 import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -31,11 +32,13 @@ class ForwardRecordingEngineTest {
     ) : StreamingExportTarget {
         val out = ByteArrayOutputStream()
         override val outputStream: OutputStream get() = out
+        var finishCount = 0
         var finished = false
         var closed = false
         var refinalizeCallCount = 0
 
         override fun finish() {
+            finishCount++
             finished = true
             close()
         }
@@ -50,6 +53,7 @@ class ForwardRecordingEngineTest {
     }
 
     private class FakeStreamingSink : StreamingExportSink {
+        val targets = mutableListOf<FakeStreamingTarget>()
         var openCount = 0
         var shouldFail = false
         var lastTarget: FakeStreamingTarget? = null
@@ -57,7 +61,7 @@ class ForwardRecordingEngineTest {
         override fun openStreaming(displayName: String, mimeType: String): StreamingExportTarget {
             openCount++
             if (shouldFail) throw IOException("Disk full or permission denied")
-            return FakeStreamingTarget().also { lastTarget = it }
+            return FakeStreamingTarget().also { lastTarget = it; targets.add(it) }
         }
     }
 
@@ -449,5 +453,165 @@ class ForwardRecordingEngineTest {
         assertEquals(11_600L, success.bytesWritten)
         assertTrue("target must be finished", sink.target?.finished == true)
         assertTrue("writer must be finished", createdWriter?.isFinished == true)
+    }
+    /** Oracle: real ring bytes must all reach file 1 before commit, then exactly once across
+     * both files. Inject bytes at the boundary sample, on the drain thread, so the live loop
+     * cannot consume them first and mask a missing checkpoint drain. 4,800 < 80,000 capacity. */
+    @Test(timeout = 10_000)
+    fun checkpointCommitsBoundaryAndContinuesWithoutGapOrOverlap() {
+        val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1)
+        val buffer = RingBuffer(80_000, config.bytesPerSecond)
+        val first = ByteArray(3200) { (it * 17).toByte() }
+        val second = ByteArray(1600) { (it * 31).toByte() }
+        val sink = FakeStreamingSink()
+        val writers = mutableListOf<FakeStreamingAudioWriter>()
+        var sampled = false
+        val engine = ForwardRecordingEngine(
+            config = config,
+            readSinceProvider = buffer::readSince,
+            writeCursorProvider = {
+                check(!sampled)
+                sampled = true
+                buffer.write(first)
+                buffer.writeCursor()
+            },
+            oldestCursorProvider = buffer::oldestCursor,
+            exportFloorAdvancerProvider = { { buffer.advanceExportFloor(it); Unit } },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            writerFactory = { target, cfg ->
+                FakeStreamingAudioWriter(target, cfg).also { writers.add(it) }
+            },
+            clock = { 1234567890000L },
+        )
+        engine.start("first.m4a")
+        try {
+            val result = engine.checkpoint()
+            assertTrue("checkpoint must keep recording: $result", result is ForwardRecordingState.Recording)
+            assertEquals(2, sink.openCount)
+            assertArrayEquals("checkpoint file must include every byte through boundary", first, writers[0].out.toByteArray())
+            assertEquals(1, sink.targets[0].finishCount)
+            assertTrue(sink.targets[0].refinalizeCallCount > 0)
+            assertFalse(sink.targets[1].finished)
+            assertEquals(3200L, buffer.exportFloor())
+            val live = result as ForwardRecordingState.Recording
+            assertEquals("first.m4a", live.lastCheckpoint?.displayName)
+            assertEquals(3200L, live.lastCheckpoint?.bytesWritten)
+            assertEquals(ForwardRecordingEngine.generateDisplayName(java.util.Date(1234567890000L)), live.displayName)
+            buffer.write(second)
+            assertTrue(engine.stop() is ForwardRecordingState.Success)
+            assertArrayEquals("rotation must neither drop nor duplicate PCM", first + second,
+                writers[0].out.toByteArray() + writers[1].out.toByteArray())
+            assertEquals(4800L, buffer.exportFloor())
+            assertEquals(listOf(1, 1), sink.targets.map { it.finishCount })
+        } finally {
+            engine.stop()
+        }
+    }
+
+    /** Oracle: an idle checkpoint opens no target and preserves the exact state. */
+    @Test(timeout = 10_000)
+    fun checkpointWhileIdleIsNoOp() {
+        val sink = FakeStreamingSink()
+        val engine = createEngine(sink = sink)
+        assertEquals(ForwardRecordingState.Idle, engine.checkpoint())
+        assertEquals(0, sink.openCount)
+    }
+
+    /** Oracle: failed rotation cannot uncommit file 1, nor report continued recording. */
+    @Test(timeout = 10_000)
+    fun checkpointOpenFailureKeepsCommittedFile() {
+        val sink = FakeStreamingSink()
+        val engine = createEngine(sink = sink)
+        engine.start("saved.m4a")
+        sink.shouldFail = true
+        val result = engine.checkpoint()
+        assertTrue(result is ForwardRecordingState.Error)
+        result as ForwardRecordingState.Error
+        assertEquals(ForwardRecordingFailureReason.SINK_OPEN_FAILED, result.reason)
+        assertTrue(result.message.contains("saved.m4a"))
+        assertEquals(1, sink.targets.single().finishCount)
+        assertTrue(sink.targets.single().closed)
+        assertTrue(sink.targets.single().refinalizeCallCount > 0)
+    }
+
+    /** Oracle: once stop has entered its final drain, a competing checkpoint is a no-op;
+     * neither call deadlocks and the writer/target are finalized exactly once. */
+    @Test(timeout = 10_000)
+    fun checkpointRacingStopFinalizesOnce() {
+        val enteredStop = CountDownLatch(1)
+        val releaseStop = CountDownLatch(1)
+        val stopped = CountDownLatch(1)
+        val sink = FakeStreamingSink()
+        val engine = ForwardRecordingEngine(
+            readSinceProvider = { cursor, _ -> ReadSinceResult.Data(byteArrayOf(), cursor, cursor, 0L) },
+            writeCursorProvider = { 0L },
+            exportFloorAdvancerProvider = { null },
+            gapsProvider = { emptyList() },
+            sink = sink,
+            writerFactory = { target, cfg -> FakeStreamingAudioWriter(target, cfg) },
+            onEnteringCleanStopDrain = {
+                enteredStop.countDown()
+                check(releaseStop.await(5, TimeUnit.SECONDS))
+            },
+        )
+        engine.start()
+        val stopThread = Thread { try { engine.stop() } finally { stopped.countDown() } }
+        stopThread.start()
+        try {
+            assertTrue("stop must enter drain", enteredStop.await(5, TimeUnit.SECONDS))
+            assertTrue(engine.checkpoint() is ForwardRecordingState.Recording)
+        } finally {
+            releaseStop.countDown()
+        }
+        assertTrue("stop must complete without deadlock", stopped.await(5, TimeUnit.SECONDS))
+        assertTrue(engine.state.value is ForwardRecordingState.Success)
+        assertEquals(1, sink.openCount)
+        assertEquals(1, sink.targets.single().finishCount)
+    }
+
+    /** Oracle: rotating a resampled stream produces exactly the same PCM as one uninterrupted
+     * engine run. A completed pause gap is injected once, even when it remains in the provider. */
+    @Test(timeout = 10_000)
+    fun checkpointPreservesConverterPhaseAndHandledGaps() {
+        fun record(rotate: Boolean): Pair<ByteArray, List<Long>> {
+            val source = AudioConfig(sampleRateHz = 44_100, channelCount = 1)
+            val output = AudioConfig(sampleRateHz = 16_000, channelCount = 1)
+            val ring = RingBuffer(capacityBytes = 80_000, initialConfig = source)
+            val first = ByteArray(4410) { (it * 13).toByte() }
+            val second = ByteArray(4410) { (it * 7).toByte() }
+            val writers = mutableListOf<FakeStreamingAudioWriter>()
+            val gaps = java.util.concurrent.CopyOnWriteArrayList<PauseGap>()
+            ring.write(first)
+            val engine = ForwardRecordingEngine(
+                config = output,
+                readSinceProvider = ring::readSince,
+                oldestCursorProvider = ring::oldestCursor,
+                writeCursorProvider = ring::writeCursor,
+                exportFloorAdvancerProvider = { { ring.advanceExportFloor(it); Unit } },
+                gapsProvider = { gaps.toList() },
+                segmentsProvider = ring::activeSegments,
+                sink = FakeStreamingSink(),
+                clock = { 1000L },
+                writerFactory = { target, cfg -> FakeStreamingAudioWriter(target, cfg).also { writers.add(it) } },
+            )
+            engine.start()
+            gaps.add(PauseGap(1100L, 1200L))
+            try {
+                if (rotate) assertTrue(engine.checkpoint() is ForwardRecordingState.Recording)
+                ring.write(second)
+                assertTrue(engine.stop() is ForwardRecordingState.Success)
+                return writers.fold(byteArrayOf()) { bytes, writer -> bytes + writer.out.toByteArray() } to
+                    writers.flatMap { it.gapsInjected }
+            } finally {
+                engine.stop()
+            }
+        }
+        val whole = record(false)
+        val rotated = record(true)
+        assertTrue("conversion must produce audio", whole.first.isNotEmpty())
+        assertArrayEquals("rotation must preserve resampling phase and held boundary frame", whole.first, rotated.first)
+        assertEquals(listOf(100L), whole.second)
+        assertEquals(whole.second, rotated.second)
     }
 }

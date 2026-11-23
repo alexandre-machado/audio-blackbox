@@ -76,6 +76,7 @@ import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.dashboardTagLabelRes
 import cc.machado.audioblackbox.ui.forwardActionResources
+import cc.machado.audioblackbox.ui.saveActionResources
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
@@ -218,6 +219,9 @@ fun DashboardScreen(
                 onDismiss = onDismissSaveNotice,
                 onRetry = onSaveRecent,
             )
+        }
+        (uiState.forwardRecordingState as? ForwardRecordingUiState.Recording)?.lastCheckpoint?.let {
+            ForwardOutcomeNotice(it, onDismissForwardNotice, onStartForwardRecording)
         }
         if (uiState.forwardRecordingState is ForwardRecordingUiState.Success ||
             uiState.forwardRecordingState is ForwardRecordingUiState.Error
@@ -745,29 +749,6 @@ private fun ActionPanelRow(
     onStopForwardRecording: () -> Unit,
 ) {
     var lastSaveClickTime by remember { mutableLongStateOf(0L) }
-    val isExporting = uiState.saveState is SaveUiState.Exporting
-    val canSave = uiState.bufferedMillis > 0 && !isExporting
-    val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
-    val capacityMinutes = (uiState.capacityMillis / 60_000L).toInt()
-
-    val saveLabel = if (isExporting) {
-        stringResource(R.string.dashboard_panel_save_saving_label)
-    } else {
-        stringResource(R.string.dashboard_panel_save_label)
-    }
-    val saveCaption = when {
-        isExporting -> stringResource(R.string.dashboard_panel_save_caption_saving)
-        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
-        uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
-        else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
-    }.uppercase()
-    val saveCd = when {
-        isExporting -> stringResource(R.string.dashboard_save_exporting_title)
-        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
-        uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
-        else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
-    }
-
     val forwardState = uiState.forwardRecordingState
     val isForwardRecording = forwardState is ForwardRecordingUiState.Recording
     // Non-null only while forward recording is live -- computed once so the caption and the
@@ -776,6 +757,32 @@ private fun ActionPanelRow(
     val elapsedClock = (forwardState as? ForwardRecordingUiState.Recording)?.let {
         formatMillisAsClock(it.elapsedMillis)
     }
+    val saveAction = saveActionResources(isForwardRecording)
+    val isExporting = !isForwardRecording && uiState.saveState is SaveUiState.Exporting
+    val canSave = (isForwardRecording || uiState.bufferedMillis > 0) && !isExporting
+    val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
+    val capacityMinutes = (uiState.capacityMillis / 60_000L).toInt()
+
+    val saveLabel = if (isExporting) {
+        stringResource(R.string.dashboard_panel_save_saving_label)
+    } else {
+        stringResource(saveAction.label)
+    }
+    val saveCaption = when {
+        elapsedClock != null -> stringResource(R.string.dashboard_panel_live_caption_recording, elapsedClock)
+        isExporting -> stringResource(R.string.dashboard_panel_save_caption_saving)
+        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
+        uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
+        else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+    }.uppercase()
+    val saveCd = when {
+        isForwardRecording -> stringResource(saveAction.contentDescription)
+        isExporting -> stringResource(R.string.dashboard_save_exporting_title)
+        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
+        uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
+        else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
+    }
+
     val liveAction = forwardActionResources(isForwardRecording)
     val liveLabel = stringResource(liveAction.label)
     val liveCaption = if (elapsedClock != null) {

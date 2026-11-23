@@ -427,4 +427,6 @@
     <string name="gallery_details_storage">Storage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Recording saved</string>
+    <string name="save_continue_label">Save &amp; continue</string>
+    <string name="save_continue_cd">Save the live recording so far and keep recording</string>
 </resources>

@@ -385,4 +385,6 @@
     <string name="gallery_details_storage">Armazenamento</string>
     <string name="gallery_details_storage_value">Gravações / Blackbox</string>
     <string name="gallery_newly_saved">Gravação salva</string>
+    <string name="save_continue_label">Salvar e continuar</string>
+    <string name="save_continue_cd">Salvar a gravação ao vivo até agora e continuar gravando</string>
 </resources>

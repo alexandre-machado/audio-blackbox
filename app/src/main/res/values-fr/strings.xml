@@ -370,4 +370,6 @@
     <string name="gallery_details_storage">Stockage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Enregistrement sauvegardé</string>
+    <string name="save_continue_label">Sauver et continuer</string>
+    <string name="save_continue_cd">Sauver l’enregistrement en direct jusqu’ici et continuer l’enregistrement</string>
 </resources>

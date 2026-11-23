@@ -365,4 +365,6 @@
     <string name="gallery_details_storage">Archiviazione</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Registrazione salvata</string>
+    <string name="save_continue_label">Salva e continua</string>
+    <string name="save_continue_cd">Salva la registrazione live effettuata finora e continua a registrare</string>
 </resources>

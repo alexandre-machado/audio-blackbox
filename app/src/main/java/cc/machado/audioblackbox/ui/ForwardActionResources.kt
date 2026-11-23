@@ -29,3 +29,21 @@ internal fun forwardActionResources(isRecording: Boolean): ForwardActionResource
             R.drawable.ic_continuous_record,
         )
     }
+
+/** Live Save rotates the current file; idle Save retains its existing buffered-window wording. */
+internal fun saveActionResources(isRecording: Boolean): ForwardActionResources =
+    if (isRecording) {
+        ForwardActionResources(
+            R.string.save_continue_label,
+            R.string.save_continue_cd,
+            R.string.save_continue_label,
+            R.drawable.ic_bookmark_save,
+        )
+    } else {
+        ForwardActionResources(
+            R.string.dashboard_panel_save_label,
+            R.string.dashboard_save_button_cd_partial,
+            R.string.recorder_notification_action_save,
+            R.drawable.ic_bookmark_save,
+        )
+    }

@@ -14,6 +14,7 @@ import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.ui.MainActivity
 import cc.machado.audioblackbox.ui.forwardActionResources
+import cc.machado.audioblackbox.ui.saveActionResources
 import cc.machado.audioblackbox.ui.specLabelRes
 import java.util.Locale
 
@@ -151,7 +152,12 @@ object RecorderNotification {
         val forwardText = when (forwardRecordingState) {
             is ForwardRecordingState.Idle -> null
             is ForwardRecordingState.Recording ->
-                context.getString(R.string.recorder_notification_forward_recording, formatDuration(forwardElapsedMillis))
+                listOfNotNull(
+                    context.getString(R.string.recorder_notification_forward_recording, formatDuration(forwardElapsedMillis)),
+                    forwardRecordingState.lastCheckpoint?.let {
+                        context.getString(R.string.recorder_notification_forward_success, it.displayName)
+                    },
+                ).joinToString(" · ")
             is ForwardRecordingState.Success ->
                 context.getString(R.string.recorder_notification_forward_success, forwardRecordingState.displayName)
             is ForwardRecordingState.Error ->
@@ -176,7 +182,11 @@ object RecorderNotification {
             .setContentIntent(contentIntent)
             .addAction(
                 0,
-                saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes),
+                if (forwardRecordingState is ForwardRecordingState.Recording) {
+                    context.getString(saveActionResources(true).notificationLabel)
+                } else {
+                    saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes)
+                },
                 saveIntent,
             )
 
@@ -219,7 +229,7 @@ object RecorderNotification {
     private fun saveActionLabel(context: Context, bufferedDurationMillis: Long, capacityMinutes: Int): String {
         val savedMinutes = RecorderService.resolveSavedMinutes(bufferedDurationMillis, capacityMinutes)
         return if (savedMinutes > 0) {
-            context.getString(R.string.recorder_notification_action_save, savedMinutes)
+            context.getString(saveActionResources(false).notificationLabel, savedMinutes)
         } else {
             // Same oracle RecorderService.handleSave()'s exported filename now uses for this same
             // sub-minute case (issue #129 follow-up) -- calling it here too, rather than
