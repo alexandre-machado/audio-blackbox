@@ -57,9 +57,9 @@
     <string name="recorder_notification_forward_recording">Enregistrement en direct\u00A0: %1$s</string>
     <string name="recorder_notification_forward_success">Enregistrement en direct sauvegardé\u00A0: %1$s</string>
     <string name="recorder_notification_forward_error">Échec de l\'enregistrement en direct</string>
-    <!-- Issue #139: a verb distinct from "Sauver", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Sauver"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Direct</string>
-    <string name="recorder_notification_action_stop_forward">Arrêter direct</string>
+    <string name="recorder_notification_action_stop_forward">Sauver et terminer</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>
@@ -178,7 +178,7 @@
     <string name="dashboard_forward_recording_title">Enregistrement en direct</string>
     <string name="dashboard_forward_elapsed_cd">Durée de l\'enregistrement en direct\u00A0: %1$s</string>
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Arrêter l\'enregistrement en direct</string>
+    <string name="dashboard_forward_stop_button">Sauver l’enregistrement en direct et le terminer</string>
     <string name="dashboard_forward_success_title">Enregistrement en direct sauvegardé</string>
     <string name="dashboard_forward_success_body">Fichier\u00A0: %1$s</string>
     <string name="dashboard_forward_error_title">Échec de l\'enregistrement en direct</string>
@@ -188,7 +188,7 @@
     <string name="dashboard_panel_save_label">Sauver</string>
     <string name="dashboard_panel_save_saving_label">Sauvegarde</string>
     <string name="dashboard_panel_live_label">Direct</string>
-    <string name="dashboard_panel_live_stop_label">Arrêt</string>
+    <string name="dashboard_panel_live_stop_label">Sauver et terminer</string>
 
     <!-- Issue #335 wiring: one-line panel captions. -->
     <string name="dashboard_panel_save_caption_no_audio">Pas encore d\'audio</string>

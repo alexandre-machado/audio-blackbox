@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.theme
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -22,7 +23,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -33,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +63,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -295,10 +300,9 @@ fun AvionicsLabelValueRow(
  *   caller but the control also renders disabled-styled so a second tap mid-export cannot double
  *   fire (mirrors the existing 500 ms debounce in `SaveSection`, which callers keep doing
  *   independently -- this primitive does not replace that guard).
- * - **Toggled / "stop" state**: same primitive, different [label]/[caption]/[ledColor] (e.g.
- *   [WarningRed] or [CautionAmber] for a live "STOP" control) -- there is deliberately no separate
- *   "stop variant" composable, because `ForwardRecordingSection` already proved the start/stop pair
- *   is one control whose text and color change, not two controls.
+ * - **Toggled / save-and-end state**: same primitive, different [label]/[caption] and
+ *   optional save glyph. The live primary action retains [FlightOrange]; state colors belong
+ *   to annunciators. This is one control whose action changes with the recording state.
  *
  * Content description: pass the *existing* accessibility strings
  * (`dashboard_save_button_cd_full`/`_partial`, etc.) as [contentDescription] unchanged -- this
@@ -322,6 +326,7 @@ fun AvionicsPanelButton(
     caption: String? = null,
     ledColor: Color = FlightOrange,
     contentDescription: String? = null,
+    @DrawableRes iconRes: Int? = null,
 ) {
     // `interactable`, not `enabled`, drives every visual below: an in-progress control is not
     // `enabled = false` (the caller still wants the click wired so a second tap is absorbed rather
@@ -386,7 +391,17 @@ fun AvionicsPanelButton(
                         ),
                 )
             }
+            // The icon sits above the label, preserving the full text-column width.
+            // Height remains content-sized so translated labels can wrap at word boundaries.
             Column(modifier = Modifier.weight(1f)) {
+                if (iconRes != null) {
+                    Icon(
+                        painter = painterResource(iconRes),
+                        contentDescription = null,
+                        tint = labelColor,
+                        modifier = Modifier.padding(bottom = 4.dp).size(18.dp),
+                    )
+                }
                 Text(
                     text = label.uppercase(),
                     fontFamily = FontFamily.Monospace,
@@ -469,9 +484,15 @@ fun AvionicsPanelButtonRow(
                 live()
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(modifier = Modifier.weight(1f)) { save() }
-                Box(modifier = Modifier.weight(1f)) { live() }
+            // Equal heights (PR #454 `@rev` REV-8): the taller button sets the row height and
+            // propagateMinConstraints stretches the other to match, so a wrapped label or an icon on
+            // one side never leaves the pair visibly uneven.
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { save() }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { live() }
             }
         }
     }

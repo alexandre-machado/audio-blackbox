@@ -75,6 +75,7 @@ import cc.machado.audioblackbox.export.ErrorLogSeverity
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.dashboardTagLabelRes
+import cc.machado.audioblackbox.ui.forwardActionResources
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
@@ -775,11 +776,8 @@ private fun ActionPanelRow(
     val elapsedClock = (forwardState as? ForwardRecordingUiState.Recording)?.let {
         formatMillisAsClock(it.elapsedMillis)
     }
-    val liveLabel = if (isForwardRecording) {
-        stringResource(R.string.dashboard_panel_live_stop_label)
-    } else {
-        stringResource(R.string.dashboard_panel_live_label)
-    }
+    val liveAction = forwardActionResources(isForwardRecording)
+    val liveLabel = stringResource(liveAction.label)
     val liveCaption = if (elapsedClock != null) {
         stringResource(R.string.dashboard_panel_live_caption_recording, elapsedClock)
     } else {
@@ -801,10 +799,10 @@ private fun ActionPanelRow(
         stringResource(
             R.string.dashboard_forward_live_announcement,
             stringResource(R.string.dashboard_forward_elapsed_cd, elapsedClock),
-            stringResource(R.string.dashboard_forward_stop_button),
+            stringResource(liveAction.contentDescription),
         )
     } else {
-        stringResource(R.string.dashboard_forward_start_button)
+        stringResource(liveAction.contentDescription)
     }
 
     AvionicsPanelButtonRow(
@@ -829,6 +827,7 @@ private fun ActionPanelRow(
         live = {
             AvionicsPanelButton(
                 label = liveLabel,
+                iconRes = liveAction.icon,
                 onClick = if (isForwardRecording) onStopForwardRecording else onStartForwardRecording,
                 caption = liveCaption,
                 ledColor = FlightOrange,
