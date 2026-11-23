@@ -436,7 +436,8 @@ class ForwardRecordingEngine(
         var cursor = initialCursor
         var totalBytesDrained = 0L
         val handledGaps = initialGaps.toMutableSet()
-        var lastRefinalizeAtNanos = System.nanoTime()
+        var lastRefinalizeAtMillis = sessionStartMillis
+        var refinalizeIntervalMillis = INITIAL_REFINALIZE_INTERVAL_MILLIS
         val reconciler = ForwardFormatReconciler(sessionConfig, segmentsProvider)
 
         // Issue #374: a gap that started before this session but ended after it must only
@@ -571,10 +572,11 @@ class ForwardRecordingEngine(
                         // Throttled off wall-clock time (not iteration count, since chunk size is
                         // data-dependent) so it never turns into a MediaStore update per drain
                         // iteration.
-                        val nowNanos = System.nanoTime()
-                        if (nowNanos - lastRefinalizeAtNanos >= REFINALIZE_INTERVAL_NANOS) {
+                        val nowMillis = clock()
+                        if (nowMillis - lastRefinalizeAtMillis >= refinalizeIntervalMillis) {
                             refinalize()
-                            lastRefinalizeAtNanos = nowNanos
+                            lastRefinalizeAtMillis = clock()
+                            refinalizeIntervalMillis = minOf(refinalizeIntervalMillis * 2, MAX_REFINALIZE_INTERVAL_MILLIS)
                         }
 
                         if (result.remainingBytes == 0L && !stopRequested.get()) {
@@ -713,11 +715,11 @@ class ForwardRecordingEngine(
          * such notification re-runs a full `GalleryViewModel.refresh()` while a live forward
          * recording and the gallery screen are both active at once. Narrowing this interval
          * therefore also raises gallery query load, not just MediaStore freshness -- the two are
-         * the same knob. At the current 5s throttle this is one bounded `MediaStore` query per 5
-         * seconds of active recording, which is judged acceptable (a plain content-provider query
-         * over a handful of rows, not a full-file read); this is not re-measured here, only
-         * recorded so a future interval change is a deliberate tradeoff instead of a silent one. */
-        private const val REFINALIZE_INTERVAL_NANOS = 5_000_000_000L // 5 seconds
+         * the same knob. ADTS duration scanning walks the entire growing file. Start after 5s,
+         * then double the delay after each completed scan (10s, 20s, 40s), capped at 60s.
+         * A clean stop always performs a final refresh independently of this cadence. */
+        private const val INITIAL_REFINALIZE_INTERVAL_MILLIS = 5_000L
+        private const val MAX_REFINALIZE_INTERVAL_MILLIS = 60_000L
 
         fun generateDisplayName(date: Date, extension: String = StreamingAdtsWriter.FILE_EXTENSION): String {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)

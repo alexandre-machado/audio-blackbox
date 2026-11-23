@@ -40,7 +40,11 @@ class StreamingAdtsWriter(target: StreamingExportTarget, private val config: Aud
         try {
             encoder.write(pcmData, offset, length)
         } catch (t: Throwable) {
-            close()
+            try {
+                close()
+            } catch (closeError: Throwable) {
+                if (closeError !== t) t.addSuppressed(closeError)
+            }
             throw t
         }
     }

@@ -107,6 +107,7 @@ class ForwardRecordingEngineTest {
         oldestCursorProvider: () -> Long? = { 0L },
         gapsProvider: () -> List<PauseGap> = { emptyList() },
         sink: StreamingExportSink = FakeStreamingSink(),
+        clock: () -> Long = System::currentTimeMillis,
         writerFactory: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter = { target, cfg -> FakeStreamingAudioWriter(target, cfg) },
     ) = ForwardRecordingEngine(
         exportFloorAdvancerProvider = { null },
@@ -116,8 +117,49 @@ class ForwardRecordingEngineTest {
         oldestCursorProvider = oldestCursorProvider,
         gapsProvider = gapsProvider,
         sink = sink,
+        clock = clock,
         writerFactory = writerFactory,
     )
+
+    /** Oracle: actual target refreshes follow 5/10/20/40/60/60 seconds, never early,
+     * and stop refreshes once more. Each read handshake completes the previous iteration. */
+    @Test fun metadataRefreshBacksOffAndStopRefreshes() {
+        val now = java.util.concurrent.atomic.AtomicLong(0)
+        val steps = java.util.concurrent.LinkedBlockingQueue<Long>()
+        val completed = java.util.concurrent.LinkedBlockingQueue<Int>()
+        val stopping = java.util.concurrent.atomic.AtomicBoolean(false)
+        val sink = FakeStreamingSink()
+        val engine = createEngine(
+            sink = sink,
+            clock = now::get,
+            readSinceProvider = { cursor, _ ->
+                completed.put(sink.lastTarget!!.refinalizeCallCount)
+                val next = if (stopping.get()) now.get() else
+                    checkNotNull(steps.poll(5, TimeUnit.SECONDS)) { "Missing clock step" }
+                now.set(next)
+                ReadSinceResult.Data(ByteArray(0), cursor, cursor, 1L)
+            },
+        )
+        engine.start()
+        try {
+            assertEquals(0, completed.poll(5, TimeUnit.SECONDS))
+            for ((time, count) in listOf(
+                4999L to 0, 5000L to 1, 10000L to 1, 14999L to 1, 15000L to 2,
+                34999L to 2, 35000L to 3, 74999L to 3, 75000L to 4,
+                134999L to 4, 135000L to 5, 194999L to 5, 195000L to 6,
+            )) {
+                steps.put(time)
+                assertEquals("refresh count at ${time}ms", count, completed.poll(5, TimeUnit.SECONDS))
+            }
+        } finally {
+            // Unblock the reader before stop joins it, without a timing-based handshake.
+            stopping.set(true)
+            steps.offer(now.get())
+            engine.stop()
+        }
+        assertTrue(engine.state.value is ForwardRecordingState.Success)
+        assertEquals("final stop refresh", 7, sink.lastTarget!!.refinalizeCallCount)
+    }
 
     @Test
     fun `normal start and stop drains all PCM and transitions to Success`() {

@@ -279,7 +279,7 @@
     <string name="settings_specs_format_label">Audio format</string>
     <string name="settings_specs_format_value">16-bit PCM (Ring Buffer)</string>
     <string name="settings_specs_export_label">Export format</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / Lossless WAV</string>
+    <string name="settings_specs_export_value">Save .m4a / Live .aac</string>
     <string name="settings_specs_sample_rate_label">Sample rate</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Channel count</string>
@@ -427,6 +427,6 @@
     <string name="gallery_details_storage">Storage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Recording saved</string>
-    <string name="dashboard_panel_save_caption_live">Saving to live file</string>
+    <string name="dashboard_panel_save_caption_live">Live file saving</string>
     <string name="dashboard_save_button_cd_live">Save is not needed during live: the live file is saved as it records</string>
 </resources>

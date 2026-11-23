@@ -242,7 +242,7 @@
     <string name="settings_specs_format_label">Formato de áudio</string>
     <string name="settings_specs_format_value">PCM 16-bit (Buffer Circular)</string>
     <string name="settings_specs_export_label">Formato de exportação</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / WAV sem perdas</string>
+    <string name="settings_specs_export_value">Salvar .m4a / Ao vivo .aac</string>
     <string name="settings_specs_sample_rate_label">Taxa de amostragem</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Canais</string>
@@ -385,6 +385,6 @@
     <string name="gallery_details_storage">Armazenamento</string>
     <string name="gallery_details_storage_value">Gravações / Blackbox</string>
     <string name="gallery_newly_saved">Gravação salva</string>
-    <string name="dashboard_panel_save_caption_live">Gravando no arquivo do live</string>
-    <string name="dashboard_save_button_cd_live">Não é necessário salvar durante o live: o arquivo do live é salvo enquanto grava</string>
+    <string name="dashboard_panel_save_caption_live">Salvando ao vivo</string>
+    <string name="dashboard_save_button_cd_live">Não é necessário tocar em Salvar durante a gravação ao vivo: o arquivo é salvo enquanto você grava.</string>
 </resources>

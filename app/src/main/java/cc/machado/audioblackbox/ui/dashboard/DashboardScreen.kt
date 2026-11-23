@@ -756,16 +756,17 @@ private fun ActionPanelRow(
     } else {
         stringResource(R.string.dashboard_panel_save_label)
     }
-    val saveCaption = when {
-        isSavingToLive -> stringResource(R.string.dashboard_panel_save_caption_live)
-        isExporting -> stringResource(R.string.dashboard_panel_save_caption_saving)
-        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
-        uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
-        else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+    val saveCaption = when (val activeCaption = activeSaveCaptionResource(isExporting, isSavingToLive)) {
+        null -> when {
+            uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
+            uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
+            else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+        }
+        else -> stringResource(activeCaption)
     }.uppercase()
     val saveCd = when {
-        isSavingToLive -> stringResource(R.string.dashboard_save_button_cd_live)
         isExporting -> stringResource(R.string.dashboard_save_exporting_title)
+        isSavingToLive -> stringResource(R.string.dashboard_save_button_cd_live)
         uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
         uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
         else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
