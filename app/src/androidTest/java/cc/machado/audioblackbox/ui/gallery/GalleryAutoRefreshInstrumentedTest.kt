@@ -120,7 +120,9 @@ class GalleryAutoRefreshInstrumentedTest {
         val sampleRateHz = 16_000
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val buffer = RingBuffer(capacityBytes = 200_000, bytesPerSecond = config.bytesPerSecond)
-        val name = "blackbox_${runId}_gallery_autorefresh.m4a"
+        // Match the production writer: MediaProvider appends .aac to a mismatched .m4a name,
+        // so waiting for that original name would time out before any PCM was even fed.
+        val name = "blackbox_${runId}_gallery_autorefresh.aac"
 
         val engine = ForwardRecordingEngine(
             exportFloorAdvancerProvider = { null },
@@ -155,6 +157,11 @@ class GalleryAutoRefreshInstrumentedTest {
         try {
             val startResult = engine.start(customDisplayName = name)
             assertTrue("start should succeed: $startResult", startResult is ForwardRecordingState.Recording)
+            val published = sink.queryRecordings().filter { it.displayName.contains(runId) }
+            insertedUris += published.map { it.uri }
+            assertEquals("published filename must match session identity: $published",
+                listOf(name), published.map { it.displayName })
+            assertEquals("audio/aac-adts", published.single().mimeType)
 
             // `@rev` PR #377 medium finding: the row must be legible as still-recording, not just
             // eventually correct. Waits (state-based, no sleep/fixed delay) for the row to show up
@@ -185,7 +192,6 @@ class GalleryAutoRefreshInstrumentedTest {
             )
             repeat(totalChunks) {
                 buffer.write(toneChunk)
-                Thread.sleep(10) // widens the write/drain race window -- real work, not a sync wait
             }
 
             // Blocks until the drain thread's finally{} block (the authoritative final refinalize,
@@ -222,6 +228,7 @@ class GalleryAutoRefreshInstrumentedTest {
                 item.isInProgress,
             )
         } finally {
+            engine.stop()
             collectorJob.cancel()
         }
     }

@@ -39,7 +39,7 @@ class StreamingAdtsWriterTest {
                     assertTrue("at least one second decoded before stop", mid.pcm.size >= config.bytesPerSecond)
                     val liveRow = sink.queryRecordings().single { it.uri == target.uri }
                     assertEquals(name, liveRow.displayName)
-                    assertEquals("audio/aac", liveRow.mimeType)
+                    assertEquals("audio/aac-adts", liveRow.mimeType)
 
                     writer.write(pcm)
                     writer.finish()
@@ -53,9 +53,12 @@ class StreamingAdtsWriterTest {
                     assertTone(completed, preset)
                     assertTrue("additional audio survives finalization", completed.pcm.size > mid.pcm.size)
                     val finalRow = sink.queryRecordings().single { it.uri == target.uri }
-                    assertEquals("audio/aac", finalRow.mimeType)
+                    assertEquals("audio/aac-adts", finalRow.mimeType)
                     assertEquals(after.size.toLong(), finalRow.sizeBytes)
                     assertTrue("refinalized duration", finalRow.durationMillis > 0)
+                    val decodedMillis = completed.pcm.size * 1000L / config.bytesPerSecond
+                    assertTrue("duration ${finalRow.durationMillis} must match decoded $decodedMillis ms",
+                        kotlin.math.abs(finalRow.durationMillis - decodedMillis) <= 150L)
                 }
             } finally {
                 target.close()

@@ -370,6 +370,6 @@
     <string name="gallery_details_storage">Stockage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Enregistrement sauvegardé</string>
-    <string name="dashboard_panel_save_caption_live">Sauvegarde en direct</string>
+    <string name="dashboard_panel_save_caption_live">Sauvegarde live</string>
     <string name="dashboard_save_button_cd_live">Il est inutile de toucher Sauver pendant l’enregistrement en direct : le fichier est sauvegardé au fur et à mesure.</string>
 </resources>

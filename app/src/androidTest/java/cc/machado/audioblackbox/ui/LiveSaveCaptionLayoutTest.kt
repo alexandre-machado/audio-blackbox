@@ -32,6 +32,7 @@ class LiveSaveCaptionLayoutTest {
                     caption = caption.value, modifier = Modifier.requiredWidth(196.dp))
             }
         }
+        val failures = mutableListOf<String>()
         for (tag in listOf("en", "pt-BR", "de", "es", "fr", "it")) {
             val locale = Locale.forLanguageTag(tag)
             val config = Configuration(composeRule.activity.resources.configuration).apply { setLocale(locale) }
@@ -41,8 +42,14 @@ class LiveSaveCaptionLayoutTest {
             val layouts = mutableListOf<TextLayoutResult>()
             composeRule.onNodeWithText(text, useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-            assertEquals("$tag caption must remain one line", 1, layouts.single().lineCount)
-            assertFalse("$tag caption must not clip", layouts.single().hasVisualOverflow)
+            val layout = layouts.single()
+            if (layout.lineCount != 1 || layout.hasVisualOverflow) {
+                failures += "$tag caption must stay on one line without clipping: " +
+                    "lines=${layout.lineCount}, size=${layout.size}, " +
+                    "widthOverflow=${layout.didOverflowWidth}, heightOverflow=${layout.didOverflowHeight}, " +
+                    "constraints=${layout.layoutInput.constraints}"
+            }
         }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
 }

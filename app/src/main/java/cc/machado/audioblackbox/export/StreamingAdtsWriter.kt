@@ -82,7 +82,13 @@ class StreamingAdtsWriter(target: StreamingExportTarget, private val config: Aud
     }
 
     companion object {
-        const val MIME_TYPE = "audio/aac"
+        // Match MediaProvider's .aac extension mapping, including after a metadata scan.
+        const val MIME_TYPE = "audio/aac-adts"
         const val FILE_EXTENSION = "aac"
+
+        fun accepts(mimeType: String, displayName: String): Boolean =
+            mimeType.equals(MIME_TYPE, ignoreCase = true) ||
+                mimeType.equals("audio/aac", ignoreCase = true) ||
+                displayName.endsWith(".aac", ignoreCase = true)
     }
 }
