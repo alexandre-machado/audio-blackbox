@@ -369,4 +369,5 @@
     <string name="gallery_details_quality">Qualité</string>
     <string name="gallery_details_storage">Stockage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="gallery_newly_saved">Enregistrement sauvegardé</string>
 </resources>

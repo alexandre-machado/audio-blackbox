@@ -364,4 +364,5 @@
     <string name="gallery_details_quality">Qualität</string>
     <string name="gallery_details_storage">Speicherort</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="gallery_newly_saved">Aufnahme gespeichert</string>
 </resources>
