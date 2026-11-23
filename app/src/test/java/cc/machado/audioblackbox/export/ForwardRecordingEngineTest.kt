@@ -568,6 +568,9 @@ class ForwardRecordingEngineTest {
         assertTrue(engine.state.value is ForwardRecordingState.Success)
         assertEquals(1, sink.openCount)
         assertEquals(1, sink.targets.single().finishCount)
+        // Oracle: the clean-stop finish and finally paths must not both settle metadata.
+        // No PCM is written here, so periodic mid-recording refinalization cannot contribute.
+        assertEquals(1, sink.targets.single().refinalizeCallCount)
     }
 
     /** Oracle: rotating a resampled stream produces exactly the same PCM as one uninterrupted

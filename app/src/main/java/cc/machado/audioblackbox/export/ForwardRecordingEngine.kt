@@ -548,8 +548,6 @@ class ForwardRecordingEngine(
             // tail, so those bytes stay available to the next save). Before Success is published,
             // so the UI refresh that Success triggers already sees the reduced buffer.
             floorAdvancer?.invoke(cursor)
-
-            refinalize()
         }
 
         try {
@@ -577,6 +575,8 @@ class ForwardRecordingEngine(
                     // Do not flush the streaming converter here: its fractional phase/held frame
                     // belongs to the continuous stream and survives into the next writer.
                     finishFile()
+                    // Settle the checkpoint before rotating; final stop settles in finally.
+                    refinalize()
                     lastCheckpoint = ForwardRecordingState.Success(displayName, totalBytesDrained)
                     val generatedName = generateDisplayName(Date(clock()))
                     var nextName = generatedName

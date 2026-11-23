@@ -135,6 +135,10 @@ class GalleryViewModel(
     private val savedDisplayNames: Flow<String> = merge(
         successTransitions(exportState) { (it as? ExportState.Success)?.displayName },
         successTransitions(forwardRecordingState) { (it as? ForwardRecordingState.Success)?.displayName },
+        successTransitions(
+            forwardRecordingState,
+            value = { (it as? ForwardRecordingState.Recording)?.lastCheckpoint },
+        ) { it?.displayName },
     )
     // Latest save wins, like newlySavedKey. A missing row retains at most one name until a
     // newer success or VM disposal; provider failures and delayed visibility do not lose it.
@@ -165,11 +169,19 @@ class GalleryViewModel(
         refresh()
     }
 
-    private fun <T> successTransitions(source: StateFlow<T>, name: (T) -> String?): Flow<String> {
-        val initial = source.value
+    private fun <T> successTransitions(source: StateFlow<T>, name: (T) -> String?): Flow<String> =
+        successTransitions(source, value = { it }, name = name)
+
+    private fun <T, V> successTransitions(
+        source: StateFlow<T>,
+        value: (T) -> V,
+        name: (V) -> String?,
+    ): Flow<String> {
+        val initial = value(source.value)
         return flow {
             var previous = initial
-            source.collect { current ->
+            source.collect { state ->
+                val current = value(state)
                 if (current != previous) {
                     previous = current
                     name(current)?.let { emit(it) }

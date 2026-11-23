@@ -138,6 +138,61 @@ class GalleryViewModelTest {
         assertEquals("finishing live must flag its existing key", live.uri, vm.uiState.value.newlySavedKey)
     }
 
+    // Oracle: checkpointing A flags A's completed row while B is live; equal checkpoint
+    // values on later byte-count updates cannot re-flag an acknowledged save.
+    @Test
+    fun `checkpoint flags finished A not live B and equal checkpoints do not replay`() = runTest {
+        val a = row("A.m4a").copy(dateAddedMillis = 1L)
+        val b = row("B.m4a").copy(dateAddedMillis = 2L)
+        val repository = FakeRecordingsRepository(emptyList())
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Idle)
+        val vm = GalleryViewModel(repository, FakeRecordingPlayer(), ioDispatcher = Dispatchers.Unconfined,
+            forwardRecordingState = forward)
+        subscribe(vm)
+        forward.value = ForwardRecordingState.Recording(a.displayName, 4096L)
+        runCurrent()
+        repository.rows = listOf(a)
+        vm.refresh()
+        runCurrent()
+        assertTrue(vm.uiState.value.items.single().isInProgress)
+        assertNull(vm.uiState.value.newlySavedKey)
+
+        val checkpoint = ForwardRecordingState.Success(a.displayName, 48_000L)
+        forward.value = ForwardRecordingState.Recording(b.displayName, 0L, checkpoint)
+        repository.rows = listOf(a.copy(sizeBytes = 48_000L), b)
+        vm.refresh()
+        runCurrent()
+        assertEquals("checkpoint must flag A, never live B", a.uri, vm.uiState.value.newlySavedKey)
+        assertFalse(vm.uiState.value.items.single { it.recording.uri == a.uri }.isInProgress)
+        assertTrue(vm.uiState.value.items.single { it.recording.uri == b.uri }.isInProgress)
+        vm.acknowledgeNewlySaved(a.uri)
+        runCurrent()
+        for (bytes in listOf(4096L, 8192L)) {
+            forward.value = ForwardRecordingState.Recording(b.displayName, bytes, checkpoint.copy())
+            runCurrent()
+            assertNull("equal checkpoint must not re-flag A", vm.uiState.value.newlySavedKey)
+        }
+    }
+
+    // Oracle: a checkpoint already present at construction is historical, including when
+    // the live byte count changes before the scheduled collector first runs.
+    @Test
+    fun `initial checkpoint does not flag on collection or later recording updates`() = runTest {
+        val a = row("A.m4a")
+        val b = row("B.m4a")
+        val initial = ForwardRecordingState.Recording(b.displayName, 0L,
+            ForwardRecordingState.Success(a.displayName, 48_000L))
+        val forward = MutableStateFlow<ForwardRecordingState>(initial)
+        val vm = GalleryViewModel(FakeRecordingsRepository(listOf(a, b)), FakeRecordingPlayer(),
+            ioDispatcher = Dispatchers.Unconfined, forwardRecordingState = forward)
+        forward.value = initial.copy(bytesWritten = 4096L)
+        subscribe(vm)
+        assertNull("initial checkpoint is not a new save", vm.uiState.value.newlySavedKey)
+        forward.value = initial.copy(bytesWritten = 8192L, lastCheckpoint = initial.lastCheckpoint?.copy())
+        runCurrent()
+        assertNull("historical checkpoint must remain ignored", vm.uiState.value.newlySavedKey)
+    }
+
     // Oracle: an error ending a live session cannot announce its surviving partial file.
     @Test
     fun `Recording to Error never flags partial row`() = runTest {
