@@ -37,8 +37,7 @@ would otherwise break deployment.
 ## 2. Configure GitHub Actions
 
 In `alexandre-machado/audio-blackbox`, open **Settings > Environments** and create
-**cloudflare-hotsite**. Restrict its deployment branches to **main only** before
-adding credentials. Add `CLOUDFLARE_API_TOKEN` as an **environment secret** and
+**cloudflare-hotsite** yourself (Settings > Environments > New environment) **before the PR merges or before any credential exists**. The first push to main would otherwise auto-create it with no branch policy. Set **Deployment branches and tags** to **Selected branches: main only** and confirm the policy shows `main` before adding credentials. Add `CLOUDFLARE_API_TOKEN` as an **environment secret** and
 `CLOUDFLARE_ACCOUNT_ID` as an **environment variable** (account ID, not zone ID).
 Do not store the token as a repository secret. The workflow reads
 `secrets.CLOUDFLARE_API_TOKEN` and `vars.CLOUDFLARE_ACCOUNT_ID` from this environment.

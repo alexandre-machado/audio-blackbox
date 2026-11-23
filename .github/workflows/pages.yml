@@ -20,7 +20,8 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# Self-hosted, like every other job in this repo (#171/#172). Safe here without the head-repo
+# `build` and `deploy` are self-hosted, like every other job in this repo (#171/#172); the two
+# Cloudflare jobs are the deliberate exception (GitHub-hosted, see validate-cloudflare). Safe here without the head-repo
 # fork guard the CI jobs carry, because this workflow has no `pull_request` trigger at all -- it
 # runs only on a push to main and on manual dispatch, neither of which a fork can cause. The
 # repository guard on each job still blocks it in a fork.
@@ -28,7 +29,8 @@ concurrency:
 # Build isolation (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
 # read-only token and no Pages/OIDC credentials. `deploy` holds pages: write + id-token: write
 # and runs only first-party actions plus the IndexNow curl.
-# `deploy-cloudflare` consumes the same artifact and is inert until credentials are set.
+# `validate-cloudflare` / `deploy-cloudflare` consume the same artifact on GitHub-hosted runners;
+# the deploy is inert until credentials are set and only runs from main.
 jobs:
   build:
     runs-on: self-hosted
@@ -142,9 +144,16 @@ jobs:
           esac
           exit 0
 
+  # Both Cloudflare jobs run on a GitHub-hosted runner, not the self-hosted one (#461 @sec
+  # SEC-1). The self-hosted runner is persistent and the build job runs ~90 third-party gems
+  # as the same user, which could tamper with ~/.gitconfig (copied by actions/checkout), the
+  # runner's binaries, or read another job's environment. A fresh ephemeral VM per job removes
+  # that path to the Cloudflare token. The repo is public, so hosted minutes are free. This
+  # mirrors the vaelo.club hotsite deploy this setup is modelled on. The fresh-directory and
+  # locked-install steps below are kept as defence in depth.
   validate-cloudflare:
     needs: build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.repository == 'alexandre-machado/audio-blackbox'
     permissions:
       contents: read
@@ -212,7 +221,7 @@ jobs:
 
   deploy-cloudflare:
     needs: validate-cloudflare
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.repository == 'alexandre-machado/audio-blackbox' && github.ref == 'refs/heads/main'
     environment: cloudflare-hotsite
     permissions:
