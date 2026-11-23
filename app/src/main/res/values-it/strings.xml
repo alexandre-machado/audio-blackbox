@@ -57,7 +57,7 @@
     <string name="recorder_notification_forward_error">Registrazione live non riuscita</string>
     <!-- Issue #139: a verb distinct from "Salva", short enough for the notification action slot. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Ferma live</string>
+    <string name="recorder_notification_action_stop_forward">Salva e termina la diretta</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>
@@ -176,7 +176,7 @@
     <string name="dashboard_forward_recording_title">Registrazione live in corso</string>
     <string name="dashboard_forward_elapsed_cd">Durata della registrazione live: %1$s</string>
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Ferma la registrazione live</string>
+    <string name="dashboard_forward_stop_button">Salva la registrazione live e terminala</string>
     <string name="dashboard_forward_success_title">Registrazione live salvata</string>
     <string name="dashboard_forward_success_body">File: %1$s</string>
     <string name="dashboard_forward_error_title">Registrazione live non riuscita</string>
@@ -186,7 +186,7 @@
     <string name="dashboard_panel_save_label">Salva</string>
     <string name="dashboard_panel_save_saving_label">Salvataggio</string>
     <string name="dashboard_panel_live_label">Live</string>
-    <string name="dashboard_panel_live_stop_label">Ferma</string>
+    <string name="dashboard_panel_live_stop_label">Salva e termina</string>
 
     <!-- Issue #335 wiring: one-line panel captions. -->
     <string name="dashboard_panel_save_caption_no_audio">Ancora nessun audio</string>

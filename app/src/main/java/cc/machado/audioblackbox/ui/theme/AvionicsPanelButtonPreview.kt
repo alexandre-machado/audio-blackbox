@@ -20,6 +20,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.ui.forwardActionResources
 import java.util.Locale
 
 /**
@@ -92,7 +93,9 @@ private fun PreviewPanelPairSaving() {
     }
 }
 
-@Preview(name = "335 - Continuous recording (STOP state, pulsing LED)", widthDp = 411, showBackground = true, backgroundColor = 0xFF0A0E17)
+@Preview(name = "452 - Live recording, save and end", widthDp = 411, showBackground = true, backgroundColor = 0xFF0A0E17)
+@Preview(name = "452 - German compact", locale = "de", widthDp = 360, fontScale = 1.3f)
+@Preview(name = "452 - French compact", locale = "fr", widthDp = 360, fontScale = 1.3f)
 @Composable
 private fun PreviewPanelPairLiveRecording() {
     AudioBlackboxTheme {
@@ -129,8 +132,8 @@ private fun PreviewPanelPairCompactWidth() {
 /**
  * `@rev`'s condition on PR #339: localisation was never verified for this design proposal. Forces
  * a pt-BR `Configuration`/`Context` the same way `ScreenLayoutTest`'s locale tests do, over the
- * two states most likely to overflow the panel button's fixed-height row -- the disabled reason
- * (a full sentence-length string in English already) and the live/STOP caption, which carries a
+ * two states most likely to wrap in the panel button's content-sized row -- the disabled reason
+ * (a full sentence-length string in English already) and the live/save-and-end caption, which carries a
  * pulsing LED as well as translated text.
  */
 @Preview(name = "335 - pt-BR, disabled + live recording", widthDp = 411, showBackground = true, backgroundColor = 0xFF0A0E17)
@@ -209,16 +212,13 @@ private fun PanelPairDemo(
                     live = {
                         AvionicsPanelButton(
                             label = liveLabel.uppercase(),
+                            iconRes = forwardActionResources(livePulsing).icon,
                             onClick = {},
                             enabled = true,
                             pulsing = livePulsing,
                             caption = liveCaption.uppercase(),
                             ledColor = liveLedColor,
-                            contentDescription = if (livePulsing) {
-                                "Stop continuous recording"
-                            } else {
-                                "Save the past and keep recording"
-                            },
+                            contentDescription = stringResource(forwardActionResources(livePulsing).contentDescription),
                         )
                     },
                 )

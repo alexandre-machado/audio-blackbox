@@ -238,6 +238,9 @@ dependencies {
 }
 
 tasks.withType<Test> {
+    // Resource-contract tests read the XML directly. A text-only edit leaves R IDs unchanged,
+    // so declare these inputs to prevent Gradle from skipping their regression assertions.
+    inputs.files(fileTree("src/main/res") { include("values*/strings.xml") })
     // RingBufferSnapshotLockBenchmarkTest (issue #22) allocates up to two ~635 MB byte arrays at
     // once (the ring buffer's backing array plus a snapshot's destination array) to benchmark the
     // hypothetical 44.1kHz/stereo/60min config -- comfortably past the JVM's default test-worker

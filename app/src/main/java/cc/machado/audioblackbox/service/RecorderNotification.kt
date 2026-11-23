@@ -13,6 +13,7 @@ import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.ui.MainActivity
+import cc.machado.audioblackbox.ui.forwardActionResources
 import cc.machado.audioblackbox.ui.specLabelRes
 import java.util.Locale
 
@@ -179,16 +180,17 @@ object RecorderNotification {
                 saveIntent,
             )
 
+        val forwardAction = forwardActionResources(forwardRecordingState is ForwardRecordingState.Recording)
         if (forwardRecordingState is ForwardRecordingState.Recording) {
             builder.addAction(
                 0,
-                context.getString(R.string.recorder_notification_action_stop_forward),
+                context.getString(forwardAction.notificationLabel),
                 stopForwardIntent,
             )
         } else {
             builder.addAction(
                 0,
-                context.getString(R.string.recorder_notification_action_start_forward),
+                context.getString(forwardAction.notificationLabel),
                 startForwardIntent,
             )
         }

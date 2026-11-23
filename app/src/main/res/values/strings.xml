@@ -65,7 +65,7 @@
          or starts an hours long recording (issue #55). Kept a distinct verb, "Record" instead of
          "Save", short enough to stay legible at the slot's real width. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Stop live</string>
+    <string name="recorder_notification_action_stop_forward">Save &amp; end live</string>
 
     <!-- Home-screen widget (issue #275). Status text stays short (unlike the fuller
          recorder_notification_state_* strings) since the widget's cells are narrow and PT-BR runs
@@ -208,7 +208,7 @@
          announcement ForwardRecordingSection used to provide before it was folded into
          ActionPanelRow's single button. -->
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Stop continuous recording</string>
+    <string name="dashboard_forward_stop_button">Save the live recording and end it</string>
     <string name="dashboard_forward_success_title">Continuous recording saved</string>
     <string name="dashboard_forward_success_body">File: %1$s</string>
     <string name="dashboard_forward_error_title">Continuous recording failed</string>
@@ -224,7 +224,7 @@
     <string name="dashboard_panel_save_label">Save</string>
     <string name="dashboard_panel_save_saving_label">Saving</string>
     <string name="dashboard_panel_live_label">Live</string>
-    <string name="dashboard_panel_live_stop_label">Stop</string>
+    <string name="dashboard_panel_live_stop_label">Save &amp; end</string>
 
     <!-- Issue #335 wiring: the panel buttons' one-line captions, filling the same role the
          explanation paragraphs / elapsed-clock text used to fill in the now-removed

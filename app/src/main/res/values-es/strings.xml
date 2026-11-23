@@ -57,7 +57,7 @@
     <string name="recorder_notification_forward_error">Error en la grabación en directo</string>
     <!-- Issue #139: a verb distinct from "Guardar", short enough for the notification action slot. -->
     <string name="recorder_notification_action_start_forward">Directo</string>
-    <string name="recorder_notification_action_stop_forward">Parar directo</string>
+    <string name="recorder_notification_action_stop_forward">Guardar y terminar el directo</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>
@@ -176,7 +176,7 @@
     <string name="dashboard_forward_recording_title">Grabando en directo</string>
     <string name="dashboard_forward_elapsed_cd">Tiempo transcurrido de la grabación en directo: %1$s</string>
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Detener la grabación en directo</string>
+    <string name="dashboard_forward_stop_button">Guardar la grabación en directo y terminarla</string>
     <string name="dashboard_forward_success_title">Grabación en directo guardada</string>
     <string name="dashboard_forward_success_body">Archivo: %1$s</string>
     <string name="dashboard_forward_error_title">Error en la grabación en directo</string>
@@ -186,7 +186,7 @@
     <string name="dashboard_panel_save_label">Guardar</string>
     <string name="dashboard_panel_save_saving_label">Guardando</string>
     <string name="dashboard_panel_live_label">Directo</string>
-    <string name="dashboard_panel_live_stop_label">Detener</string>
+    <string name="dashboard_panel_live_stop_label">Guardar y terminar</string>
 
     <!-- Issue #335 wiring: one-line panel captions. -->
     <string name="dashboard_panel_save_caption_no_audio">Aún no hay audio</string>

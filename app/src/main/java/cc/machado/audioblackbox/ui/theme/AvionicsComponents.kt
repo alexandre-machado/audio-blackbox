@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.theme
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -33,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +61,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -322,6 +325,7 @@ fun AvionicsPanelButton(
     caption: String? = null,
     ledColor: Color = FlightOrange,
     contentDescription: String? = null,
+    @DrawableRes iconRes: Int? = null,
 ) {
     // `interactable`, not `enabled`, drives every visual below: an in-progress control is not
     // `enabled = false` (the caller still wants the click wired so a second tap is absorbed rather
@@ -386,6 +390,16 @@ fun AvionicsPanelButton(
                         ),
                 )
             }
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = labelColor,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            // Keep the label width bounded but its height unconstrained: DE/FR save-and-end
+            // labels can wrap, including at enlarged font scales, without losing any text.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = label.uppercase(),
