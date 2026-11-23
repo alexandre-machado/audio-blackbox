@@ -2,7 +2,6 @@ package cc.machado.audioblackbox.ui
 
 import cc.machado.audioblackbox.R
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ForwardActionResourcesTest {
@@ -22,7 +21,7 @@ class ForwardActionResourcesTest {
         assertEquals(R.string.dashboard_panel_live_label, action.label)
         assertEquals(R.string.dashboard_forward_start_button, action.contentDescription)
         assertEquals(R.string.recorder_notification_action_start_forward, action.notificationLabel)
-        assertNull(action.icon)
+        assertEquals(R.drawable.ic_continuous_record, action.icon)
     }
 
 }

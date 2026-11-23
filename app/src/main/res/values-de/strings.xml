@@ -55,7 +55,7 @@
     <string name="recorder_notification_forward_recording">Live-Aufnahme: %1$s</string>
     <string name="recorder_notification_forward_success">Live-Aufnahme gespeichert: %1$s</string>
     <string name="recorder_notification_forward_error">Live-Aufnahme fehlgeschlagen</string>
-    <!-- Issue #139: a verb distinct from "Speichern", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Speichern"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Live</string>
     <string name="recorder_notification_action_stop_forward">Speichern &amp; beenden</string>
 

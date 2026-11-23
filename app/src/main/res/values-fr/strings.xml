@@ -57,7 +57,7 @@
     <string name="recorder_notification_forward_recording">Enregistrement en direct\u00A0: %1$s</string>
     <string name="recorder_notification_forward_success">Enregistrement en direct sauvegardé\u00A0: %1$s</string>
     <string name="recorder_notification_forward_error">Échec de l\'enregistrement en direct</string>
-    <!-- Issue #139: a verb distinct from "Sauver", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Sauver"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Direct</string>
     <string name="recorder_notification_action_stop_forward">Sauver et terminer</string>
 

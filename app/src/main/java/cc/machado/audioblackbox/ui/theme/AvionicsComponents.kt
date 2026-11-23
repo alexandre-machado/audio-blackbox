@@ -23,7 +23,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -482,9 +484,15 @@ fun AvionicsPanelButtonRow(
                 live()
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(modifier = Modifier.weight(1f)) { save() }
-                Box(modifier = Modifier.weight(1f)) { live() }
+            // Equal heights (PR #454 `@rev` REV-8): the taller button sets the row height and
+            // propagateMinConstraints stretches the other to match, so a wrapped label or an icon on
+            // one side never leaves the pair visibly uneven.
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { save() }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { live() }
             }
         }
     }

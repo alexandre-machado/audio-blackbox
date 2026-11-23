@@ -55,7 +55,7 @@
     <string name="recorder_notification_forward_recording">Registrazione live: %1$s</string>
     <string name="recorder_notification_forward_success">Registrazione live salvata: %1$s</string>
     <string name="recorder_notification_forward_error">Registrazione live non riuscita</string>
-    <!-- Issue #139: a verb distinct from "Salva", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Salva"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Live</string>
     <string name="recorder_notification_action_stop_forward">Salva e termina</string>
 

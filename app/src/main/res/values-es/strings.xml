@@ -55,7 +55,7 @@
     <string name="recorder_notification_forward_recording">Grabación en directo: %1$s</string>
     <string name="recorder_notification_forward_success">Grabación en directo guardada: %1$s</string>
     <string name="recorder_notification_forward_error">Error en la grabación en directo</string>
-    <!-- Issue #139: a verb distinct from "Guardar", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Guardar"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Directo</string>
     <string name="recorder_notification_action_stop_forward">Guardar y terminar</string>
 
