@@ -54,7 +54,7 @@
     <string name="recorder_notification_forward_success">Gravação ao vivo salva: %1$s</string>
     <string name="recorder_notification_forward_error">Falha na gravação ao vivo</string>
     <string name="recorder_notification_action_start_forward">Ao vivo</string>
-    <string name="recorder_notification_action_stop_forward">Salvar e encerrar live</string>
+    <string name="recorder_notification_action_stop_forward">Salvar e encerrar</string>
 
     <!-- Widget de tela inicial (issue #275) -->
     <string name="widget_label">Audio Blackbox</string>

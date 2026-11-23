@@ -57,7 +57,7 @@
     <string name="recorder_notification_forward_error">Live-Aufnahme fehlgeschlagen</string>
     <!-- Issue #139: a verb distinct from "Speichern", short enough for the notification action slot. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Live-Aufnahme speichern &amp; beenden</string>
+    <string name="recorder_notification_action_stop_forward">Speichern &amp; beenden</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>

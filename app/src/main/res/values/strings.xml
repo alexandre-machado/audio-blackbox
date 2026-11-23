@@ -65,7 +65,7 @@
          or starts an hours long recording (issue #55). Kept a distinct verb, "Record" instead of
          "Save", short enough to stay legible at the slot's real width. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Save &amp; end live</string>
+    <string name="recorder_notification_action_stop_forward">Save &amp; end</string>
 
     <!-- Home-screen widget (issue #275). Status text stays short (unlike the fuller
          recorder_notification_state_* strings) since the widget's cells are narrow and PT-BR runs

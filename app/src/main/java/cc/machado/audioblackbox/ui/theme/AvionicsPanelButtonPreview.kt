@@ -94,8 +94,8 @@ private fun PreviewPanelPairSaving() {
 }
 
 @Preview(name = "452 - Live recording, save and end", widthDp = 411, showBackground = true, backgroundColor = 0xFF0A0E17)
-@Preview(name = "452 - German compact", locale = "de", widthDp = 360, fontScale = 1.3f)
-@Preview(name = "452 - French compact", locale = "fr", widthDp = 360, fontScale = 1.3f)
+@Preview(name = "452 - German compact", locale = "de", widthDp = 411, fontScale = 1.3f, showBackground = true, backgroundColor = 0xFF0A0E17)
+@Preview(name = "452 - French compact", locale = "fr", widthDp = 411, fontScale = 1.3f, showBackground = true, backgroundColor = 0xFF0A0E17)
 @Composable
 private fun PreviewPanelPairLiveRecording() {
     AudioBlackboxTheme {
@@ -224,5 +224,34 @@ private fun PanelPairDemo(
                 )
             }
         }
+    }
+}
+
+
+// A 411dp screen stacks after card gutters. Use 411dp of actual row space here to
+// exercise two columns at enlarged font scale, without a preview-only breakpoint.
+@Preview(name = "452 - German two-up row", locale = "de", widthDp = 411, fontScale = 1.3f, showBackground = true, backgroundColor = 0xFF0A0E17)
+@Preview(name = "452 - French two-up row", locale = "fr", widthDp = 411, fontScale = 1.3f, showBackground = true, backgroundColor = 0xFF0A0E17)
+@Composable
+private fun PreviewLiveTwoUpRow() {
+    AudioBlackboxTheme {
+        AvionicsPanelButtonRow(
+            save = {
+                AvionicsPanelButton(
+                    label = stringResource(R.string.dashboard_panel_save_label),
+                    caption = stringResource(R.string.dashboard_panel_save_caption_buffered, "12:03"),
+                    onClick = {},
+                )
+            },
+            live = {
+                AvionicsPanelButton(
+                    label = stringResource(R.string.dashboard_panel_live_stop_label),
+                    caption = stringResource(R.string.dashboard_panel_live_caption_recording, "00:42"),
+                    iconRes = forwardActionResources(true).icon,
+                    pulsing = true,
+                    onClick = {},
+                )
+            },
+        )
     }
 }

@@ -57,7 +57,7 @@
     <string name="recorder_notification_forward_error">Registrazione live non riuscita</string>
     <!-- Issue #139: a verb distinct from "Salva", short enough for the notification action slot. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Salva e termina la diretta</string>
+    <string name="recorder_notification_action_stop_forward">Salva e termina</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>

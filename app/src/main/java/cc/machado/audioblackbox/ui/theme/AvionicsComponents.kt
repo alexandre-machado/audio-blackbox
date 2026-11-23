@@ -298,10 +298,9 @@ fun AvionicsLabelValueRow(
  *   caller but the control also renders disabled-styled so a second tap mid-export cannot double
  *   fire (mirrors the existing 500 ms debounce in `SaveSection`, which callers keep doing
  *   independently -- this primitive does not replace that guard).
- * - **Toggled / "stop" state**: same primitive, different [label]/[caption]/[ledColor] (e.g.
- *   [WarningRed] or [CautionAmber] for a live "STOP" control) -- there is deliberately no separate
- *   "stop variant" composable, because `ForwardRecordingSection` already proved the start/stop pair
- *   is one control whose text and color change, not two controls.
+ * - **Toggled / save-and-end state**: same primitive, different [label]/[caption] and
+ *   optional save glyph. The live primary action retains [FlightOrange]; state colors belong
+ *   to annunciators. This is one control whose action changes with the recording state.
  *
  * Content description: pass the *existing* accessibility strings
  * (`dashboard_save_button_cd_full`/`_partial`, etc.) as [contentDescription] unchanged -- this
@@ -390,17 +389,17 @@ fun AvionicsPanelButton(
                         ),
                 )
             }
-            if (iconRes != null) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    tint = labelColor,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            // Keep the label width bounded but its height unconstrained: DE/FR save-and-end
-            // labels can wrap, including at enlarged font scales, without losing any text.
+            // The icon sits above the label, preserving the full text-column width.
+            // Height remains content-sized so translated labels can wrap at word boundaries.
             Column(modifier = Modifier.weight(1f)) {
+                if (iconRes != null) {
+                    Icon(
+                        painter = painterResource(iconRes),
+                        contentDescription = null,
+                        tint = labelColor,
+                        modifier = Modifier.padding(bottom = 4.dp).size(18.dp),
+                    )
+                }
                 Text(
                     text = label.uppercase(),
                     fontFamily = FontFamily.Monospace,

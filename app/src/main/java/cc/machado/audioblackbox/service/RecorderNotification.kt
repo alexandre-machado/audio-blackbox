@@ -180,23 +180,26 @@ object RecorderNotification {
                 saveIntent,
             )
 
-        val forwardAction = forwardActionResources(forwardRecordingState is ForwardRecordingState.Recording)
-        if (forwardRecordingState is ForwardRecordingState.Recording) {
-            builder.addAction(
-                0,
-                context.getString(forwardAction.notificationLabel),
-                stopForwardIntent,
-            )
-        } else {
-            builder.addAction(
-                0,
-                context.getString(forwardAction.notificationLabel),
-                startForwardIntent,
-            )
-        }
+        val forwardAction = forwardActionFor(forwardRecordingState)
+        builder.addAction(
+            0,
+            context.getString(forwardAction.labelRes),
+            if (forwardAction.endsRecording) stopForwardIntent else startForwardIntent,
+        )
 
         builder.addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
         return builder.build()
+    }
+
+    internal data class ForwardAction(val labelRes: Int, val endsRecording: Boolean)
+
+    /** Pure action selection used by [build]; keeps the title and intent on the same state branch. */
+    internal fun forwardActionFor(state: ForwardRecordingState): ForwardAction {
+        val recording = state is ForwardRecordingState.Recording
+        return ForwardAction(
+            labelRes = forwardActionResources(recording).notificationLabel,
+            endsRecording = recording,
+        )
     }
 
     /**

@@ -57,7 +57,7 @@
     <string name="recorder_notification_forward_error">Error en la grabación en directo</string>
     <!-- Issue #139: a verb distinct from "Guardar", short enough for the notification action slot. -->
     <string name="recorder_notification_action_start_forward">Directo</string>
-    <string name="recorder_notification_action_stop_forward">Guardar y terminar el directo</string>
+    <string name="recorder_notification_action_stop_forward">Guardar y terminar</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>
