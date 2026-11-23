@@ -199,6 +199,15 @@ jobs:
           cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
           mkdir -p "$WORK_DIR/.staged/audio-blackbox"
           tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
+          # #461 @sec SEC-8: the artifact comes from the self-hosted build. Accept only regular
+          # files and directories, never a symlink (e.g. to /proc/self/environ), device or FIFO
+          # that wrangler would follow and upload.
+          odd="$(find "$WORK_DIR/.staged" ! -type f ! -type d -print)"
+          if [ -n "$odd" ]; then
+            echo "::error::Refusing to stage non-regular files from the Pages artifact:"
+            echo "$odd"
+            exit 1
+          fi
           test -f "$WORK_DIR/.staged/audio-blackbox/404.html"
           export NPM_CONFIG_CACHE="$(mktemp -d "${RUNNER_TEMP}/cf-npm.XXXXXX")"
           export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-home.XXXXXX")"
@@ -268,6 +277,15 @@ jobs:
           cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
           mkdir -p "$WORK_DIR/.staged/audio-blackbox"
           tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
+          # #461 @sec SEC-8: the artifact comes from the self-hosted build. Accept only regular
+          # files and directories, never a symlink (e.g. to /proc/self/environ), device or FIFO
+          # that wrangler would follow and upload.
+          odd="$(find "$WORK_DIR/.staged" ! -type f ! -type d -print)"
+          if [ -n "$odd" ]; then
+            echo "::error::Refusing to stage non-regular files from the Pages artifact:"
+            echo "$odd"
+            exit 1
+          fi
           test -f "$WORK_DIR/.staged/audio-blackbox/404.html"
           export NPM_CONFIG_CACHE="$(mktemp -d "${RUNNER_TEMP}/cf-npm.XXXXXX")"
           export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-home.XXXXXX")"
