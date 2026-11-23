@@ -2,6 +2,8 @@ package cc.machado.audioblackbox.ui.gallery
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -37,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +55,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +88,8 @@ import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import cc.machado.audioblackbox.ui.theme.SECTION_SPACING
 import cc.machado.audioblackbox.ui.theme.TextMuted
 import cc.machado.audioblackbox.ui.theme.WarningRed
+import cc.machado.audioblackbox.ui.theme.TelemetryCyan
+import kotlinx.coroutines.delay
 
 /**
  * Hosts [GalleryViewModel] and renders [GalleryScreen] against its live state -- the same
@@ -91,9 +102,11 @@ import cc.machado.audioblackbox.ui.theme.WarningRed
  * exactly what to call.
  */
 @Composable
-fun GalleryRoute(modifier: Modifier = Modifier) {
+fun GalleryRoute(
+    modifier: Modifier = Modifier,
+    viewModel: GalleryViewModel = viewModel(factory = GalleryViewModel.factory(LocalContext.current)),
+) {
     val context = LocalContext.current
-    val viewModel: GalleryViewModel = viewModel(factory = GalleryViewModel.factory(context))
     // No LaunchedEffect(Unit)/refresh() here anymore (issue #375): GalleryViewModel.init already
     // runs the first query, and its RecordingsChangeObserver (registered for this ViewModel's
     // whole lifetime, not once per composition) now keeps the list current on its own -- see
@@ -111,6 +124,7 @@ fun GalleryRoute(modifier: Modifier = Modifier) {
         onDeleteCancelled = viewModel::onDeleteCancelled,
         onDeleteErrorDismissed = viewModel::onDeleteErrorDismissed,
         onRefresh = viewModel::refresh,
+        onNewlySavedShown = viewModel::acknowledgeNewlySaved,
         modifier = modifier,
     )
 }
@@ -154,7 +168,27 @@ fun GalleryScreen(
     // Real wiring is GalleryRoute -> GalleryViewModel::refresh.
     onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onNewlySavedShown: (Uri) -> Unit = {},
 ) {
+    val listState = rememberLazyListState()
+    var highlightedKey by remember { mutableStateOf<Uri?>(null) }
+    val acknowledge by rememberUpdatedState(onNewlySavedShown)
+    val savedKey = uiState.newlySavedKey
+    val savedIndex = uiState.items.indexOfFirst { it.recording.uri == savedKey }
+    LaunchedEffect(savedKey, savedIndex) {
+        if (savedKey != null && savedIndex >= 0) {
+            listState.animateScrollToItem(savedIndex)
+            highlightedKey = savedKey
+            acknowledge(savedKey)
+        }
+    }
+    // Separate from acknowledgement: clearing the pending flag must not cancel the highlight.
+    LaunchedEffect(highlightedKey) {
+        if (highlightedKey != null) {
+            delay(3_000L)
+            highlightedKey = null
+        }
+    }
     // Issue #420: no bottom gutter here. Dashboard and Settings apply SCREEN_GUTTER *inside*
     // their verticalScroll, so their scroll viewport runs to the bottom of AppScaffold's content
     // area and content scrolls up to the same edge above the navigation bar on both. Padding this
@@ -187,6 +221,8 @@ fun GalleryScreen(
                 uiState.items.isEmpty() -> EmptyState()
                 else -> RecordingList(
                     items = uiState.items,
+                    listState = listState,
+                    highlightedKey = highlightedKey,
                     onPlayPauseClicked = onPlayPauseClicked,
                     onSeek = onSeek,
                     onShareClicked = onShareClicked,
@@ -310,6 +346,8 @@ private fun EmptyState() {
 @Composable
 private fun RecordingList(
     items: List<RecordingListItem>,
+    listState: LazyListState,
+    highlightedKey: Uri?,
     onPlayPauseClicked: (RecordingItem) -> Unit,
     onSeek: (Long) -> Unit,
     onShareClicked: (RecordingItem) -> Unit,
@@ -318,6 +356,7 @@ private fun RecordingList(
     var expandedUri by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         // The screen's bottom gutter, scrolled with the content rather than clipping it (#420).
         contentPadding = PaddingValues(bottom = SCREEN_GUTTER),
@@ -328,6 +367,7 @@ private fun RecordingList(
             val isExpanded = expandedUri == uriStr
             RecordingCard(
                 item = item,
+                isNewlySaved = item.recording.uri == highlightedKey,
                 isExpanded = isExpanded,
                 onToggleExpand = {
                     expandedUri = if (isExpanded) null else uriStr
@@ -344,6 +384,7 @@ private fun RecordingList(
 @Composable
 private fun RecordingCard(
     item: RecordingListItem,
+    isNewlySaved: Boolean,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onPlayPauseClicked: () -> Unit,
@@ -364,10 +405,24 @@ private fun RecordingCard(
     )
     val shareCd = stringResource(R.string.gallery_share_cd, recording.displayName)
     val deleteCd = stringResource(R.string.gallery_delete_cd, recording.displayName)
+    val savedDescription = stringResource(R.string.gallery_newly_saved)
 
     AvionicsCard(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (isNewlySaved) Modifier.border(2.dp, TelemetryCyan, CARD_SHAPE) else Modifier)
+            // Live region only on the newly saved card: a polite live region on every card would
+            // re-announce ordinary content changes (playback progress, refinalized durations).
+            .then(
+                if (isNewlySaved) {
+                    Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        stateDescription = savedDescription
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .clickable { onToggleExpand() },
     ) {
         Column(

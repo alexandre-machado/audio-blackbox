@@ -384,4 +384,5 @@
     <string name="gallery_details_quality">Qualidade</string>
     <string name="gallery_details_storage">Armazenamento</string>
     <string name="gallery_details_storage_value">Gravações / Blackbox</string>
+    <string name="gallery_newly_saved">Gravação salva</string>
 </resources>

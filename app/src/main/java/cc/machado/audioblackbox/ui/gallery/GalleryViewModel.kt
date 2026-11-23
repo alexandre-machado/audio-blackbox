@@ -2,6 +2,7 @@ package cc.machado.audioblackbox.ui.gallery
 
 import android.content.Context
 import android.media.AudioManager
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -70,6 +71,7 @@ class GalleryViewModel(
     private val _pendingDelete = MutableStateFlow<RecordingItem?>(null)
     private val _deleteError = MutableStateFlow<RecordingItem?>(null)
     private val _isRefreshing = MutableStateFlow(false)
+    private val _newlySavedKey = MutableStateFlow<Uri?>(null)
 
     // Polled rather than observed for the same reason DashboardViewModel polls buffered duration:
     // MediaPlayer.getCurrentPosition() is a plain getter, not itself observable, and changes
@@ -98,8 +100,10 @@ class GalleryViewModel(
         baseUiState,
         _isRefreshing,
         forwardRecordingState,
-    ) { state, isRefreshing, forwardState ->
+        _newlySavedKey,
+    ) { state, isRefreshing, forwardState, newlySavedKey ->
         applyRefreshAndInProgressState(state, isRefreshing, forwardState)
+            .copy(newlySavedKey = newlySavedKey)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -122,7 +126,33 @@ class GalleryViewModel(
     private val changeSubscription: Closeable = changeObserver.observe { refresh() }
 
     init {
+        // Observe saves even while the gallery has no subscriber. Playback polling remains
+        // WhileSubscribed. Null is loading; the first actual list (including empty) is baseline.
+        viewModelScope.launch {
+            var previous: Map<Uri, RecordingListItem>? = null
+            combine(_recordings, forwardRecordingState) { recordings, forward ->
+                applyRefreshAndInProgressState(
+                    buildUiState(recordings, PlaybackState.Idle, 0L, null), false, forward,
+                )
+            }.collect { state ->
+                if (!state.isLoading) {
+                    val before = previous
+                    val saved = if (before == null) null else state.items.firstOrNull { item ->
+                        val old = before[item.recording.uri]
+                        !item.isInProgress && (old == null || old.isInProgress)
+                    }
+                    previous = state.items.associateBy { it.recording.uri }
+                    _newlySavedKey.value = saved?.recording?.uri
+                        ?: _newlySavedKey.value?.takeIf { previous!!.containsKey(it) }
+                }
+            }
+        }
         refresh()
+    }
+
+    /** A stale screen acknowledgement must not clear a more recent save. */
+    fun acknowledgeNewlySaved(key: Uri) {
+        _newlySavedKey.compareAndSet(key, null)
     }
 
     /** Re-runs the real `MediaStore` query. Called on init, re-invoked automatically by

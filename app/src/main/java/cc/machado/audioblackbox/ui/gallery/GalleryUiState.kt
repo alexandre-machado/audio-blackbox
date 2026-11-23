@@ -78,4 +78,6 @@ data class GalleryUiState(
     // of an already-visible list on every automatic refresh, which is exactly the flicker issue
     // #375 says to avoid.
     val isRefreshing: Boolean = false,
+    // Retained until the screen has brought this URI into view and acknowledged it.
+    val newlySavedKey: Uri? = null,
 )

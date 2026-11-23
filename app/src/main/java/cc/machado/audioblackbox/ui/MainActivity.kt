@@ -51,6 +51,7 @@ import cc.machado.audioblackbox.settings.DataStoreRetentionWindowPreferences
 import cc.machado.audioblackbox.ui.dashboard.DashboardRoute
 import cc.machado.audioblackbox.ui.dashboard.DashboardViewModel
 import cc.machado.audioblackbox.ui.gallery.GalleryRoute
+import cc.machado.audioblackbox.ui.gallery.GalleryViewModel
 import cc.machado.audioblackbox.ui.onboarding.OnboardingScreen
 import cc.machado.audioblackbox.ui.settings.SettingsRoute
 import cc.machado.audioblackbox.ui.settings.SettingsViewModel
@@ -121,6 +122,9 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             AudioBlackboxTheme {
+                // Establish the initial list before a dashboard save, even before the first
+                // gallery visit. The activity owns this VM across tab changes.
+                val galleryViewModel: GalleryViewModel = viewModel(factory = GalleryViewModel.factory(this))
                 // Issue #73, PR #74 round 2: hoisted here (not inside MainScreenWithBottomBar,
                 // which no longer exists) so both Scaffold's `bottomBar` slot and its `content`
                 // slot below can read/drive the same selected tab -- Scaffold requires the bar and
@@ -230,7 +234,7 @@ class MainActivity : ComponentActivity() {
                                 Destination.DASHBOARD -> DashboardRoute(
                                     viewModel = viewModel(factory = dashboardViewModelFactory),
                                 )
-                                Destination.GALLERY -> GalleryRoute()
+                                Destination.GALLERY -> GalleryRoute(viewModel = galleryViewModel)
                                 Destination.SETTINGS -> SettingsRoute(
                                     viewModel = viewModel(factory = settingsViewModelFactory),
                                 )
