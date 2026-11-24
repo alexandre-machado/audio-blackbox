@@ -54,7 +54,7 @@
     <string name="recorder_notification_forward_success">Gravação ao vivo salva: %1$s</string>
     <string name="recorder_notification_forward_error">Falha na gravação ao vivo</string>
     <string name="recorder_notification_action_start_forward">Ao vivo</string>
-    <string name="recorder_notification_action_stop_forward">Parar ao vivo</string>
+    <string name="recorder_notification_action_stop_forward">Salvar e encerrar</string>
 
     <!-- Widget de tela inicial (issue #275) -->
     <string name="widget_label">Audio Blackbox</string>
@@ -177,7 +177,7 @@
     <string name="dashboard_forward_recording_title">Gravando para frente</string>
     <string name="dashboard_forward_elapsed_cd">Tempo decorrido da gravação contínua: %1$s</string>
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Parar gravação contínua</string>
+    <string name="dashboard_forward_stop_button">Salvar a gravação ao vivo e encerrá-la</string>
     <string name="dashboard_forward_success_title">Gravação contínua salva</string>
     <string name="dashboard_forward_success_body">Arquivo: %1$s</string>
     <string name="dashboard_forward_error_title">Falha na gravação contínua</string>
@@ -188,7 +188,7 @@
     <string name="dashboard_panel_save_label">Salvar</string>
     <string name="dashboard_panel_save_saving_label">Salvando</string>
     <string name="dashboard_panel_live_label">Ao vivo</string>
-    <string name="dashboard_panel_live_stop_label">Parar</string>
+    <string name="dashboard_panel_live_stop_label">Salvar e encerrar</string>
 
     <!-- Issue #335 wiring: legendas de uma linha dos botões do painel, ver comentário equivalente
          em values/strings.xml. -->
@@ -242,7 +242,7 @@
     <string name="settings_specs_format_label">Formato de áudio</string>
     <string name="settings_specs_format_value">PCM 16-bit (Buffer Circular)</string>
     <string name="settings_specs_export_label">Formato de exportação</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / WAV sem perdas</string>
+    <string name="settings_specs_export_value">Salvar .m4a / Ao vivo .aac</string>
     <string name="settings_specs_sample_rate_label">Taxa de amostragem</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Canais</string>
@@ -398,4 +398,7 @@
     <string name="pro_remaining">restam %1$s grátis</string>
     <string name="pro_card_label">Gravação ao vivo sem limite</string>
     <string name="pro_remaining_cd">Tempo restante de gravação ao vivo grátis: %1$s</string>
+    <string name="gallery_newly_saved">Gravação salva</string>
+    <string name="dashboard_panel_save_caption_live">Salvando ao vivo</string>
+    <string name="dashboard_save_button_cd_live">Não é necessário tocar em Salvar durante a gravação ao vivo: o arquivo é salvo enquanto você grava.</string>
 </resources>

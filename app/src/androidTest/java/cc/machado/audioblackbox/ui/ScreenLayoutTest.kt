@@ -20,6 +20,8 @@ import cc.machado.audioblackbox.ui.theme.SCREEN_GUTTER
 import java.util.Locale
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -510,6 +512,13 @@ class ScreenLayoutTest {
         }
         // Live (forward recording) is independent of the lookback buffer and stays enabled.
         composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).apply {
+            // Oracle: the real DashboardScreen call site selects start resources while idle.
+            assertContentDescriptionEquals(
+                composeRule.activity.getString(R.string.dashboard_forward_start_button),
+            )
+            assertTextContains(
+                composeRule.activity.getString(R.string.dashboard_panel_live_label).uppercase(),
+            )
             performScrollTo()
             assertIsDisplayed()
             assertIsEnabled()
@@ -543,11 +552,11 @@ class ScreenLayoutTest {
     }
 
     /**
-     * Forward recording live: the Live control must present as its STOP identity, and the start
+     * Forward recording live: the Live control must present as its save-and-end identity, and the start
      * identity must no longer exist -- one control, not two, per [AvionicsPanelButton]'s doc.
      */
     @Test
-    fun actionPanelLiveButtonPresentsAsStopWhileForwardRecording() {
+    fun actionPanelLiveButtonPresentsAsSaveAndEndWhileForwardRecording() {
         composeRule.setContent {
             CompactHarnessApp(
                 Destination.DASHBOARD,
@@ -569,6 +578,8 @@ class ScreenLayoutTest {
             assertIsEnabled()
         }
         composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).assertDoesNotExist()
+        // Oracle: live already writes the file; a separate Save must be disabled.
+        composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG).assertIsNotEnabled()
     }
 
     /**
@@ -579,7 +590,7 @@ class ScreenLayoutTest {
      * (that issue is about a `RemoteViews` widget's reflective `setInt` call, an unrelated
      * mechanism, not Compose's own `Modifier.semantics { liveRegion = ... }`).
      *
-     * Oracle: fails if the Live/STOP button does not carry [SemanticsProperties.LiveRegion] while
+     * Oracle: fails if the Live/save-and-end button does not carry [SemanticsProperties.LiveRegion] while
      * forward recording is active, or if its announced text does not include the elapsed clock
      * (i.e. if the live region exists but never actually changes as time passes).
      */
@@ -604,16 +615,29 @@ class ScreenLayoutTest {
         stopButton.performScrollTo()
         val config = stopButton.fetchSemanticsNode().config
         assertTrue(
-            "expected the Live/STOP button to carry a LiveRegion semantics property while forward " +
+            "expected the Live/save-and-end button to carry a LiveRegion semantics property while forward " +
                 "recording is active, so TalkBack re-announces it as the elapsed clock changes",
             config.contains(SemanticsProperties.LiveRegion),
         )
         assertEquals(LiveRegionMode.Polite, config.getOrNull(SemanticsProperties.LiveRegion))
 
         val announced = config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString(" ") ?: ""
+        // Oracle: inverting isForwardRecording at the DashboardScreen resolver call must fail.
+        val context = composeRule.activity
+        assertEquals(
+            context.getString(
+                R.string.dashboard_forward_live_announcement,
+                context.getString(R.string.dashboard_forward_elapsed_cd, "00:42"),
+                context.getString(R.string.dashboard_forward_stop_button),
+            ),
+            announced,
+        )
+        stopButton.assertTextContains(
+            context.getString(R.string.dashboard_panel_live_stop_label).uppercase(),
+        )
         assertTrue(
-            "expected the Live/STOP button's announced content description (\"$announced\") to " +
-                "include the elapsed clock, not just the static \"stop\" action name -- otherwise " +
+            "expected the Live/save-and-end button's announced content description (\"$announced\") to " +
+                "include the elapsed clock, not just the static \"save-and-end\" action name -- otherwise " +
                 "the live region exists but never actually changes as time passes",
             announced.contains("00:42"),
         )

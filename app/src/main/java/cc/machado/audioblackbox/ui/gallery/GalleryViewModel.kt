@@ -2,11 +2,14 @@ package cc.machado.audioblackbox.ui.gallery
 
 import android.content.Context
 import android.media.AudioManager
+import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.export.RecordingRow
@@ -16,6 +19,7 @@ import java.io.Closeable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
@@ -63,6 +68,7 @@ class GalleryViewModel(
     // how the UI renders it. Defaults to the real, process-lifetime companion flow; tests inject a
     // fake the same way every other constructor parameter here already does.
     private val forwardRecordingState: StateFlow<ForwardRecordingState> = RecorderService.forwardRecordingState,
+    private val exportState: StateFlow<ExportState> = RecorderService.exportState,
 ) : ViewModel() {
 
     // null means "the first query hasn't returned yet" -- see GalleryUiState.isLoading's doc.
@@ -70,6 +76,7 @@ class GalleryViewModel(
     private val _pendingDelete = MutableStateFlow<RecordingItem?>(null)
     private val _deleteError = MutableStateFlow<RecordingItem?>(null)
     private val _isRefreshing = MutableStateFlow(false)
+    private val _newlySavedKey = MutableStateFlow<Uri?>(null)
 
     // Polled rather than observed for the same reason DashboardViewModel polls buffered duration:
     // MediaPlayer.getCurrentPosition() is a plain getter, not itself observable, and changes
@@ -98,8 +105,10 @@ class GalleryViewModel(
         baseUiState,
         _isRefreshing,
         forwardRecordingState,
-    ) { state, isRefreshing, forwardState ->
+        _newlySavedKey,
+    ) { state, isRefreshing, forwardState, newlySavedKey ->
         applyRefreshAndInProgressState(state, isRefreshing, forwardState)
+            .copy(newlySavedKey = newlySavedKey)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -121,8 +130,57 @@ class GalleryViewModel(
     // top of this one.
     private val changeSubscription: Closeable = changeObserver.observe { refresh() }
 
+    // Extension seam for future successful-save sources. Capture initial values now, not when
+    // collection is scheduled: a Success already present at VM creation is not a new save.
+    private val savedDisplayNames: Flow<String> = merge(
+        successTransitions(exportState) { (it as? ExportState.Success)?.displayName },
+        successTransitions(forwardRecordingState) { (it as? ForwardRecordingState.Success)?.displayName },
+    )
+    // Latest save wins, like newlySavedKey. A missing row retains at most one name until a
+    // newer success or VM disposal; provider failures and delayed visibility do not lose it.
+    private val pendingSavedName = MutableStateFlow<String?>(null)
+
     init {
+        viewModelScope.launch {
+            savedDisplayNames.collect { pendingSavedName.value = it }
+        }
+        // Observe even without a gallery subscriber; playback polling stays WhileSubscribed.
+        viewModelScope.launch {
+            combine(_recordings, forwardRecordingState, pendingSavedName) { rows, forward, name ->
+                Triple(rows, (forward as? ForwardRecordingState.Recording)?.displayName, name)
+            }.collect { (rows, activeName, name) ->
+                if (rows != null) {
+                    val saved = rows.firstOrNull { it.displayName == name && it.displayName != activeName }
+                    if (saved != null) {
+                        _newlySavedKey.value = saved.uri
+                        pendingSavedName.compareAndSet(name, null)
+                    } else {
+                        _newlySavedKey.value = _newlySavedKey.value?.takeIf { key ->
+                            rows.any { it.uri == key && it.displayName != activeName }
+                        }
+                    }
+                }
+            }
+        }
         refresh()
+    }
+
+    private fun <T> successTransitions(source: StateFlow<T>, name: (T) -> String?): Flow<String> {
+        val initial = source.value
+        return flow {
+            var previous = initial
+            source.collect { current ->
+                if (current != previous) {
+                    previous = current
+                    name(current)?.let { emit(it) }
+                }
+            }
+        }
+    }
+
+    /** A stale screen acknowledgement must not clear a more recent save. */
+    fun acknowledgeNewlySaved(key: Uri) {
+        _newlySavedKey.compareAndSet(key, null)
     }
 
     /** Re-runs the real `MediaStore` query. Called on init, re-invoked automatically by
@@ -135,6 +193,11 @@ class GalleryViewModel(
             try {
                 val rows = withContext(ioDispatcher) { repository.queryRecordings() }
                 _recordings.value = mapRowsToItems(rows)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Do not log provider messages, which may contain recording names or URIs.
+                Log.w("GalleryViewModel", "Recording query failed: ${e.javaClass.simpleName}")
             } finally {
                 _isRefreshing.value = false
             }
@@ -226,7 +289,7 @@ class GalleryViewModel(
         // ExportEngine.filenameFor's secondsLabel doc) -- this regex only anchors on the suffix
         // shape to find the timestamp group, so both forms must keep matching or every sub-minute
         // recording would silently fall back to DATE_ADDED sorting instead of its real capture time.
-        private val FILENAME_REGEX = Regex("""^blackbox_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_\d+(?:min|s)\.\w+$""")
+        private val FILENAME_REGEX = Regex("""^blackbox_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?:\d+(?:min|s)|forward)\.\w+$""")
 
         /** Pure oracle for "does this filename carry a capture timestamp, and if so, what is it"
          * -- `null` on any row whose name doesn't match [FILENAME_REGEX] or whose captured

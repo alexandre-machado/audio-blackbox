@@ -9,6 +9,8 @@ on:
       - '.github/workflows/pages.yml'
       - 'scripts/ci/check-site-rendered.sh'
       - 'scripts/ci/setup-jekyll-ruby.sh'
+      - 'scripts/ci/stage-cloudflare-site.sh'
+      - 'cloudflare/**'
   workflow_dispatch:
 
 # Minimum by default; each job widens only what it needs.
@@ -18,14 +20,17 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# Self-hosted, like every other job in this repo (#171/#172). Safe here without the head-repo
+# `build` and `deploy` are self-hosted, like every other job in this repo (#171/#172); the two
+# Cloudflare jobs are the deliberate exception (GitHub-hosted, see validate-cloudflare). Safe here without the head-repo
 # fork guard the CI jobs carry, because this workflow has no `pull_request` trigger at all -- it
 # runs only on a push to main and on manual dispatch, neither of which a fork can cause. The
 # repository guard on each job still blocks it in a fork.
 #
-# Two jobs (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
+# Build isolation (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
 # read-only token and no Pages/OIDC credentials. `deploy` holds pages: write + id-token: write
 # and runs only first-party actions plus the IndexNow curl.
+# `validate-cloudflare` / `deploy-cloudflare` consume the same artifact on GitHub-hosted runners;
+# the deploy is inert until credentials are set and only runs from main.
 jobs:
   build:
     runs-on: self-hosted
@@ -138,3 +143,169 @@ jobs:
             *) echo "::warning::IndexNow submission returned HTTP ${http_code} (non-fatal)" ;;
           esac
           exit 0
+
+  # Both Cloudflare jobs run on a GitHub-hosted runner, not the self-hosted one (#461 @sec
+  # SEC-1). The self-hosted runner is persistent and the build job runs ~90 third-party gems
+  # as the same user, which could tamper with ~/.gitconfig (copied by actions/checkout), the
+  # runner's binaries, or read another job's environment. A fresh ephemeral VM per job removes
+  # that path to the Cloudflare token. The repo is public, so hosted minutes are free. This
+  # mirrors the vaelo.club hotsite deploy this setup is modelled on. The fresh-directory and
+  # locked-install steps below are kept as defence in depth.
+  validate-cloudflare:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.repository == 'alexandre-machado/audio-blackbox'
+    permissions:
+      contents: read
+    steps:
+      - name: Allocate fresh job directories
+        id: dirs
+        run: |
+          set -euo pipefail
+          echo "checkout=$(mktemp -d "${GITHUB_WORKSPACE}/cf-checkout.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "artifact=$(mktemp -d "${RUNNER_TEMP}/cf-artifact.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "tools=$(mktemp -d "${RUNNER_TEMP}/cf-node.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "work=$(mktemp -d "${RUNNER_TEMP}/cf-work.XXXXXX")" >> "$GITHUB_OUTPUT"
+
+      - name: Fresh checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          path: ${{ steps.dirs.outputs.checkout }}
+
+      - name: Set up fresh Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        env:
+          # Do not execute a Node binary cached by the gem-running build job.
+          RUNNER_TOOL_CACHE: ${{ steps.dirs.outputs.tools }}
+        with:
+          node-version: '24'
+
+      - name: Download Pages artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: ${{ steps.dirs.outputs.artifact }}
+
+      # The Liquid guard ran in build before upload. Artifact trust is identical to
+      # the Pages deploy: no cached Ruby or gem-running build scripts execute here.
+      - name: Stage artifact and install locked Wrangler without lifecycle scripts
+        env:
+          SOURCE_DIR: ${{ steps.dirs.outputs.checkout }}
+          ARTIFACT_DIR: ${{ steps.dirs.outputs.artifact }}
+          WORK_DIR: ${{ steps.dirs.outputs.work }}
+        run: |
+          set -euo pipefail
+          cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
+          mkdir -p "$WORK_DIR/.staged/audio-blackbox"
+          tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
+          # #461 @sec SEC-8: the artifact comes from the self-hosted build. Accept only regular
+          # files and directories, never a symlink (e.g. to /proc/self/environ), device or FIFO
+          # that wrangler would follow and upload.
+          odd="$(find "$WORK_DIR/.staged" ! -type f ! -type d -print)"
+          if [ -n "$odd" ]; then
+            echo "::error::Refusing to stage non-regular files from the Pages artifact:"
+            echo "$odd"
+            exit 1
+          fi
+          test -f "$WORK_DIR/.staged/audio-blackbox/404.html"
+          export NPM_CONFIG_CACHE="$(mktemp -d "${RUNNER_TEMP}/cf-npm.XXXXXX")"
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-config.XXXXXX")"
+          npm ci --ignore-scripts --prefix "$WORK_DIR"
+
+      - name: Test and dry-run without credentials
+        working-directory: ${{ steps.dirs.outputs.work }}
+        env:
+          CLOUDFLARE_API_KEY: ''
+          CLOUDFLARE_EMAIL: ''
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-dry-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-dry-config.XXXXXX")"
+          node --test worker.test.mjs
+          ./node_modules/.bin/wrangler deploy --dry-run --config wrangler.jsonc --outdir "$RUNNER_TEMP/cloudflare-dry-run"
+
+  deploy-cloudflare:
+    needs: validate-cloudflare
+    runs-on: ubuntu-latest
+    if: github.repository == 'alexandre-machado/audio-blackbox' && github.ref == 'refs/heads/main'
+    environment: cloudflare-hotsite
+    permissions:
+      contents: read
+    steps:
+      - name: Allocate fresh job directories
+        id: dirs
+        run: |
+          set -euo pipefail
+          echo "checkout=$(mktemp -d "${GITHUB_WORKSPACE}/cf-checkout.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "artifact=$(mktemp -d "${RUNNER_TEMP}/cf-artifact.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "tools=$(mktemp -d "${RUNNER_TEMP}/cf-node.XXXXXX")" >> "$GITHUB_OUTPUT"
+          echo "work=$(mktemp -d "${RUNNER_TEMP}/cf-work.XXXXXX")" >> "$GITHUB_OUTPUT"
+
+      - name: Fresh checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          path: ${{ steps.dirs.outputs.checkout }}
+
+      - name: Set up fresh Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        env:
+          # Do not execute a Node binary cached by the gem-running build job.
+          RUNNER_TOOL_CACHE: ${{ steps.dirs.outputs.tools }}
+        with:
+          node-version: '24'
+
+      - name: Download Pages artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: ${{ steps.dirs.outputs.artifact }}
+
+      # The Liquid guard ran in build before upload. Artifact trust is identical to
+      # the Pages deploy: no cached Ruby or gem-running build scripts execute here.
+      - name: Stage artifact and install locked Wrangler without lifecycle scripts
+        env:
+          SOURCE_DIR: ${{ steps.dirs.outputs.checkout }}
+          ARTIFACT_DIR: ${{ steps.dirs.outputs.artifact }}
+          WORK_DIR: ${{ steps.dirs.outputs.work }}
+        run: |
+          set -euo pipefail
+          cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
+          mkdir -p "$WORK_DIR/.staged/audio-blackbox"
+          tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
+          # #461 @sec SEC-8: the artifact comes from the self-hosted build. Accept only regular
+          # files and directories, never a symlink (e.g. to /proc/self/environ), device or FIFO
+          # that wrangler would follow and upload.
+          odd="$(find "$WORK_DIR/.staged" ! -type f ! -type d -print)"
+          if [ -n "$odd" ]; then
+            echo "::error::Refusing to stage non-regular files from the Pages artifact:"
+            echo "$odd"
+            exit 1
+          fi
+          test -f "$WORK_DIR/.staged/audio-blackbox/404.html"
+          export NPM_CONFIG_CACHE="$(mktemp -d "${RUNNER_TEMP}/cf-npm.XXXXXX")"
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-config.XXXXXX")"
+          npm ci --ignore-scripts --prefix "$WORK_DIR"
+
+      - name: Deploy Cloudflare Worker and assets
+        working-directory: ${{ steps.dirs.outputs.work }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_KEY: ''
+          CLOUDFLARE_EMAIL: ''
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare credentials missing; skipping Cloudflare deploy. GitHub Pages stays active."
+            exit 0
+          fi
+          export HOME="$(mktemp -d "${RUNNER_TEMP}/cf-deploy-home.XXXXXX")"
+          export XDG_CONFIG_HOME="$(mktemp -d "${RUNNER_TEMP}/cf-deploy-config.XXXXXX")"
+          ./node_modules/.bin/wrangler deploy --config wrangler.jsonc

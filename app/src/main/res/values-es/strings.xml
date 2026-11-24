@@ -55,9 +55,9 @@
     <string name="recorder_notification_forward_recording">Grabación en directo: %1$s</string>
     <string name="recorder_notification_forward_success">Grabación en directo guardada: %1$s</string>
     <string name="recorder_notification_forward_error">Error en la grabación en directo</string>
-    <!-- Issue #139: a verb distinct from "Guardar", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Guardar"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Directo</string>
-    <string name="recorder_notification_action_stop_forward">Parar directo</string>
+    <string name="recorder_notification_action_stop_forward">Guardar y terminar</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>
@@ -176,7 +176,7 @@
     <string name="dashboard_forward_recording_title">Grabando en directo</string>
     <string name="dashboard_forward_elapsed_cd">Tiempo transcurrido de la grabación en directo: %1$s</string>
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Detener la grabación en directo</string>
+    <string name="dashboard_forward_stop_button">Guardar la grabación en directo y terminarla</string>
     <string name="dashboard_forward_success_title">Grabación en directo guardada</string>
     <string name="dashboard_forward_success_body">Archivo: %1$s</string>
     <string name="dashboard_forward_error_title">Error en la grabación en directo</string>
@@ -186,7 +186,7 @@
     <string name="dashboard_panel_save_label">Guardar</string>
     <string name="dashboard_panel_save_saving_label">Guardando</string>
     <string name="dashboard_panel_live_label">Directo</string>
-    <string name="dashboard_panel_live_stop_label">Detener</string>
+    <string name="dashboard_panel_live_stop_label">Guardar y terminar</string>
 
     <!-- Issue #335 wiring: one-line panel captions. -->
     <string name="dashboard_panel_save_caption_no_audio">Aún no hay audio</string>
@@ -235,7 +235,7 @@
     <string name="settings_specs_format_label">Formato de audio</string>
     <string name="settings_specs_format_value">PCM de 16 bits (búfer circular)</string>
     <string name="settings_specs_export_label">Formato de exportación</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / WAV sin pérdida</string>
+    <string name="settings_specs_export_value">Guardar .m4a / Directo .aac</string>
     <string name="settings_specs_sample_rate_label">Frecuencia de muestreo</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Canales</string>
@@ -378,4 +378,7 @@
     <string name="pro_remaining">quedan %1$s gratis</string>
     <string name="pro_card_label">Grabación en directo sin límite</string>
     <string name="pro_remaining_cd">Tiempo gratuito restante de grabación en directo: %1$s</string>
+    <string name="gallery_newly_saved">Grabación guardada</string>
+    <string name="dashboard_panel_save_caption_live">Guardando live</string>
+    <string name="dashboard_save_button_cd_live">No hace falta guardar durante la grabación en directo: el archivo se guarda mientras se graba</string>
 </resources>

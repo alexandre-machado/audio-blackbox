@@ -55,9 +55,9 @@
     <string name="recorder_notification_forward_recording">Live-Aufnahme: %1$s</string>
     <string name="recorder_notification_forward_success">Live-Aufnahme gespeichert: %1$s</string>
     <string name="recorder_notification_forward_error">Live-Aufnahme fehlgeschlagen</string>
-    <!-- Issue #139: a verb distinct from "Speichern", short enough for the notification action slot. -->
+    <!-- Issue #139: the start action uses a word distinct from "Speichern"; the stop action (#452) deliberately reuses the save verb, because it does save. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Live stoppen</string>
+    <string name="recorder_notification_action_stop_forward">Speichern &amp; beenden</string>
 
     <!-- Home-screen widget (issue #275): status text kept short for the narrow widget cell. -->
     <string name="widget_label">Audio Blackbox</string>
@@ -176,7 +176,7 @@
     <string name="dashboard_forward_recording_title">Live-Aufnahme läuft</string>
     <string name="dashboard_forward_elapsed_cd">Dauer der Live-Aufnahme: %1$s</string>
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Live-Aufnahme stoppen</string>
+    <string name="dashboard_forward_stop_button">Die Live-Aufnahme speichern und beenden</string>
     <string name="dashboard_forward_success_title">Live-Aufnahme gespeichert</string>
     <string name="dashboard_forward_success_body">Datei: %1$s</string>
     <string name="dashboard_forward_error_title">Live-Aufnahme fehlgeschlagen</string>
@@ -186,7 +186,7 @@
     <string name="dashboard_panel_save_label">Speichern</string>
     <string name="dashboard_panel_save_saving_label">Speichert</string>
     <string name="dashboard_panel_live_label">Live</string>
-    <string name="dashboard_panel_live_stop_label">Stopp</string>
+    <string name="dashboard_panel_live_stop_label">Speichern &amp; beenden</string>
 
     <!-- Issue #335 wiring: one-line panel captions. -->
     <string name="dashboard_panel_save_caption_no_audio">Noch kein Audio</string>
@@ -235,7 +235,7 @@
     <string name="settings_specs_format_label">Audioformat</string>
     <string name="settings_specs_format_value">16-Bit-PCM (Ringpuffer)</string>
     <string name="settings_specs_export_label">Exportformat</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / verlustfreies WAV</string>
+    <string name="settings_specs_export_value">Speichern .m4a / Live .aac</string>
     <string name="settings_specs_sample_rate_label">Abtastrate</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Kanäle</string>
@@ -378,4 +378,7 @@
     <string name="pro_remaining">noch %1$s gratis</string>
     <string name="pro_card_label">Unbegrenzte Live-Aufnahme</string>
     <string name="pro_remaining_cd">Verbleibende kostenlose Live-Aufnahmezeit: %1$s</string>
+    <string name="gallery_newly_saved">Aufnahme gespeichert</string>
+    <string name="dashboard_panel_save_caption_live">Live speichern</string>
+    <string name="dashboard_save_button_cd_live">Speichern ist während der Live-Aufnahme nicht nötig: Die Live-Datei wird während der Aufnahme gespeichert</string>
 </resources>

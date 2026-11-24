@@ -189,4 +189,8 @@ data class DashboardUiState(
      * [cc.machado.audioblackbox.audio.AudioLevel.peakLevel]. Always `0f` unless
      * [captureStatus] is [CaptureStatus.Recording] -- see [DashboardViewModel.mapUiState]. */
     val inputLevel: Float = 0f,
-)
+) {
+    val canSave: Boolean
+        get() = bufferedMillis > 0 && saveState !is SaveUiState.Exporting &&
+            forwardRecordingState !is ForwardRecordingUiState.Recording
+}

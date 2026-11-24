@@ -11,6 +11,9 @@ import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.export.ForwardRecordingEngine
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.ToneGenerator
+import cc.machado.audioblackbox.export.StreamingAdtsWriter
+import cc.machado.audioblackbox.export.AacDecodeSupport
+import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -120,7 +123,9 @@ class GalleryAutoRefreshInstrumentedTest {
         val sampleRateHz = 16_000
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val buffer = RingBuffer(capacityBytes = 200_000, bytesPerSecond = config.bytesPerSecond)
-        val name = "blackbox_${runId}_gallery_autorefresh.m4a"
+        // Match the production writer: MediaProvider appends .aac to a mismatched .m4a name,
+        // so waiting for that original name would time out before any PCM was even fed.
+        val name = "blackbox_${runId}_gallery_autorefresh.aac"
 
         val engine = ForwardRecordingEngine(
             exportFloorAdvancerProvider = { null },
@@ -155,6 +160,13 @@ class GalleryAutoRefreshInstrumentedTest {
         try {
             val startResult = engine.start(customDisplayName = name)
             assertTrue("start should succeed: $startResult", startResult is ForwardRecordingState.Recording)
+            val published = sink.queryRecordings().filter { it.displayName.contains(runId) }
+            insertedUris += published.map { it.uri }
+            assertEquals("published filename must match session identity: $published",
+                listOf(name), published.map { it.displayName })
+            // Check production MIME recognition without allowing the .aac fallback to mask it.
+            assertTrue(StreamingAdtsWriter.accepts(published.single().mimeType, ""))
+            assertTrue(published.single().displayName.endsWith(".aac"))
 
             // `@rev` PR #377 medium finding: the row must be legible as still-recording, not just
             // eventually correct. Waits (state-based, no sleep/fixed delay) for the row to show up
@@ -185,7 +197,6 @@ class GalleryAutoRefreshInstrumentedTest {
             )
             repeat(totalChunks) {
                 buffer.write(toneChunk)
-                Thread.sleep(10) // widens the write/drain race window -- real work, not a sync wait
             }
 
             // Blocks until the drain thread's finally{} block (the authoritative final refinalize,
@@ -209,6 +220,22 @@ class GalleryAutoRefreshInstrumentedTest {
 
             val item = converged.items.single { it.recording.displayName == name }
             insertedUris += item.recording.uri
+            assertTrue(StreamingAdtsWriter.accepts(item.recording.mimeType, ""))
+            assertTrue(item.recording.displayName.endsWith(".aac"))
+            // Metadata recognition alone cannot prove the gallery row points to playable audio.
+            val snapshot = File.createTempFile("gallery-adts-", ".aac", context.cacheDir)
+            try {
+                context.contentResolver.openInputStream(item.recording.uri)!!.use { input ->
+                    snapshot.outputStream().use { output -> input.copyTo(output) }
+                }
+                val decoded = AacDecodeSupport.decode(snapshot)
+                assertEquals(sampleRateHz, decoded.sampleRateHz)
+                assertEquals(1, decoded.channelCount)
+                assertTrue("gallery file must decode at least two seconds of PCM",
+                    decoded.pcm.size >= sampleRateHz * 2 * 2)
+            } finally {
+                snapshot.delete()
+            }
             assertEquals(
                 "gallery state's duration must match the real refinalized MediaStore duration",
                 true,
@@ -222,6 +249,7 @@ class GalleryAutoRefreshInstrumentedTest {
                 item.isInProgress,
             )
         } finally {
+            engine.stop()
             collectorJob.cancel()
         }
     }

@@ -13,6 +13,7 @@ import cc.machado.audioblackbox.audio.QualityPreset
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.ui.MainActivity
+import cc.machado.audioblackbox.ui.forwardActionResources
 import cc.machado.audioblackbox.ui.specLabelRes
 import java.util.Locale
 
@@ -175,33 +176,44 @@ object RecorderNotification {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
-            .addAction(
-                0,
-                saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes),
-                saveIntent,
-            )
-
+        val forwardAction = forwardActionFor(forwardRecordingState)
+        for (action in actionsFor(forwardRecordingState)) {
+            when (action) {
+                Action.SAVE -> builder.addAction(0,
+                    saveActionLabel(context, bufferedDurationMillis ?: 0L, capacityMinutes), saveIntent)
+                Action.LIVE, Action.SAVE_AND_END -> builder.addAction(0,
+                    context.getString(forwardAction.labelRes),
+                    if (forwardAction.endsRecording) stopForwardIntent else startForwardIntent)
+                Action.STOP -> builder.addAction(0,
+                    context.getString(R.string.recorder_notification_action_stop), stopIntent)
+            }
+        }
         // Issue #443: the cap message is longer than one collapsed line; let it expand in full.
         if (forwardRecordingState is ForwardRecordingState.Success && forwardRecordingState.freeLimitReached) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
         }
+        return builder.build()
+    }
 
-        if (forwardRecordingState is ForwardRecordingState.Recording) {
-            builder.addAction(
-                0,
-                context.getString(R.string.recorder_notification_action_stop_forward),
-                stopForwardIntent,
-            )
+    internal data class ForwardAction(val labelRes: Int, val endsRecording: Boolean)
+
+    internal enum class Action { SAVE, LIVE, SAVE_AND_END, STOP }
+
+    /** Exact ordered action set consumed by build, independent of Android notification classes. */
+    internal fun actionsFor(state: ForwardRecordingState): List<Action> =
+        if (state is ForwardRecordingState.Recording) {
+            listOf(Action.SAVE_AND_END, Action.STOP)
         } else {
-            builder.addAction(
-                0,
-                context.getString(R.string.recorder_notification_action_start_forward),
-                startForwardIntent,
-            )
+            listOf(Action.SAVE, Action.LIVE, Action.STOP)
         }
 
-        builder.addAction(0, context.getString(R.string.recorder_notification_action_stop), stopIntent)
-        return builder.build()
+    /** Pure action selection used by [build]; keeps the title and intent on the same state branch. */
+    internal fun forwardActionFor(state: ForwardRecordingState): ForwardAction {
+        val recording = state is ForwardRecordingState.Recording
+        return ForwardAction(
+            labelRes = forwardActionResources(recording).notificationLabel,
+            endsRecording = recording,
+        )
     }
 
     /**

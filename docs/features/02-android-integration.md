@@ -14,12 +14,11 @@ flag, tied to the app's lifecycle. It owns the capture engine and the ring buffe
 buffer survives Activity destruction. This is the single highest-risk failure mode of the
 product: without it, "the last 30 minutes" silently becomes "the last few seconds".
 
-## Persistent Notification
-The required status bar notification indicating active recording, on a dedicated
-low-importance channel.
+## Persistent Notification & Home-Screen Widget
+The required status bar notification indicating active recording runs on a dedicated
+low-importance channel and shows the live capture state and buffered duration.
 
-*Enhancement:* quick action buttons directly on the notification — "Salvar últimos 30 min"
-and "Parar motor".
+Quick action buttons on the notification let the user trigger `Save` (writes the buffered audio since the last save), `Live` (starts or stops a continuous forward recording that includes the buffered past), and `Stop` (stops the recording service) without opening the app. A one-tap home-screen widget (`#275`) also lets the user start or stop recording directly from the launcher.
 
 ## Audio Interruption Handling
 `AudioManager.AudioRecordingCallback` gracefully pauses buffer writing during incoming

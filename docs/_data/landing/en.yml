@@ -38,7 +38,7 @@ feature_interrupt_desc: When another foreground app takes the microphone, Androi
 feature_battery: OEM Battery Survival
 feature_battery_desc: Foreground service with active notification and guided manufacturer battery-optimization bypass keeps recording uninterrupted even with the screen off.
 feature_player: In-App Audio Player
-feature_player_desc: Listen, seek, delete, and share your saved <code>.m4a</code> (AAC) recordings through the Android share sheet. A home-screen widget starts or stops recording with one tap.
+feature_player_desc: Listen, seek, delete, and share your saved <code>.m4a</code> / <code>.aac</code> (AAC) recordings through the Android share sheet. A home-screen widget starts or stops recording with one tap.
 design_tag: US Aviation Design System
 design_title: Avionics Living Design Prototype
 design_desc: 'Test the interactive cockpit simulator: real-time VU meter, Korry annunciator status lights, "REMOVE BEFORE FLIGHT" safety tag, and flight tape memory buffer in your browser.'

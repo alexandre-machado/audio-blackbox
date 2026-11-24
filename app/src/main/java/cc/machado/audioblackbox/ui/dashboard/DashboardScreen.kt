@@ -75,6 +75,7 @@ import cc.machado.audioblackbox.export.ErrorLogSeverity
 import cc.machado.audioblackbox.export.ExportFailureReason
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.dashboardTagLabelRes
+import cc.machado.audioblackbox.ui.forwardActionResources
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
 import cc.machado.audioblackbox.ui.theme.AvionicsCardHeaderBar
@@ -755,7 +756,8 @@ private fun ActionPanelRow(
 ) {
     var lastSaveClickTime by remember { mutableLongStateOf(0L) }
     val isExporting = uiState.saveState is SaveUiState.Exporting
-    val canSave = uiState.bufferedMillis > 0 && !isExporting
+    val canSave = uiState.canSave
+    val isSavingToLive = uiState.forwardRecordingState is ForwardRecordingUiState.Recording
     val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
     val capacityMinutes = (uiState.capacityMillis / 60_000L).toInt()
 
@@ -764,14 +766,17 @@ private fun ActionPanelRow(
     } else {
         stringResource(R.string.dashboard_panel_save_label)
     }
-    val saveCaption = when {
-        isExporting -> stringResource(R.string.dashboard_panel_save_caption_saving)
-        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
-        uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
-        else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+    val saveCaption = when (val activeCaption = activeSaveCaptionResource(isExporting, isSavingToLive)) {
+        null -> when {
+            uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
+            uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
+            else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+        }
+        else -> stringResource(activeCaption)
     }.uppercase()
     val saveCd = when {
         isExporting -> stringResource(R.string.dashboard_save_exporting_title)
+        isSavingToLive -> stringResource(R.string.dashboard_save_button_cd_live)
         uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
         uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
         else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)
@@ -785,11 +790,8 @@ private fun ActionPanelRow(
     val elapsedClock = (forwardState as? ForwardRecordingUiState.Recording)?.let {
         formatMillisAsClock(it.elapsedMillis)
     }
-    val liveLabel = if (isForwardRecording) {
-        stringResource(R.string.dashboard_panel_live_stop_label)
-    } else {
-        stringResource(R.string.dashboard_panel_live_label)
-    }
+    val liveAction = forwardActionResources(isForwardRecording)
+    val liveLabel = stringResource(liveAction.label)
     // Issue #443: the engine's own countdown (null for Pro/Unknown, i.e. uncapped), shown only
     // inside the final FREE_CAP_WARNING_MILLIS so the caption is not a permanent upsell.
     val freeRemainingClock = (forwardState as? ForwardRecordingUiState.Recording)?.freeRemainingMillis
@@ -822,10 +824,10 @@ private fun ActionPanelRow(
             } else {
                 stringResource(R.string.dashboard_forward_elapsed_cd, elapsedClock)
             },
-            stringResource(R.string.dashboard_forward_stop_button),
+            stringResource(liveAction.contentDescription),
         )
     } else {
-        stringResource(R.string.dashboard_forward_start_button)
+        stringResource(liveAction.contentDescription)
     }
 
     AvionicsPanelButtonRow(
@@ -850,6 +852,7 @@ private fun ActionPanelRow(
         live = {
             AvionicsPanelButton(
                 label = liveLabel,
+                iconRes = liveAction.icon,
                 onClick = if (isForwardRecording) onStopForwardRecording else onStartForwardRecording,
                 caption = liveCaption,
                 ledColor = FlightOrange,

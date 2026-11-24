@@ -147,6 +147,12 @@ end
 {"og:locale" => og_locale, "og:url" => url}.each do |key, expected|
   fail_with.("incorrect #{key}") unless metas.select { |m| m["property"] == key }.map { |m| m["content"] } == [expected]
 end
+expected_og_alt = locales.values.map { |_, ogl, _| ogl } - [og_locale]
+actual_og_alt = metas.select { |m| m["property"] == "og:locale:alternate" }.map { |m| m["content"] }
+fail_with.("og:locale:alternate must cover the other 5 locales") unless actual_og_alt.sort == expected_og_alt.sort
+llms_links = links.select { |l| l["rel"] == "alternate" && l["type"] == "text/plain" }.map { |l| [l["title"], l["href"]] }.to_h
+expected_llms = { "llms.txt" => base + "llms.txt", "llms-full.txt" => base + "llms-full.txt" }
+fail_with.("expected llms.txt and llms-full.txt alternate links") unless llms_links == expected_llms
 %w[og:title og:description].each do |key|
   values = metas.select { |m| m["property"] == key }.map { |m| m["content"] }
   fail_with.("missing or duplicate #{key}") unless values.size == 1 && !values[0].to_s.strip.empty?
@@ -173,7 +179,7 @@ end
 
 faqs = parsed.select { |b| b.is_a?(Hash) && b["@type"] == "FAQPage" }
 apps = parsed.select { |b| b.is_a?(Hash) && b["@type"] == "MobileApplication" }
-fail_with.("expected one localized MobileApplication") unless apps.size == 1 && apps[0]["url"] == url && !apps[0]["description"].to_s.empty?
+fail_with.("expected one localized MobileApplication") unless apps.size == 1 && apps[0]["url"] == url && !apps[0]["description"].to_s.empty? && apps[0]["isAccessibleForFree"] == true && !apps[0]["permissions"].to_s.empty?
 fail_with.("expected exactly one FAQPage block, found #{faqs.size}") unless faqs.size == 1
 ld = Array(faqs[0]["mainEntity"]).map { |e| [e["name"], e.dig("acceptedAnswer", "text")] }
 
@@ -189,6 +195,26 @@ if visible != ld
   fail_with.("FAQ entry #{i + 1} differs. visible: #{visible[i].inspect} JSON-LD: #{ld[i].inspect}")
 end
 puts "Landing page OK: #{page}; SEO, language links, assets and #{ld.size} verbatim FAQ entries."
+end
+
+%w[
+  design/index.html
+  features/01-capture-and-memory-core.html
+  features/02-android-integration.html
+  features/03-export-engine.html
+  features/04-user-interface.html
+].each do |doc_page|
+  f = File.join(site_dir, doc_page)
+  next unless File.file?(f)
+  s = File.read(f, encoding: "UTF-8")
+  if s.include?("&amp;amp;")
+    puts "::error file=#{f}::double-escaped HTML entity (&amp;amp;) found"
+    exit 1
+  end
+  unless s.include?('<link rel="canonical"')
+    puts "::error file=#{f}::missing canonical link"
+    exit 1
+  end
 end
 RUBY
 if [ "$rc" -ne 0 ]; then

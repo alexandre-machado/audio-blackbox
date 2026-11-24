@@ -1,15 +1,12 @@
 package cc.machado.audioblackbox.export
 
 import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaFormat
 import android.media.MediaMuxer
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.PauseGap
 import java.io.Closeable
 import java.io.File
 import java.io.FileDescriptor
-import java.io.IOException
 
 /**
  * Common streaming audio writer interface for incremental PCM chunks and live gap injection (issue #54).
@@ -78,16 +75,14 @@ class StreamingAacWriter private constructor(
 
     private val lock = Any()
 
-    private val codec: MediaCodec
+    private val encoder: AacEncoderPump
     private val muxer: MediaMuxer
-    private var codecStarted = false
     private var muxerStarted = false
     private var muxerTrackIndex = -1
 
-    private val bufferInfo = MediaCodec.BufferInfo()
     private val zeroBuffer = ByteArray(ZERO_BUFFER_SIZE)
 
-    private var totalBytesFed = 0L
+    private val totalBytesFed: Long get() = encoder.totalBytesFed
     private var isFinished = false
     private var isClosed = false
     private var recoveredFromAlreadyStoppedMuxer = false
@@ -121,7 +116,7 @@ class StreamingAacWriter private constructor(
     /**
      * Whether `muxer.stop()` threw during [finish] and [finish] still completed because an
      * independent re-read verified the output is a complete, decodable recording (issues #347,
-     * #378; see [MuxerStopFailurePolicy]). Exposed so a caller (e.g. `ForwardRecordingEngine`) can
+     * #378; see [MuxerStopFailurePolicy]). Exposed so an MP4 caller can
      * log the occurrence for audit purposes even though the session did not fail.
      */
     val recoveredFromMuxerAlreadyStopped: Boolean
@@ -195,43 +190,80 @@ class StreamingAacWriter private constructor(
         require(config.channelCount > 0) { "channelCount must be positive, was ${config.channelCount}" }
         require(bitRateBps > 0) { "bitRateBps must be positive, was $bitRateBps" }
 
-        val format = MediaFormat.createAudioFormat(
-            MediaFormat.MIMETYPE_AUDIO_AAC,
-            config.sampleRateHz,
-            config.channelCount,
-        ).apply {
-            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            setInteger(MediaFormat.KEY_BIT_RATE, bitRateBps)
+        val createdMuxer = if (fileDescriptor != null) {
+            MediaMuxer(fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        } else {
+            MediaMuxer(requireNotNull(outputFile).absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         }
-
-        // Safeguarded resource creation: if MediaMuxer construction throws (e.g. unwritable file,
-        // disk full) or if codec configuration/start fails, any allocated resource is released
-        // immediately rather than leaked.
-        val createdCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-        var createdMuxer: MediaMuxer? = null
-        var startedCodec = false
+        muxer = createdMuxer
         try {
-            val muxerInstance = if (fileDescriptor != null) {
-                MediaMuxer(fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            } else {
-                MediaMuxer(requireNotNull(outputFile).absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            }
-            createdMuxer = muxerInstance
-
-            createdCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            createdCodec.start()
-            startedCodec = true
-
-            this.codec = createdCodec
-            this.muxer = muxerInstance
-            this.codecName = runCatching { createdCodec.name }.getOrNull()?.takeIf { it.isNotBlank() }
-                ?: runCatching { createdCodec.codecInfo.name }.getOrNull()?.takeIf { it.isNotBlank() }
-                ?: UNKNOWN_CODEC_NAME
-            this.codecStarted = true
+            encoder = AacEncoderPump(config, bitRateBps,
+                onFormat = { format ->
+                    check(!muxerStarted) { "MediaCodec changed output format more than once" }
+                    val outputFormat = format
+                    // AOSP's MPEG4Writer only takes AAC codec-specific data from the track format
+                    // (csd-0 -> ESDS), never from a CODEC_CONFIG sample, and marks the track
+                    // malformed at stop() without it. Recorded for diagnostics (issue #378).
+                    csd0PresentAtAddTrack = outputFormat.containsKey("csd-0")
+                    muxerTrackIndex = muxer.addTrack(outputFormat)
+                    muxer.start()
+                    muxerStarted = true
+                },
+                onSample = { outputBuffer, bufferInfo, isEndOfStream ->
+                    check(muxerStarted) { "encoder produced sample data before the muxer's track was added" }
+                    outputBuffer.position(bufferInfo.offset)
+                    outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                    if (isEndOfStream) eosFlaggedDataSamples++
+                    // Issue #347 observed that the S25's encoder sets BUFFER_FLAG_END_OF_STREAM
+                    // on the buffer holding its last real frame. MediaMuxer only gives that flag
+                    // meaning on an empty marker buffer, so it is stripped from real data here
+                    // and sent on its own marker below. `isEndOfStream` (captured above) still
+                    // drives this loop's exit.
+                    //
+                    // Issue #378: the timestamp is not passed through blindly either. A sample
+                    // whose pts does not advance makes MPEG4Writer mark the whole track
+                    // malformed, which only surfaces at stop() as "muxer would have stopped
+                    // already" and leaves a file with an empty sample table. See
+                    // MuxerTimestampSanitizer for why rewriting it is exact for AAC-LC.
+                    var codecPtsUs = bufferInfo.presentationTimeUs
+                    codecPtsOverrideForTest?.let {
+                        codecPtsUs = it(codecPtsUs)
+                        overriddenSamples++
+                    }
+                    val ptsUs = timestamps.next(codecPtsUs, isEndOfStream)
+                    bufferInfo.set(
+                        bufferInfo.offset,
+                        bufferInfo.size,
+                        ptsUs,
+                        bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv(),
+                    )
+                    muxer.writeSampleData(muxerTrackIndex, outputBuffer, bufferInfo)
+                    if (inFinalDrain) finalDrainSamples++
+                },
+                onEnd = {
+                    if (muxerStarted && timestamps.samples > 0) {
+                        // Empty end-of-stream marker, sent whether the encoder put EOS on its last
+                        // real frame (the S25) or on a separate empty buffer (the emulator's
+                        // software encoder), so both take the same muxer path. Its timestamp is one
+                        // frame after the last sample, which MPEG4Writer turns into that sample's
+                        // duration. A failure here is recorded, not swallowed: it means the track
+                        // was already stopped, and stop() will then fail with this in its message.
+                        val markerInfo = MediaCodec.BufferInfo()
+                        markerInfo.set(0, 0, timestamps.endOfStreamMarkerPtsUs(), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        try {
+                            muxer.writeSampleData(muxerTrackIndex, java.nio.ByteBuffer.allocate(0), markerInfo)
+                            eosMarkerWritten = true
+                        } catch (e: IllegalStateException) {
+                            eosMarkerError = "${e.javaClass.simpleName}: ${e.message}"
+                        } catch (e: IllegalArgumentException) {
+                            eosMarkerError = "${e.javaClass.simpleName}: ${e.message}"
+                        }
+                    }
+                },
+            )
+            codecName = encoder.name
         } catch (t: Throwable) {
-            if (startedCodec) runCatching { createdCodec.stop() }
-            runCatching { createdCodec.release() }
-            runCatching { createdMuxer?.release() }
+            runCatching { createdMuxer.release() }
             throw t
         }
     }
@@ -255,30 +287,12 @@ class StreamingAacWriter private constructor(
             check(!isClosed) { "Cannot write to a closed StreamingAacWriter" }
             check(!isFinished) { "Cannot write to a finished StreamingAacWriter" }
 
-            var currentOffset = offset
-            var remaining = length
-            val deadlineNanos = System.nanoTime() + OP_TIMEOUT_MILLIS * 1_000_000L
-
-            while (remaining > 0) {
-                if (System.nanoTime() > deadlineNanos) {
-                    throw IOException("AAC encode write exceeded deadline of ${OP_TIMEOUT_MILLIS}ms")
-                }
-                drainOutput(endOfStream = false, deadlineNanos = deadlineNanos)
-
-                val inputIndex = codec.dequeueInputBuffer(TIMEOUT_US)
-                if (inputIndex >= 0) {
-                    val inputBuffer = requireNotNull(codec.getInputBuffer(inputIndex))
-                    inputBuffer.clear()
-                    val chunkSize = minOf(inputBuffer.remaining(), remaining)
-                    inputBuffer.put(pcmData, currentOffset, chunkSize)
-                    val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / config.bytesPerSecond
-                    codec.queueInputBuffer(inputIndex, 0, chunkSize, presentationTimeUs, 0)
-                    currentOffset += chunkSize
-                    remaining -= chunkSize
-                    totalBytesFed += chunkSize
-                }
+            try {
+                encoder.write(pcmData, offset, length)
+            } catch (t: Throwable) {
+                close()
+                throw t
             }
-            drainOutput(endOfStream = false, deadlineNanos = deadlineNanos)
         }
     }
 
@@ -334,94 +348,6 @@ class StreamingAacWriter private constructor(
         }
     }
 
-    private fun drainOutput(endOfStream: Boolean, deadlineNanos: Long) {
-        while (true) {
-            if (System.nanoTime() > deadlineNanos) {
-                throw IOException("AAC encode drain exceeded deadline")
-            }
-            val timeout = if (endOfStream) TIMEOUT_US else 0L
-            when (val outputIndex = codec.dequeueOutputBuffer(bufferInfo, timeout)) {
-                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    check(!muxerStarted) { "MediaCodec changed output format more than once" }
-                    val outputFormat = codec.outputFormat
-                    // AOSP's MPEG4Writer only takes AAC codec-specific data from the track format
-                    // (csd-0 -> ESDS), never from a CODEC_CONFIG sample, and marks the track
-                    // malformed at stop() without it. Recorded for diagnostics (issue #378).
-                    csd0PresentAtAddTrack = outputFormat.containsKey("csd-0")
-                    muxerTrackIndex = muxer.addTrack(outputFormat)
-                    muxer.start()
-                    muxerStarted = true
-                }
-                MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                    if (endOfStream) {
-                        continue
-                    } else {
-                        return
-                    }
-                }
-                else -> if (outputIndex >= 0) {
-                    val outputBuffer = requireNotNull(codec.getOutputBuffer(outputIndex))
-                    val isEndOfStream = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
-                    if (bufferInfo.size > 0 &&
-                        (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
-                    ) {
-                        check(muxerStarted) { "encoder produced sample data before the muxer's track was added" }
-                        outputBuffer.position(bufferInfo.offset)
-                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                        if (isEndOfStream) eosFlaggedDataSamples++
-                        // Issue #347 observed that the S25's encoder sets BUFFER_FLAG_END_OF_STREAM
-                        // on the buffer holding its last real frame. MediaMuxer only gives that flag
-                        // meaning on an empty marker buffer, so it is stripped from real data here
-                        // and sent on its own marker below. `isEndOfStream` (captured above) still
-                        // drives this loop's exit.
-                        //
-                        // Issue #378: the timestamp is not passed through blindly either. A sample
-                        // whose pts does not advance makes MPEG4Writer mark the whole track
-                        // malformed, which only surfaces at stop() as "muxer would have stopped
-                        // already" and leaves a file with an empty sample table. See
-                        // MuxerTimestampSanitizer for why rewriting it is exact for AAC-LC.
-                        var codecPtsUs = bufferInfo.presentationTimeUs
-                        codecPtsOverrideForTest?.let {
-                            codecPtsUs = it(codecPtsUs)
-                            overriddenSamples++
-                        }
-                        val ptsUs = timestamps.next(codecPtsUs, isEndOfStream)
-                        bufferInfo.set(
-                            bufferInfo.offset,
-                            bufferInfo.size,
-                            ptsUs,
-                            bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv(),
-                        )
-                        muxer.writeSampleData(muxerTrackIndex, outputBuffer, bufferInfo)
-                        if (inFinalDrain) finalDrainSamples++
-                    }
-                    if (isEndOfStream && muxerStarted && timestamps.samples > 0) {
-                        // Empty end-of-stream marker, sent whether the encoder put EOS on its last
-                        // real frame (the S25) or on a separate empty buffer (the emulator's
-                        // software encoder), so both take the same muxer path. Its timestamp is one
-                        // frame after the last sample, which MPEG4Writer turns into that sample's
-                        // duration. A failure here is recorded, not swallowed: it means the track
-                        // was already stopped, and stop() will then fail with this in its message.
-                        val markerInfo = MediaCodec.BufferInfo()
-                        markerInfo.set(0, 0, timestamps.endOfStreamMarkerPtsUs(), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        try {
-                            muxer.writeSampleData(muxerTrackIndex, java.nio.ByteBuffer.allocate(0), markerInfo)
-                            eosMarkerWritten = true
-                        } catch (e: IllegalStateException) {
-                            eosMarkerError = "${e.javaClass.simpleName}: ${e.message}"
-                        } catch (e: IllegalArgumentException) {
-                            eosMarkerError = "${e.javaClass.simpleName}: ${e.message}"
-                        }
-                    }
-                    codec.releaseOutputBuffer(outputIndex, false)
-                    if (isEndOfStream) {
-                        return
-                    }
-                }
-            }
-        }
-    }
-
     /**
      * Finalizes the live AAC session at the current point, flushes the encoder, stops the muxer,
      * writes container headers (`moov` atom), and releases all resources.
@@ -434,40 +360,9 @@ class StreamingAacWriter private constructor(
             check(!isClosed) { "StreamingAacWriter is already closed" }
 
             try {
-                val deadlineNanos = System.nanoTime() + FINISH_DEADLINE_MILLIS * 1_000_000L
-                var eosQueued = false
-                while (!eosQueued) {
-                    if (System.nanoTime() > deadlineNanos) {
-                        throw IOException("AAC encode finish exceeded deadline while queuing EOS")
-                    }
-                    val inputIndex = codec.dequeueInputBuffer(TIMEOUT_US)
-                    if (inputIndex >= 0) {
-                        var queuedSize = 0
-                        if (totalBytesFed == 0L) {
-                            val inputBuffer = requireNotNull(codec.getInputBuffer(inputIndex))
-                            inputBuffer.clear()
-                            val silenceBytes = config.bytesPerFrame * 1024
-                            queuedSize = minOf(inputBuffer.remaining(), silenceBytes)
-                            inputBuffer.put(ByteArray(queuedSize))
-                            totalBytesFed += queuedSize
-                        }
-                        val presentationTimeUs = (totalBytesFed * MICROS_PER_SECOND) / config.bytesPerSecond
-                        codec.queueInputBuffer(
-                            inputIndex,
-                            0,
-                            queuedSize,
-                            presentationTimeUs,
-                            MediaCodec.BUFFER_FLAG_END_OF_STREAM,
-                        )
-                        eosQueued = true
-                    } else {
-                        drainOutput(endOfStream = false, deadlineNanos = deadlineNanos)
-                    }
-                }
-
                 inFinalDrain = true
                 try {
-                    drainOutput(endOfStream = true, deadlineNanos = deadlineNanos)
+                    encoder.finish()
                 } finally {
                     inFinalDrain = false
                 }
@@ -502,10 +397,7 @@ class StreamingAacWriter private constructor(
                     }
                     muxerStarted = false
                 }
-                if (codecStarted) {
-                    codec.stop()
-                    codecStarted = false
-                }
+                encoder.stop()
                 isFinished = true
             } finally {
                 releaseResources()
@@ -522,10 +414,6 @@ class StreamingAacWriter private constructor(
             if (isClosed) return
             try {
                 if (!isFinished) {
-                    if (codecStarted) {
-                        runCatching { codec.stop() }
-                        codecStarted = false
-                    }
                     if (muxerStarted) {
                         runCatching { muxer.stop() }
                         muxerStarted = false
@@ -538,12 +426,9 @@ class StreamingAacWriter private constructor(
     }
 
     private fun releaseResources() {
+        if (isClosed) return
         isClosed = true
-        if (codecStarted) {
-            runCatching { codec.stop() }
-            codecStarted = false
-        }
-        runCatching { codec.release() }
+        encoder.close()
         if (muxerStarted) {
             runCatching { muxer.stop() }
             muxerStarted = false
@@ -555,10 +440,6 @@ class StreamingAacWriter private constructor(
         const val MIME_TYPE_M4A = "audio/mp4"
         const val FILE_EXTENSION = "m4a"
 
-        private const val TIMEOUT_US = 10_000L
-        private const val MICROS_PER_SECOND = 1_000_000L
-        private const val OP_TIMEOUT_MILLIS = 30_000L
-        private const val FINISH_DEADLINE_MILLIS = 60_000L
         private const val ZERO_BUFFER_SIZE = 4096
 
         /** Placeholder for [encoderName] when the platform reports no codec name at all. */

@@ -14,12 +14,16 @@
   <link rel="alternate" hreflang="x-default" href="{{ '/' | absolute_url }}">
   <link rel="sitemap" type="application/xml" href="{{ '/sitemap.xml' | relative_url }}">
   <link rel="alternate" type="text/plain" title="llms.txt" href="{{ '/llms.txt' | absolute_url }}">
+  <link rel="alternate" type="text/plain" title="llms-full.txt" href="{{ '/llms-full.txt' | absolute_url }}">
 
   <!-- Open Graph / Meta -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ page.url | absolute_url }}">
   <meta property="og:site_name" content="Audio Blackbox">
   <meta property="og:locale" content="{{ page.og_locale }}">
+  {% for language in site.data.languages %}{% if language.og_locale != page.og_locale %}
+  <meta property="og:locale:alternate" content="{{ language.og_locale }}">
+  {% endif %}{% endfor %}
   <meta property="og:title" content="{{ t.title | escape }}">
   <meta property="og:description" content="{{ t.social_description | escape }}">
   <meta property="og:image" content="https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png">
@@ -44,6 +48,8 @@
   "description": {{ t.overview_intro | strip_html | jsonify }},
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Android 10+",
+  "isAccessibleForFree": true,
+  "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED (no INTERNET permission)",
   "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
   "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
   "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",

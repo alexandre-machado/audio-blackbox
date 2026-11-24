@@ -1,18 +1,24 @@
 - lang: en
+  og_locale: en_US
   path: /
   name: English
 - lang: pt-BR
+  og_locale: pt_BR
   path: /pt-br/
   name: Português (Brasil)
 - lang: es
+  og_locale: es_ES
   path: /es/
   name: Español
 - lang: fr
+  og_locale: fr_FR
   path: /fr/
   name: Français
 - lang: de
+  og_locale: de_DE
   path: /de/
   name: Deutsch
 - lang: it
+  og_locale: it_IT
   path: /it/
   name: Italiano

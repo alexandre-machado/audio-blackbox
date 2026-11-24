@@ -26,7 +26,7 @@ import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingEngine
 import cc.machado.audioblackbox.export.ForwardRecordingState
 import cc.machado.audioblackbox.export.PayloadEncoder
-import cc.machado.audioblackbox.export.StreamingAacWriter
+import cc.machado.audioblackbox.export.StreamingAdtsWriter
 import cc.machado.audioblackbox.export.MediaStoreSink
 import cc.machado.audioblackbox.PreloadedRetentionWindow
 import cc.machado.audioblackbox.settings.DataStoreRecordingPreferences
@@ -162,7 +162,7 @@ class RecorderService : Service() {
             exportFloorAdvancerProvider = { engine.exportFloorAdvancer() },
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
-            writerFactory = { target, cfg -> StreamingAacWriter(target, cfg) },
+            writerFactory = { target, cfg -> StreamingAdtsWriter(target, cfg) },
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             // Issue #322: read fresh on every drain iteration, same reason as the providers above
             // (a rebuild replaces `engine` wholesale) and additionally so a preset change landing

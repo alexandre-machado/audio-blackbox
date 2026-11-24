@@ -65,7 +65,7 @@
          or starts an hours long recording (issue #55). Kept a distinct verb, "Record" instead of
          "Save", short enough to stay legible at the slot's real width. -->
     <string name="recorder_notification_action_start_forward">Live</string>
-    <string name="recorder_notification_action_stop_forward">Stop live</string>
+    <string name="recorder_notification_action_stop_forward">Save &amp; end</string>
 
     <!-- Home-screen widget (issue #275). Status text stays short (unlike the fuller
          recorder_notification_state_* strings) since the widget's cells are narrow and PT-BR runs
@@ -208,7 +208,7 @@
          announcement ForwardRecordingSection used to provide before it was folded into
          ActionPanelRow's single button. -->
     <string name="dashboard_forward_live_announcement">%1$s. %2$s</string>
-    <string name="dashboard_forward_stop_button">Stop continuous recording</string>
+    <string name="dashboard_forward_stop_button">Save the live recording and end it</string>
     <string name="dashboard_forward_success_title">Continuous recording saved</string>
     <string name="dashboard_forward_success_body">File: %1$s</string>
     <string name="dashboard_forward_error_title">Continuous recording failed</string>
@@ -224,7 +224,7 @@
     <string name="dashboard_panel_save_label">Save</string>
     <string name="dashboard_panel_save_saving_label">Saving</string>
     <string name="dashboard_panel_live_label">Live</string>
-    <string name="dashboard_panel_live_stop_label">Stop</string>
+    <string name="dashboard_panel_live_stop_label">Save &amp; end</string>
 
     <!-- Issue #335 wiring: the panel buttons' one-line captions, filling the same role the
          explanation paragraphs / elapsed-clock text used to fill in the now-removed
@@ -279,7 +279,7 @@
     <string name="settings_specs_format_label">Audio format</string>
     <string name="settings_specs_format_value">16-bit PCM (Ring Buffer)</string>
     <string name="settings_specs_export_label">Export format</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / Lossless WAV</string>
+    <string name="settings_specs_export_value">Save .m4a / Live .aac</string>
     <string name="settings_specs_sample_rate_label">Sample rate</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Channel count</string>
@@ -440,4 +440,7 @@
     <string name="pro_remaining">%1$s free left</string>
     <string name="pro_card_label">Unlimited live recording</string>
     <string name="pro_remaining_cd">Free live recording time remaining: %1$s</string>
+    <string name="gallery_newly_saved">Recording saved</string>
+    <string name="dashboard_panel_save_caption_live">Saving live</string>
+    <string name="dashboard_save_button_cd_live">Save is not needed during live: the live file is saved as it records</string>
 </resources>
