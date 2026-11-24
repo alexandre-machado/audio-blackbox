@@ -16,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +60,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -312,6 +314,7 @@ fun AvionicsLabelValueRow(
  * control is hand-rolled.
  */
 val PANEL_BUTTON_MIN_HEIGHT = 48.dp
+const val PANEL_BUTTON_ICON_TEST_TAG = "panel-button-icon"
 
 @Composable
 fun AvionicsPanelButton(
@@ -326,6 +329,8 @@ fun AvionicsPanelButton(
     contentDescription: String? = null,
     // Exposes the actual caption layout for bounds checks; null keeps the normal text fast path.
     onCaptionTextLayout: ((TextLayoutResult) -> Unit)? = null,
+    // Optional decorative slot; callers must apply the supplied modifier to the icon.
+    icon: (@Composable (Modifier) -> Unit)? = null,
 ) {
     // `interactable`, not `enabled`, drives every visual below: an in-progress control is not
     // `enabled = false` (the caller still wants the click wired so a second tap is absorbed rather
@@ -390,13 +395,22 @@ fun AvionicsPanelButton(
                         ),
                 )
             }
-            // Height remains content-sized so translated labels can wrap at word boundaries.
+            // Captions still wrap and determine height; titles shrink before truncating.
             Column(modifier = Modifier.weight(1f)) {
+                if (icon != null) {
+                    Box(Modifier.testTag(PANEL_BUTTON_ICON_TEST_TAG)) {
+                        icon(Modifier.testTag("$PANEL_BUTTON_ICON_TEST_TAG-content"))
+                    }
+                }
                 Text(
                     text = label.uppercase(),
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 13.sp,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 13.sp, stepSize = 0.25.sp),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     letterSpacing = 0.06.sp,
                     color = labelColor,
                 )
@@ -476,7 +490,7 @@ fun AvionicsPanelButtonRow(
             }
         } else {
             // Equal heights (PR #454 `@rev` REV-8): the taller button sets the row height and
-            // propagateMinConstraints stretches the other to match, so a wrapped label on
+            // propagateMinConstraints stretches the other to match, so a wrapped caption on
             // one side never leaves the pair visibly uneven.
             Row(
                 modifier = Modifier.height(IntrinsicSize.Min),
