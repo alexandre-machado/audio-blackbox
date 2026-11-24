@@ -306,8 +306,9 @@
          aparelho, calculado dinamicamente pelo DeviceMemoryBudget (uma versão mais pesada, menos
          memória livre agora, ou um downgrade). Nunca mostrado a quem já está no limite atual ou
          abaixo dele. -->
-    <string name="settings_retention_clamp_notice_title">Janela de retenção reduzida</string>
-    <string name="settings_retention_clamp_notice_body">Sua janela de retenção foi reduzida de %1$d para %2$d minutos porque ela não cabe mais neste aparelho.</string>
+    <string name="settings_retention_clamp_notice_title">Limite temporário de memória</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Sua escolha salva é %1$d min. O limite efetivo é temporariamente %2$d min por falta de memória para o app. Sua escolha salva é mantida.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Até %1$d min nesta qualidade — limitado pela memória que o Android dá ao app, não pela RAM total do celular.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendi</string>
 
     <!-- Aviso de redimensionamento recusado (issue #272): mostrado quando uma alteração de
@@ -387,4 +388,5 @@
     <string name="gallery_newly_saved">Gravação salva</string>
     <string name="dashboard_panel_save_caption_live">Salvando ao vivo</string>
     <string name="dashboard_save_button_cd_live">Não é necessário tocar em Salvar durante a gravação ao vivo: o arquivo é salvo enquanto você grava.</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Alteração pendente — buffer ativo: %1$d min.</string>
 </resources>

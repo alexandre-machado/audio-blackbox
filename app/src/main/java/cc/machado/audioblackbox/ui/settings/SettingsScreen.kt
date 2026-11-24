@@ -160,6 +160,13 @@ fun SettingsScreen(
             onSelectQualityPreset = onSelectQualityPreset,
         )
         RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
+        uiState.retentionLimit?.let { limit ->
+            Text(
+                text = stringResource(R.string.settings_retention_clamp_notice_body, limit.previousMinutes, limit.newMinutes),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
         DiagnosticsSection(
@@ -216,10 +223,17 @@ private fun RetentionStepperSection(
                 },
             )
             Text(
-                text = stringResource(R.string.settings_retention_explanation),
+                text = stringResource(R.string.settings_retention_ceiling, stepper.maxSelectableMinutes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (stepper.isDirty) {
+                Text(
+                    text = stringResource(R.string.settings_retention_pending, stepper.committedMinutes),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
 
             Surface(
                 shape = RoundedCornerShape(RADIUS_SM),

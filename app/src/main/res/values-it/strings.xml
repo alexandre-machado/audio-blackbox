@@ -288,9 +288,10 @@
     <string name="settings_consumption_io_value">0 KB/s (solo RAM)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Finestra di conservazione ridotta</string>
+    <string name="settings_retention_clamp_notice_title">Limite temporaneo di memoria</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">La finestra di conservazione è stata ridotta da %1$d a %2$d minuti perché non rientra più in questo dispositivo.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">La scelta salvata è %1$d min. Il limite effettivo è temporaneamente %2$d min per la memoria limitata dell\'app. La scelta salvata viene conservata.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Fino a %1$d min con questa qualità — limitato dalla memoria che Android assegna all\'app, non dalla RAM totale del telefono.</string>
     <string name="settings_retention_clamp_notice_dismiss">Ho capito</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -367,4 +368,5 @@
     <string name="gallery_newly_saved">Registrazione salvata</string>
     <string name="dashboard_panel_save_caption_live">Salvataggio live</string>
     <string name="dashboard_save_button_cd_live">Non serve salvare durante la registrazione live: il file viene salvato mentre si registra</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Modifica in sospeso — buffer attivo: %1$d min.</string>
 </resources>

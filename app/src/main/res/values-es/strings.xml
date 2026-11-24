@@ -288,9 +288,10 @@
     <string name="settings_consumption_io_value">0 KB/s (solo RAM)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Ventana de retención reducida</string>
+    <string name="settings_retention_clamp_notice_title">Límite temporal de memoria</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu ventana de retención se ha reducido de %1$d a %2$d minutos porque ya no cabe en este dispositivo.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu elección guardada es %1$d min. El límite efectivo es temporalmente %2$d min por la memoria disponible para la app. Tu elección se conserva.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Hasta %1$d min con esta calidad — limitado por la memoria que Android da a la app, no por toda la RAM del teléfono.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendido</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -367,4 +368,5 @@
     <string name="gallery_newly_saved">Grabación guardada</string>
     <string name="dashboard_panel_save_caption_live">Guardando live</string>
     <string name="dashboard_save_button_cd_live">No hace falta guardar durante la grabación en directo: el archivo se guarda mientras se graba</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Cambio pendiente — búfer activo: %1$d min.</string>
 </resources>

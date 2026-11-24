@@ -92,4 +92,5 @@ data class SettingsUiState(
      * [SettingsViewModel.dismissResizeError]. The previous, still-active setting stays in force --
      * this is a refusal, never a crash and never a silent no-op. */
     val resizeError: ResizeErrorInfo? = null,
+    val retentionLimit: ClampNotice? = null,
 )

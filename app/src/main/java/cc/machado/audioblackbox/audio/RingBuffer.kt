@@ -1035,9 +1035,9 @@ class RingBuffer(
         }
     }
 
-    private companion object {
-        const val MARKER_CAPACITY = 8192
-        const val MILLIS_PER_SECOND = 1000L
+    internal companion object {
+        private const val MARKER_CAPACITY = 8192
+        private const val MILLIS_PER_SECOND = 1000L
 
         /**
          * Production chunk granularity for the segmented backing store (issue #277): small enough
@@ -1050,13 +1050,13 @@ class RingBuffer(
         const val DEFAULT_CHUNK_SIZE_BYTES = 1 * 1024 * 1024
 
         /** Shared empty payload so an idle [readSince] poll allocates nothing at all. */
-        val EMPTY = ByteArray(0)
+        private val EMPTY = ByteArray(0)
 
         /**
          * Shared zero-length placeholder [resize] swaps into a drained source chunk's slot
          * (issue #277): replacing the strong reference lets the real chunk's bytes be reclaimed
          * immediately instead of staying reachable (via [chunks]) for the rest of the resize.
          */
-        val EMPTY_CHUNK = ByteArray(0)
+        private val EMPTY_CHUNK = ByteArray(0)
     }
 }

@@ -293,9 +293,10 @@
     <string name="settings_consumption_io_value">0 Ko/s (RAM uniquement)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Fenêtre de conservation réduite</string>
+    <string name="settings_retention_clamp_notice_title">Limite temporaire de mémoire</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Votre fenêtre de conservation a été réduite de %1$d à %2$d minutes, car elle ne tient plus sur cet appareil.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Votre choix enregistré est de %1$d min. La limite effective est temporairement de %2$d min à cause de la mémoire limitée de l\'app. Votre choix est conservé.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Jusqu’à %1$d min à cette qualité — selon la mémoire accordée par Android à l\'app, pas toute la RAM du téléphone.</string>
     <string name="settings_retention_clamp_notice_dismiss">Compris</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -372,4 +373,5 @@
     <string name="gallery_newly_saved">Enregistrement sauvegardé</string>
     <string name="dashboard_panel_save_caption_live">Sauvegarde live</string>
     <string name="dashboard_save_button_cd_live">Il est inutile de toucher Sauver pendant l’enregistrement en direct : le fichier est sauvegardé au fur et à mesure.</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Modification en attente — tampon actif : %1$d min.</string>
 </resources>

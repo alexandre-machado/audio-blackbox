@@ -20,7 +20,10 @@ package cc.machado.audioblackbox.audio
  * ## The model
  * ```
  * safeHeap   = maxHeap * SAFE_HEAP_UTILISATION
- * backing    = (safeHeap - usedHeap) / PEAK_TO_BACKING_RATIO
+ * existing   = actual allocated buffer bytes (zero before capture allocates)
+ * budget     = safeHeap - usedHeap + existing - 2 * chunkSize
+ * budget     = min(budget, 0.85 * availableSystemBytes + existing - 2 * chunkSize)
+ * backing    = max(0, budget) / PEAK_TO_BACKING_RATIO
  * minutes    = backing / bytesPerMinute   (floored to the stepper's step)
  * ```
  *
@@ -44,6 +47,23 @@ package cc.machado.audioblackbox.audio
  */
 object DeviceMemoryBudget {
 
+    // Installed when the service companion is initialized, after preference preloading.
+    // Preferences must not initialize the service merely to discover that no buffer exists yet.
+    @Volatile var currentBufferAllocationBytesProvider: () -> Long = { 0L }
+    @Volatile var availableSystemBytesProvider: () -> Long? = { null }
+
+    /** Runtime adapter shared by service and preferences; the decision below remains pure. */
+    fun currentMaxRetentionMinutes(
+        preset: QualityPreset,
+        availableSystemBytes: Long? = null,
+        memoryBudget: MemoryBudget = MemoryBudget.REAL,
+        currentBufferAllocationBytes: Long = currentBufferAllocationBytesProvider(),
+    ): Int {
+        val heap = memoryBudget.sample()
+        return maxRetentionMinutes(preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
+            heap.maxHeapBytes, heap.usedHeapBytes, availableSystemBytes, currentBufferAllocationBytes)
+    }
+
     /**
      * The largest retention window, in whole stepper steps, that [config]'s audio format can
      * safely occupy on this device right now.
@@ -62,23 +82,31 @@ object DeviceMemoryBudget {
      * @param availableSystemBytes `ActivityManager.MemoryInfo.availMem`, or `null` when unknown.
      *   Applied as a second, independent limit: a heap ceiling means nothing if the system as a
      *   whole has no memory left to back it.
+     * @param currentBufferAllocationBytes actual resident backing capacity, not the configured
+     *   duration. Credits replacement storage while reserving both boundary chunks required by
+     *   RingBuffer.resize. The measured export margin is retained as an additional safety bound.
      */
     fun maxRetentionMinutes(
         config: AudioConfig,
         maxHeapBytes: Long,
         usedHeapBytes: Long,
         availableSystemBytes: Long? = null,
+        currentBufferAllocationBytes: Long = 0L,
     ): Int {
         val step = AudioConfig.RETENTION_WINDOW_STEP_MINUTES
         val floor = AudioConfig.RETENTION_WINDOW_MIN_MINUTES
 
         val safeHeapBytes = (maxHeapBytes * SAFE_HEAP_UTILISATION).toLong()
-        var budgetBytes = (safeHeapBytes - usedHeapBytes).coerceAtLeast(0L)
+        // Credit only real backing storage, never the configured duration of an idle engine.
+        val existing = currentBufferAllocationBytes.coerceIn(0L, usedHeapBytes.coerceAtLeast(0L))
+        val boundaryBytes = 2L * RingBuffer.DEFAULT_CHUNK_SIZE_BYTES
+        var budgetBytes = (safeHeapBytes - usedHeapBytes + existing - boundaryBytes).coerceAtLeast(0L)
 
         // The system's own availability is an independent ceiling, not an average: a generous heap
         // limit on a device that is currently out of memory buys nothing.
         if (availableSystemBytes != null) {
-            budgetBytes = minOf(budgetBytes, (availableSystemBytes * SAFE_HEAP_UTILISATION).toLong())
+            budgetBytes = minOf(budgetBytes,
+                ((availableSystemBytes * SAFE_HEAP_UTILISATION).toLong() + existing - boundaryBytes).coerceAtLeast(0L))
         }
 
         val backingBytes = (budgetBytes / PEAK_TO_BACKING_RATIO).toLong()
