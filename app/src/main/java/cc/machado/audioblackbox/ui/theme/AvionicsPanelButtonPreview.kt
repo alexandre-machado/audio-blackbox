@@ -212,7 +212,6 @@ private fun PanelPairDemo(
                     live = {
                         AvionicsPanelButton(
                             label = liveLabel.uppercase(),
-                            iconRes = forwardActionResources(livePulsing).icon,
                             onClick = {},
                             enabled = true,
                             pulsing = livePulsing,
@@ -247,7 +246,6 @@ private fun PreviewLiveTwoUpRow() {
                 AvionicsPanelButton(
                     label = stringResource(R.string.dashboard_panel_live_stop_label),
                     caption = stringResource(R.string.dashboard_panel_live_caption_recording, "00:42"),
-                    iconRes = forwardActionResources(true).icon,
                     pulsing = true,
                     onClick = {},
                 )

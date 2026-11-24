@@ -1,6 +1,5 @@
 package cc.machado.audioblackbox.ui.theme
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -36,7 +35,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -63,7 +61,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -327,7 +324,6 @@ fun AvionicsPanelButton(
     caption: String? = null,
     ledColor: Color = FlightOrange,
     contentDescription: String? = null,
-    @DrawableRes iconRes: Int? = null,
     // Exposes the actual caption layout for bounds checks; null keeps the normal text fast path.
     onCaptionTextLayout: ((TextLayoutResult) -> Unit)? = null,
 ) {
@@ -394,17 +390,8 @@ fun AvionicsPanelButton(
                         ),
                 )
             }
-            // The icon sits above the label, preserving the full text-column width.
             // Height remains content-sized so translated labels can wrap at word boundaries.
             Column(modifier = Modifier.weight(1f)) {
-                if (iconRes != null) {
-                    Icon(
-                        painter = painterResource(iconRes),
-                        contentDescription = null,
-                        tint = labelColor,
-                        modifier = Modifier.padding(bottom = 4.dp).size(18.dp),
-                    )
-                }
                 Text(
                     text = label.uppercase(),
                     fontFamily = FontFamily.Monospace,
@@ -489,7 +476,7 @@ fun AvionicsPanelButtonRow(
             }
         } else {
             // Equal heights (PR #454 `@rev` REV-8): the taller button sets the row height and
-            // propagateMinConstraints stretches the other to match, so a wrapped label or an icon on
+            // propagateMinConstraints stretches the other to match, so a wrapped label on
             // one side never leaves the pair visibly uneven.
             Row(
                 modifier = Modifier.height(IntrinsicSize.Min),

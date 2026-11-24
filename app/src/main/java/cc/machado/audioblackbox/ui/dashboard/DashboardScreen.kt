@@ -748,7 +748,7 @@ private fun statusColor(status: CaptureStatus): Color = when (status) {
  * name does not.
  */
 @Composable
-private fun ActionPanelRow(
+internal fun ActionPanelRow(
     uiState: DashboardUiState,
     onSaveRecent: () -> Unit,
     onStartForwardRecording: () -> Unit,
@@ -852,7 +852,6 @@ private fun ActionPanelRow(
         live = {
             AvionicsPanelButton(
                 label = liveLabel,
-                iconRes = liveAction.icon,
                 onClick = if (isForwardRecording) onStopForwardRecording else onStartForwardRecording,
                 caption = liveCaption,
                 ledColor = FlightOrange,
