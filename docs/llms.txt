@@ -5,7 +5,7 @@
 Key facts:
 
 - Package name: cc.machado.audioblackbox
-- Price: free to install and use. One optional in-app purchase, a one-time Pro unlock (`pro_unlock`), removes the 2-hour limit on live recording time (excluding the buffered past). Everything else, including the retroactive buffer and all quality presets, is free. Installs before 2026-12-20 at 03:00 UTC get Pro at no cost. The app has no account and no ads, and sends no usage analytics itself.
+- Price: free to install and use. One optional in-app purchase, a one-time Pro unlock (`pro_unlock`), removes the 2-hour limit on live recording time (excluding the buffered past). Everything else, including the retroactive buffer and all quality presets, is free. Early-bird Pro, free: install Audio Blackbox by December 19, 2026 (before December 20, 00:00 Brasília time, UTC−3) and Pro stays unlocked on that device at no cost, for good. The benefit belongs to that installation: uninstalling and reinstalling, or switching devices, does not keep it. The app has no account and no ads, and sends no usage analytics itself.
 - This website uses Google Analytics 4 and Microsoft Clarity to measure visits. That applies to the website only, not to the app.
 - License: GNU General Public License v3.0, source on GitHub.
 - Platform: Android 10 (API 29) and newer.
