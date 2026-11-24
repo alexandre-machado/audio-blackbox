@@ -101,52 +101,41 @@ class MediaStoreSink(
         // row whose file does not exist yet drops the row (measured on the S25, PR #415), so the
         // file has to be there before the early commit below.
         val creatingPfd = openWritable(resolver, uri)
+        val earlyCommit = ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }
 
-        // Early commit (issue #53): clear IS_PENDING immediately so the recording in progress is
-        // visible in MediaStore and Gallery while still being written.
-        try {
-            val earlyCommit = ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }
+        fun publish(): ParcelFileDescriptor {
+            // Publish only after the durable journal exists, before writing audio (issue #53).
             resolver.update(uri, earlyCommit, null, null)
-        } catch (e: Exception) {
-            try { creatingPfd.close() } catch (_: Exception) {}
-            resolver.delete(uri, null, null)
-            throw IOException("Failed to early-commit MediaStore row for $uri", e)
+            // Issue #378: publication renames the pending file. S25 FUSE rejects fstat/ftruncate
+            // on the old descriptor, so the writer must open a fresh one after that rename.
+            return try {
+                openWritable(resolver, uri)
+            } finally {
+                try { creatingPfd.close() } catch (_: Exception) {}
+            }
         }
-
-        // Issue #378: the early commit *renames* the file on disk, from
-        // `.pending-<expiry>-<name>` to `<name>`. A descriptor opened before that rename keeps
-        // accepting write(), but fstat() and ftruncate() on it fail with EIO on the S25's FUSE
-        // (open mode makes no difference: "rw" and "rwt" behave the same). MediaMuxer.stop() needs
-        // both: it ftruncates its pre-allocated tail, and fails with ERROR_IO (-1004) when that
-        // returns EIO, which the JNI reports as "muxer would have stopped already". So the
-        // descriptor the muxer writes through is opened after the rename, on the published file.
-        val pfd = try {
-            openWritable(resolver, uri)
-        } catch (e: IOException) {
-            // openWritable has already deleted the row.
-            try { creatingPfd.close() } catch (_: Exception) {}
-            throw e
-        }
-        try { creatingPfd.close() } catch (_: Exception) {}
 
         return object : StreamingExportTarget {
             @Volatile private var isClosed = false
+            private var pfd: ParcelFileDescriptor? = null
             override val uri: Uri = uri
             override fun prepare() {
+                if (pfd != null) return
                 try {
                     registerLive(context, uri)
+                    pfd = publish()
                 } catch (e: Exception) {
                     abortUnstarted()
-                    throw IOException("Could not journal the live recording", e)
+                    throw IOException("Could not prepare the live recording", e)
                 }
             }
 
             override fun abortUnstarted() {
                 try { close() } finally { resolver.delete(uri, null, null) }
             }
-            override val fileDescriptor: FileDescriptor = pfd.fileDescriptor
+            override val fileDescriptor: FileDescriptor get() = checkNotNull(pfd).fileDescriptor
             override val outputStream: OutputStream by lazy {
-                FileOutputStream(pfd.fileDescriptor)
+                FileOutputStream(fileDescriptor)
             }
 
             override fun finish() {
@@ -217,7 +206,7 @@ class MediaStoreSink(
                 if (isClosed) return
                 isClosed = true
                 try {
-                    pfd.close()
+                    (pfd ?: creatingPfd).close()
                 } catch (_: Exception) {}
             }
         }

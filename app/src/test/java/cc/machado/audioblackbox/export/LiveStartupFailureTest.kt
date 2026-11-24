@@ -18,19 +18,22 @@ import org.mockito.Mockito
 import org.mockito.kotlin.*
 
 class LiveStartupFailureTest {
-    // Oracle: the real sink deletes the already-published row on journal failure, even if close
+    // Oracle: the real sink deletes the pending row on journal failure, even if close
     // fails. No fake target implements the cleanup being tested.
-    @Test fun journalFailureDeletesPublishedRow() = withSink({ _, _ -> throw IOException("journal") }) { sink, resolver, uri ->
+    @Test fun journalFailureDeletesPendingRowWithoutPublishing() = withSink({ _, _ -> throw IOException("journal") }) { sink, resolver, uri ->
         val target = sink.openStreaming("blackbox_test.ogg", "audio/ogg")
         try { target.prepare(); fail("Journal failure must surface") } catch (_: IOException) {}
         verify(resolver).delete(uri, null, null)
+        verify(resolver, never()).update(any(), any(), anyOrNull(), anyOrNull())
     }
 
     // Oracle: failure constructing the writer must invoke the real sink's row deletion, not close
     // alone. Opus remains selected and the engine returns its specific availability failure.
     @Test fun unavailableWriterDeletesPublishedRowAndReportsSpecificError() = withSink({ _, _ -> }) { sink, resolver, uri ->
         val engine = engine(sink) { _, _ -> throw OpusUnavailableException() }
-        val result = engine.start()
+        engine.start()
+        engine.stop() // joins the drain worker, including startup failure
+        val result = engine.state.value
         assertEquals(ForwardRecordingFailureReason.OPUS_UNAVAILABLE, (result as ForwardRecordingState.Error).reason)
         verify(resolver).delete(uri, null, null)
     }
@@ -40,14 +43,16 @@ class LiveStartupFailureTest {
     @Test fun journalRunsOffStartPathBeforeFirstAudio() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        withSink({ _, _ -> entered.countDown(); check(release.await(10, TimeUnit.SECONDS)) }) { sink, _, _ ->
+        withSink({ _, _ -> entered.countDown(); check(release.await(10, TimeUnit.SECONDS)) }) { sink, resolver, _ ->
             val writer = mock<StreamingAudioWriter>()
             val engine = engine(sink) { _, _ -> writer }
             try {
                 assertTrue(engine.start() is ForwardRecordingState.Recording)
                 assertTrue(entered.await(10, TimeUnit.SECONDS))
                 verify(writer, never()).write(any(), any(), any())
+                verify(resolver, never()).update(any(), any(), anyOrNull(), anyOrNull())
             } finally { release.countDown(); engine.stop() }
+            verify(resolver).update(any(), any(), anyOrNull(), anyOrNull())
         }
     }
 

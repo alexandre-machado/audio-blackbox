@@ -35,6 +35,9 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
     private val codec: MediaCodec
     private val output: ParcelFileDescriptor.AutoCloseOutputStream
     private var ogg: OggOpusWriter? = null
+    private val codecHeaders = mutableListOf<java.nio.ByteBuffer>()
+    private var splitDelay: java.nio.ByteBuffer? = null
+    private var outputChannels = config.channelCount
     private val info = MediaCodec.BufferInfo()
     private val rate = OpusEncoding.outputRate(config)
     private val silence = ByteArray(4096)
@@ -108,22 +111,33 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
             checkDeadline(deadline)
             when (val index = codec.dequeueOutputBuffer(info, if (untilEos) 10_000L else 0L)) {
                 MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    check(ogg == null)
                     val format = codec.outputFormat
-                    ogg = OggOpusWriter(output, config.channelCount, config.sampleRateHz,
-                        OpusPacket.preSkip(format.getByteBuffer("csd-0"), format.getByteBuffer("csd-1")))
+                    outputChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    splitDelay = format.getByteBuffer("csd-1")?.duplicate()
+                    for (key in listOf("csd-0", "csd-1", "csd-2")) {
+                        format.getByteBuffer(key)?.let { codecHeaders += it.duplicate() }
+                    }
                 }
                 MediaCodec.INFO_TRY_AGAIN_LATER -> if (!untilEos) return
                 else -> if (index >= 0) {
                     val eos = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     try {
-                        if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
+                        if (info.size > 0) {
                             val buffer = checkNotNull(codec.getOutputBuffer(index)).duplicate()
                             buffer.position(info.offset)
                             buffer.limit(info.offset + info.size)
                             val packet = ByteArray(info.size)
                             buffer.get(packet)
-                            checkNotNull(ogg).writePacket(packet)
+                            if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+                                codecHeaders += java.nio.ByteBuffer.wrap(packet)
+                            } else {
+                                if (ogg == null) {
+                                    val head = OpusPacket.header(*codecHeaders.toTypedArray(), fallbackChannels = outputChannels)
+                                        ?: OpusPacket.Header(outputChannels, OpusPacket.preSkip(null, splitDelay))
+                                    ogg = OggOpusWriter(output, head.channels, config.sampleRateHz, head.preSkip)
+                                }
+                                checkNotNull(ogg).writePacket(packet)
+                            }
                         }
                     } finally { codec.releaseOutputBuffer(index, false) }
                     if (eos) return
@@ -159,7 +173,8 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
                 }
             }
             drain(true, deadline)
-            checkNotNull(ogg) { "Opus encoder produced no track" }.finish()
+            checkNotNull(ogg) { "Opus encoder produced no track" }
+                .finish(fedBytes / config.bytesPerFrame * 48_000L / rate)
             codec.stop()
             finished = true
         } finally { close() }

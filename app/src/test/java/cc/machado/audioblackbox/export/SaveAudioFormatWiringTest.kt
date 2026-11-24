@@ -95,9 +95,23 @@ class SaveAudioFormatWiringTest {
                         oldestCursorProvider = ring::oldestCursor, exportFloorAdvancerProvider = { null },
                         gapsProvider = { emptyList() }, sink = streamingSink { _, mime ->
                             assertEquals("audio/ogg", mime); liveTarget
-                        }, liveEncodingProvider = selector::liveEncoding)
+                        }, liveEncodingProvider = {
+                            val encoding = selector.liveEncoding()
+                            encoding.copy(createWriter = { target, cfg ->
+                                // Mockito static/construction scopes belong to the drain thread.
+                                Mockito.mockStatic(MediaFormat::class.java).use { workerFormats ->
+                                    workerFormats.`when`<MediaFormat> {
+                                        MediaFormat.createAudioFormat("audio/opus", 16_000, 1)
+                                    }.thenReturn(format)
+                                    Mockito.mockConstruction(MediaCodecList::class.java) { codecs, _ ->
+                                        whenever(codecs.findEncoderForFormat(format)).thenReturn(null)
+                                    }.use { encoding.createWriter(target, cfg) }
+                                }
+                            })
+                        })
+                    live.start()
                     assertEquals(ForwardRecordingFailureReason.OPUS_UNAVAILABLE,
-                        (live.start() as ForwardRecordingState.Error).reason)
+                        (live.stop() as ForwardRecordingState.Error).reason)
                     verify(liveTarget).abortUnstarted()
                     assertEquals(1, aborts)
                     assertEquals(0, commits)
@@ -125,25 +139,35 @@ class SaveAudioFormatWiringTest {
             selected = SaveAudioFormat.AAC
             target
         }
-        Mockito.mockConstruction(StreamingOpusWriter::class.java).use { opus ->
-            Mockito.mockConstruction(StreamingAdtsWriter::class.java).use { aac ->
+        val opus = mutableListOf<StreamingOpusWriter>()
+        val aac = mutableListOf<StreamingAdtsWriter>()
                 val engine = ForwardRecordingEngine(config = config,
                     readSinceProvider = ring::readSince, writeCursorProvider = ring::writeCursor,
                     oldestCursorProvider = ring::oldestCursor, exportFloorAdvancerProvider = { null },
-                    gapsProvider = { emptyList() }, sink = sink, liveEncodingProvider = selector::liveEncoding)
+                    gapsProvider = { emptyList() }, sink = sink, liveEncodingProvider = {
+                        val encoding = selector.liveEncoding()
+                        encoding.copy(createWriter = { destination, cfg ->
+                            Mockito.mockConstruction(StreamingOpusWriter::class.java).use { opusMocks ->
+                                Mockito.mockConstruction(StreamingAdtsWriter::class.java).use { aacMocks ->
+                                    encoding.createWriter(destination, cfg).also {
+                                        opus += opusMocks.constructed()
+                                        aac += aacMocks.constructed()
+                                    }
+                                }
+                            }
+                        })
+                    })
                 assertTrue(engine.start() is ForwardRecordingState.Recording)
                 assertTrue(engine.stop() is ForwardRecordingState.Success)
                 assertEquals("audio/ogg", opened[0].second)
                 assertTrue(opened[0].first.endsWith(".ogg"))
-                verify(opus.constructed().single(), atLeastOnce()).write(any(), any(), any())
-                assertTrue(aac.constructed().isEmpty())
+                verify(opus.single(), atLeastOnce()).write(any(), any(), any())
+                assertTrue(aac.isEmpty())
                 assertTrue(engine.start() is ForwardRecordingState.Recording)
                 assertTrue(engine.stop() is ForwardRecordingState.Success)
                 assertEquals("audio/aac-adts", opened[1].second)
                 assertTrue(opened[1].first.endsWith(".aac"))
-                verify(aac.constructed().single(), atLeastOnce()).write(any(), any(), any())
-            }
-        }
+                verify(aac.single(), atLeastOnce()).write(any(), any(), any())
     }
 
     // Oracle: discovery success is not encode success. A real configure-path exception must

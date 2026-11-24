@@ -7,6 +7,35 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OggOpusWriterTest {
+    private fun hex(value: String) = value.split(" ").map { it.toInt(16).toByte() }.toByteArray()
+
+    /** Oracle: fixed Android marker bytes encode stereo and 6,510,417ns => 313 samples,
+     * overriding the embedded 312; preroll (80ms) must never become pre-skip. */
+    @Test fun codec2AndBareGoldenHeaders() {
+        val bare = hex("4f 70 75 73 48 65 61 64 01 02 38 01 80 bb 00 00 00 00 00")
+        val hdr = "AOPUSHDR".toByteArray() + hex("13 00 00 00 00 00 00 00") + bare
+        val delay = "AOPUSDLY".toByteArray() + hex("08 00 00 00 00 00 00 00 51 57 63 00 00 00 00 00")
+        val preroll = "AOPUSPRL".toByteArray() + hex("08 00 00 00 00 00 00 00 00 b4 c4 04 00 00 00 00")
+        assertEquals(OpusPacket.Header(2, 312), OpusPacket.header(ByteBuffer.wrap(bare)))
+        assertEquals(OpusPacket.Header(2, 313), OpusPacket.header(ByteBuffer.wrap(hdr + delay + preroll)))
+        assertEquals(OpusPacket.Header(2, 313), OpusPacket.header(
+            ByteBuffer.wrap(hdr), ByteBuffer.wrap(delay), ByteBuffer.wrap(preroll)))
+        assertEquals(OpusPacket.Header(2, 313), OpusPacket.header(null, null, null, ByteBuffer.wrap(hdr + delay)))
+        assertNull(OpusPacket.header(ByteBuffer.wrap(hdr.copyOf(20))))
+        assertEquals(OpusPacket.Header(2, 312), OpusPacket.header(ByteBuffer.wrap(hdr.copyOf(20)), ByteBuffer.wrap(bare)))
+    }
+
+    /** Oracle: EOS removes 648 samples of padding; prior page granules and CRC stay valid. */
+    @Test fun finalGranuleTrimsEncoderPadding() {
+        val out = ByteArrayOutputStream()
+        val writer = OggOpusWriter(out, 1, 48000, 312, 1)
+        repeat(5) { writer.writePacket(byteArrayOf(0x98.toByte())) }
+        writer.finish(3840)
+        val parsed = OggTestParser.parse(out.toByteArray())
+        assertEquals(listOf(0L, 0L, 1920L, 3840L, 4152L), parsed.pages.map { it.granule })
+        assertEquals(4, parsed.pages.last().flags)
+    }
+
     /** Oracle: CRC-32/OGG (init=0, no reflection/xorout) check value for ASCII 123456789. */
     @Test fun crcKnownAnswer() {
         assertEquals(0x89A1897FL.toInt(), OggPageWriter.crc("123456789".toByteArray()))
@@ -142,7 +171,31 @@ class OggOpusWriterTest {
         assertEquals(384, OpusPacket.preSkip(null, delay))
         assertEquals(0, head.position())
         assertEquals(0, delay.position())
-        assertThrows(IllegalArgumentException::class.java) { OpusPacket.preSkip(null, null) }
+    }
+
+    /** Oracle: missing CSD still emits mono/stereo OpusHead with 312 pre-skip, intact
+     * audio packets, valid page CRCs and EOS with the requested end trim. */
+    @Test fun noCsdProducesValidFileWithDefaultPreSkip() {
+        for (channels in 1..2) {
+            val out = ByteArrayOutputStream()
+            val writer = OggOpusWriter(out, channels, 48000, OpusPacket.preSkip(null, null), 42)
+            val silence = hex("f8 ff fe")
+            repeat(2) { writer.writePacket(silence) }
+            writer.finish(1608)
+            val parsed = OggTestParser.parse(out.toByteArray())
+            assertArrayEquals(hex("4f 70 75 73 48 65 61 64 01 0${channels} 38 01 80 bb 00 00 00 00 00"), parsed.packets[0])
+            assertEquals(4, parsed.packets.size)
+            parsed.packets.drop(2).forEach { assertArrayEquals(silence, it) }
+            assertEquals(listOf(2, 0, 4), parsed.pages.map { it.flags })
+            assertEquals(listOf(0L, 0L, 1920L), parsed.pages.map { it.granule })
+        }
+    }
+
+    /** Oracle: a Codec2 delay without OpusHead overrides the default, retaining format channels. */
+    @Test fun delayOnlyCodec2UsesFormatChannels() {
+        val delay = ByteBuffer.wrap("AOPUSDLY".toByteArray() +
+            hex("08 00 00 00 00 00 00 00 51 57 63 00 00 00 00 00"))
+        assertEquals(OpusPacket.Header(2, 313), OpusPacket.header(delay, fallbackChannels = 2))
     }
 }
 

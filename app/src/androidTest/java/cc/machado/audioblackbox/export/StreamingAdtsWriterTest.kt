@@ -22,6 +22,7 @@ class StreamingAdtsWriterTest {
             val config = preset.config(5)
             val name = "blackbox_${UUID.randomUUID()}_forward.aac"
             val target = sink.openStreaming(name, StreamingAdtsWriter.MIME_TYPE)
+            target.prepare()
             val snapshot = File.createTempFile("live-adts-", ".aac", context.cacheDir)
             try {
                 StreamingAdtsWriter(target, config).use { writer ->

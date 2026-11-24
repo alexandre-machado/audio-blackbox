@@ -58,14 +58,20 @@ class SaveAudioFormatSettingsTest {
         assertEquals(SaveAudioFormat.OPUS, selected.value)
         rule.onNodeWithText(context.getString(R.string.settings_format_opus_unavailable))
             .performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText(context.getString(R.string.settings_save_audio_format))
-            .performScrollTo().performClick()
+        rule.onNode(hasText(context.getString(R.string.settings_format_opus)) and hasClickAction())
+            .performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         // The menu lives in a popup window. Wait (bounded) for its item to exist, then fire the
         // item's real click action instead of injecting touch into the popup. The touch-injection
         // route failed on CI with the node gone mid-gesture, while the semantics route still
         // drives the production onClick -> onSelect wiring asserted below.
         val aacItem = hasText(context.getString(R.string.settings_format_aac)) and hasClickAction()
-        rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(aacItem).fetchSemanticsNodes().size == 1 }
+        try {
+            rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(aacItem).fetchSemanticsNodes().size == 1 }
+        } catch (timeout: ComposeTimeoutException) {
+            val roots = rule.onAllNodes(isRoot(), useUnmergedTree = true)
+            repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("SaveAudioFormat") }
+            throw timeout
+        }
         rule.onAllNodes(hasText("Opus") and hasClickAction()).onLast().assertIsNotEnabled()
         rule.onNode(aacItem).assertIsDisplayed().assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)

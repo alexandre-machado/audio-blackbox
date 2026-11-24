@@ -57,8 +57,18 @@ class OpusSaveRoundTripTest {
                 assertTrue(row.displayName.endsWith(".ogg"))
                 assertTrue(row.mimeType in setOf("audio/ogg", "audio/opus", "application/ogg", "audio/x-ogg"))
                 context.contentResolver.openInputStream(uri)!!.use { input -> copy.outputStream().use { input.copyTo(it) } }
-                assertTrue("Saved Opus must decode through MediaExtractor/MediaCodec",
-                    OggPrefixQualificationTest().decode(copy).isNotEmpty())
+                // Oracle: decoder output after pre-skip is 2000ms +/- one 20ms frame.
+                var decodedRate = 0
+                var decodedChannels = 0
+                val decoded = OggPrefixQualificationTest().decode(copy) { format ->
+                    decodedRate = format.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE)
+                    decodedChannels = format.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT)
+                }
+                assertTrue("Decoder must report its PCM rate", decodedRate > 0)
+                assertEquals(channels, decodedChannels)
+                val frames = decoded.size / (decodedChannels * 2)
+                assertTrue("$rate/$channels decoded $frames frames at $decodedRate Hz",
+                    kotlin.math.abs(frames - decodedRate * 2) <= decodedRate / 50)
                 assertEquals(pcm.size.toLong(), ring.exportFloor())
             } finally {
                 sink.queryRecordings().filter { it.displayName == name }.forEach {

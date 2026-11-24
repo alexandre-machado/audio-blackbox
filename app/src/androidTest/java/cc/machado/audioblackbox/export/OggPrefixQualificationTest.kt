@@ -22,7 +22,7 @@ import org.junit.runner.RunWith
  * #433 owner stop gate, deliberately independent of format-selection UI. Oracle: complete
  * Provider audio pages preceding a torn write remain decodable by Android and preparable
  * by MediaPlayer. Header-only cuts have no recoverable audio and are recorded separately.
- * No repaired copy, retry, or assumed MIME can make this qualification pass. Encoding uses
+ * Raw and repaired copies must independently qualify; repair cannot hide raw failures. Encoding uses
  * the production provider; decoding and preparation use the unmodified Android readers.
  */
 @RunWith(AndroidJUnit4::class)
@@ -31,6 +31,7 @@ class OggPrefixQualificationTest {
         val directory = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,
             "opus-prefix-qualification").apply { mkdirs() }
         val failures = mutableListOf<String>()
+        val repairedFailures = mutableListOf<String>()
         try {
             for ((rate, channels, bitrate) in listOf(
                 Triple(16_000, 1, 24_000), Triple(32_000, 1, 32_000), Triple(44_100, 2, 96_000),
@@ -81,6 +82,28 @@ class OggPrefixQualificationTest {
                         }
                         if (player.isFailure) failures += "$id MediaPlayer: ${player.exceptionOrNull()}"
                     }
+                    val repaired = runCatching {
+                        java.io.RandomAccessFile(prefix, "rw").use { OggTailRepair.repair(it.channel) }
+                    }
+                    if (repaired.isFailure) repairedFailures += "$id repair: ${repaired.exceptionOrNull()}"
+                    if (completeAudioPages >= 1) {
+                        val repairedPcm = runCatching { decode(prefix) }
+                        val pcm = repairedPcm.getOrNull()
+                        if (pcm == null || pcm.isEmpty()) {
+                            repairedFailures += "$id decode: ${repairedPcm.exceptionOrNull()}"
+                        } else {
+                            val boundary = pages.last { it.end <= cut }.end
+                            val expected = boundaryPcm[boundary]?.getOrNull()
+                            if (expected != null && !pcm.contentEquals(expected)) {
+                                repairedFailures += "$id lost or changed complete-page PCM"
+                            }
+                            if (pcm.size > reference.size || pcm.indices.any { pcm[it] != reference[it] }) {
+                                repairedFailures += "$id PCM differs from reference prefix"
+                            }
+                        }
+                        val repairedPlayer = runCatching { prepare(prefix) }
+                        if (repairedPlayer.isFailure) repairedFailures += "$id MediaPlayer: ${repairedPlayer.exceptionOrNull()}"
+                    }
                 }
             }
         } finally {
@@ -88,7 +111,8 @@ class OggPrefixQualificationTest {
         }
         failures.forEach { Log.e(TAG, it) }
         assertTrue("OWNER STOP GATE: provider Ogg prefix qualification failed:\n" +
-            failures.joinToString("\n"), failures.isEmpty())
+            "RAW:\n" + failures.joinToString("\n") + "\nREPAIRED:\n" +
+            repairedFailures.joinToString("\n"), failures.isEmpty() && repairedFailures.isEmpty())
     }
 
     private data class Page(val start: Int, val laces: Int, val body: Int, val end: Int)
@@ -135,7 +159,7 @@ class OggPrefixQualificationTest {
         }
     }
 
-    internal fun decode(file: File): ByteArray {
+    internal fun decode(file: File, onOutputFormat: (MediaFormat) -> Unit = {}): ByteArray {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         try {
@@ -168,6 +192,7 @@ class OggPrefixQualificationTest {
                     }
                 }
                 val index = decoder.dequeueOutputBuffer(info, 10_000)
+                if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) onOutputFormat(decoder.outputFormat)
                 if (index >= 0) {
                     try {
                         if (info.size > 0) {

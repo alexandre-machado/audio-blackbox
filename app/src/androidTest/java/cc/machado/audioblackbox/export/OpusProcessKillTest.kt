@@ -95,6 +95,13 @@ class OpusProcessKillTest {
         val lines = marker.readLines()
         assertNotEquals("Verifier must run in a new app process", lines[0].toInt(), Process.myPid())
         val uri = Uri.parse(lines[1])
+        // Wait for Application.onCreate recovery before reading: repair can truncate the tail.
+        // Never invoke recovery here, which would bypass the lifecycle wiring under test.
+        val receipt = runBlocking {
+            withTimeout(45_000) { InterruptedLiveRecovery.results.first { uri.toString() in it } }
+        }
+        assertEquals("Our startup scan must succeed, not merely discard a stale entry",
+            RecoveryResult.SCANNED, receipt[uri.toString()])
         val bytes = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
         val prefix = savedPrefix.readBytes()
         assertTrue("Killed live file disappeared or shrank", bytes.size >= prefix.size)
@@ -109,15 +116,16 @@ class OpusProcessKillTest {
             val decoder = OggPrefixQualificationTest()
             val expected = decoder.decode(complete)
             assertTrue("Last complete page prefix must contain PCM", expected.isNotEmpty())
-            assertArrayEquals("Raw killed file must decode through the last complete page",
+            assertArrayEquals("Recovered killed file must decode through the last complete page",
                 expected, decoder.decode(original))
-            // Application.onCreate has launched the real startup recovery. Observe its result;
-            // do not call recovery from the test and accidentally bypass the lifecycle wiring.
-            val receipt = runBlocking {
-                withTimeout(45_000) { InterruptedLiveRecovery.results.first { uri.toString() in it } }
-            }
-            assertEquals("Our startup scan must succeed, not merely discard a stale entry",
-                RecoveryResult.SCANNED, receipt[uri.toString()])
+            val recoveredBytes = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+            assertEquals("Recovered file must end at a complete page",
+                recoveredBytes.size, completePageEnd(recoveredBytes).second)
+            original.writeBytes(recoveredBytes)
+            val recoveredPcm = decoder.decode(original)
+            assertTrue("Recovered file must decode non-empty PCM", recoveredPcm.isNotEmpty())
+            assertTrue("Recovered PCM must retain the reference prefix", recoveredPcm.size >= expected.size)
+            assertArrayEquals("Recovered PCM prefix changed", expected, recoveredPcm.copyOf(expected.size))
             assertFalse(uri.toString() in InterruptedLiveRecovery.pendingRows(context))
             val row = MediaStoreSink(context).queryRecordings().single { it.uri == uri }
             assertEquals(bytes.size.toLong(), row.sizeBytes)

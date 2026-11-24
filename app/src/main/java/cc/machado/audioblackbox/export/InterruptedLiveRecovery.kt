@@ -35,7 +35,7 @@ internal fun recoverLiveRows(
 }
 
 /** Durable journal, written on the drain thread before the first audio frame.
- * Startup only rescans: it never opens a writable descriptor, rewrites a tail, or deletes audio.
+ * Startup repairs torn Ogg tails before rescanning; it never deletes audio or changes ADTS.
  * Only the startup snapshot is serialized with registration; scanner IPC never holds that lock.
  * Active rows are excluded so startup cannot mistake this process's file for an interrupted one.
  * All entry points run off the capture and main threads.
@@ -59,7 +59,7 @@ internal object InterruptedLiveRecovery {
             }
             recovered = true
         } catch (e: Exception) {
-            Log.w("LiveRecovery", "Interrupted recording metadata recovery failed; files preserved", e)
+            Log.w("LiveRecovery", "Recovery failures=1")
             // A later startup attempt may retry; Live registration never awaits this scan.
             throw e
         }
@@ -107,6 +107,20 @@ internal object InterruptedLiveRecovery {
                 !(StreamingAdtsWriter.accepts(metadata[1].orEmpty(), name) ||
                     StreamingOpusWriter.accepts(metadata[1].orEmpty(), name))) return RecoveryResult.STALE
             val path = metadata[0] ?: return RecoveryResult.RETRY
+            if (StreamingOpusWriter.accepts(metadata[1].orEmpty(), name) &&
+                !StreamingAdtsWriter.accepts(metadata[1].orEmpty(), name)) {
+                // rw preserves existing bytes; rwt would destroy the file before validation.
+                val descriptor = resolver.openFileDescriptor(uri, "rw") ?: return RecoveryResult.RETRY
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+                    android.os.ParcelFileDescriptor.AutoCloseOutputStream(
+                        android.os.ParcelFileDescriptor.dup(descriptor.fileDescriptor)
+                    ).use { output ->
+                        val repair = OggTailRepair.repair(input.channel, output.channel)
+                        Log.i("LiveRecovery", "Repaired=${if (repair == OggTailRepair.Result.TRUNCATED) 1 else 0} " +
+                            "invalidHeaders=${if (repair == OggTailRepair.Result.INVALID_HEADERS) 1 else 0}")
+                    }
+                }
+            }
             val done = CountDownLatch(1)
             var scanned = false
             MediaScannerConnection.scanFile(context, arrayOf(path), arrayOf(metadata[1])) { _, result ->
@@ -117,7 +131,7 @@ internal object InterruptedLiveRecovery {
             if (!success) Log.w("LiveRecovery", "Interrupted row scan incomplete; retained for next startup")
             if (success) RecoveryResult.SCANNED else RecoveryResult.RETRY
         } catch (e: Exception) {
-            Log.w("LiveRecovery", "Interrupted row could not be scanned; file preserved", e)
+            Log.w("LiveRecovery", "Row recovery failures=1")
             RecoveryResult.RETRY
         }
     }

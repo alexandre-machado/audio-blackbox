@@ -18,7 +18,7 @@ internal class OggOpusWriter(
     private val output: OutputStream,
     channels: Int,
     inputSampleRate: Int,
-    preSkip: Int,
+    private val preSkip: Int,
     serial: Int = Random.nextInt(),
 ) {
     private val pages = OggPageWriter(output, serial)
@@ -56,9 +56,11 @@ internal class OggOpusWriter(
         packets++
     }
 
-    fun finish() {
+    fun finish(inputSamples48k: Long? = null) {
         if (finished) return
-        pages.flush(4)
+        val end = inputSamples48k?.let { preSkip + it }
+        require(end == null || end in (samples - pageSamples)..samples) { "Invalid Opus end trim" }
+        pages.flush(4, end)
         output.flush()
         finished = true
     }
@@ -94,13 +96,13 @@ internal class OggPageWriter(private val output: OutputStream, private val seria
         } while (true)
     }
 
-    fun flush(flags: Int = 0) {
+    fun flush(flags: Int = 0, endGranule: Long? = null) {
         if (segments == 0 && flags == 0) return
         page.fill(0, 0, 27)
         "OggS".toByteArray(Charsets.US_ASCII).copyInto(page)
         page[5] = (flags or if (continued) 1 else 0).toByte()
         val header = ByteBuffer.wrap(page).order(ByteOrder.LITTLE_ENDIAN)
-        header.putLong(6, granule).putInt(14, serial).putInt(18, sequence++)
+        header.putLong(6, endGranule ?: granule).putInt(14, serial).putInt(18, sequence++)
         page[26] = segments.toByte()
         page.copyInto(page, 27 + segments, 282, 282 + bytes)
         val length = 27 + segments + bytes
@@ -148,22 +150,54 @@ internal object OpusPacket {
         return frame * count
     }
 
-    /** Android CSD-1 stores codec delay in native-endian nanoseconds. */
-    fun preSkip(head: ByteBuffer?, delay: ByteBuffer?): Int {
-        val h = head?.duplicate()?.order(ByteOrder.LITTLE_ENDIAN)
-        if (h != null && h.remaining() >= 19) {
-            val signature = ByteArray(8).also { h.get(it) }
-            if (signature.contentEquals("OpusHead".toByteArray(Charsets.US_ASCII))) {
-                h.get() // version
-                h.get() // channels
-                return h.short.toInt() and 65535
+    data class Header(val channels: Int, val preSkip: Int)
+
+    /** Bare framework CSD or bounded Codec2 marker records; never scan arbitrary payload bytes. */
+    fun header(vararg sources: ByteBuffer?, fallbackChannels: Int? = null): Header? {
+        var head: Header? = null
+        var delay: Int? = null
+        fun bare(buffer: ByteBuffer): Header? {
+            val b = buffer.slice().order(ByteOrder.LITTLE_ENDIAN)
+            if (b.remaining() < 19) return null
+            val signature = ByteArray(8).also { b.get(it) }
+            if (String(signature, Charsets.US_ASCII) != "OpusHead") return null
+            val version = b.get().toInt() and 255
+            val channels = b.get().toInt() and 255
+            val skip = b.short.toInt() and 65535
+            if (version !in 1..15 || channels !in 1..2 || b.get(18).toInt() != 0) return null
+            return Header(channels, skip)
+        }
+        for (source in sources) {
+            val b = source?.slice()?.order(ByteOrder.LITTLE_ENDIAN) ?: continue
+            bare(b)?.let { if (head == null) head = it }
+            while (b.remaining() >= 16) {
+                val marker = String(ByteArray(8).also { b.get(it) }, Charsets.US_ASCII)
+                if (marker !in setOf("AOPUSHDR", "AOPUSDLY", "AOPUSPRL")) break
+                val size = b.long
+                if (size < 0 || size > b.remaining()) break
+                val payload = b.slice().order(ByteOrder.LITTLE_ENDIAN).apply { limit(size.toInt()) }
+                when (marker) {
+                    "AOPUSHDR" -> bare(payload)?.let { head = it }
+                    "AOPUSDLY" -> if (size == 8L) delay = delaySamples(payload.long)
+                }
+                b.position(b.position() + size.toInt())
             }
         }
-        val d = requireNotNull(delay) { "Opus encoder omitted delay CSD" }
-            .duplicate().order(ByteOrder.nativeOrder())
-        require(d.remaining() >= 8)
-        val nanos = d.long
-        require(nanos in 0..1_365_312_500L)
-        return (nanos * 48_000 / 1_000_000_000L).toInt()
+        return head?.let { it.copy(preSkip = delay ?: it.preSkip) }
+            ?: delay?.let { skip -> fallbackChannels?.let { Header(it, skip) } }
+    }
+
+    private fun delaySamples(nanos: Long): Int? =
+        if (nanos in 0..1_365_312_500L) ((nanos * 48_000 + 500_000_000L) / 1_000_000_000L).toInt()
+        else null
+
+    /** Split CSD-1 fallback is nanoseconds; absent/invalid metadata must never imply zero. */
+    fun preSkip(head: ByteBuffer?, delay: ByteBuffer?): Int {
+        header(head, delay)?.let { return it.preSkip }
+        val d = delay?.duplicate()?.order(ByteOrder.LITTLE_ENDIAN)
+        // Some Android encoders omit delay CSD entirely. Use libopus's standard encoder
+        // lookahead: 312 samples at 48 kHz (6.5 ms). A wrong pre-skip only shifts the
+        // decoded start by a few milliseconds; it never corrupts the encoded data.
+        return (if (d?.remaining() == 8) delaySamples(d.long) else null) ?: 312
     }
 }

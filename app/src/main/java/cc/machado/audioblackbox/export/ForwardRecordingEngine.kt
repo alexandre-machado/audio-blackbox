@@ -246,25 +246,11 @@ class ForwardRecordingEngine(
             }
 
             val currentConfig = configProvider?.invoke() ?: config
-            val writer = try {
-                encoding.createWriter(target, currentConfig)
-            } catch (e: Exception) {
-                target.abortUnstarted()
-                val err = ForwardRecordingState.Error(
-                    if (e is OpusUnavailableException) ForwardRecordingFailureReason.OPUS_UNAVAILABLE
-                    else ForwardRecordingFailureReason.SINK_OPEN_FAILED,
-                    "Failed to create streaming writer: ${e.message}",
-                    e,
-                )
-                stateValue = err
-                return err
-            }
 
             stopRequested.set(false)
             cancelRequested.set(false)
             wakeUpLatch = CountDownLatch(1)
             activeTarget = target
-            activeWriter = writer
 
             val sessionStartMillis = clock()
             val sessionStartElapsed = monotonicClock()
@@ -273,6 +259,24 @@ class ForwardRecordingEngine(
             stateValue = ForwardRecordingState.Recording(displayName, 0L)
 
             val drainThread = Thread({
+                val writer = try {
+                    target.prepare()
+                    encoding.createWriter(target, currentConfig)
+                } catch (e: Exception) {
+                    try { target.abortUnstarted() } catch (_: Exception) {}
+                    synchronized(lock) {
+                        activeDrainThread = null
+                        activeTarget = null
+                        activeWriter = null
+                        stateValue = ForwardRecordingState.Error(
+                            if (e is OpusUnavailableException) ForwardRecordingFailureReason.OPUS_UNAVAILABLE
+                            else ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                            "Failed to prepare streaming writer: ${e.message}", e,
+                        )
+                    }
+                    return@Thread
+                }
+                activeWriter = writer
                 // `currentConfig` is the format the writer above was configured with, i.e. the
                 // format this file declares -- so it is also the format every drained chunk must
                 // be converted into (issue #322).
@@ -528,7 +532,6 @@ class ForwardRecordingEngine(
         }
 
         try {
-            target.prepare()
             while (!stopRequested.get() && !cancelRequested.get()) {
                 // Issue #443: the free cap. Elapsed >= cap (remaining <= 0) ends the live loop and
                 // falls through to the exact clean-stop path stop() uses: final drain to the write
