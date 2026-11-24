@@ -17,7 +17,7 @@ data "cloudflare_account_api_token_permission_groups_list" "deploy" {
     postcondition {
       condition = length(try([
         for group in self.result : group
-        if try(group.name == each.key && contains(group.scopes, each.value) && group.is_selectable == true && length(group.id) > 0, false)
+        if try(group.name == each.key && contains(group.scopes, each.value) && try(group.is_selectable, null) != false && length(group.id) > 0, false)
       ], [])) == 1
       error_message = "Expected exactly one selectable permission group matching ${each.key} and ${each.value}."
     }
@@ -28,7 +28,7 @@ locals {
   selected_permissions = {
     for name, scope in local.permissions : name => try(one([
       for group in data.cloudflare_account_api_token_permission_groups_list.deploy[name].result : group.id
-      if try(group.name == name && contains(group.scopes, scope) && group.is_selectable == true && length(group.id) > 0, false)
+      if try(group.name == name && contains(group.scopes, scope) && try(group.is_selectable, null) != false && length(group.id) > 0, false)
     ]), null)
   }
 }

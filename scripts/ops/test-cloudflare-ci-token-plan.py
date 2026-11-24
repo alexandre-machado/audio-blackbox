@@ -24,7 +24,7 @@ ZONE_SCOPE = ACCOUNT_SCOPE + ".zone"
 NAMES = ["Workers Scripts Write", "Workers Routes Write", "Zone Read"]
 IDS = ["1" * 32, "2" * 32, "3" * 32]
 GROUPS = [
-    dict(id=id_, name=name, scopes=[scope], is_selectable=True)
+    dict(id=id_, name=name, scopes=[scope])  # real API shape: no is_selectable field (upstream #7212 debug log)
     for id_, name, scope in zip(IDS, NAMES, [ACCOUNT_SCOPE, ZONE_SCOPE, ZONE_SCOPE])
 ]
 # Overinclusive results exercise local exact-name/scope/selectability guards.

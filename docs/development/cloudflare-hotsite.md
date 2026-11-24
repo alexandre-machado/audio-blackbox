@@ -62,8 +62,7 @@ shell tracing, Terraform debug logs, `terraform output -raw` on its own, or
 `terraform show -json` in recorded terminals. The wrapper disables Terraform
 logging, applies with restrictive file permissions, and pipes the sensitive
 output to `gh secret set` via stdin, never a command argument or a file. It first
-checks that Terraform output succeeded and contains a non-empty, 40-character
-URL-safe token, then clears the temporary shell variable after upload or failure.
+checks that Terraform output succeeded and contains a non-empty token of 40-128 URL-safe characters, then clears the temporary shell variable after upload or failure.
 Normal apply output redacts `token_value`; `sensitive` does not encrypt state.
 
 The module creates **audio-blackbox-hotsite-ci** with exactly two allow policies:
