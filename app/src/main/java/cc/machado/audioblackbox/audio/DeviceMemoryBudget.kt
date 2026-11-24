@@ -65,6 +65,18 @@ object DeviceMemoryBudget {
             heap.maxHeapBytes, heap.usedHeapBytes, availableSystemBytes, currentBufferAllocationBytes)
     }
 
+    /** Idle/start admission runs on the caller before any capture thread is launched. A high
+     * used-heap sample may include garbage: issue one GC hint and re-sample once before refusing.
+     * No waiting or retries; live resize retains its existing allocation guard. */
+    internal fun idleAllocationRefusal(
+        requestedBytes: Int,
+        memoryBudget: MemoryBudget,
+    ): ResizeOutcome.Refused? {
+        allocationRefusal(requestedBytes, 0, memoryBudget) ?: return null
+        memoryBudget.reclaim()
+        return allocationRefusal(requestedBytes, 0, memoryBudget)
+    }
+
     /** Final allocation guard shared by idle selection, start and live resize (including the
      * minimum step, which is a UI floor rather than a promise that allocation is affordable). */
     internal fun allocationRefusal(

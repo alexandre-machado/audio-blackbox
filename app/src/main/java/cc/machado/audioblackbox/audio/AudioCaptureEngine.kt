@@ -261,7 +261,7 @@ class AudioCaptureEngine(
             val newCapacityBytes = newConfig.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
             val buffer = ringBuffer
             if (buffer == null) {
-                DeviceMemoryBudget.allocationRefusal(newCapacityBytes, 0, memoryBudget)?.let {
+                DeviceMemoryBudget.idleAllocationRefusal(newCapacityBytes, memoryBudget)?.let {
                     return SwitchConfigResult.BufferResizeRefused(it)
                 }
             }
@@ -325,7 +325,7 @@ class AudioCaptureEngine(
 
             val currentCfg = activeConfig
             val capacityBytes = currentCfg.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-            DeviceMemoryBudget.allocationRefusal(capacityBytes, 0, memoryBudget)?.let {
+            DeviceMemoryBudget.idleAllocationRefusal(capacityBytes, memoryBudget)?.let {
                 _state.value = CaptureState.Error(
                     CaptureErrorReason.BUFFER_ALLOCATION_FAILED,
                     "Insufficient memory for $capacityBytes-byte ring buffer",

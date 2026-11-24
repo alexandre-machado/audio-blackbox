@@ -123,10 +123,18 @@ data class FormatSegment(
 fun interface MemoryBudget {
     fun sample(): MemorySample
 
+    /** One best-effort hint before idle allocation is refused; never called by the capture loop.
+     * Fakes may override this to model garbage becoming reclaimable without running real GC. */
+    fun reclaim() = Unit
+
     companion object {
-        val REAL: MemoryBudget = MemoryBudget {
-            val rt = Runtime.getRuntime()
-            MemorySample(maxHeapBytes = rt.maxMemory(), usedHeapBytes = rt.totalMemory() - rt.freeMemory())
+        val REAL: MemoryBudget = object : MemoryBudget {
+            override fun sample(): MemorySample {
+                val rt = Runtime.getRuntime()
+                return MemorySample(maxHeapBytes = rt.maxMemory(), usedHeapBytes = rt.totalMemory() - rt.freeMemory())
+            }
+
+            override fun reclaim() = Runtime.getRuntime().gc()
         }
     }
 }

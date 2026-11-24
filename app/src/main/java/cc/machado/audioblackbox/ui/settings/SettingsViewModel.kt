@@ -98,6 +98,11 @@ class SettingsViewModel(
     private val _pendingPreset = MutableStateFlow<QualityPreset?>(null)
     private var pendingWasRefused = false
 
+    // Suppress the limit notice across the engine -> DataStore handoff. Keep the target until
+    // the UI combine itself has observed both sides, not merely until the write returns: its
+    // storedMinutes input can still be queued then. A real later clamp remains visible.
+    private val _retentionApplyTarget = MutableStateFlow<Int?>(null)
+
     // Non-null exactly while there is an unacknowledged "your settings change could not be
     // applied" refusal (issue #272) -- a real, user-visible signal for a resize the engine
     // refused rather than crashed on, per AGENTS.md §5 "never fake a signal in the UI". Cleared by
@@ -124,7 +129,11 @@ class SettingsViewModel(
         combine(_pendingMinutes, _pendingPreset, ::Pair),
         combine(retentionWindowPreferences.clampNoticeFlow, retentionWindowPreferences.storedMinutesFlow, ::Pair),
         _resizeError,
-    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (clampNotice, storedMinutes), resizeError ->
+        _retentionApplyTarget,
+    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (clampNotice, storedMinutes), resizeError, applyTarget ->
+        if (applyTarget != null && storedMinutes == applyTarget && committedMins == capacityMinutesFlow.value) {
+            _retentionApplyTarget.compareAndSet(applyTarget, null)
+        }
         val effectivePendingMins = pendingMins ?: committedMins
         val effectivePendingPreset = pendingPreset ?: committedPreset
         mapUiState(
@@ -140,7 +149,9 @@ class SettingsViewModel(
             currentBufferAllocationBytes = currentBufferAllocationBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
             batteryStatus = batteryStatusProvider(),
-        )
+        ).let { state ->
+            if (applyTarget != null) state.copy(retentionLimit = null) else state
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -294,6 +305,7 @@ class SettingsViewModel(
             return
         }
         _resizeError.value = null
+        _retentionApplyTarget.value = minutes
         // Exactly one application attempt. An idle rebuild's refusal is just as binding as
         // a live resize's; never persist first or independently resample after applying.
         val applied = if (captureState.value is CaptureState.Idle) {
@@ -302,9 +314,16 @@ class SettingsViewModel(
             onSwitchSettings(minutes, preset)
         }
         if (applied) {
-            retentionWindowPreferences.setSettings(minutes, preset)
+            try {
+                retentionWindowPreferences.setSettings(minutes, preset)
+            } catch (failure: Exception) {
+                // A failed/cancelled write is a real divergence, not a successful handoff.
+                _retentionApplyTarget.value = null
+                throw failure
+            }
             resetPending()
         } else {
+            _retentionApplyTarget.value = null
             pendingWasRefused = true
             val refusal = RecorderService.resizeRefusalFlow.value
             RecorderService.acknowledgeResizeRefusal()

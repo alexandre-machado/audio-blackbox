@@ -188,20 +188,17 @@ internal fun clampNoticeFor(stored: Int?, maxRetentionMinutes: Int): ClampNotice
 
 /**
  * Production default for "what is this device's current ceiling for [preset]" (issue #298): reads
- * the real, live JVM heap through [DeviceMemoryBudget.maxRetentionMinutes] -- no
- * `availableSystemBytes` here, since this free function has no `Context` to read
- * `ActivityManager.MemoryInfo` from (the heap term alone is still a real, live measurement, not a
- * guess). Callers that do have a `Context` -- [cc.machado.audioblackbox.service.RecorderService]'s
- * instance methods -- pass their own provider instead of relying on this default; see that class's
- * `availableSystemBytesProvider`.
+ * the real, live JVM heap and current buffer allocation through
+ * [DeviceMemoryBudget.currentMaxRetentionMinutes]. Its default system-memory argument reads
+ * [DeviceMemoryBudget.availableSystemBytesProvider], installed by AudioBlackboxApplication.
+ * No Context is needed here; until that provider is installed, its null result means heap-only.
  */
 internal fun defaultMaxRetentionMinutesProvider(preset: QualityPreset): Int =
     DeviceMemoryBudget.currentMaxRetentionMinutes(preset)
 
 /**
- * Same computation as [defaultMaxRetentionMinutesProvider], but also folds in
- * [getAvailableSystemBytes] as [DeviceMemoryBudget.maxRetentionMinutes]'s independent
- * `availableSystemBytes` term.
+ * Same computation as [defaultMaxRetentionMinutesProvider], with an explicit
+ * [getAvailableSystemBytes] provider for the independent system-memory term.
  *
  * `@rev` review on PR #300, finding 1 (HIGH): extracted specifically so a JVM test can exercise
  * the *exact* provider [DataStoreRetentionWindowPreferences]'s `operator fun invoke(context)`
@@ -356,8 +353,8 @@ class DataStoreRetentionWindowPreferences(
          *
          * `@rev` review on PR #300, finding 1 (HIGH): this is the one production construction site
          * for the class that is the *sole* source of [RetentionWindowPreferences.clampNoticeFlow],
-         * so it is not enough for it to default to [defaultMaxRetentionMinutesProvider] (heap-only,
-         * no `Context`) the way the bare constructor above does for JVM tests -- a real `Context` is
+         * so this factory explicitly supplies the system-memory source rather than depending on
+         * application initialization of the default provider. A real `Context` is
          * available right here, so this factory folds in
          * [cc.machado.audioblackbox.telemetry.PowerTelemetry.getAvailableSystemBytes] the same way
          * [cc.machado.audioblackbox.ui.MainActivity] already does for `SettingsViewModel`. Without
