@@ -1,4 +1,4 @@
-Audio Blackbox es un grabador retroactivo: una dashcam de audio que conserva los últimos minutos de sonido en la memoria de tu móvil para que puedas grabar el pasado después de que ocurra.
+Audio Blackbox es un grabador retroactivo: una dashcam de audio que conserva los últimos minutos en la memoria del móvil para grabar el pasado.
 
 El audio permanece en RAM hasta que tocas Guardar o inicias Directo. La app nunca sube tus grabaciones.
 
@@ -11,24 +11,24 @@ Pensada para
 • Ideas, reuniones en las que participas y momentos en familia: la idea dicha en voz alta, lo que se acaba de acordar, la primera palabra.
 
 Cómo funciona
-• Activa la grabación continua. Una notificación permanece visible durante todo el tiempo que la app graba.
-• El audio va a un búfer circular en RAM. Cuando se llena, el audio más antiguo se sustituye por el más reciente.
+• Activa la grabación continua. Una notificación sigue visible mientras graba.
+• El audio va a un búfer circular en RAM; al llenarse, el nuevo sustituye al antiguo.
 • El búfer parte de 5 minutos, ajustables en pasos de 5, hasta el límite seguro de memoria de la app para la calidad elegida. No hay un tope de duración impuesto por el producto; Ajustes muestra el límite actual.
 • Guardar escribe el audio desde el último guardado (todo el búfer la primera vez) sin solapar archivos.
-• El formato de audio se elige gratis para Guardar y Directo: AAC (predeterminado) u Opus (.ogg), con archivos de voz más pequeños. Algunos reproductores y apps de mensajería no abren .ogg. En dispositivos sin soporte, Opus se desactiva e indica el motivo.
-• Directo guarda el pasado del búfer y continúa en un archivo: con AAC, un .aac (ADTS) reproducible mientras se graba; con Opus, un .ogg reproducible al terminar. Al reabrir la app se recupera el audio Opus ya escrito y se descarta la última página incompleta; puede perderse el final. El tiempo en directo se limita a 2 horas en el plan gratuito; después se guarda automáticamente. El archivo puede superar las 2 horas al incluir el pasado del búfer. Pro, de pago único, elimina el límite de tiempo en directo.
+• Formato gratis para Guardar y Directo: AAC (predeterminado) u Opus (.ogg), con archivos de voz más pequeños. Algunos reproductores y apps de mensajería no abren .ogg. En dispositivos sin soporte, Opus se desactiva e indica el motivo.
+• Directo guarda el pasado del búfer y continúa en un archivo: con AAC, un .aac (ADTS) reproducible mientras se graba; con Opus, un .ogg reproducible al terminar. Al reabrir, se recupera el Opus escrito y se descarta la última página incompleta; puede perderse el final. Directo: 2 horas gratis, luego guardado automático. El archivo puede superar las 2 horas al incluir el pasado del búfer. Pro, de pago único, elimina el límite de tiempo en directo. Pro gratis para quienes llegan pronto: instala Audio Blackbox hasta el 19 de diciembre de 2026 (antes del 20 de diciembre, a las 00:00, hora de Brasilia, UTC−3) y Pro queda desbloqueado en ese dispositivo, sin coste, para siempre. El beneficio corresponde a esa instalación: si desinstalas y reinstalas, o cambias de dispositivo, no se conserva.
 
 Funciones
-• Tres perfiles de calidad: Voz (16 kHz mono, el búfer más largo), Equilibrado (32 kHz mono) y Alta fidelidad (44,1 kHz estéreo, que puede usar más de un micrófono en los móviles que los tengan). Una mayor calidad usa más memoria por minuto, por lo que el búfer se acorta.
+• Tres perfiles de calidad: Voz (16 kHz mono, el búfer más largo), Equilibrado (32 kHz mono) y Alta fidelidad (44,1 kHz estéreo, con varios micrófonos si están disponibles). Más calidad usa más memoria por minuto y acorta el búfer.
 • Widget en la pantalla de inicio para iniciar o detener la grabación con un toque.
 • Guardar, Directo y Detener desde la notificación.
-• Se pausa cuando otra app ocupa el micrófono, por ejemplo durante una llamada, y se reanuda sola cuando queda libre.
-• Reproductor integrado para escuchar, desplazarte por el audio, compartir y eliminar las grabaciones guardadas.
+• Pausa si otra app ocupa el micrófono (p. ej., llamadas); se reanuda sola al quedar libre.
+• Reproductor integrado: escucha, recorre, comparte y elimina grabaciones guardadas.
 
 Privacidad
-• La propia app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) se comunica con Google para procesar la compra opcional y comprobar el derecho a Pro; su biblioteca también envía sus propios diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube.
+• La app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) contacta con Google para la compra opcional y verificar el derecho a Pro; su biblioteca envía sus diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube.
 • El audio del búfer permanece en RAM hasta que guardas o inicias Directo. Los archivos se guardan en Recordings/Blackbox del móvil (Music/Blackbox en Android 10 y 11), bajo tu control.
 • De código abierto con licencia GPL-3.0, con mantenimiento activo y todo el código en GitHub.
 
 Graba con responsabilidad
-Usa Audio Blackbox para tus propias conversaciones e ideas. Grabar a otras personas puede requerir su consentimiento, y las normas varían entre países y estados. Consulta la legislación local sobre grabaciones antes de grabar. Eres responsable del uso que hagas de la app.
+Usa Audio Blackbox para tus propias conversaciones e ideas. Grabar a otros puede requerir su consentimiento; las normas varían por país y estado. Consulta las leyes locales antes de grabar. Eres responsable de tu uso de la app.

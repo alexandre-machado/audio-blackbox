@@ -1,6 +1,6 @@
-O Audio Blackbox é um gravador retroativo: uma dashcam de áudio que guarda na memória do celular os últimos minutos de som, para você gravar o passado depois que ele aconteceu.
+Audio Blackbox é um gravador retroativo: uma dashcam de áudio que guarda os últimos minutos na memória do celular para gravar o passado.
 
-O áudio fica na RAM até você tocar em Salvar ou iniciar Ao vivo, e as suas gravações nunca saem do celular: o app nunca envia o seu áudio para lugar nenhum.
+O áudio fica na RAM até Salvar ou iniciar Ao vivo. O app nunca envia suas gravações: elas ficam no celular.
 
 Para quem é
 • Músicos e compositores: guarde o riff ou a melodia que acabou de improvisar, sem ter apertado gravar antes.
@@ -11,23 +11,23 @@ Para quem é
 • Ideias, reuniões das quais você participa e momentos em família: a ideia falada em voz alta, o que acabou de ser combinado, a primeira palavra.
 
 Como funciona
-• Ligue a gravação contínua. Uma notificação fica visível durante todo o tempo em que o app está gravando.
-• O áudio vai para um buffer circular na memória RAM. Quando o buffer enche, o trecho mais antigo dá lugar ao mais recente.
+• Ligue a gravação contínua. Uma notificação fica visível durante toda a gravação.
+• O áudio vai para um buffer circular na RAM. Quando cheio, o áudio novo substitui o antigo.
 • O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual.
 • Salvar grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez), sem repetir trechos.
-• O formato de áudio é uma escolha gratuita para Salvar e Ao vivo: AAC (padrão) ou Opus (.ogg), com arquivos menores para voz. Alguns players e apps de mensagens podem não abrir .ogg. Em aparelhos sem suporte, Opus fica desativado com o motivo indicado.
-• Ao vivo salva o passado do buffer e continua em um único arquivo: com AAC, um .aac (ADTS) reproduzível durante a gravação; com Opus, um .ogg reproduzível após o término. Ao reabrir o app, a recuperação mantém o áudio Opus já escrito e descarta a última página incompleta; o final pode ser perdido. O tempo ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo.
+• Formato grátis para Salvar e Ao vivo: AAC (padrão) ou Opus (.ogg), com arquivos menores para voz. Alguns players e apps de mensagens podem não abrir .ogg. Em aparelhos sem suporte, Opus fica desativado com o motivo indicado.
+• Ao vivo salva o passado do buffer e continua em um único arquivo: com AAC, um .aac (ADTS) reproduzível durante a gravação; com Opus, um .ogg reproduzível após o término. Ao reabrir o app, a recuperação mantém o áudio Opus já escrito e descarta a última página incompleta; o final pode ser perdido. Ao vivo é limitado a 2 horas grátis; depois, o arquivo é salvo automaticamente. O arquivo pode superar 2 horas ao incluir o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Pro grátis para quem chega cedo: instale o Audio Blackbox até 19 de dezembro de 2026 (antes de 20/12, 00h no horário de Brasília) e o Pro fica liberado neste aparelho, sem custo, para sempre. O benefício vale para essa instalação: se desinstalar e instalar de novo, ou trocar de aparelho, ele não é mantido.
 
 Recursos
-• Três presets de qualidade: Voz (16 kHz mono, o buffer mais longo), Equilibrado (32 kHz mono) e Alta fidelidade (44,1 kHz estéreo, que pode usar mais de um microfone nos aparelhos que têm). Qualidade maior usa mais memória por minuto, então o buffer fica mais curto.
+• Três presets: Voz (16 kHz mono, o buffer mais longo), Equilibrado (32 kHz mono) e Alta fidelidade (44,1 kHz estéreo, que pode usar mais de um microfone nos aparelhos que têm). Maior qualidade usa mais memória por minuto e encurta o buffer.
 • Widget na tela inicial para ligar ou desligar a gravação com um toque.
 • Salvar, Ao vivo e Parar direto na notificação.
 • Pausa quando outro app assume o microfone, como numa ligação, e volta sozinho quando ele fica livre.
 • Player integrado para ouvir, avançar, compartilhar e apagar as gravações salvas.
 
 Privacidade
-• O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem.
-• O áudio do buffer fica na memória até você salvar ou iniciar Ao vivo. As suas gravações nunca são enviadas: os arquivos salvos vão para a pasta Recordings/Blackbox do seu celular (Music/Blackbox no Android 10 e 11), sob o seu controle.
+• O app não envia áudio nem analytics de uso. Google Play Billing (serviços do Google Play) contata o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca envia seus diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem.
+• O buffer fica na memória até Salvar ou iniciar Ao vivo. Sem envio de gravações: os arquivos vão para Recordings/Blackbox no celular (Music/Blackbox no Android 10 e 11), sob o seu controle.
 • De código aberto (GPL-3.0), mantido ativamente, com todo o código no GitHub.
 
 Grave com responsabilidade
