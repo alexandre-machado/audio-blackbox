@@ -77,7 +77,7 @@ usage_4: Quando algo que vale guardar acabou de acontecer, toque em <strong>Salv
 usage_5: Abra o player do app para ouvir, avançar e compartilhar a gravação exportada por qualquer destino da folha de compartilhamento do Android.
 download_tag: Download
 download_title: Baixe o Audio Blackbox no Google Play
-download_intro: "Uso gratuito, com desbloqueio Pro opcional de pagamento único. Código aberto e disponível para Android 10 ou mais recente."
+download_intro: "Uso gratuito, com desbloqueio Pro opcional de pagamento único. Código aberto e disponível para Android 10 ou mais recente. Pro grátis para quem chega cedo: instale o Audio Blackbox até 19 de dezembro de 2026 (antes de 20/12, 00h no horário de Brasília) e o Pro fica liberado neste aparelho, sem custo, para sempre. O benefício vale para essa instalação: se desinstalar e instalar de novo, ou trocar de aparelho, ele não é mantido."
 install_title: Instale pela Play Store
 install_desc: Abra a página no seu Android e toque em Instalar. Sem cadastro de conta nem convites.
 open_play: Abrir Play Store →
@@ -145,7 +145,7 @@ faq:
   - q: Um gravador sempre ativo esgota a bateria?
     a: O Audio Blackbox foi medido em um Samsung Galaxy S25 gravando continuamente no preset Voz. Com a tela apagada, usou cerca de 1,0% a 1,5% da bateria por hora e menos de 1% de CPU, sem escritas em disco durante o preenchimento do buffer. Outros celulares e ajustes terão resultados diferentes.
   - q: O Audio Blackbox é gratuito e de código aberto?
-    a: "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo .aac (ADTS), reproduzível durante a gravação. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Instalações anteriores a 20/12/2026 às 03:00 UTC recebem o Pro sem custo."
+    a: "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo .aac (ADTS), reproduzível durante a gravação. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Pro grátis para quem chega cedo: instale o Audio Blackbox até 19 de dezembro de 2026 (antes de 20/12, 00h no horário de Brasília) e o Pro fica liberado neste aparelho, sem custo, para sempre. O benefício vale para essa instalação: se desinstalar e instalar de novo, ou trocar de aparelho, ele não é mantido."
   - q: "Existe uma alternativa de código aberto a gravadores retroativos no Android?"
     a: "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem."
   - q: Quais versões do Android são compatíveis?
