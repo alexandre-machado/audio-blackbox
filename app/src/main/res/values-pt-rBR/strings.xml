@@ -396,5 +396,8 @@
     <string name="settings_format_aac_live">Ao vivo continua em AAC (.aac), reproduzível durante a gravação.</string>
     <string name="settings_format_opus_live">Para ouvir a gravação em Opus, aguarde o término. Se o app fechar inesperadamente, o trecho já salvo pode ser recuperado, mas o final pode se perder e alguns players podem não abrir o arquivo.</string>
     <string name="settings_format_opus_unavailable">Opus indisponível neste aparelho.</string>
-    <string name="settings_format_save_error">Não foi possível salvar o formato de áudio. Tente novamente.</string>
+    <string name="settings_format_save_error">Não foi possível salvar o formato.</string>
+    <string name="audio_format_opus_extension">Opus (.ogg)</string>
+    <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
+    <string name="audio_format_ogg">Ogg</string>
 </resources>

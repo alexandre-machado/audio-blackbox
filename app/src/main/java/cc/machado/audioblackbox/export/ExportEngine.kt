@@ -33,6 +33,7 @@ enum class ExportFailureReason {
 
     /** [ExportSink.open] threw, e.g. MediaStore insert rejected, no space, permission denied. */
     SINK_OPEN_FAILED,
+    OPUS_UNAVAILABLE,
 
     /** Writing the header or payload to the sink's `OutputStream` threw. */
     WRITE_FAILED,
@@ -488,7 +489,8 @@ class ExportEngine(
             writeFailure != null -> {
                 target.abort()
                 ExportState.Error(
-                    failureReason ?: ExportFailureReason.WRITE_FAILED,
+                    if (writeFailure is OpusUnavailableException) ExportFailureReason.OPUS_UNAVAILABLE
+                    else failureReason ?: ExportFailureReason.WRITE_FAILED,
                     writeFailure.message ?: writeFailure.javaClass.simpleName,
                     writeFailure
                 )

@@ -80,7 +80,10 @@ interface RecordingsRepository {
  * failure [ExportTarget.abort] deletes the row via `ContentResolver.delete` rather than leaving an
  * orphaned pending entry behind -- this is unchanged by issue #32/#33's other changes.
  */
-class MediaStoreSink(private val context: Context) : ExportSink, StreamingExportSink, RecordingsRepository {
+class MediaStoreSink(
+    private val context: Context,
+    private val registerLive: (Context, Uri) -> Unit = InterruptedLiveRecovery::register,
+) : ExportSink, StreamingExportSink, RecordingsRepository {
 
     override fun openStreaming(displayName: String, mimeType: String): StreamingExportTarget {
         val resolver = context.contentResolver
@@ -126,16 +129,21 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
         }
         try { creatingPfd.close() } catch (_: Exception) {}
 
-        try {
-            InterruptedLiveRecovery.register(context, uri)
-        } catch (e: Exception) {
-            pfd.close()
-            throw IOException("Could not journal the live recording", e)
-        }
-
         return object : StreamingExportTarget {
             @Volatile private var isClosed = false
             override val uri: Uri = uri
+            override fun prepare() {
+                try {
+                    registerLive(context, uri)
+                } catch (e: Exception) {
+                    abortUnstarted()
+                    throw IOException("Could not journal the live recording", e)
+                }
+            }
+
+            override fun abortUnstarted() {
+                try { close() } finally { resolver.delete(uri, null, null) }
+            }
             override val fileDescriptor: FileDescriptor = pfd.fileDescriptor
             override val outputStream: OutputStream by lazy {
                 FileOutputStream(pfd.fileDescriptor)

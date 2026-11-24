@@ -478,7 +478,7 @@ private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFA
             HorizontalDivider(color = CockpitBorder)
             SpecRow(label = stringResource(R.string.settings_specs_export_label), value = when (saveAudioFormat) {
                 SaveAudioFormat.AAC -> stringResource(R.string.settings_specs_export_value)
-                SaveAudioFormat.OPUS -> "Opus (.ogg)"
+                SaveAudioFormat.OPUS -> stringResource(R.string.audio_format_opus_extension)
                 null -> ""
             }, isMonospace = true)
             HorizontalDivider(color = CockpitBorder)

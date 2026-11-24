@@ -31,4 +31,9 @@ class SaveAudioFormatPreferences(private val store: DataStore<Preferences>) {
     }
 }
 
-private val Context.saveAudioFormatDataStore by preferencesDataStore(name = "save_audio_format_prefs")
+private val Context.saveAudioFormatDataStore by preferencesDataStore(
+    name = "save_audio_format_prefs",
+    corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
+        androidx.datastore.preferences.core.emptyPreferences()
+    },
+)

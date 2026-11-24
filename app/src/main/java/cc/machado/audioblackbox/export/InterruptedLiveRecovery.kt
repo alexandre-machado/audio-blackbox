@@ -11,50 +11,72 @@ import androidx.datastore.preferences.preferencesDataStore
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 
-private val Context.liveRecoveryStore by preferencesDataStore(name = "interrupted_live_rows")
+private val Context.liveRecoveryStore by preferencesDataStore(
+    name = "interrupted_live_rows",
+    corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
+        androidx.datastore.preferences.core.emptyPreferences()
+    },
+)
 
-/** Durable journal, written before the first codec byte. Every entry is a published live row.
+internal enum class RecoveryResult { SCANNED, STALE, RETRY }
+
+/** The receipt is emitted only after our scanner result and journal consumption agree. */
+internal fun recoverLiveRows(
+    rows: Set<String>,
+    refresh: (String) -> RecoveryResult,
+    forget: (String) -> Unit,
+): Map<String, RecoveryResult> = rows.associateWith { raw ->
+    val result = refresh(raw)
+    if (result != RecoveryResult.RETRY) forget(raw)
+    result
+}
+
+/** Durable journal, written on the drain thread before the first audio frame.
  * Startup only rescans: it never opens a writable descriptor, rewrites a tail, or deletes audio.
- * Serialized with registration so app/service startup cannot mistake this process's live file
- * for an interrupted recording. All entry points run off the capture and main threads.
+ * Only the startup snapshot is serialized with registration; scanner IPC never holds that lock.
+ * Active rows are excluded so startup cannot mistake this process's file for an interrupted one.
+ * All entry points run off the capture and main threads.
  */
 internal object InterruptedLiveRecovery {
     private val lock = Any()
+    private val recoveryLock = Any()
+    private val activeRows = mutableSetOf<String>()
+    private val mutableResults = kotlinx.coroutines.flow.MutableStateFlow<Map<String, RecoveryResult>>(emptyMap())
+    val results = mutableResults.asStateFlow()
     private val rowsKey = stringSetPreferencesKey("unfinished_rows")
     private var recovered = false
 
-    fun recover(context: Context) = synchronized(lock) {
+    fun recover(context: Context) = synchronized(recoveryLock) {
         if (recovered) return
         val app = context.applicationContext
         try {
-            val rows = pendingRows(app)
-            for (raw in rows) {
-                val uri = Uri.parse(raw)
-                if (refresh(app, uri)) forget(app, uri)
+            val rows = synchronized(lock) { pendingRows(app) - activeRows }
+            mutableResults.value = recoverLiveRows(rows, { refresh(app, Uri.parse(it)) }) {
+                forget(app, Uri.parse(it))
             }
             recovered = true
         } catch (e: Exception) {
             Log.w("LiveRecovery", "Interrupted recording metadata recovery failed; files preserved", e)
-            // Do not mark complete: registration must retry before opening another session.
+            // A later startup attempt may retry; Live registration never awaits this scan.
             throw e
         }
     }
 
-    /** Read-only journal inspection also lets the kill test distinguish our recovery from an
-     * automatic MediaProvider scan on descriptor death. Never exposes audio contents. */
+    /** Read-only journal inspection. Scan receipts, not absence alone, prove recovery ran. */
     fun pendingRows(context: Context): Set<String> = runBlocking {
         context.applicationContext.liveRecoveryStore.data.first()[rowsKey].orEmpty()
     }
 
     fun register(context: Context, uri: Uri) = synchronized(lock) {
-        recover(context)
         runBlocking {
             context.applicationContext.liveRecoveryStore.edit { prefs ->
                 prefs[rowsKey] = prefs[rowsKey].orEmpty() + uri.toString()
             }
         }
+        activeRows.add(uri.toString())
         Unit
     }
 
@@ -64,26 +86,27 @@ internal object InterruptedLiveRecovery {
                 prefs[rowsKey] = prefs[rowsKey].orEmpty() - uri.toString()
             }
         }
+        activeRows.remove(uri.toString())
         Unit
     }
 
-    /** Returns true only after the scanner confirms a row, or if the journal entry is stale.
+    /** Distinguishes scanner confirmation from stale entries and retryable failures.
      * MIME is provider-owned; using the queried alias preserves Ogg/Opus and ADTS normalization.
      */
-    private fun refresh(context: Context, uri: Uri): Boolean {
-        if (uri.scheme != "content" || uri.authority != MediaStore.AUTHORITY) return true
+    private fun refresh(context: Context, uri: Uri): RecoveryResult {
+        if (uri.scheme != "content" || uri.authority != MediaStore.AUTHORITY) return RecoveryResult.STALE
         val resolver = context.contentResolver
         return try {
             val metadata = resolver.query(uri, arrayOf(MediaStore.Audio.Media.DATA,
                 MediaStore.Audio.Media.MIME_TYPE, MediaStore.Audio.Media.DISPLAY_NAME,
                 MediaStore.Audio.Media.OWNER_PACKAGE_NAME), null, null, null)?.use { cursor ->
                 if (!cursor.moveToFirst()) null else Array(4) { cursor.getString(it) }
-            } ?: return true // A user-deleted file is not recreated.
+            } ?: return RecoveryResult.STALE // A user-deleted file is not recreated.
             val name = metadata[2].orEmpty()
             if (metadata[3] != context.packageName || !name.startsWith("blackbox_") ||
                 !(StreamingAdtsWriter.accepts(metadata[1].orEmpty(), name) ||
-                    StreamingOpusWriter.accepts(metadata[1].orEmpty(), name))) return true
-            val path = metadata[0] ?: return false
+                    StreamingOpusWriter.accepts(metadata[1].orEmpty(), name))) return RecoveryResult.STALE
+            val path = metadata[0] ?: return RecoveryResult.RETRY
             val done = CountDownLatch(1)
             var scanned = false
             MediaScannerConnection.scanFile(context, arrayOf(path), arrayOf(metadata[1])) { _, result ->
@@ -92,10 +115,10 @@ internal object InterruptedLiveRecovery {
             }
             val success = done.await(15, TimeUnit.SECONDS) && scanned
             if (!success) Log.w("LiveRecovery", "Interrupted row scan incomplete; retained for next startup")
-            success
+            if (success) RecoveryResult.SCANNED else RecoveryResult.RETRY
         } catch (e: Exception) {
             Log.w("LiveRecovery", "Interrupted row could not be scanned; file preserved", e)
-            false
+            RecoveryResult.RETRY
         }
     }
 }

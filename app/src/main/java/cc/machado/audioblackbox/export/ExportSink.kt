@@ -71,6 +71,12 @@ interface StreamingExportSink {
  *   partial recorded audio is preserved on disk for the black box recording.
  */
 interface StreamingExportTarget : Closeable, AutoCloseable {
+    /** Journal on the drain thread, before audio, without delaying the caller of start(). */
+    fun prepare() {}
+
+    /** Only before the first audio write: delete the unusable published row. */
+    fun abortUnstarted() { close() }
+
     /** The content URI of the MediaStore row. */
     val uri: Uri
 

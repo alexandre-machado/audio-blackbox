@@ -870,7 +870,8 @@ private fun SaveOutcomeNotice(
         }
         is SaveUiState.Error -> {
             titleRes = R.string.dashboard_save_error_title
-            body = saveState.message
+            body = if (saveState.reason == ExportFailureReason.OPUS_UNAVAILABLE)
+                stringResource(R.string.settings_format_opus_unavailable) else saveState.message
             dismissible = true
         }
     }
@@ -1020,7 +1021,8 @@ private fun ForwardOutcomeNotice(
         }
         is ForwardRecordingUiState.Error -> {
             titleRes = R.string.dashboard_forward_error_title
-            body = forwardState.message
+            body = if (forwardState.reason == cc.machado.audioblackbox.export.ForwardRecordingFailureReason.OPUS_UNAVAILABLE)
+                stringResource(R.string.settings_format_opus_unavailable) else forwardState.message
         }
         else -> return
     }

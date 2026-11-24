@@ -145,8 +145,8 @@ class GalleryMappingTest {
             durationMillis = 60_000L,
             capturedAtMillis = 0L,
         )
-        assertEquals("16-bit PCM Linear", inferAudioQuality(wavItem))
-        assertTrue(inferAudioQuality(aacItem).startsWith("AAC"))
+        assertEquals("16-bit PCM Linear", inferAudioQuality(wavItem, "Ogg"))
+        assertTrue(inferAudioQuality(aacItem, "Ogg").startsWith("AAC"))
     }
 
     @Test

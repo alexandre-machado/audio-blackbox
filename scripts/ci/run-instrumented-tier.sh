@@ -286,26 +286,21 @@ command -v timeout >/dev/null || fail "timeout is required for the process-kill 
 timeout -k 5 120 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
   > /tmp/instrumented-opus-kill-start.log 2>&1 &
 OPUS_START_PID=$!
-opus_deadline=$((SECONDS + 90))
-opus_ready=""
-while [[ $SECONDS -lt $opus_deadline ]]; do
-  opus_ready="$(timeout -k 2 5 "${ADB[@]}" logcat -d -s OpusKillTest:I | grep -oE 'OPUS_KILL_READY pid=[0-9]+' | tail -1 || true)"
-  [[ -n "$opus_ready" ]] && break
-done
+opus_ready="$(timeout -k 2 90 "${ADB[@]}" logcat -m 1 -e 'OPUS_KILL_READY pid=[0-9]+' -s OpusKillTest:I | grep -oE 'OPUS_KILL_READY pid=[0-9]+' || true)"
 if [[ -z "$opus_ready" ]]; then
   timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
   wait "$OPUS_START_PID" || true
   fail "Opus live writer never reported READY; see /tmp/instrumented-opus-kill-start.log."
 fi
 opus_app_pid="${opus_ready##*=}"
-opus_actual_pid="$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" | tr -d '\r')"
+opus_actual_pid="$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" | tr -d '\r' || true)"
 [[ "$opus_app_pid" == "$opus_actual_pid" ]] || fail "The READY app PID is no longer alive; no process-kill result can be claimed."
 timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
 wait "$OPUS_START_PID" || true # Process death is expected; verifier success is the oracle.
-[[ -z "$("${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
+[[ -z "$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
 timeout -k 5 180 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
   2>&1 | tee /tmp/instrumented-opus-kill-verify.log
-grep -q 'OK (' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
+grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
 log "Opus process-kill and startup-recovery qualification OK."
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------

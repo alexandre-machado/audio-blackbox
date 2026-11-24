@@ -139,7 +139,9 @@ object RecorderNotification {
             is ExportState.Exporting -> context.getString(R.string.recorder_notification_export_exporting)
             is ExportState.Success ->
                 context.getString(R.string.recorder_notification_export_success, exportState.displayName)
-            is ExportState.Error -> context.getString(R.string.recorder_notification_export_error)
+            is ExportState.Error -> context.getString(
+                if (exportState.reason == cc.machado.audioblackbox.export.ExportFailureReason.OPUS_UNAVAILABLE)
+                    R.string.settings_format_opus_unavailable else R.string.recorder_notification_export_error)
         }
 
         val forwardElapsedMillis = if (bytesPerSecond > 0 && forwardRecordingState is ForwardRecordingState.Recording) {
@@ -155,7 +157,9 @@ object RecorderNotification {
             is ForwardRecordingState.Success ->
                 context.getString(R.string.recorder_notification_forward_success, forwardRecordingState.displayName)
             is ForwardRecordingState.Error ->
-                context.getString(R.string.recorder_notification_forward_error)
+                context.getString(
+                    if (forwardRecordingState.reason == cc.machado.audioblackbox.export.ForwardRecordingFailureReason.OPUS_UNAVAILABLE)
+                        R.string.settings_format_opus_unavailable else R.string.recorder_notification_forward_error)
         }
 
         val extraStatus = when {

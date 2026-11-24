@@ -381,5 +381,8 @@
     <string name="settings_format_aac_live">Le direct reste en AAC (.aac), lisible pendant l’enregistrement.</string>
     <string name="settings_format_opus_live">Attendez la fin de l’enregistrement pour écouter un fichier Opus. Si l’application se ferme de façon inattendue, l’audio déjà enregistré peut être récupérable, mais la fin peut être perdue et certains lecteurs peuvent ne pas ouvrir le fichier.</string>
     <string name="settings_format_opus_unavailable">Opus indisponible sur cet appareil.</string>
-    <string name="settings_format_save_error">Impossible de sauvegarder le format audio. Réessayez.</string>
+    <string name="settings_format_save_error">Impossible de sauvegarder le format.</string>
+    <string name="audio_format_opus_extension">Opus (.ogg)</string>
+    <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
+    <string name="audio_format_ogg">Ogg</string>
 </resources>

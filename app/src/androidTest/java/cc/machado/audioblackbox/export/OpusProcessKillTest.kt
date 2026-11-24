@@ -6,7 +6,6 @@ import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.machado.audioblackbox.audio.AudioConfig
-import cc.machado.audioblackbox.audio.ReadSinceResult
 import cc.machado.audioblackbox.audio.RingBuffer
 import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.settings.SaveAudioFormatPreferences
@@ -14,6 +13,8 @@ import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -49,13 +50,16 @@ class OpusProcessKillTest {
         runBlocking { preferences.set(SaveAudioFormat.OPUS) }
         val selector = RecordingFormatSelector({ runBlocking { preferences.current() } }, context.cacheDir)
         val sink = MediaStoreSink(context)
-        val drained = CountDownLatch(1)
+        val written = java.util.concurrent.Semaphore(0)
+        val nextTone = ToneGenerator.tone(440.0, 16_000, 200, 1)
         val name = "blackbox_${System.currentTimeMillis()}_kill_forward.ogg"
         val engine = ForwardRecordingEngine(config = config,
             readSinceProvider = { cursor, max ->
-                ring.readSince(cursor, max).also { result ->
-                    if (result is ReadSinceResult.Data && result.bytes.isEmpty()) drained.countDown()
-                }
+                // Each next read follows the previous codec write. Keep feeding real PCM until
+                // force-stop: READY must never park an idle writer at the end of a fixture.
+                written.release()
+                if (cursor == ring.writeCursor()) ring.write(nextTone)
+                ring.readSince(cursor, max)
             },
             writeCursorProvider = ring::writeCursor, oldestCursorProvider = ring::oldestCursor,
             exportFloorAdvancerProvider = { ring::advanceExportFloor }, gapsProvider = { emptyList() },
@@ -63,20 +67,24 @@ class OpusProcessKillTest {
         try {
             val result = engine.start(name)
             assertTrue("$result", result is ForwardRecordingState.Recording)
-            assertTrue("Live drain never consumed the fixture", drained.await(30, TimeUnit.SECONDS))
             val row = sink.queryRecordings().single { it.displayName == name }
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
             var bytes: ByteArray
             do {
                 check(System.nanoTime() < deadline) { "Muxer never persisted audio pages" }
+                check(written.tryAcquire(1, 30, TimeUnit.SECONDS)) { "Writer stopped progressing" }
+                written.drainPermits()
                 bytes = context.contentResolver.openInputStream(row.uri)!!.use { it.readBytes() }
             } while (completePageEnd(bytes).first < 5)
-            savedPrefix.writeBytes(bytes)
+            // Only completed pages are immutable while the writer is still appending.
+            savedPrefix.writeBytes(bytes.copyOf(completePageEnd(bytes).second))
             marker.writeText("${Process.myPid()}\n${row.uri}\n")
             assertTrue("Live URI must be durable before the kill",
                 row.uri.toString() in InterruptedLiveRecovery.pendingRows(context))
             assertEquals(0L, ring.exportFloor())
             assertTrue(engine.state.value is ForwardRecordingState.Recording)
+            written.drainPermits()
+            check(written.tryAcquire(8, 30, TimeUnit.SECONDS)) { "Writer stopped after prefix snapshot" }
             Log.i("OpusKillTest", "OPUS_KILL_READY pid=${Process.myPid()}")
             // External handshake, not a delay: success requires the script to kill this process.
             check(CountDownLatch(1).await(90, TimeUnit.SECONDS)) { "Tier script did not kill the live process" }
@@ -105,15 +113,16 @@ class OpusProcessKillTest {
                 expected, decoder.decode(original))
             // Application.onCreate has launched the real startup recovery. Observe its result;
             // do not call recovery from the test and accidentally bypass the lifecycle wiring.
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(45)
-            var refreshed = false
-            while (!refreshed && System.nanoTime() < deadline) {
-                val row = MediaStoreSink(context).queryRecordings().single { it.uri == uri }
-                refreshed = row.sizeBytes == bytes.size.toLong() && row.durationMillis > 0 &&
-                    uri.toString() !in InterruptedLiveRecovery.pendingRows(context)
-                assertTrue(StreamingOpusWriter.accepts(row.mimeType, row.displayName))
+            val receipt = runBlocking {
+                withTimeout(45_000) { InterruptedLiveRecovery.results.first { uri.toString() in it } }
             }
-            assertTrue("Startup did not refresh size/duration of the interrupted live row", refreshed)
+            assertEquals("Our startup scan must succeed, not merely discard a stale entry",
+                RecoveryResult.SCANNED, receipt[uri.toString()])
+            assertFalse(uri.toString() in InterruptedLiveRecovery.pendingRows(context))
+            val row = MediaStoreSink(context).queryRecordings().single { it.uri == uri }
+            assertEquals(bytes.size.toLong(), row.sizeBytes)
+            assertTrue(row.durationMillis > 0)
+            assertTrue(StreamingOpusWriter.accepts(row.mimeType, row.displayName))
             assertArrayEquals(bytes, context.contentResolver.openInputStream(uri)!!.use { it.readBytes() })
             // Only this test's fixture is removed, after preservation/recovery assertions pass.
             context.contentResolver.delete(uri, null, null)

@@ -9,6 +9,8 @@ import java.io.FileDescriptor
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+class OpusUnavailableException : IOException("Opus unavailable on this device.")
+
 internal object OpusEncoding {
     fun outputRate(config: AudioConfig): Int = if (config.sampleRateHz == 16_000) 16_000 else 48_000
     fun bitrate(config: AudioConfig): Int = when (config.sampleRateHz) {
@@ -46,7 +48,7 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
     private var closed = false
 
     init {
-        val name = OpusEncoding.encoderName(config) ?: throw IOException("Opus unavailable on this device.")
+        val name = OpusEncoding.encoderName(config) ?: throw OpusUnavailableException()
         val created = MediaCodec.createByCodecName(name)
         var createdMuxer: MediaMuxer? = null
         try {

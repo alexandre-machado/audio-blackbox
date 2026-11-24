@@ -55,6 +55,8 @@ class SaveAudioFormatSettingsTest {
         rule.onNodeWithText(context.getString(R.string.settings_format_opus_helper))
             .performScrollTo().assertIsDisplayed()
         assertEquals(SaveAudioFormat.OPUS, selected.value)
+        rule.onNodeWithText(context.getString(R.string.settings_format_opus_unavailable))
+            .performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(context.getString(R.string.settings_save_audio_format))
             .performScrollTo().performClick()
         rule.onAllNodesWithText("Opus").onLast().assertIsNotEnabled()

@@ -12,6 +12,21 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SaveAudioFormatPreferencesTest {
+    // Oracle: the production delegate replaces a malformed protobuf and exposes AAC, then
+    // remains writable. Testing an independently constructed handler would miss its wiring.
+    @Test fun corruptProductionPreferencesRecoverToAac() = runTest {
+        val dir = java.nio.file.Files.createTempDirectory("corrupt-format").toFile()
+        val context = org.mockito.kotlin.mock<android.content.Context>()
+        org.mockito.kotlin.whenever(context.applicationContext).thenReturn(context)
+        org.mockito.kotlin.whenever(context.filesDir).thenReturn(dir)
+        File(dir, "datastore/save_audio_format_prefs.preferences_pb").apply {
+            parentFile!!.mkdirs(); writeBytes(byteArrayOf(0x0a, 0x7f))
+        }
+        val preferences = SaveAudioFormatPreferences(context)
+        assertEquals(SaveAudioFormat.AAC, preferences.current())
+        preferences.set(SaveAudioFormat.OPUS)
+        assertEquals(SaveAudioFormat.OPUS, preferences.current())
+    }
     // Oracle: real DataStore reads, including unknown persisted IDs, retain the AAC default.
     @Test fun missingAndUnknownIdsSelectAac() = runTest {
         val file = File.createTempFile("format-default", ".preferences_pb").apply { delete() }

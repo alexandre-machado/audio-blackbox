@@ -41,6 +41,7 @@ enum class ForwardRecordingFailureReason {
 
     /** [StreamingExportSink.openStreaming] threw (e.g. MediaStore insert rejected, disk full). */
     SINK_OPEN_FAILED,
+    OPUS_UNAVAILABLE,
 
     /** Writing to the streaming writer or sink threw. */
     WRITE_FAILED,
@@ -231,10 +232,12 @@ class ForwardRecordingEngine(
             val writer = try {
                 encoding.createWriter(target, currentConfig)
             } catch (e: Exception) {
-                target.close()
+                target.abortUnstarted()
                 val err = ForwardRecordingState.Error(
-                    ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                    if (e is OpusUnavailableException) ForwardRecordingFailureReason.OPUS_UNAVAILABLE
+                    else ForwardRecordingFailureReason.SINK_OPEN_FAILED,
                     "Failed to create streaming writer: ${e.message}",
+                    e,
                 )
                 stateValue = err
                 return err
@@ -494,6 +497,7 @@ class ForwardRecordingEngine(
         }
 
         try {
+            target.prepare()
             while (!stopRequested.get() && !cancelRequested.get()) {
                 // Check and inject any completed pause gaps that occurred since session start
                 val currentGaps = gapsProvider()

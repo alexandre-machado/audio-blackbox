@@ -86,6 +86,19 @@ class SaveAudioFormatWiringTest {
                     val result = engine(ring, sink, selector::saveEncoder).export(100, 0)
                     assertTrue("$result", result is ExportState.Error)
                     assertTrue((result as ExportState.Error).message.contains("Opus unavailable on this device."))
+                    assertEquals(ExportFailureReason.OPUS_UNAVAILABLE, result.reason)
+                    val liveTarget = mock<StreamingExportTarget> {
+                        on { fileDescriptor } doReturn FileDescriptor()
+                    }
+                    val live = ForwardRecordingEngine(config = config,
+                        readSinceProvider = ring::readSince, writeCursorProvider = ring::writeCursor,
+                        oldestCursorProvider = ring::oldestCursor, exportFloorAdvancerProvider = { null },
+                        gapsProvider = { emptyList() }, sink = streamingSink { _, mime ->
+                            assertEquals("audio/ogg", mime); liveTarget
+                        }, liveEncodingProvider = selector::liveEncoding)
+                    assertEquals(ForwardRecordingFailureReason.OPUS_UNAVAILABLE,
+                        (live.start() as ForwardRecordingState.Error).reason)
+                    verify(liveTarget).abortUnstarted()
                     assertEquals(1, aborts)
                     assertEquals(0, commits)
                     assertEquals(0L, ring.exportFloor())
