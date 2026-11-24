@@ -22,6 +22,17 @@ Create a temporary master token in the Cloudflare dashboard with only:
 - **Account > Account API Tokens > Edit** (`Account API Tokens Write`), scoped
   to account `53f6d9e3dd6600e598c81e222c4369db`.
 - **Zone > Zone > Read**, scoped only to **machado.cc**, for zone lookup.
+- **Zone > Workers Routes > Edit** (`Workers Routes Write`), scoped only to
+  **machado.cc**, so the master can delegate that single-zone permission.
+
+Cloudflare's single-zone common permission check requires the creating token
+to hold each permission it grants on that zone (both Zone Read and Workers
+Routes Write here). [Upstream #7241](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7241)
+reports that account-scoped groups are delegated through Account API Tokens
+Write without this requirement; the maintainer confirms the check is API-side.
+Accordingly, **Workers Scripts Edit on the master is not required** for this
+account-scoped grant. This is upstream evidence, not a live authorization test
+of this module; do not broaden the child token to all zones to bypass the check.
 
 Use a short expiry (for example one hour). The creating member needs API Token
 Provisioning capability or Super Administrator status and authority to grant the
@@ -50,7 +61,9 @@ master in the Cloudflare dashboard; unsetting it does not revoke it. Do not use
 shell tracing, Terraform debug logs, `terraform output -raw` on its own, or
 `terraform show -json` in recorded terminals. The wrapper disables Terraform
 logging, applies with restrictive file permissions, and pipes the sensitive
-output directly to `gh secret set` via stdin, never a command argument or a file.
+output to `gh secret set` via stdin, never a command argument or a file. It first
+checks that Terraform output succeeded and contains a non-empty, 40-character
+URL-safe token, then clears the temporary shell variable after upload or failure.
 Normal apply output redacts `token_value`; `sensitive` does not encrypt state.
 
 The module creates **audio-blackbox-hotsite-ci** with exactly two allow policies:
@@ -68,10 +81,19 @@ Workers Scripts remains account-wide and Workers Routes remains zone-wide.
 
 The pinned latest stable provider checked on 2026-11-24 is **5.29.0**. Schemas:
 [`cloudflare_account_token`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/resources/account_token),
-[`cloudflare_account_api_token_permission_groups`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/data-sources/account_api_token_permission_groups),
+[`cloudflare_account_api_token_permission_groups_list`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/data-sources/account_api_token_permission_groups_list),
 and [`cloudflare_zone`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/data-sources/zone).
-The current permission data source has no `_list` suffix and returns
-`permission_groups`. The provider uses `CLOUDFLARE_API_TOKEN` automatically.
+The `_list` data source accepts optional `account_id`, `name`, `scope`, and
+`max_items` (default 1000). Its `result` list contains `id`, `name`, `scopes`,
+`is_selectable`, and `category` (checked against the
+[v5.29.0 registry source](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.29.0/docs/data-sources/account_api_token_permission_groups_list.md)).
+Pass raw names: the SDK URL-encodes them despite
+the registry example showing encoded names. Terraform selects exactly one
+exact-name, matching-scope group with `is_selectable = true` and a non-empty ID;
+null attributes fail closed. The non-list data source cannot decode the API's
+array response in 5.29.0 ([#7212](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7212)).
+The zone data source remains: its list-then-detail decoding is covered by the
+mock plan test. The provider uses `CLOUDFLARE_API_TOKEN` automatically.
 The generated `.terraform.lock.hcl` belongs in version control.
 
 ### Expiry, state, verification, rotation and revocation
@@ -87,7 +109,9 @@ contain the full token value. Keep them on the trusted owner machine with
 restricted permissions/encrypted storage, only as long as needed to rotate or
 destroy this token. Never upload state, saved plans, crash/debug logs, or secret
 variable files to CI/artifacts. `.gitignore` excludes `*.tfstate*`, `.terraform/`,
-crash logs, `*.tfvars`, `*.tfvars.json`, and `*.tfplan`. Ignoring files is not
+crash logs, `*.tfvars`, `*.tfvars.json`, `*.tfplan`, Terraform CLI credential
+configuration (`.terraformrc`, `terraform.rc`), and local override files
+(`override.tf`, `override.tf.json`, `*_override.tf`, `*_override.tf.json`). Ignoring files is not
 access control. Do not delete live state casually: it is needed to manage/revoke
 the token. After destroy (or confirmed dashboard revocation), remove state and
 backups according to the owner's secure-storage policy. Do not add a remote
@@ -108,8 +132,7 @@ load it with the hidden prompt above, and choose a new expiry:
 
 ```bash
 export TF_VAR_expires_on='2027-11-24T00:00:00Z' # choose a future rotation date
-terraform -chdir=infra/terraform/cloudflare-ci-token apply -replace=cloudflare_account_token.ci
-bash scripts/ops/apply-cloudflare-ci-token.sh
+bash scripts/ops/apply-cloudflare-ci-token.sh rotate
 unset CLOUDFLARE_API_TOKEN TF_VAR_expires_on
 ```
 
@@ -124,7 +147,7 @@ value: revoke the token in the dashboard and provision a replacement.
 To retire it, load a fresh master, then run:
 
 ```bash
-terraform -chdir=infra/terraform/cloudflare-ci-token destroy
+bash scripts/ops/apply-cloudflare-ci-token.sh destroy
 unset CLOUDFLARE_API_TOKEN
 gh secret delete CLOUDFLARE_API_TOKEN --env cloudflare-hotsite --repo alexandre-machado/audio-blackbox
 ```
@@ -132,6 +155,10 @@ gh secret delete CLOUDFLARE_API_TOKEN --env cloudflare-hotsite --repo alexandre-
 Destroy revokes the deploy token in Cloudflare; deleting the GitHub secret alone
 does not. Revoke the master too, then remove the local secret-bearing state and
 backups. This module does not destroy the Worker or route.
+Both subcommands enforce `umask 077`, disable tracing, unset every `TF_LOG*`
+variable, and refuse CI just like the default apply operation. Destroy never
+uploads a secret. To retry only an upload after rotation, use the default wrapper
+operation, **not `rotate`**, which would replace the token again.
 
 ### Credential-free gate
 
@@ -139,16 +166,27 @@ backups. This module does not destroy the Worker or route.
 terraform fmt -check -recursive
 terraform -chdir=infra/terraform/cloudflare-ci-token init -backend=false -input=false -lockfile=readonly
 terraform -chdir=infra/terraform/cloudflare-ci-token validate
+bash scripts/ops/test-cloudflare-ci-token-plan.sh
+# Also prove the regression oracle rejects both historical defects:
+bash scripts/ops/test-cloudflare-ci-token-plan.sh --mutations
 ```
 
 `.github/workflows/terraform.yml` runs these checks on a fresh GitHub-hosted
 runner for pull requests and main pushes, with read-only contents permission,
 no environment or secrets, Terraform 1.17.2, and `hashicorp/setup-terraform`
 v4.0.1 pinned to `dfe3c3f87815947d99a8997f908cb6525fc44e9e`.
-`terraform plan` cannot run without credentials: permission and zone data
-sources call the Cloudflare API. Format/validate check syntax and provider
-schemas, not live authorization or API behavior. Apply, rotation, destruction,
-and deployment verification remain owner-only operations.
+The plan test uses Python 3's loopback HTTP server, canned API-shaped responses,
+a fake token and disposable module copies with a clean Terraform environment.
+Provider 5.29.0 supports `CLOUDFLARE_BASE_URL` (also the `base_url` argument);
+see its [provider implementation](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.29.0/internal/provider.go).
+The test directs all API requests to that server. It checks the JSON plan for
+exactly two policies, expected permission IDs and account/zone resource keys,
+including similar-name, wrong-scope, unselectable and null-attribute decoys.
+`--mutations` reinstates double encoding and the broken non-list data source
+separately, requiring each to fail the permission postcondition after validation
+passes. No real credentials or owner state are used. This tests provider
+decoding and module behavior, not live authorization. Apply, rotation,
+destruction, and deployment verification remain owner-only operations.
 
 ## 2. Configure GitHub Actions
 

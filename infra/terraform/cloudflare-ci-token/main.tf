@@ -6,20 +6,30 @@ locals {
   }
 }
 
-data "cloudflare_account_api_token_permission_groups" "deploy" {
+data "cloudflare_account_api_token_permission_groups_list" "deploy" {
   for_each   = local.permissions
   account_id = var.account_id
-  name       = replace(urlencode(each.key), "+", "%20")
-  scope      = each.value
+  # The SDK encodes query parameters; pass the literal API permission name.
+  name  = each.key
+  scope = each.value
 
   lifecycle {
     postcondition {
-      condition = length(self.permission_groups) == 1 && alltrue([
-        for group in self.permission_groups :
-        group.name == each.key && contains(group.scopes, each.value) && group.is_selectable != false
-      ])
+      condition = length(try([
+        for group in self.result : group
+        if try(group.name == each.key && contains(group.scopes, each.value) && group.is_selectable == true && length(group.id) > 0, false)
+      ], [])) == 1
       error_message = "Expected exactly one selectable permission group matching ${each.key} and ${each.value}."
     }
+  }
+}
+
+locals {
+  selected_permissions = {
+    for name, scope in local.permissions : name => try(one([
+      for group in data.cloudflare_account_api_token_permission_groups_list.deploy[name].result : group.id
+      if try(group.name == name && contains(group.scopes, scope) && group.is_selectable == true && length(group.id) > 0, false)
+    ]), null)
   }
 }
 
@@ -45,15 +55,15 @@ resource "cloudflare_account_token" "ci" {
     {
       effect = "allow"
       permission_groups = [
-        { id = one(data.cloudflare_account_api_token_permission_groups.deploy["Workers Scripts Write"].permission_groups).id }
+        { id = local.selected_permissions["Workers Scripts Write"] }
       ]
       resources = jsonencode({ "com.cloudflare.api.account.${var.account_id}" = "*" })
     },
     {
       effect = "allow"
       permission_groups = [
-        { id = one(data.cloudflare_account_api_token_permission_groups.deploy["Workers Routes Write"].permission_groups).id },
-        { id = one(data.cloudflare_account_api_token_permission_groups.deploy["Zone Read"].permission_groups).id }
+        { id = local.selected_permissions["Workers Routes Write"] },
+        { id = local.selected_permissions["Zone Read"] }
       ]
       resources = jsonencode({ "com.cloudflare.api.account.zone.${data.cloudflare_zone.machado.id}" = "*" })
     }
