@@ -172,7 +172,8 @@ fun SettingsScreen(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,
         )
-        Column {
+        Column(Modifier.testTag("retention_limit_notice")
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
             RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
             RetentionLimitNotice(uiState.retentionLimit)
         }
@@ -192,11 +193,10 @@ fun SettingsScreen(
     }
 }
 
-/** Keep the announcement target alive, with no height or section gap when empty. */
+/** The always-visible retention section owns the live region; absent text adds no space. */
 @Composable
 private fun RetentionLimitNotice(limit: ClampNotice?) {
-    Box(Modifier.fillMaxWidth().testTag("retention_limit_notice")
-        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+    Box(Modifier.fillMaxWidth()) {
         limit?.let {
             Text(
                 text = stringResource(R.string.settings_retention_clamp_notice_body, it.previousMinutes, it.newMinutes),

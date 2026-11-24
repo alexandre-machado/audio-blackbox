@@ -3,6 +3,7 @@ package cc.machado.audioblackbox.ui.settings
 import androidx.lifecycle.ViewModelStore
 import cc.machado.audioblackbox.audio.*
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
+import cc.machado.audioblackbox.settings.RetentionWindowPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,6 +17,66 @@ import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsReclaimThreadTest {
+    /** Oracle REV-16: a closing VM's apply and suspended persistence exclude a new VM's
+     * admission, so engine config and saved preferences finish on the same newest value. */
+    @Test fun closingScreenSaveSerializesWithNewScreen() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        val oldStore = ViewModelStore()
+        val newStore = ViewModelStore()
+        val releaseWrite = CompletableDeferred<Unit>()
+        val capacity = MutableStateFlow(5)
+        val backing = InMemoryRetentionWindowPreferences(initialMinutes = 5)
+        val events = mutableListOf<String>()
+        val prefs = object : RetentionWindowPreferences by backing {
+            override suspend fun setSettings(minutes: Int, preset: QualityPreset) {
+                if (minutes == 10) releaseWrite.await()
+                backing.setSettings(minutes, preset)
+                events += "persist $minutes"
+            }
+        }
+        fun vm() = SettingsViewModel(
+            captureState = MutableStateFlow(CaptureState.Idle),
+            capacityMinutesFlow = capacity,
+            qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE),
+            retentionWindowPreferences = prefs,
+            onRebuildEngine = { minutes, _ ->
+                events += "apply $minutes"
+                capacity.value = minutes
+                true
+            },
+            admissionDispatcher = dispatcher,
+            maxMemoryBytesProvider = { 256L * 1024 * 1024 },
+            usedMemoryBytesProvider = { 20L * 1024 * 1024 },
+            currentBufferAllocationBytesProvider = { 0L },
+        )
+        try {
+            val old = vm()
+            oldStore.put("settings", old)
+            old.incrementPending()
+            oldStore.clear() // flush outlives the closing screen
+            runCurrent()
+            assertEquals(listOf("apply 10"), events)
+            val newer = vm()
+            newStore.put("settings", newer)
+            newer.incrementPending()
+            advanceTimeBy(1_000)
+            runCurrent()
+            assertEquals(listOf("apply 10"), events)
+            releaseWrite.complete(Unit)
+            runCurrent()
+            assertEquals(listOf("apply 10", "persist 10", "apply 15", "persist 15"), events)
+            assertEquals(15, capacity.value)
+            assertEquals(15, backing.currentBufferDurationMinutes())
+        } finally {
+            releaseWrite.complete(Unit)
+            oldStore.clear()
+            newStore.clear()
+            runCurrent()
+            Dispatchers.resetMain()
+        }
+    }
+
     /** Oracle: real idle admission reclaims exactly once off the UI thread, and persists only
      * the admitted config. Removing the VM's dispatcher fails the callback thread assertion. */
     @Test fun reclaimedMemoryAdmitsOffMain() = checkAdmission(20, true)

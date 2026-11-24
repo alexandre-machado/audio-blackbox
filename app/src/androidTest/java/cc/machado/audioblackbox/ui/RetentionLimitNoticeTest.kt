@@ -6,11 +6,10 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.settings.ClampNotice
@@ -19,6 +18,7 @@ import cc.machado.audioblackbox.ui.settings.SettingsScreen
 import cc.machado.audioblackbox.ui.settings.SettingsUiState
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,8 +27,8 @@ import org.junit.runner.RunWith
 class RetentionLimitNoticeTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    /** Oracle: the same polite semantics node exists while empty and carries the first notice.
-     * Moving the parent inside limit?.let fails the initial fetch, before any text appears. */
+    /** Oracle: the merged live region has real layout bounds before, during and after a notice.
+     * An empty Box fails the bounds assertion even when its semantics id is stable. */
     @Test fun emptyLiveRegionSurvivesFirstNoticeAndClear() {
         val limit = mutableStateOf<ClampNotice?>(null)
         compose.setContent {
@@ -43,16 +43,24 @@ class RetentionLimitNoticeTest {
                 )
             }
         }
-        val node = compose.onNodeWithTag("retention_limit_notice")
+        val node = compose.onNodeWithTag("retention_limit_notice", useUnmergedTree = false)
+        node.performScrollTo()
         val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
-        node.assert(polite).assertHeightIsEqualTo(0.dp)
+        fun assertVisibleRegion() {
+            node.assert(polite)
+            val size = node.fetchSemanticsNode().layoutInfo
+            assertTrue("live region must have non-zero width", size.width > 0)
+            assertTrue("live region must have non-zero height", size.height > 0)
+        }
+        assertVisibleRegion()
         val originalId = node.fetchSemanticsNode().id
         compose.runOnIdle { limit.value = ClampNotice(30, 15) }
-        node.assert(polite).assertTextEquals(compose.activity.getString(
+        assertVisibleRegion()
+        node.assertTextContains(compose.activity.getString(
             R.string.settings_retention_clamp_notice_body, 30, 15))
         assertEquals(originalId, node.fetchSemanticsNode().id)
         compose.runOnIdle { limit.value = null }
-        node.assert(polite).assertHeightIsEqualTo(0.dp)
+        assertVisibleRegion()
         assertEquals(originalId, node.fetchSemanticsNode().id)
     }
 }

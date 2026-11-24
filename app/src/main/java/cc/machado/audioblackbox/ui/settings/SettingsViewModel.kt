@@ -129,7 +129,6 @@ class SettingsViewModel(
     // DEBOUNCE_MILLIS timer, so a preset tap immediately followed by a run of stepper taps
     // collapses into exactly one [commitPending] call, not one per tap. See [scheduleDebouncedCommit].
     private var commitJob: Job? = null
-    private val commitMutex = Mutex()
     private var editGeneration = 0L
     private var cleared = false
 
@@ -374,6 +373,8 @@ class SettingsViewModel(
     }
 
     companion object {
+        // Apply + persistence must remain atomic across closing and newly opened screens.
+        private val commitMutex = Mutex()
         private const val STOP_TIMEOUT_MILLIS = 5_000L
         private const val BYTES_PER_MB = 1_000_000L
 
