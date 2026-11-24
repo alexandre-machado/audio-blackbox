@@ -705,11 +705,14 @@ jobs:
     # and cancel-in-progress unrelated `build`/`instrumented-tests` runs (e.g. two open PRs' CI),
     # which playstore.yml's separation never did and which this merge must not introduce either.
     concurrency:
-      group: playstore-release
-      # Owner rule (AB-2411-34): a Play deploy is never cancelled mid-flight. The group still
-      # serializes Play edits. A deploy that is only *pending* behind a running one can be
-      # superseded by a newer pending deploy (GitHub keeps one pending per group); that newer
-      # AAB has a higher versionCode and contains the superseded commit's code.
+      # Owner rule (AB-2411-34): a Play deploy is never cancelled mid-flight. Branch pushes (main ->
+      # internal) share one group, which serializes their Play edits; a main deploy that is only
+      # *pending* can be superseded by a newer main deploy to the SAME track, whose AAB has a
+      # higher versionCode and contains the older code. Tags (alpha) and workflow_dispatch
+      # (track/sync_only) get a group per run, so a newer main deploy can never replace them
+      # and they always reach their own track. If such a run overlaps a main deploy, the Play
+      # API rejects the second edit loudly (re-runnable), never silently.
+      group: playstore-release-${{ github.event_name == 'push' && github.ref_type == 'branch' && 'internal' || github.run_id }}
       cancel-in-progress: false
     steps:
       - name: Checkout
