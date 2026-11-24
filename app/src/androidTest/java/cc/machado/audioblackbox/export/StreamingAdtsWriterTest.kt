@@ -39,7 +39,10 @@ class StreamingAdtsWriterTest {
                     assertTrue("at least one second decoded before stop", mid.pcm.size >= config.bytesPerSecond)
                     val liveRow = sink.queryRecordings().single { it.uri == target.uri }
                     assertEquals(name, liveRow.displayName)
-                    assertEquals("audio/aac-adts", liveRow.mimeType)
+                    // Exercise MIME recognition independently of accepts()'s filename fallback.
+                    // Provider alias spelling is not the contract; recognition + decoding is.
+                    assertTrue(StreamingAdtsWriter.accepts(liveRow.mimeType, ""))
+                    assertTrue(liveRow.displayName.endsWith(".aac"))
 
                     writer.write(pcm)
                     writer.finish()
@@ -53,7 +56,8 @@ class StreamingAdtsWriterTest {
                     assertTone(completed, preset)
                     assertTrue("additional audio survives finalization", completed.pcm.size > mid.pcm.size)
                     val finalRow = sink.queryRecordings().single { it.uri == target.uri }
-                    assertEquals("audio/aac-adts", finalRow.mimeType)
+                    assertTrue(StreamingAdtsWriter.accepts(finalRow.mimeType, ""))
+                    assertTrue(finalRow.displayName.endsWith(".aac"))
                     assertEquals(after.size.toLong(), finalRow.sizeBytes)
                     assertTrue("refinalized duration", finalRow.durationMillis > 0)
                     val decodedMillis = completed.pcm.size * 1000L / config.bytesPerSecond

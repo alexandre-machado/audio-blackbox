@@ -82,7 +82,10 @@ class StreamingAdtsWriter(target: StreamingExportTarget, private val config: Aud
     }
 
     companion object {
-        // Match MediaProvider's .aac extension mapping, including after a metadata scan.
+        // Describe the ADTS framing explicitly; the stored alias is provider-owned. API 30 CI
+        // run 45274165321 inserted audio/aac and read audio/aac-adts; run 45282572245
+        // inserted audio/aac-adts and read audio/aac. Neither insertion nor scanning guarantees
+        // alias preservation. Consumers use accepts(), and tests also verify .aac + decoding.
         const val MIME_TYPE = "audio/aac-adts"
         const val FILE_EXTENSION = "aac"
 
