@@ -40,8 +40,8 @@ fun getGitCommitCount(): Int {
  *
  * - Date: the build date in UTC (CI runners and the Play upload are UTC; a BRT date would flip
  *   at 21:00 local and disagree with run timestamps).
- * - Build: the CI run number, i.e. exactly the versionCode (100 + GITHUB_RUN_NUMBER), so the
- *   name and the code always identify the same upload.
+ * - Build: the versionCode (100 + GITHUB_RUN_NUMBER), not the raw run number, so the name
+ *   and the code always identify the same upload.
  * - SHA: 7-character short commit SHA.
  * - Local/debug builds (no GITHUB_RUN_NUMBER) use build 0 and a -dev suffix:
  *   v{yy.MM.dd}.0-{sha7}-dev. A local build can never be mistaken for a CI upload.
@@ -59,7 +59,10 @@ fun computeDynamicVersionName(): String {
 }
 
 fun computeBuildDate(): String {
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    // UTC, like the versionName date, so the two never disagree between 21:00 and 24:00 BRT.
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
     return dateFormat.format(Date())
 }
 
