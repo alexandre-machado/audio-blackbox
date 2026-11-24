@@ -3,7 +3,7 @@ package cc.machado.audioblackbox.export
 import android.media.MediaCodec
 import android.media.MediaCodecList
 import android.media.MediaFormat
-import android.media.MediaMuxer
+import android.os.ParcelFileDescriptor
 import cc.machado.audioblackbox.audio.AudioConfig
 import java.io.FileDescriptor
 import java.io.IOException
@@ -33,7 +33,8 @@ internal object OpusEncoding {
 class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioConfig) : StreamingAudioWriter {
     private val lock = Any()
     private val codec: MediaCodec
-    private val muxer: MediaMuxer
+    private val output: ParcelFileDescriptor.AutoCloseOutputStream
+    private var ogg: OggOpusWriter? = null
     private val info = MediaCodec.BufferInfo()
     private val rate = OpusEncoding.outputRate(config)
     private val silence = ByteArray(4096)
@@ -42,25 +43,25 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
     } else null
     private var fedBytes = 0L
     private var sourceBytes = 0L
-    private var track = -1
-    private var muxerStarted = false
     private var finished = false
     private var closed = false
 
     init {
         val name = OpusEncoding.encoderName(config) ?: throw OpusUnavailableException()
         val created = MediaCodec.createByCodecName(name)
-        var createdMuxer: MediaMuxer? = null
+        var createdOutput: ParcelFileDescriptor.AutoCloseOutputStream? = null
         try {
             created.configure(OpusEncoding.format(config), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             created.start()
-            createdMuxer = MediaMuxer(descriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG)
+            // Same durability as StreamingAdtsWriter: direct writes, flush at finish,
+            // no per-page fsync. The target retains ownership of its original fd.
+            createdOutput = ParcelFileDescriptor.AutoCloseOutputStream(ParcelFileDescriptor.dup(descriptor))
             codec = created
-            muxer = createdMuxer
+            output = createdOutput
         } catch (t: Throwable) {
             runCatching { created.stop() }
             runCatching { created.release() }
-            runCatching { createdMuxer?.release() }
+            runCatching { createdOutput?.close() }
             throw t
         }
     }
@@ -107,19 +108,22 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
             checkDeadline(deadline)
             when (val index = codec.dequeueOutputBuffer(info, if (untilEos) 10_000L else 0L)) {
                 MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    check(!muxerStarted)
-                    // Preserve all codec-supplied CSD (OpusHead, pre-skip and seek preroll).
-                    track = muxer.addTrack(codec.outputFormat)
-                    muxer.start()
-                    muxerStarted = true
+                    check(ogg == null)
+                    val format = codec.outputFormat
+                    ogg = OggOpusWriter(output, config.channelCount, config.sampleRateHz,
+                        OpusPacket.preSkip(format.getByteBuffer("csd-0"), format.getByteBuffer("csd-1")))
                 }
                 MediaCodec.INFO_TRY_AGAIN_LATER -> if (!untilEos) return
                 else -> if (index >= 0) {
                     val eos = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     try {
                         if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
-                            check(muxerStarted)
-                            muxer.writeSampleData(track, checkNotNull(codec.getOutputBuffer(index)), info)
+                            val buffer = checkNotNull(codec.getOutputBuffer(index)).duplicate()
+                            buffer.position(info.offset)
+                            buffer.limit(info.offset + info.size)
+                            val packet = ByteArray(info.size)
+                            buffer.get(packet)
+                            checkNotNull(ogg).writePacket(packet)
                         }
                     } finally { codec.releaseOutputBuffer(index, false) }
                     if (eos) return
@@ -155,9 +159,7 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
                 }
             }
             drain(true, deadline)
-            check(muxerStarted) { "Opus encoder produced no track" }
-            muxer.stop()
-            muxerStarted = false
+            checkNotNull(ogg) { "Opus encoder produced no track" }.finish()
             codec.stop()
             finished = true
         } finally { close() }
@@ -168,8 +170,7 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
         closed = true
         runCatching { codec.stop() }
         runCatching { codec.release() }
-        if (muxerStarted) runCatching { muxer.stop() }
-        runCatching { muxer.release() }
+        output.close()
         Unit
     }
 

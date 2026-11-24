@@ -20,9 +20,10 @@ import org.junit.runner.RunWith
 
 /**
  * #433 owner stop gate, deliberately independent of format-selection UI. Oracle: complete
- * MediaMuxer audio pages preceding a torn write remain decodable by Android and preparable
+ * Provider audio pages preceding a torn write remain decodable by Android and preparable
  * by MediaPlayer. Header-only cuts have no recoverable audio and are recorded separately.
- * No repaired copy, custom muxer, retry, or assumed MIME can make this qualification pass.
+ * No repaired copy, retry, or assumed MIME can make this qualification pass. Encoding uses
+ * the production provider; decoding and preparation use the unmodified Android readers.
  */
 @RunWith(AndroidJUnit4::class)
 class OggPrefixQualificationTest {
@@ -86,7 +87,7 @@ class OggPrefixQualificationTest {
             directory.deleteRecursively()
         }
         failures.forEach { Log.e(TAG, it) }
-        assertTrue("OWNER STOP GATE: MediaMuxer Ogg prefix qualification failed:\n" +
+        assertTrue("OWNER STOP GATE: provider Ogg prefix qualification failed:\n" +
             failures.joinToString("\n"), failures.isEmpty())
     }
 
