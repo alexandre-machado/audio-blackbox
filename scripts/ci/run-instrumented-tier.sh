@@ -298,6 +298,10 @@ opus_actual_pid="$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" | tr -d '\r'
 timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
 wait "$OPUS_START_PID" || true # Process death is expected; verifier success is the oracle.
 [[ -z "$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
+# Snapshot after death and before Application.onCreate can repair the MediaStore row.
+timeout -k 2 15 "${ADB[@]}" shell run-as "$APP_ID" sh -c \
+  "' { IFS= read -r pid; IFS= read -r uri; IFS= read -r path; } < files/opus-kill-row.txt; cp -- \"\$path\" files/opus-killed-raw.ogg'" \
+  || fail "Could not preserve the raw killed Opus file."
 timeout -k 5 180 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
   2>&1 | tee /tmp/instrumented-opus-kill-verify.log
 grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."

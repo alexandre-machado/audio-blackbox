@@ -4,11 +4,12 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
-/** Startup-only repair of our single-stream Opus files. Never resynchronizes past damage.
- * Memory is bounded by one maximum Ogg page. No EOS is synthesized or rewritten.
+/** Startup-only repair of our single-stream Opus files. Preserves interior damage.
+ * Memory is bounded by one maximum Ogg page plus an 8 KiB scan buffer.
+ * No EOS is synthesized or rewritten.
  */
 internal object OggTailRepair {
-    enum class Result { UNCHANGED, TRUNCATED, INVALID_HEADERS }
+    enum class Result { UNCHANGED, TRUNCATED, INVALID_HEADERS, INTERIOR_DAMAGE }
 
     fun repair(input: FileChannel, output: FileChannel = input): Result {
         val size = input.size()
@@ -61,6 +62,44 @@ internal object OggTailRepair {
         }
         if (pages < 2) return Result.INVALID_HEADERS
         if (end == size) return Result.UNCHANGED
+        // Damaged lacing/length cannot be trusted: search every subsequent byte,
+        // using bounded chunks and the existing page buffer to validate candidates.
+        val scan = ByteBuffer.allocate(8192)
+        var position = end
+        var matched = 0
+        val capture = "OggS".toByteArray(Charsets.US_ASCII)
+        while (position < size) {
+            scan.clear()
+            scan.limit(minOf(scan.capacity().toLong(), size - position).toInt())
+            val count = input.read(scan, position)
+            check(count > 0) { "Incomplete Ogg tail scan" }
+            scan.flip()
+            repeat(count) {
+                val byte = scan.get()
+                position++
+                matched = if (byte == capture[matched]) matched + 1 else if (byte == capture[0]) 1 else 0
+                if (matched == capture.size) {
+                    matched = 0
+                    input.position(position - capture.size)
+                    if (read(0, 27) && page[4] == 0.toByte()) {
+                        val segments = page[26].toInt() and 255
+                        if (read(27, segments)) {
+                            val body = 27 + segments
+                            var length = 0
+                            for (i in 27 until body) length += page[i].toInt() and 255
+                            if (read(body, length)) {
+                                val header = ByteBuffer.wrap(page).order(ByteOrder.LITTLE_ENDIAN)
+                                val crc = header.getInt(22)
+                                header.putInt(22, 0)
+                                if (OggPageWriter.crc(page, body + length) == crc) {
+                                    return Result.INTERIOR_DAMAGE
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         output.truncate(end)
         output.force(true)
         return Result.TRUNCATED

@@ -78,7 +78,12 @@ class OpusProcessKillTest {
             } while (completePageEnd(bytes).first < 5)
             // Only completed pages are immutable while the writer is still appending.
             savedPrefix.writeBytes(bytes.copyOf(completePageEnd(bytes).second))
-            marker.writeText("${Process.myPid()}\n${row.uri}\n")
+            val path = context.contentResolver.query(row.uri,
+                arrayOf(android.provider.MediaStore.Audio.Media.DATA), null, null, null)!!.use {
+                check(it.moveToFirst())
+                it.getString(0)
+            }
+            marker.writeText("${Process.myPid()}\n${row.uri}\n$path\n")
             assertTrue("Live URI must be durable before the kill",
                 row.uri.toString() in InterruptedLiveRecovery.pendingRows(context))
             assertEquals(0L, ring.exportFloor())
@@ -95,6 +100,20 @@ class OpusProcessKillTest {
         val lines = marker.readLines()
         assertNotEquals("Verifier must run in a new app process", lines[0].toInt(), Process.myPid())
         val uri = Uri.parse(lines[1])
+        // CI snapshots the stopped process's file before starting this process.
+        // Application.onCreate may already be repairing the original row now.
+        val raw = File(context.filesDir, "opus-killed-raw.ogg")
+        assertTrue("CI must preserve the raw killed file before restart", raw.isFile)
+        val rawResult = runCatching {
+            val pcm = OggPrefixQualificationTest().decode(raw)
+            check(pcm.isNotEmpty()) { "Empty raw decode" }
+            pcm.size
+        }
+        val rawReport = rawResult.fold({ "PASS pcmSamples=$it" }, { "FAIL type=${it.javaClass.simpleName}" })
+        Log.i("OpusKillTest", "OPUS_KILL_RAW $rawReport")
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply {
+            putString("stream", "OPUS_KILL_RAW $rawReport\n")
+        })
         // Wait for Application.onCreate recovery before reading: repair can truncate the tail.
         // Never invoke recovery here, which would bypass the lifecycle wiring under test.
         val receipt = runBlocking {
@@ -123,6 +142,8 @@ class OpusProcessKillTest {
                 recoveredBytes.size, completePageEnd(recoveredBytes).second)
             original.writeBytes(recoveredBytes)
             val recoveredPcm = decoder.decode(original)
+            Log.i("OpusKillTest", "OPUS_KILL_REPAIRED pcmSamples=${recoveredPcm.size} " +
+                "removedBytes=${raw.length() - recoveredBytes.size}")
             assertTrue("Recovered file must decode non-empty PCM", recoveredPcm.isNotEmpty())
             assertTrue("Recovered PCM must retain the reference prefix", recoveredPcm.size >= expected.size)
             assertArrayEquals("Recovered PCM prefix changed", expected, recoveredPcm.copyOf(expected.size))
@@ -136,6 +157,7 @@ class OpusProcessKillTest {
             context.contentResolver.delete(uri, null, null)
             marker.delete()
             savedPrefix.delete()
+            raw.delete()
             runBlocking { SaveAudioFormatPreferences(context).set(SaveAudioFormat.AAC) }
         } finally { original.delete(); complete.delete() }
     }

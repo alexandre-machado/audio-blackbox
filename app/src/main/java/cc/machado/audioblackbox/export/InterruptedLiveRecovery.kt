@@ -59,7 +59,7 @@ internal object InterruptedLiveRecovery {
             }
             recovered = true
         } catch (e: Exception) {
-            Log.w("LiveRecovery", "Recovery failures=1")
+            Log.w("LiveRecovery", "Recovery failures=1", e)
             // A later startup attempt may retry; Live registration never awaits this scan.
             throw e
         }
@@ -117,7 +117,8 @@ internal object InterruptedLiveRecovery {
                     ).use { output ->
                         val repair = OggTailRepair.repair(input.channel, output.channel)
                         Log.i("LiveRecovery", "Repaired=${if (repair == OggTailRepair.Result.TRUNCATED) 1 else 0} " +
-                            "invalidHeaders=${if (repair == OggTailRepair.Result.INVALID_HEADERS) 1 else 0}")
+                            "invalidHeaders=${if (repair == OggTailRepair.Result.INVALID_HEADERS) 1 else 0} " +
+                            "interiorDamage=${if (repair == OggTailRepair.Result.INTERIOR_DAMAGE) 1 else 0}")
                     }
                 }
             }
@@ -131,7 +132,7 @@ internal object InterruptedLiveRecovery {
             if (!success) Log.w("LiveRecovery", "Interrupted row scan incomplete; retained for next startup")
             if (success) RecoveryResult.SCANNED else RecoveryResult.RETRY
         } catch (e: Exception) {
-            Log.w("LiveRecovery", "Row recovery failures=1")
+            Log.w("LiveRecovery", "Row recovery failures=1", e)
             RecoveryResult.RETRY
         }
     }

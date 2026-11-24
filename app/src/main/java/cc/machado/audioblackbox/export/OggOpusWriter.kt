@@ -58,8 +58,12 @@ internal class OggOpusWriter(
 
     fun finish(inputSamples48k: Long? = null) {
         if (finished) return
-        val end = inputSamples48k?.let { preSkip + it }
-        require(end == null || end in (samples - pageSamples)..samples) { "Invalid Opus end trim" }
+        // Delay metadata can overestimate lookahead, or EOS may not flush it. Keep
+        // every packet and clamp metadata rather than failing the entire recording.
+        val lower = maxOf(preSkip.toLong(), samples - pageSamples).coerceAtMost(samples)
+        val end = inputSamples48k?.let {
+            preSkip + it.coerceIn(0L, Long.MAX_VALUE - preSkip)
+        }?.coerceIn(lower, samples)
         pages.flush(4, end)
         output.flush()
         finished = true

@@ -25,11 +25,14 @@ class OggTailRepairTest {
         return ends
     }
 
-    private fun verify(bytes: ByteArray, expected: ByteArray) {
+    private fun verify(bytes: ByteArray, expected: ByteArray, result: OggTailRepair.Result? = null) {
         val file = java.nio.file.Files.createTempFile("ogg-repair", ".ogg").toFile()
         try {
             file.writeBytes(bytes)
-            RandomAccessFile(file, "rw").use { OggTailRepair.repair(it.channel) }
+            RandomAccessFile(file, "rw").use {
+                val actual = OggTailRepair.repair(it.channel)
+                if (result != null) assertEquals(result, actual)
+            }
             assertArrayEquals("Repair must retain exactly the complete CRC-valid prefix", expected, file.readBytes())
             RandomAccessFile(file, "rw").use {
                 assertNotEquals(OggTailRepair.Result.TRUNCATED, OggTailRepair.repair(it.channel))
@@ -55,6 +58,23 @@ class OggTailRepairTest {
         val ends = ends(bytes)
         val corrupt = bytes.clone().also { it[it.lastIndex] = (it.last().toInt() xor 1).toByte() }
         verify(corrupt, bytes.copyOf(ends[ends.lastIndex - 1]))
+    }
+
+    // Oracle: valid later pages forbid truncation even when the damaged page's
+    // capture, CRC or lacing is corrupt, or most of that page is missing.
+    @Test fun interiorDamagePreservesAllBytes() {
+        val bytes = fixture()
+        val boundaries = ends(bytes)
+        val start = boundaries[1]
+        for (offset in listOf(start, start + 22, start + 27)) {
+            val corrupt = bytes.clone().also { it[offset] = (it[offset].toInt() xor 1).toByte() }
+            verify(corrupt, corrupt, OggTailRepair.Result.INTERIOR_DAMAGE)
+        }
+        val torn = bytes.copyOf(start + 12) + bytes.copyOfRange(boundaries[2], bytes.size)
+        verify(torn, torn, OggTailRepair.Result.INTERIOR_DAMAGE)
+        val acrossScanBoundary = bytes.copyOf(start) + ByteArray(8190) +
+            bytes.copyOfRange(boundaries[2], bytes.size)
+        verify(acrossScanBoundary, acrossScanBoundary, OggTailRepair.Result.INTERIOR_DAMAGE)
     }
 
     // Oracle: corrupt header pages and unrelated ADTS data are never truncated.

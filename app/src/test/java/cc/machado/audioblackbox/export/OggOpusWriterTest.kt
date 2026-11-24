@@ -7,6 +7,40 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OggOpusWriterTest {
+    /** Oracle: overestimated delay never loses packets or EOS; CRC-valid final granule
+     * is capped at decoded samples, including the one-sample rounded-delay case. */
+    @Test fun overestimatedLookaheadKeepsFinalPage() = assertClampedFinish(400, 2700, 3, 2880)
+
+    /** Oracle: missing delay CSD and a short unflushed input still produce the audio page. */
+    @Test fun fallbackWithShortInputKeepsFinalPage() =
+        assertClampedFinish(OpusPacket.preSkip(null, null), 960, 1, 960)
+
+    /** Oracle: 6,510,417 ns rounds to 313 but actual delay 312 fits exactly 1920 samples. */
+    @Test fun roundedDelayKeepsFinalPage() {
+        val delay = ByteBuffer.wrap("AOPUSDLY".toByteArray() +
+            hex("08 00 00 00 00 00 00 00 51 57 63 00 00 00 00 00"))
+        assertClampedFinish(OpusPacket.header(delay, fallbackChannels = 1)!!.preSkip, 1608, 2, 1920)
+    }
+
+    /** Oracle: trim cannot precede pre-skip or the already flushed audio granule. */
+    @Test fun trimLowerBoundsKeepFinalPage() {
+        assertClampedFinish(312, -100, 1, 312)
+        assertClampedFinish(312, 0, 3, 1920)
+    }
+
+    private fun assertClampedFinish(skip: Int, input: Long, packets: Int, expectedEnd: Long) {
+        val out = ByteArrayOutputStream()
+        val writer = OggOpusWriter(out, 1, 48000, skip, 42)
+        val silence = hex("f8 ff fe")
+        repeat(packets) { writer.writePacket(silence) }
+        writer.finish(input)
+        val parsed = OggTestParser.parse(out.toByteArray())
+        assertEquals(packets + 2, parsed.packets.size)
+        parsed.packets.drop(2).forEach { assertArrayEquals(silence, it) }
+        assertEquals(4, parsed.pages.last().flags)
+        assertEquals(expectedEnd, parsed.pages.last().granule)
+    }
+
     private fun hex(value: String) = value.split(" ").map { it.toInt(16).toByte() }.toByteArray()
 
     /** Oracle: fixed Android marker bytes encode stereo and 6,510,417ns => 313 samples,
