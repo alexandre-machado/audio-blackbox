@@ -290,7 +290,6 @@
     <string name="settings_privacy_title">Privacy &amp; local processing</string>
     <string name="settings_privacy_explanation">Audio Blackbox operates purely locally on your device. Microphone audio is kept in transient RAM and overwritten automatically. Zero telemetry, crash reports, or audio streams are ever sent to remote servers.</string>
     <string name="settings_retention_title">Rolling buffer retention window</string>
-    <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Changes apply automatically a moment after you stop adjusting.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/STEP_MINUTES bound the stepper to
          multiples of 5, at least 5 (issue #298 removed the fixed upper MAX_MINUTES in favor of a
@@ -343,11 +342,12 @@
          whenever the stored retention window no longer fits this device's *current*
          DeviceMemoryBudget-derived ceiling (a heavier release, less free memory right now, or a
          downgrade). Never shown to a user already at or below the current ceiling. -->
-    <string name="settings_retention_clamp_notice_title">Retention window reduced</string>
+    <string name="settings_retention_clamp_notice_title">Temporary memory limit</string>
     <!-- Not a plural, same reasoning as settings_retention_value_active_cd above: %1$d is the raw
          previously-stored value and %2$d is this device's current computed ceiling, both
          multiples of 5, so neither is ever 1. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your retention window was reduced from %1$d to %2$d minutes because it no longer fits on this device.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Your saved choice is %1$d min; the current setting is %2$d min. The saved choice will be checked against available memory at the next app start.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Up to %1$d min at this quality — limited by the memory Android gives the app, not total phone RAM.</string>
     <string name="settings_retention_clamp_notice_dismiss">Got it</string>
 
     <!-- Resize-refused notice (issue #272): shown when a live settings change was refused because
@@ -429,4 +429,5 @@
     <string name="gallery_newly_saved">Recording saved</string>
     <string name="dashboard_panel_save_caption_live">Saving live</string>
     <string name="dashboard_save_button_cd_live">Save is not needed during live: the live file is saved as it records</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Pending change — active buffer: %1$d min.</string>
 </resources>

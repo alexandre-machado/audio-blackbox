@@ -260,6 +260,11 @@ class AudioCaptureEngine(
         synchronized(lock) {
             val newCapacityBytes = newConfig.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
             val buffer = ringBuffer
+            if (buffer == null) {
+                DeviceMemoryBudget.idleAllocationRefusal(newCapacityBytes, memoryBudget)?.let {
+                    return SwitchConfigResult.BufferResizeRefused(it)
+                }
+            }
             if (buffer != null) {
                 val outcome = try {
                     buffer.resize(newCapacityBytes, memoryBudget)
@@ -305,7 +310,7 @@ class AudioCaptureEngine(
      * [state] as [CaptureState.Error] instead of throwing.
      */
     @SuppressLint("MissingPermission")
-    fun start() {
+    fun start(memoryBudget: MemoryBudget = MemoryBudget.REAL) {
         // Wait out any teardown still in flight from a previous stop()/read-error before
         // deciding whether to start a new session -- otherwise this call could race a stale
         // cleanup (finding 2) or be silently dropped because it still observes the old
@@ -320,6 +325,13 @@ class AudioCaptureEngine(
 
             val currentCfg = activeConfig
             val capacityBytes = currentCfg.totalBufferBytes.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+            DeviceMemoryBudget.idleAllocationRefusal(capacityBytes, memoryBudget)?.let {
+                _state.value = CaptureState.Error(
+                    CaptureErrorReason.BUFFER_ALLOCATION_FAILED,
+                    "Insufficient memory for $capacityBytes-byte ring buffer",
+                )
+                return
+            }
             val buffer = try {
                 RingBuffer(capacityBytes = capacityBytes, initialConfig = currentCfg, clock = clock)
             } catch (oom: OutOfMemoryError) {

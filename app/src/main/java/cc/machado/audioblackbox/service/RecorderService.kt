@@ -843,7 +843,13 @@ class RecorderService : Service() {
         // backed reading (see onCreate()'s comment). A JVM test never sets this, matching every
         // other companion-level provider's "real production value, injectable seam for tests"
         // shape below.
-        var availableSystemBytesProvider: () -> Long? = { null }
+        var availableSystemBytesProvider: () -> Long? = { DeviceMemoryBudget.availableSystemBytesProvider() }
+
+        fun currentBufferAllocationBytes(): Long = _engine.capacityBytes()?.toLong() ?: 0L
+
+        init {
+            DeviceMemoryBudget.currentBufferAllocationBytesProvider = ::currentBufferAllocationBytes
+        }
 
         // The single source of truth for "what is this device's ceiling for this preset, right
         // now" -- real production behaviour reads the live JVM heap plus whatever
@@ -851,14 +857,20 @@ class RecorderService : Service() {
         // of depending on the test JVM's own, environment-dependent heap size (this companion
         // object's `var`s are also why RecorderServiceRetentionWindowTest resets this in
         // tearDown -- see that test's setUp/tearDown).
-        var maxRetentionMinutesProvider: (QualityPreset) -> Int = { preset ->
-            DeviceMemoryBudget.maxRetentionMinutes(
-                config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-                maxHeapBytes = Runtime.getRuntime().maxMemory(),
-                usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
-                availableSystemBytes = availableSystemBytesProvider(),
+        internal fun retentionCeiling(
+            preset: QualityPreset,
+            memoryBudget: cc.machado.audioblackbox.audio.MemoryBudget = cc.machado.audioblackbox.audio.MemoryBudget.REAL,
+            allocationBytes: Long = currentBufferAllocationBytes(),
+            availableSystemBytes: Long? = availableSystemBytesProvider(),
+        ): Int =
+            DeviceMemoryBudget.currentMaxRetentionMinutes(
+                preset = preset,
+                memoryBudget = memoryBudget,
+                availableSystemBytes = availableSystemBytes,
+                currentBufferAllocationBytes = allocationBytes,
             )
-        }
+
+        var maxRetentionMinutesProvider: (QualityPreset) -> Int = { retentionCeiling(it) }
 
         /**
          * Recalculates this device's current ceiling for the active [QualityPreset] and clamps
@@ -915,8 +927,8 @@ class RecorderService : Service() {
          * through the exact same [SwitchConfigResult.BufferResizeRefused]/[resizeRefusalFlow]
          * channel a live buffer's own memory-fit refusal already uses (issue #272), rather than a
          * silent clamp: the previous, still-running setting stays in force and the caller ([
-         * SettingsViewModel.commitPending]) reverts the displayed value and shows the existing
-         * refusal notice, exactly as it already does for an engine-refused resize -- one signal
+         * SettingsViewModel.commitPending]) keeps the requested values pending and shows the
+         * refusal notice, exactly as it does for an engine-refused resize -- one signal
          * for "this could not be applied", not two.
          */
         fun switchSettings(
