@@ -261,7 +261,7 @@ class ProEntitlementRepositoryTest {
 
     // Oracle: cutoff-1 grants grandfathered Pro even without Play; exact cutoff does not.
     @Test fun grandfatherBoundaryIsStrict() = runTest {
-        assertEquals(Instant.parse("2026-10-15T00:00:00Z").toEpochMilli(), GRANDFATHER_CUTOFF_EPOCH_MS)
+        assertEquals(Instant.parse("2026-12-20T03:00:00Z").toEpochMilli(), GRANDFATHER_CUTOFF_EPOCH_MS)
         val before = repository(FakeBilling().apply { failure = IOException("no Play") },
             installed = GRANDFATHER_CUTOFF_EPOCH_MS - 1)
         val at = repository(installed = GRANDFATHER_CUTOFF_EPOCH_MS)
