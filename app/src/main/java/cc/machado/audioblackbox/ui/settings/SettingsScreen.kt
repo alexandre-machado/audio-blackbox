@@ -172,11 +172,7 @@ fun SettingsScreen(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,
         )
-        Column(Modifier.testTag("retention_limit_notice")
-            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-            RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
-            RetentionLimitNotice(uiState.retentionLimit)
-        }
+        RetentionStepperSection(uiState.retentionStepper, uiState.retentionLimit, onDecrement, onIncrement)
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
         DiagnosticsSection(
@@ -193,17 +189,14 @@ fun SettingsScreen(
     }
 }
 
-/** The always-visible retention section owns the live region; absent text adds no space. */
+/** Limit notice text, rendered inside the ceiling's live-region node; absent text adds no space. */
 @Composable
 private fun RetentionLimitNotice(limit: ClampNotice?) {
-    Box(Modifier.fillMaxWidth()) {
-        limit?.let {
-            Text(
-                text = stringResource(R.string.settings_retention_clamp_notice_body, it.previousMinutes, it.newMinutes),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = SECTION_SPACING),
-            )
-        }
+    limit?.let {
+        Text(
+            text = stringResource(R.string.settings_retention_clamp_notice_body, it.previousMinutes, it.newMinutes),
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -224,6 +217,7 @@ private fun SettingsHeader() {
 @Composable
 private fun RetentionStepperSection(
     stepper: RetentionStepperUiState,
+    limit: ClampNotice?,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
 ) {
@@ -246,11 +240,21 @@ private fun RetentionStepperSection(
                     AvionicsTag(text = "~${stepper.approxPendingRamMb} MB")
                 },
             )
-            Text(
-                text = stringResource(R.string.settings_retention_ceiling, stepper.maxSelectableMinutes),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Small, always-present live region (REV-12/14/19): the ceiling line is never empty, so
+            // the node keeps non-zero bounds in the accessibility tree, and it holds only the
+            // ceiling and the limit notice. A +/- tap does not re-announce the whole card.
+            Column(
+                modifier = Modifier.testTag("retention_limit_notice")
+                    .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_retention_ceiling, stepper.maxSelectableMinutes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                RetentionLimitNotice(limit)
+            }
             // No empty line or spacedBy gap when there is nothing to announce.
             if (stepper.isDirty) {
                 Text(

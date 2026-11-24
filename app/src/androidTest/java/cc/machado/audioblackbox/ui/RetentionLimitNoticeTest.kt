@@ -59,6 +59,15 @@ class RetentionLimitNoticeTest {
         node.assertTextContains(compose.activity.getString(
             R.string.settings_retention_clamp_notice_body, 30, 15))
         assertEquals(originalId, node.fetchSemanticsNode().id)
+        // REV-19 oracle: the live region holds only the ceiling and the notice, never the card's
+        // stepper controls, so a +/- tap does not re-announce the whole card.
+        val announced = node.fetchSemanticsNode().config.getOrElse(SemanticsProperties.Text) { emptyList() }
+            .joinToString(" ") { it.text }
+        val decrementCd = compose.activity.getString(R.string.settings_retention_decrement_cd)
+        assertTrue("live region must not contain the stepper: $announced", !announced.contains(decrementCd))
+        assertTrue("live region must not merge stepper actions",
+            node.fetchSemanticsNode().children.none { it.config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick) } &&
+                !node.fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick))
         compose.runOnIdle { limit.value = null }
         assertVisibleRegion()
         assertEquals(originalId, node.fetchSemanticsNode().id)
