@@ -306,7 +306,7 @@ jobs:
             echo "::error::Cannot inspect CI emulator ports; refusing to start."
             exit 1
           fi
-          for port in 5600 5601; do
+          for port in 5580 5581; do
             if awk -v port="$port" '$4 ~ (":" port "$") { found=1 } END { exit !found }' <<< "$listeners"; then
               echo "::error::CI emulator port $port is occupied; refusing to start or kill its owner."
               exit 1
@@ -325,10 +325,10 @@ jobs:
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         env:
-          ANDROID_SERIAL: emulator-5600
+          ANDROID_SERIAL: emulator-5580
           CI_EMULATOR_SHUTDOWN: "true"
         with:
-          emulator-port: 5600
+          emulator-port: 5580
           api-level: ${{ env.API_LEVEL }}
           target: ${{ env.TARGET }}
           arch: ${{ env.ARCH }}

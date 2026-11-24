@@ -89,7 +89,13 @@ shutdown_ci_emulator() {
   local -a matches=()
   trap - EXIT
   set +e
-  timeout -k 2 15 adb -s "$ANDROID_SERIAL" emu kill
+  # Only talk to the console if we proved this serial runs our AVD (#463 @sec SEC-1): another
+  # distro could have grabbed the port between the pre-check and our emulator's launch.
+  if [[ "${CI_EMULATOR_VERIFIED:-}" == true ]]; then
+    timeout -k 2 15 adb -s "$ANDROID_SERIAL" emu kill
+  else
+    printf '::warning::%s was never verified as AVD %s; skipping emu kill.\n' "$ANDROID_SERIAL" "$AVD_NAME" >&2
+  fi
   if ! wait_for_emulator_exit; then
     printf '::warning::%s did not disappear; attempting bounded, AVD-and-port-scoped qemu fallback.\n' "$ANDROID_SERIAL" >&2
     for proc in /proc/[0-9]*; do
@@ -111,8 +117,8 @@ shutdown_ci_emulator() {
 # Register before any test/build failure can exit. Local callers retain their running AVD.
 # The action supplies EMULATOR_PORT and ANDROID_SERIAL from its emulator-port input.
 if [[ "${CI_EMULATOR_SHUTDOWN:-}" == true ]]; then
-  [[ "${EMULATOR_PORT:-}" == 5600 && "${ANDROID_SERIAL:-}" == emulator-5600 && -n "${AVD_NAME:-}" ]] ||
-    fail "CI cleanup requires the dedicated emulator-5600 and an explicit AVD_NAME."
+  [[ "${EMULATOR_PORT:-}" == 5580 && "${ANDROID_SERIAL:-}" == emulator-5580 && -n "${AVD_NAME:-}" ]] ||
+    fail "CI cleanup requires the dedicated emulator-5580 and an explicit AVD_NAME."
   command -v timeout >/dev/null || fail "timeout is required for bounded CI shutdown."
   trap shutdown_ci_emulator EXIT
 fi
@@ -159,6 +165,17 @@ else
 fi
 ADB=(adb -s "$SERIAL")
 log "Target emulator: $SERIAL"
+
+# In CI, refuse to drive an emulator we cannot prove is ours (#463 @sec SEC-1). The console
+# must answer with this job's AVD name; a foreign emulator on the port fails closed here.
+if [[ "${CI_EMULATOR_SHUTDOWN:-}" == true ]]; then
+  running_avd="$(timeout -k 2 10 "${ADB[@]}" emu avd name 2>/dev/null | head -1 | tr -d '\r' || true)"
+  if [[ "$running_avd" != "$AVD_NAME" ]]; then
+    fail "$SERIAL reports AVD '${running_avd:-<no answer>}', expected '$AVD_NAME'; refusing to test or kill a foreign emulator."
+  fi
+  CI_EMULATOR_VERIFIED=true
+  log "Verified $SERIAL runs AVD '$AVD_NAME'."
+fi
 
 # --- Build + install ------------------------------------------------------
 log "Assembling debug + androidTest APKs..."
