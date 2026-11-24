@@ -76,7 +76,7 @@ usage_4: When something worth keeping just happened, tap <strong>Save</strong>. 
 usage_5: Open the in-app player to listen, seek, and share the exported recording through any Android Sharesheet target.
 download_tag: Download
 download_title: Get Audio Blackbox on Google Play
-download_intro: "Free to use, with an optional one-time Pro unlock. Open source and available now for Android 10 and newer."
+download_intro: "Free to use, with an optional one-time Pro unlock. Open source and available now for Android 10 and newer. Early-bird Pro, free: install Audio Blackbox by December 19, 2026 (before December 20, 00:00 Brasília time, UTC−3) and Pro stays unlocked on that device at no cost, for good. The benefit belongs to that installation: uninstalling and reinstalling, or switching devices, does not keep it."
 install_title: Install from the Play Store
 install_desc: Open the listing on your Android device and tap Install. No account sign-ups, no invitations.
 open_play: Open Play Store &rarr;
@@ -144,7 +144,7 @@ faq:
 - q: Does an always-on recorder drain the battery?
   a: 'Audio Blackbox was measured on a Samsung Galaxy S25 recording continuously at the Voice preset: with the screen off it used about 1.0% to 1.5% of the battery per hour and under 1% CPU, with no disk writes while buffering. Other phones and settings will give different numbers.'
 - q: Is Audio Blackbox free and open source?
-  a: "Free to install and use, and open source under GPL-3.0. Everything except the optional one-time Pro unlock stays free. Live saves the buffered audio from before the tap and continues in a single file: .aac (ADTS) with AAC (default), playable while recording, or .ogg with Opus, which you must wait until recording ends to play. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Installs before 2026-12-20 at 03:00 UTC get Pro at no cost."
+  a: "Free to install and use, and open source under GPL-3.0. Everything except the optional one-time Pro unlock stays free. Live saves the buffered audio from before the tap and continues in a single file: .aac (ADTS) with AAC (default), playable while recording, or .ogg with Opus, which you must wait until recording ends to play. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Early-bird Pro, free: install Audio Blackbox by December 19, 2026 (before December 20, 00:00 Brasília time, UTC−3) and Pro stays unlocked on that device at no cost, for good. The benefit belongs to that installation: uninstalling and reinstalling, or switching devices, does not keep it."
 - q: "Is there an open-source alternative to retroactive recorder apps on Android?"
   a: "Free to install and use, and open source under GPL-3.0. Everything except the optional one-time Pro unlock stays free. The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage."
 - q: What Android versions are supported?

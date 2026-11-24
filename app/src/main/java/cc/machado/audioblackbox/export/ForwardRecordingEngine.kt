@@ -139,6 +139,7 @@ class ForwardRecordingEngine(
     private val monotonicClock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val entitlement: () -> Entitlement = { Entitlement.Unknown },
     private val freeCapMillis: Long = FREE_LIVE_RECORDING_CAP,
+    private val prepareTimeoutMillis: Long = 10_000L,
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -174,6 +175,7 @@ class ForwardRecordingEngine(
             _state.value = value
         }
 
+    private val preparation = BoundedLivePrepare()
     private val lock = Any()
     private var activeDrainThread: Thread? = null
     private var activeTarget: StreamingExportTarget? = null
@@ -236,7 +238,9 @@ class ForwardRecordingEngine(
             }
             val displayName = customDisplayName ?: generateDisplayName(Date(clock()), encoding.extension)
             val target = try {
-                sink.openStreaming(displayName, encoding.mimeType)
+                preparation.open(prepareTimeoutMillis) {
+                    sink.openStreaming(displayName, encoding.mimeType)
+                }
             } catch (e: Exception) {
                 val err = ForwardRecordingState.Error(
                     ForwardRecordingFailureReason.SINK_OPEN_FAILED,
@@ -248,20 +252,9 @@ class ForwardRecordingEngine(
 
             val currentConfig = configProvider?.invoke() ?: config
 
-            // start() runs on the service's worker dispatcher. Complete the durable journal
-            // and publication before reporting Recording, so Gallery can see the session as
-            // soon as start returns. Codec construction still belongs to the drain thread.
-            try {
-                target.prepare()
-            } catch (e: Exception) {
-                try { target.abortUnstarted() } catch (_: Exception) {}
-                val err = ForwardRecordingState.Error(
-                    ForwardRecordingFailureReason.SINK_OPEN_FAILED,
-                    "Failed to prepare streaming target: ${e.message}", e,
-                )
-                stateValue = err
-                return err
-            }
+            // Preparation has journaled and published the row before Recording is emitted.
+            // A timed-out provider retains its target on the preparation worker for cleanup;
+            // it can never start a drain or block the next queued stop.
 
             stopRequested.set(false)
             cancelRequested.set(false)

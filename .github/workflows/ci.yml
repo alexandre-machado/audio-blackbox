@@ -676,7 +676,12 @@ jobs:
     # because `build`/`instrumented-tests` are legitimately skipped (not run) on a sync_only
     # workflow_dispatch -- 'skipped' must count as "does not block deploy" there, while 'failure'
     # or 'cancelled' must still block it on every other trigger.
+    # Owner kill switch (2026-11-24, AB-2411-37): repository variable PLAY_ENABLED='false' skips
+    # this whole job (AAB upload, R8 mapping upload and listing sync, including sync_only), so
+    # nothing reaches Play while a submission is in review. Any other value, or the variable
+    # being unset, keeps the normal behaviour. Flip it in Settings > Variables, not in code.
     if: >-
+      vars.PLAY_ENABLED != 'false' &&
       github.repository == 'alexandre-machado/audio-blackbox' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (needs.build.result == 'success' || needs.build.result == 'skipped') &&

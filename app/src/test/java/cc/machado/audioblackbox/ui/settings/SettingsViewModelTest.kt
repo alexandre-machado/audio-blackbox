@@ -83,6 +83,7 @@ class SettingsViewModelTest {
         // (32_000 B/s * 40 * 60 = 76,800,000) from usedMemoryBytesProvider() before calling
         // DeviceMemoryBudget, so 86,800,000 here becomes an effective 10,000,000 non-buffer used.
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(40),
             maxMemoryBytesProvider = { 135_000_000L },
@@ -108,6 +109,7 @@ class SettingsViewModelTest {
     @Test
     fun `decrementPending moves by the step and stops at the minimum bound`() = runTest(testDispatcher) {
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(10),
         )
@@ -132,6 +134,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -162,6 +165,7 @@ class SettingsViewModelTest {
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -195,6 +199,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -256,6 +261,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30, initialQualityPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
@@ -288,6 +294,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -335,6 +342,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -370,6 +378,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -403,6 +412,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -423,6 +433,7 @@ class SettingsViewModelTest {
     fun `a refusal flushed after the ViewModel is cleared surfaces on the next SettingsViewModel instead of being lost`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -446,6 +457,7 @@ class SettingsViewModelTest {
         // The user reopens Settings: a fresh instance must surface the refusal the dead one
         // couldn't -- the entire point of stashing it on the companion-owned marker.
         val reopened = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -458,6 +470,7 @@ class SettingsViewModelTest {
 
         // And it must not resurface a third time -- it was consumed by `reopened` above.
         val reopenedAgain = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -475,6 +488,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -536,6 +550,7 @@ class SettingsViewModelTest {
 
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 90, maxRetentionMinutesProvider = { 95 })
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = cc.machado.audioblackbox.service.RecorderService.captureState,
             capacityMinutesFlow = cc.machado.audioblackbox.service.RecorderService.bufferDurationMinutesFlow,
             qualityPresetFlow = cc.machado.audioblackbox.service.RecorderService.qualityPresetFlow,
@@ -586,6 +601,7 @@ class SettingsViewModelTest {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val switchCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
@@ -628,6 +644,7 @@ class SettingsViewModelTest {
             initialClampNotice = ClampNotice(previousMinutes = 60, newMinutes = 45),
         )
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(45),
             retentionWindowPreferences = preferences,
@@ -649,6 +666,7 @@ class SettingsViewModelTest {
             initialClampNotice = ClampNotice(previousMinutes = 60, newMinutes = 45),
         )
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(45),
             retentionWindowPreferences = preferences,
@@ -677,6 +695,7 @@ class SettingsViewModelTest {
     fun `a user who was never clamped never sees a notice`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
@@ -754,6 +773,7 @@ class SettingsViewModelTest {
         val switchedPresets = mutableListOf<cc.machado.audioblackbox.audio.QualityPreset>()
         var stopCalls = 0
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Recording),
             capacityMinutesFlow = MutableStateFlow(30),
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
@@ -807,6 +827,7 @@ class SettingsViewModelTest {
     fun `SettingsViewModel surfaces live battery and power telemetry through uiState`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 15)
         val vm = SettingsViewModel(
+            admissionDispatcher = StandardTestDispatcher(),
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(15),
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),

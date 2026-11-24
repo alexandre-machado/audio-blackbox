@@ -59,7 +59,7 @@ internal object InterruptedLiveRecovery {
             }
             recovered = true
         } catch (e: Exception) {
-            Log.w("LiveRecovery", "Recovery failures=1", e)
+            Log.w("LiveRecovery", "Recovery failures=1 type=${e.javaClass.simpleName}")
             // A later startup attempt may retry; Live registration never awaits this scan.
             throw e
         }
@@ -132,7 +132,7 @@ internal object InterruptedLiveRecovery {
             if (!success) Log.w("LiveRecovery", "Interrupted row scan incomplete; retained for next startup")
             if (success) RecoveryResult.SCANNED else RecoveryResult.RETRY
         } catch (e: Exception) {
-            Log.w("LiveRecovery", "Row recovery failures=1", e)
+            Log.w("LiveRecovery", "Row recovery failures=1 type=${e.javaClass.simpleName}")
             RecoveryResult.RETRY
         }
     }

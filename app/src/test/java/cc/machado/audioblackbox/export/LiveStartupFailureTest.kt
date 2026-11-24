@@ -77,7 +77,7 @@ class LiveStartupFailureTest {
             writerFactory = factory)
     }
 
-    private fun withSink(register: (Context, Uri) -> Unit, test: (MediaStoreSink, ContentResolver, Uri) -> Unit) {
+    private fun withSink(register: (Context, Uri) -> Unit, test: (StreamingExportSink, ContentResolver, Uri) -> Unit) {
         val context = mock<Context>()
         val resolver = mock<ContentResolver>()
         val uri = mock<Uri>()
@@ -87,11 +87,22 @@ class LiveStartupFailureTest {
         whenever(resolver.openFileDescriptor(eq(uri), any())).thenReturn(pfd)
         whenever(pfd.fileDescriptor).thenReturn(FileDescriptor())
         doThrow(IOException("close failed")).whenever(pfd).close()
-        Mockito.mockStatic(MediaStore.Audio.Media::class.java).use { media ->
-            media.`when`<Uri> { MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY) }.thenReturn(uri)
-            Mockito.mockConstruction(ContentValues::class.java).use {
-                test(MediaStoreSink(context, register), resolver, uri)
+        // Mockito static/construction scopes belong to the thread performing provider work.
+        // Keep the real sink under test when the engine moves preparation onto its worker.
+        fun <T> withProviderMocks(block: () -> T): T =
+            Mockito.mockStatic(MediaStore.Audio.Media::class.java).use { media ->
+                media.`when`<Uri> { MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY) }.thenReturn(uri)
+                Mockito.mockConstruction(ContentValues::class.java).use { block() }
+            }
+        val realSink = MediaStoreSink(context, register)
+        val sink = object : StreamingExportSink {
+            override fun openStreaming(displayName: String, mimeType: String): StreamingExportTarget {
+                val target = withProviderMocks { realSink.openStreaming(displayName, mimeType) }
+                return object : StreamingExportTarget by target {
+                    override fun prepare() = withProviderMocks { target.prepare() }
+                }
             }
         }
+        test(sink, resolver, uri)
     }
 }
