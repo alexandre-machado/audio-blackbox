@@ -1,0 +1,26 @@
+name: Terraform validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cloudflare-ci-token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform -chdir=infra/terraform/cloudflare-ci-token init -backend=false -input=false -lockfile=readonly
+      - run: terraform -chdir=infra/terraform/cloudflare-ci-token validate

@@ -31,3 +31,12 @@ certificates/
 /docs/.jekyll-cache/
 /cloudflare/.staged/
 /cloudflare/.wrangler/
+
+# Owner-only Terraform state and inputs can contain credentials.
+*.tfstate*
+.terraform/
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+*.tfplan

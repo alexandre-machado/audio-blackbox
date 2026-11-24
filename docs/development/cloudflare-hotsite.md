@@ -6,143 +6,149 @@ The Play Console privacy-policy URL remains
 No domain migration or Play Console edit is needed. GitHub Pages remains the
 origin and rollback target; the user site's `/` is outside the Worker route.
 
-## 1. Create the deployment token
+## 1. Provision the deployment token with Terraform (owner only)
 
-In Cloudflare, create a custom API token with these dashboard permissions:
+Terraform in `infra/terraform/cloudflare-ci-token/` is the supported provisioning
+path. The [dashboard template link](https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/) exists but is not the supported path.
 
-| Permission | Resource scope |
-| --- | --- |
-| Account > Workers Scripts > Edit | Only the account containing machado.cc |
-| Zone > Workers Routes > Edit | Include > Specific zone > machado.cc |
-| Zone > Zone > Read | Include > Specific zone > machado.cc |
+Prerequisites: Terraform **1.17.2**, Bash, GitHub CLI authenticated with permission
+to set environment secrets, and a trusted owner machine. Prepare the protected
+`cloudflare-hotsite` environment in section 2 first. Set its non-secret
+`CLOUDFLARE_ACCOUNT_ID` variable to `53f6d9e3dd6600e598c81e222c4369db`.
+The wrapper does not create the environment or change its protection rules.
 
-The first two permissions deploy the script/assets and manage its zone route.
-The third is needed to resolve the configured `zone_name` through the Zones API;
-the two write permissions alone do not grant the documented zone lookup access.
-Do not grant DNS Edit, KV, R2, Pages or all-zone access. The account ID is supplied
-explicitly, so account discovery is not needed.
-The exact legacy dashboard names above are still listed in Cloudflare's
-[API token permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/);
-the API also calls Edit permissions Write. See the
-[zone lookup permission](https://developers.cloudflare.com/api/resources/zones/methods/list/)
-and [Worker route authorization](https://developers.cloudflare.com/workers/authorization/workers/).
-These were checked for the Wrangler 4 deployment on 2026-11-23. Token authorization
-and resource creation still require the owner's first authenticated deployment.
+Create a temporary master token in the Cloudflare dashboard with only:
 
-Set an explicit token expiry and record a rotation date before it expires. Workers
-Scripts Edit remains account-wide and Routes Edit zone-wide. Optionally restrict
-client IPs only if the runner has a stable, known egress IP; a changing egress
-would otherwise break deployment.
+- **Account > Account API Tokens > Edit** (`Account API Tokens Write`), scoped
+  to account `53f6d9e3dd6600e598c81e222c4369db`.
+- **Zone > Zone > Read**, scoped only to **machado.cc**, for zone lookup.
 
-### Pre-filled dashboard alternative (verified 2026-11-24)
+Use a short expiry (for example one hour). The creating member needs API Token
+Provisioning capability or Super Administrator status and authority to grant the
+requested permissions; see [account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/).
+The master is owner-only: never CI, never committed, never a GitHub secret.
+`CLOUDFLARE_API_TOKEN` in the owner's shell is the **master**; the GitHub secret of
+that same name receives only the restricted **deploy** token.
 
-Cloudflare documents [token template URLs](https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/).
-The confirmed short keys/types are `workers_scripts/edit`, `workers_routes/edit`,
-and `zone/read`. They respectively upload the Worker/assets, manage the route,
-and resolve `zone_name: machado.cc`.
-
-For a **user-owned** deploy token, substitute `ACCOUNT_ID` with the account's
-32-character ID and `ZONE_ID` with the ID of **machado.cc in that account** in
-this URL, then open it (IDs are not credentials):
-
-```text
-https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=ACCOUNT_ID&zoneId=ZONE_ID&name=audio-blackbox-hotsite-deploy
-```
-
-Review all three permissions and the single-account/single-zone scopes before
-creating it: user templates silently drop unresolved keys. This link was checked
-against documentation, not exercised in an authenticated dashboard.
-Account-owned template URLs instead use
-`https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=...&name=...`;
-they **do not support `accountId` or `zoneId` scoping parameters**. Do not use that
-format expecting it to preselect machado.cc. The script below sets account-owned
-token scopes explicitly through the API.
-
-### Owner-machine automation (account-owned deploy token)
-
-Prepare the protected GitHub environment in section 2 first. Install Bash, curl,
-jq and GitHub CLI and authenticate `gh` with access to environment secrets.
-Run from the repository root on your own trusted machine; never run this helper
-in CI. No credentials are needed to inspect the request:
-
-```bash
-bash scripts/ops/cloudflare-create-deploy-token.sh --dry-run --set-account-var
-```
-
-Stdout is the request JSON with placeholder resource/permission IDs. Stderr lists
-the permission names to resolve and GitHub commands with the secret redacted.
-The same policy builder is used for real requests. The default expiry is 365 days
-from execution; override with `--expires-on YYYY-MM-DDTHH:MM:SSZ` (future UTC).
-
-Create a temporary master token in Cloudflare's dashboard with **Account >
-Account API Tokens > Edit**, scoped only to the target account (API name:
-`Account API Tokens Write`). This is the minimal token-creation permission.
-For this helper's mandatory zone lookup, also grant **Zone > Zone > Read**,
-scoped only to **machado.cc**. Token management alone does not authorize zone
-lookup. Set a short expiry, e.g. one hour. The creating member needs API Token
-Provisioning capability or Super Administrator status, and permission to grant
-the requested Worker and zone permissions; see
-[account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/).
-
-The master must **never** enter CI, the repo, shell history, or any GitHub secret
-or environment. In a fresh, untraced Bash shell, use a hidden prompt (do not type
-the token as a command or argument):
+From the repository root in a fresh, untraced Bash shell:
 
 ```bash
 set +x
-read -r -s -p 'Temporary Cloudflare master token: ' CLOUDFLARE_MASTER_TOKEN
+umask 077
+unset TF_LOG TF_LOG_PATH TF_LOG_CORE TF_LOG_PROVIDER
+terraform -chdir=infra/terraform/cloudflare-ci-token init -lockfile=readonly
+read -r -s -p 'Temporary Cloudflare master token: ' CLOUDFLARE_API_TOKEN
 printf '\n'
-export CLOUDFLARE_MASTER_TOKEN
-bash scripts/ops/cloudflare-create-deploy-token.sh --account-id ACCOUNT_ID --set-account-var
-unset CLOUDFLARE_MASTER_TOKEN
+export CLOUDFLARE_API_TOKEN
+bash scripts/ops/apply-cloudflare-ci-token.sh
+unset CLOUDFLARE_API_TOKEN
 ```
 
-Replace `ACCOUNT_ID` before running, or export `CLOUDFLARE_ACCOUNT_ID` and omit
-`--account-id`. Omit `--set-account-var` to preserve the existing GitHub variable.
-Unset the parent-shell master variable even if the helper fails. Delete/revoke
-the temporary master in the Cloudflare dashboard immediately after use; local
-variable cleanup does not revoke it.
+Review the interactive apply plan before approving it. Always unset the parent
+shell variable even if apply/upload fails, and immediately revoke the temporary
+master in the Cloudflare dashboard; unsetting it does not revoke it. Do not use
+shell tracing, Terraform debug logs, `terraform output -raw` on its own, or
+`terraform show -json` in recorded terminals. The wrapper disables Terraform
+logging, applies with restrictive file permissions, and pipes the sensitive
+output directly to `gh secret set` via stdin, never a command argument or a file.
+Normal apply output redacts `token_value`; `sensitive` does not encrypt state.
 
-The helper resolves machado.cc with `GET /zones?name=machado.cc&account.id=...`,
-then resolves exact permission **names and scopes** through
-[`GET /accounts/{account_id}/tokens/permission_groups`](https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/subresources/permission_groups/methods/list/).
-Missing, ambiguous or explicitly unselectable groups stop execution. IDs are
-never hardcoded. Cloudflare's
-[creation guide](https://developers.cloudflare.com/fundamentals/api/how-to/create-via-api/)
-also documents `/user/tokens/permission_groups` for user-owned tokens; that is
-not the endpoint used here.
+The module creates **audio-blackbox-hotsite-ci** with exactly two allow policies:
 
-[`POST /accounts/{account_id}/tokens`](https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/create/)
-accepts `name`, `expires_on`, and `policies` containing `effect: allow`,
-`permission_groups: [{id: ...}]`, and `resources`. The two policies grant:
+| Permission names resolved through the API | Resource |
+| --- | --- |
+| Workers Scripts Write (dashboard Edit) | Configured account only |
+| Workers Routes Write (dashboard Edit), Zone Read | machado.cc only |
 
-- `Workers Scripts Write` on `com.cloudflare.api.account.<account_id>`.
-- `Workers Routes Write` and `Zone Read` on `com.cloudflare.api.account.zone.<zone_id>`.
+Permission names and scopes must resolve to exactly one selectable group each;
+missing/ambiguous results fail a Terraform postcondition. The zone data source
+filters by both name and account. Neither permission IDs nor zone IDs are
+hardcoded. No DNS Edit, KV, R2, Pages, or all-zone grants are included.
+Workers Scripts remains account-wide and Workers Routes remains zone-wide.
 
-Each resource value is `"*"` (all operations allowed by those permissions on that
-specific resource), not a wildcard resource identifier. The account endpoint
-requires `Account API Tokens Write`; `API Tokens Write` is the user-token API
-permission and is not a substitute. The
-[zone lookup API](https://developers.cloudflare.com/api/resources/zones/methods/list/)
-separately requires Zone Read.
+The pinned latest stable provider checked on 2026-11-24 is **5.29.0**. Schemas:
+[`cloudflare_account_token`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/resources/account_token),
+[`cloudflare_account_api_token_permission_groups`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/data-sources/account_api_token_permission_groups),
+and [`cloudflare_zone`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/data-sources/zone).
+The current permission data source has no `_list` suffix and returns
+`permission_groups`. The provider uses `CLOUDFLARE_API_TOKEN` automatically.
+The generated `.terraform.lock.hcl` belongs in version control.
 
-The helper keeps the master out of curl arguments and child environments,
-disables curl configuration/tracing, and suppresses raw API/error output. The
-creation response exists only in shell memory; after validation, jq streams
-`.result.value` directly into `gh secret set` over stdin. No token is printed or
-written to a temporary file. Exit/signal traps clear sensitive shell variables.
-This is not protection against a compromised owner machine or process-memory
-inspection. Never source the script, enable verbose shell tracing, or capture a
-debug session containing credentials.
+### Expiry, state, verification, rotation and revocation
 
-Record the deploy token's expiry and rotate before it: create a fresh temporary
-master, rerun the helper to replace the environment secret, revoke the master,
-and verify a successful main-branch deployment before revoking the old deploy
-token. If upload fails or creation times out, inspect the account token list and
-revoke the newly created/orphan token before retrying; creation is not retried
-automatically. If the optional variable update fails, the secret may already
-have changed. No real API creation or deployment has been validated without
-owner credentials.
+`expires_on` defaults to **2027-11-24T00:00:00Z**, about one year after this
+rollout, deliberately a fixed date so repeated applies do not move expiry.
+Set `TF_VAR_expires_on` to another future RFC3339 timestamp when rotating; record
+a reminder before expiry. `TF_VAR_account_id` can override the account default,
+but machado.cc must resolve inside that account.
+
+The default **local backend only** is intentional: state and state backups
+contain the full token value. Keep them on the trusted owner machine with
+restricted permissions/encrypted storage, only as long as needed to rotate or
+destroy this token. Never upload state, saved plans, crash/debug logs, or secret
+variable files to CI/artifacts. `.gitignore` excludes `*.tfstate*`, `.terraform/`,
+crash logs, `*.tfvars`, `*.tfvars.json`, and `*.tfplan`. Ignoring files is not
+access control. Do not delete live state casually: it is needed to manage/revoke
+the token. After destroy (or confirmed dashboard revocation), remove state and
+backups according to the owner's secure-storage policy. Do not add a remote
+backend without a separately reviewed secret-storage design.
+
+Verify without displaying the value:
+
+```bash
+gh secret list --env cloudflare-hotsite --repo alexandre-machado/audio-blackbox
+```
+
+Confirm the token name, expiry and scopes in Cloudflare, then run the main-branch
+deployment in section 3 and confirm success. No authenticated creation or deploy
+has been tested as part of credential-free validation.
+
+For rotation, obtain a fresh short-lived master with the same minimal scope,
+load it with the hidden prompt above, and choose a new expiry:
+
+```bash
+export TF_VAR_expires_on='2027-11-24T00:00:00Z' # choose a future rotation date
+terraform -chdir=infra/terraform/cloudflare-ci-token apply -replace=cloudflare_account_token.ci
+bash scripts/ops/apply-cloudflare-ci-token.sh
+unset CLOUDFLARE_API_TOKEN TF_VAR_expires_on
+```
+
+Replacement revokes the old token before creating the new one, so pause deploys
+until the wrapper uploads the replacement. Revoke the temporary master and
+verify a main deployment. If GitHub upload fails after a successful apply, keep
+the state and rerun the wrapper to upload the same value; do not create orphan
+tokens. If creation fails with an uncertain outcome, inspect the dashboard and
+revoke any orphan before retrying. Lost state cannot recover the one-time token
+value: revoke the token in the dashboard and provision a replacement.
+
+To retire it, load a fresh master, then run:
+
+```bash
+terraform -chdir=infra/terraform/cloudflare-ci-token destroy
+unset CLOUDFLARE_API_TOKEN
+gh secret delete CLOUDFLARE_API_TOKEN --env cloudflare-hotsite --repo alexandre-machado/audio-blackbox
+```
+
+Destroy revokes the deploy token in Cloudflare; deleting the GitHub secret alone
+does not. Revoke the master too, then remove the local secret-bearing state and
+backups. This module does not destroy the Worker or route.
+
+### Credential-free gate
+
+```bash
+terraform fmt -check -recursive
+terraform -chdir=infra/terraform/cloudflare-ci-token init -backend=false -input=false -lockfile=readonly
+terraform -chdir=infra/terraform/cloudflare-ci-token validate
+```
+
+`.github/workflows/terraform.yml` runs these checks on a fresh GitHub-hosted
+runner for pull requests and main pushes, with read-only contents permission,
+no environment or secrets, Terraform 1.17.2, and `hashicorp/setup-terraform`
+v4.0.1 pinned to `dfe3c3f87815947d99a8997f908cb6525fc44e9e`.
+`terraform plan` cannot run without credentials: permission and zone data
+sources call the Cloudflare API. Format/validate check syntax and provider
+schemas, not live authorization or API behavior. Apply, rotation, destruction,
+and deployment verification remain owner-only operations.
 
 ## 2. Configure GitHub Actions
 
