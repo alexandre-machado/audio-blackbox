@@ -1,6 +1,7 @@
 package cc.machado.audioblackbox.security
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -12,8 +13,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * Asserts that:
  * 1. The source manifest declares no network permissions directly and strips AD_ID.
  * 2. The **merged release manifest** (the output of AGP manifest merging across all dependencies)
- *    declares strictly zero network permissions (`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`,
- *    `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE`) and no `AD_ID`.
+ *    matches the exact owner-approved permission allowlist (#441) and contains no `AD_ID`.
  *
  * Task coupling: `testDebugUnitTest` in `app/build.gradle.kts` explicitly depends on
  * `processReleaseMainManifest` to guarantee the merged release manifest is generated prior to test execution.
@@ -22,18 +22,19 @@ import javax.xml.parsers.DocumentBuilderFactory
 class ManifestPermissionSecurityTest {
 
     @Test
-    fun mergedReleaseManifest_declaresZeroNetworkPermissions() {
+    fun mergedReleaseManifest_matchesExactPermissionAllowlist() {
         val manifestFile = resolveMergedReleaseManifest()
 
         val permissions = extractPermissions(manifestFile)
 
-        assertFalse("Merged release manifest must NOT request android.permission.INTERNET", permissions.contains("android.permission.INTERNET"))
-        assertFalse("Merged release manifest must NOT request android.permission.ACCESS_NETWORK_STATE", permissions.contains("android.permission.ACCESS_NETWORK_STATE"))
         assertFalse("Merged release manifest must NOT request android.permission.ACCESS_WIFI_STATE", permissions.contains("android.permission.ACCESS_WIFI_STATE"))
         assertFalse("Merged release manifest must NOT request android.permission.CHANGE_WIFI_STATE", permissions.contains("android.permission.CHANGE_WIFI_STATE"))
         assertFalse("Merged release manifest must NOT request android.permission.CHANGE_NETWORK_STATE", permissions.contains("android.permission.CHANGE_NETWORK_STATE"))
 
         val expectedPermissions = setOf(
+            "android.permission.INTERNET",
+            "android.permission.ACCESS_NETWORK_STATE",
+            "com.android.vending.BILLING",
             "android.permission.RECORD_AUDIO",
             "android.permission.POST_NOTIFICATIONS",
             "android.permission.FOREGROUND_SERVICE",
@@ -42,9 +43,11 @@ class ManifestPermissionSecurityTest {
             "android.permission.RECEIVE_BOOT_COMPLETED",
             "cc.machado.audioblackbox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
         )
-        assertTrue(
-            "Merged release manifest permissions ($permissions) must be a subset of expected permissions ($expectedPermissions)",
-            expectedPermissions.containsAll(permissions),
+        // Oracle: any added OR removed merged release permission fails this equality.
+        assertEquals(
+            "Merged release permissions must exactly match the approved allowlist",
+            expectedPermissions,
+            permissions,
         )
     }
 
@@ -119,11 +122,12 @@ class ManifestPermissionSecurityTest {
         val factory = DocumentBuilderFactory.newInstance()
         val builder = factory.newDocumentBuilder()
         val doc = builder.parse(file)
-        val usesPermissions = doc.getElementsByTagName("uses-permission")
+        val usesPermissions = doc.getElementsByTagName("*")
         val result = mutableSetOf<String>()
 
         for (i in 0 until usesPermissions.length) {
             val node = usesPermissions.item(i)
+            if (node.nodeName != "uses-permission" && node.nodeName != "uses-permission-sdk-23") continue
             val name = node.attributes.getNamedItem("android:name")?.nodeValue
             val toolsNode = node.attributes.getNamedItem("tools:node")?.nodeValue
             if (name != null && toolsNode != "remove") {

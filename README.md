@@ -1,6 +1,6 @@
 # Audio Blackbox
 
-**Audio Blackbox is a free, open-source Android app that records the last minutes of audio into RAM, so you can save something after it happened.** It is for anyone who realizes too late that a moment was worth keeping: musicians and songwriters, journalists and interviews, students and lectures, a memory aid for spoken instructions, a pocket audio dashcam, and ideas and family moments. The rolling buffer is at least 5 minutes, set in 5-minute steps, with the maximum computed on your phone; nothing is written to storage until you tap Save, and the app has no internet permission. It runs on Android 10 (API 29) and newer, costs nothing, and is licensed under GPL-3.0. **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)** · [Project site](https://alexandre.machado.cc/audio-blackbox/)
+**Audio Blackbox is an open-source Android app that records the last minutes of audio into RAM, so you can save something after it happened.** It is for anyone who realizes too late that a moment was worth keeping: musicians and songwriters, journalists and interviews, students and lectures, a memory aid for spoken instructions, a pocket audio dashcam, and ideas and family moments. The rolling buffer is at least 5 minutes, set in 5-minute steps, up to the app's safe memory limit for the selected quality; audio is written to storage when you tap Save or start Live, and recorded audio never leaves your phone. It is free to use, with an optional one-time Pro unlock for unlimited live recording (free sessions save automatically after 2 hours of live time; files also include the buffered past). It runs on Android 10 (API 29) and newer and is licensed under GPL-3.0. **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)** · [Project site](https://alexandre.machado.cc/audio-blackbox/)
 
 <p align="center">
   <img src="docs/design/store/feature_graphic_1024x500.png" alt="Audio Blackbox Banner" width="800">
@@ -10,7 +10,7 @@
   <a href="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml"><img src="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
   <a href="https://developer.android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-3DDC84.svg?logo=android&logoColor=white" alt="Android Platform"></a>
-  <a href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"><img src="https://img.shields.io/badge/Privacy-100%25%20Offline%20%7C%20Zero%20Network-success.svg" alt="Zero Network Permission"></a>
+  <a href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"><img src="https://img.shields.io/badge/Privacy-Audio%20stays%20on%20device%20%7C%20No%20ads-success.svg" alt="Privacy: audio stays on device, no ads"></a>
   <a href="https://m3.material.io"><img src="https://img.shields.io/badge/Design-Material%203-6750A4.svg" alt="Material 3"></a>
   <a href="https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"><img src="https://img.shields.io/badge/Google_Play-Get_it_on_Google_Play-01875F.svg?logo=googleplay&logoColor=white" alt="Get it on Google Play"></a>
   <a href="https://alexandre.machado.cc/audio-blackbox/"><img src="https://img.shields.io/badge/Project_Site-alexandre.machado.cc-FF5722.svg" alt="Project Site"></a>
@@ -22,9 +22,9 @@
 
 ---
 
-**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio in device RAM (**at least 5 minutes, in 5-minute steps, with no fixed upper bound** -- the ceiling is sized automatically per device and per quality preset from how much memory it can safely hold) and writes to storage **only when you explicitly ask it to**.
+**Audio Blackbox** is a continuous memory audio recorder for Android that functions like a flight recorder or dashcam for sound: it keeps a rolling window of recent audio in device RAM (**at least 5 minutes, in 5-minute steps, up to the app's safe memory limit for the selected quality**; no product-imposed duration cap) and writes to storage **only when you explicitly ask it to**.
 
-Nothing touches your disk until you press save, and the app has no internet permission, so it never uploads anything; saved files go to your phone's `Recordings/Blackbox` folder, where you control them. It is made for the moments you only know mattered *after* they happened: the riff or melody you just improvised (musicians and songwriters), the quote before you hit record (journalists and interviews), the lecture explanation you just missed (students and lectures), spoken instructions or directions you need to replay (memory aid), unexpected incidents in traffic or on the street (pocket audio dashcam), and ideas, agreements in meetings you are part of, or family moments.
+Audio stays in RAM until you save or start Live, and your recordings are never uploaded; saved files go to your phone's `Recordings/Blackbox` folder, where you control them. It is made for the moments you only know mattered *after* they happened: the riff or melody you just improvised (musicians and songwriters), the quote before you hit record (journalists and interviews), the lecture explanation you just missed (students and lectures), spoken instructions or directions you need to replay (memory aid), unexpected incidents in traffic or on the street (pocket audio dashcam), and ideas, agreements in meetings you are part of, or family moments.
 
 ---
 
@@ -40,14 +40,15 @@ Nothing touches your disk until you press save, and the app has no internet perm
 
 - 🎯 **Two Primary Capture Modes**:
   - **Save Recent Past (Lookback)**: Write the buffered audio since your last save (the whole buffer the first time) from the memory ring buffer into an AAC (`.m4a`) file. One action, no window to pick -- the old fixed-window selector was retired in #121 because it promised windows the buffer might not hold. Since #410 a successful save advances the buffer's export floor, so the next save starts where the previous file ended and consecutive saves never overlap.
-  - **Continuous Live Recording**: Start a forward live recording that automatically preserves the preceding buffer timeline so nothing is lost.
-- 🎚️ **Selectable Audio Quality**: Three presets in Settings -- Voice (16 kHz mono), Balanced (32 kHz mono), and High Fidelity (44.1 kHz stereo) -- each trading sample rate/channels for its own device-derived retention ceiling.
+  - **Continuous Live Recording**: Live saves the buffered audio from before the tap and continues in a single .aac (ADTS) file, playable while recording. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Installs before 2026-12-20 at 03:00 UTC get Pro at no cost.
+- 🎚️ **Selectable Audio Quality**: Three presets in Settings -- Voice (16 kHz mono), Balanced (32 kHz mono), and High Fidelity (44.1 kHz stereo) -- each trading sample rate/channels for its own app-memory retention ceiling.
 - 📊 **Real-time Live VU Meter**: 20-capsule reactive microphone input level indicator built on Material 3 components, styled with the app's avionics/cockpit brand theme (see `AGENTS.md` §5).
 - 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).
 - 🏠 **Home-Screen Widget**: Start or stop capture straight from the launcher, no need to open the app first.
-- 🛡️ **100% Local, Zero-Network Privacy**:
-  - **Zero Network Permissions**: The `android.permission.INTERNET` permission is completely absent from the merged release manifest.
-  - **Zero Telemetry / Crash SDKs**: No Firebase, no analytics, no third-party trackers.
+- 🛡️ **Local-First Privacy**:
+  - **Recorded Audio Never Leaves the Device**: no account, no cloud, no upload path for audio anywhere in the app.
+  - **Network Use Is Google Play Billing Only**: since the optional Pro unlock, the merged manifest declares `INTERNET`, `ACCESS_NETWORK_STATE` and `com.android.vending.BILLING`. They come from Google Play Billing, whose library sends its own usage telemetry from the app process (#441). The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage.
+  - **No Ads or App Usage Analytics**: no ad SDK or `AD_ID`. Billing library diagnostics are described above.
   - **Local Persistence Only**: Files are saved directly to your device's standard music/recordings folder (`Recordings/Blackbox/` on Android 12+, `Music/Blackbox/` on Android 10-11).
 - ⚡ **Seamless Interruption Handling**: Pauses gracefully during phone calls or third-party audio focus grabs, preserving silence gaps to ensure exported timestamps remain perfectly synced.
 - 🔋 **Robust Background Survival**: Dedicated foreground capture service with persistent notifications and guided manufacturer battery-killer bypass.
@@ -85,7 +86,7 @@ Measured live on physical **Samsung Galaxy S25 (`SM-S931B`, Android 16 / API 36)
 
 ## 📚 Engineering Studies: Device-Derived Memory Limits
 
-The buffer's ceiling is computed from the device's own memory numbers rather than reacting to Android's memory-pressure callbacks (`onTrimMemory`), and the buffer is never grown behind the user's back. This is a deliberate engineering decision:
+The buffer's ceiling is computed from the app's safe heap budget for the selected quality (also constrained by available system memory) rather than reacting to Android's memory-pressure callbacks (`onTrimMemory`), and the buffer is never grown behind the user's back. This is a deliberate engineering decision:
 
 1. **Memory Warnings are Blind to Process Limits**: The OS broadcasts memory pressure warnings when the *entire system* is low on RAM. However, every Android application operates under a strict per-process limit (the Dalvik Heap Limit). If the app suddenly exceeds its own quota, the runtime immediately throws an `OutOfMemoryError` and crashes the app, without ever broadcasting an `onTrimMemory` warning.
 2. **A Per-Device, Per-Preset Ceiling**: `DeviceMemoryBudget` (#298) caps total heap use at **85%** of `Runtime.getRuntime().maxMemory()`, subtracts the app's live heap footprint, also caps against 85% of the system's available memory, and divides what is left by a measured **1.15x** export peak-to-buffer ratio. The result, floored to 5-minute steps and never below 5 minutes, is the largest window the stepper offers for the chosen quality preset. It is recomputed on every read, so a heavier release or a tighter device clamps a stored value down (with a visible notice) instead of crashing.
@@ -96,7 +97,7 @@ The result: the capture loop itself never allocates, a reallocation only ever ha
 
 ## 📲 Download
 
-Audio Blackbox is free on Google Play: **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)**. It runs on Android 10 (API 29) and newer.
+Audio Blackbox is free on Google Play, with an optional one-time Pro unlock for unlimited live recording: **[Get it on Google Play](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox)**. It runs on Android 10 (API 29) and newer.
 
 ---
 

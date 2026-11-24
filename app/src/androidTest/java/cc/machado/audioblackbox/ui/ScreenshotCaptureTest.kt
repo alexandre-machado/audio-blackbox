@@ -82,7 +82,7 @@ class ScreenshotCaptureTest {
         // Mirrors MainActivity, which draws edge to edge -- without this the window would be
         // pre-inset by the system bars and the picture would not show what the user sees.
         enableCockpitEdgeToEdge()
-        composeRule.setContent { HarnessApp(Destination.DASHBOARD) }
+        composeRule.setContent { HarnessApp(Destination.DASHBOARD, proState = screenshotProState(LOCALE_EN)) }
 
         capture("01-dashboard")
         galleryTab().performClick()
@@ -93,7 +93,7 @@ class ScreenshotCaptureTest {
 
     @Test
     fun capturesAllDestinationsInTheCompactAssertionWindow() {
-        composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD) }
+        composeRule.setContent { CompactHarnessApp(Destination.DASHBOARD, proState = screenshotProState(LOCALE_EN)) }
 
         capture("04-dashboard-compact")
         galleryTab().performClick()
@@ -144,7 +144,10 @@ class ScreenshotCaptureTest {
                 LocalContext provides localized,
                 LocalConfiguration provides localized.resources.configuration,
             ) {
-                ShowcaseApp(destination)
+                ShowcaseApp(
+                    destination,
+                    screenshotProState(localeTag),
+                )
             }
         }
 
@@ -223,12 +226,29 @@ class ScreenshotCaptureTest {
     }
 
     private companion object {
+        fun screenshotProState(localeTag: String) = proCardStateOf(
+            entitlement = cc.machado.audioblackbox.billing.Entitlement.Free,
+            pending = false,
+            price = cc.machado.audioblackbox.billing.PriceState.Available(PRO_PRICES.getValue(localeTag)),
+        )
+
         /** Must match the path `scripts/ci/run-instrumented-tier.sh` pulls from. */
         const val SCREENSHOT_DIR_NAME = "screenshots"
 
         /** Must match the directory names under `distribution/metadata/android/`. */
         const val LOCALE_EN = "en-US"
         val STORE_LOCALES = listOf(LOCALE_EN, "pt-BR", "es-ES", "fr-FR", "de-DE", "it-IT")
+
+        // Screenshot-only prices: each locale is a one-line edit once currencies are confirmed.
+        // Free + Available renders the real ProCard with an enabled CTA, without billing timing.
+        val PRO_PRICES = mapOf(
+            "en-US" to "R$ 14,90",
+            "pt-BR" to "R$ 14,90",
+            "es-ES" to "R$ 14,90",
+            "fr-FR" to "R$ 14,90",
+            "de-DE" to "R$ 14,90",
+            "it-IT" to "R$ 14,90",
+        )
 
         /** Long enough to be well past any entry transition, so the frame is a settled one. */
         const val ANIMATION_SETTLE_MILLIS = 2_000L

@@ -1,5 +1,1 @@
-What's new:
-• Consecutive saves no longer overlap: each save starts where the previous one ended
-• The buffer limit is now worked out for your phone and quality preset, and shown in Settings
-• Home-screen widget to start or stop recording with one tap
-• Still fully offline: no internet permission, no analytics
+Pro: optional one-time unlock. Installs before 2026-12-20 03:00 UTC get Pro free. Live saves the buffered past and continues in one .aac ADTS file, playable while recording. Free: auto-save after 2 hours of live time; the buffered past makes the file longer. Pro removes that cap. The app sends no audio or usage analytics. Google Play Billing contacts Google for purchases and entitlement checks, with its own diagnostics.

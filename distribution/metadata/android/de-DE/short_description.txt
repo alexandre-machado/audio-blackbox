@@ -1,1 +1,1 @@
-Audio-Dashcam: Speichere, was du gerade gehört hast. Offline, bleibt am Handy.
+Audio-Dashcam: Speichere, was du gerade gehört hast. Audio bleibt am Handy.

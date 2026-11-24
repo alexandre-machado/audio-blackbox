@@ -1,11 +1,11 @@
 # Audio Blackbox
 
-> Audio Blackbox is a free, open-source (GPL-3.0) Android app that keeps the last minutes of sound in a rolling RAM buffer and writes them to local storage only when the user taps Save. The buffer is at least 5 minutes, set in 5-minute steps, with the maximum computed on the device. The app has no INTERNET permission, so it never uploads audio. It runs on Android 10 (API 29) and newer and is free on Google Play.
+> Audio Blackbox is an open-source (GPL-3.0) Android app that keeps the last minutes of sound in a rolling RAM buffer and writes them to local storage when the user taps Save or starts Live. The buffer is at least 5 minutes, set in 5-minute steps, up to the app's safe memory limit for the selected quality. Recorded audio never leaves the device: the app has no account, no cloud, no ads and sends no usage analytics itself. It runs on Android 10 (API 29) and newer and is free on Google Play, with an optional one-time Pro unlock for unlimited live recording.
 
 Key facts:
 
 - Package name: cc.machado.audioblackbox
-- Price: free. The app has no account and no ads, and contains no analytics or trackers.
+- Price: free to install and use. One optional in-app purchase, a one-time Pro unlock (`pro_unlock`), removes the 2-hour limit on live recording time (excluding the buffered past). Everything else, including the retroactive buffer and all quality presets, is free. Installs before 2026-12-20 at 03:00 UTC get Pro at no cost. The app has no account and no ads, and sends no usage analytics itself.
 - This website uses Google Analytics 4 and Microsoft Clarity to measure visits. That applies to the website only, not to the app.
 - License: GNU General Public License v3.0, source on GitHub.
 - Platform: Android 10 (API 29) and newer.
@@ -22,10 +22,16 @@ Key facts:
 - Pocket Audio Dashcam: If something unexpected happens in traffic or on the street, save the minutes leading up to it.
 - Ideas & Family Moments: The thought you said out loud, what was just agreed in a meeting you were part of, the first word at the dinner table.
 
+## Recording and billing
+
+Live saves the buffered audio from before the tap and continues in a single .aac (ADTS) file, playable while recording. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
+
+The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage.
+
 ## Product
 
 - [Project site](https://alexandre.machado.cc/audio-blackbox/): overview, features, RAM calculator per quality preset, and FAQ
-- [Google Play listing](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox): install the app (free)
+- [Google Play listing](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox): install the app (free, with an optional one-time Pro unlock)
 - [Full description for LLMs](https://alexandre.machado.cc/audio-blackbox/llms-full.txt): self-contained factual description, including how the buffer works and the FAQ
 - [Privacy policy](https://alexandre.machado.cc/audio-blackbox/release/privacy-policy): privacy policy for the app
 
@@ -44,7 +50,7 @@ All versions link to the English-only privacy policy.
 
 - [GitHub repository](https://github.com/alexandre-machado/audio-blackbox): full source code and README
 - [License (GPL-3.0)](https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE): license text
-- [Android manifest](https://github.com/alexandre-machado/audio-blackbox/blob/main/app/src/main/AndroidManifest.xml): declared permissions, with no INTERNET permission
+- [Android manifest](https://github.com/alexandre-machado/audio-blackbox/blob/main/app/src/main/AndroidManifest.xml): declared permissions (the only network permissions come from Google Play Billing)
 
 ## Feature docs
 

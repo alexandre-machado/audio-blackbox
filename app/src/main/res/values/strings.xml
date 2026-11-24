@@ -288,7 +288,7 @@
     <string name="settings_specs_persistence_label">Persistence mode</string>
     <string name="settings_specs_persistence_value">MediaStore (Local storage)</string>
     <string name="settings_privacy_title">Privacy &amp; local processing</string>
-    <string name="settings_privacy_explanation">Audio Blackbox operates purely locally on your device. Microphone audio is kept in transient RAM and overwritten automatically. Zero telemetry, crash reports, or audio streams are ever sent to remote servers.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox keeps recordings on your device and itself sends no audio or usage analytics. Buffered audio stays in RAM until you save it or start Live, which records to a local file. No ads, account or cloud storage. Google Play Billing (Play services) communicates with Google to process the optional purchase, check entitlement and send its own diagnostics.</string>
     <string name="settings_retention_title">Rolling buffer retention window</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/STEP_MINUTES bound the stepper to
@@ -376,6 +376,8 @@
     <string name="settings_website_url">https://alexandre.machado.cc/audio-blackbox/</string>
     <string name="settings_privacy_policy_label">Privacy policy</string>
     <string name="settings_privacy_policy_url">https://alexandre.machado.cc/audio-blackbox/release/privacy-policy</string>
+    <string name="settings_support_label">Support the project</string>
+    <string name="settings_support_no_browser">No browser is available to open the support page.</string>
 
     <!-- Full Diagnostic Log export (issue #388) -->
     <string name="settings_card_diagnostics_label">DIAGNOSTIC LOG</string>
@@ -426,6 +428,18 @@
     <string name="gallery_details_quality">Quality</string>
     <string name="gallery_details_storage">Storage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
+    <string name="pro_title">Pro</string>
+    <string name="pro_explanation">Free: 2 hours of Live per session, plus buffered audio from before the tap. Unlock Pro once for unlimited Live.</string>
+    <string name="pro_unlock">Unlock Pro</string>
+    <string name="pro_store_unavailable">Store unavailable</string>
+    <string name="pro_price_loading">Checking price…</string>
+    <string name="pro_pending">Purchase pending</string>
+    <string name="pro_active">Pro active. Thank you!</string>
+    <string name="pro_early">Pro included for early users. Thank you!</string>
+    <string name="pro_limit_saved">%1$s was saved because the free 2-hour limit was reached. Pro removes this limit.</string>
+    <string name="pro_remaining">%1$s free left</string>
+    <string name="pro_card_label">Unlimited live recording</string>
+    <string name="pro_remaining_cd">Free live recording time remaining: %1$s</string>
     <string name="gallery_newly_saved">Recording saved</string>
     <string name="dashboard_panel_save_caption_live">Saving live</string>
     <string name="dashboard_save_button_cd_live">Save is not needed during live: the live file is saved as it records</string>
