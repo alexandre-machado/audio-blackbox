@@ -93,7 +93,7 @@ Yes. The buffer starts at 5 minutes, in 5-minute steps, up to the app's safe mem
 
 ### How can I save audio from before I pressed record?
 
-A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Audio is written to storage when you tap Save or start Live or start Live.
+A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Audio is written to storage when you tap Save or start Live.
 
 ### What is a retroactive or always-on buffer recorder?
 

@@ -26,7 +26,7 @@ Funktionen
 
 Datenschutz
 • Die App selbst sendet weder Audio noch Nutzungsanalysen. Google Play Billing (Google Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln und die Pro-Berechtigung zu prüfen; die Bibliothek sendet auch eigene Nutzungs- und Fehlerdiagnosen. Keine Werbung, kein Konto und kein Cloud-Audiospeicher.
-• Audio bleibt bis zum Speichern im Arbeitsspeicher. Deine Aufnahmen werden nie hochgeladen: Dateien landen im Ordner Recordings/Blackbox auf deinem Handy (Music/Blackbox unter Android 10 und 11), unter deiner Kontrolle.
+• Gepuffertes Audio bleibt bis zum Speichern oder Start von Live im RAM. Deine Aufnahmen werden nie hochgeladen: Dateien landen im Ordner Recordings/Blackbox auf deinem Handy (Music/Blackbox unter Android 10 und 11), unter deiner Kontrolle.
 • Quelloffen unter GPL-3.0, aktiv gepflegt, mit dem vollständigen Quellcode auf GitHub.
 
 Verantwortungsvoll aufnehmen

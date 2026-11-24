@@ -535,6 +535,44 @@ class ForwardRecordingEngineTest {
         assertTrue("target must be closed", sink.lastTarget?.closed == true)
     }
 
+    // Oracle: a real cap notice observed by the Pro collector must not clear a synchronous
+    // start failure published before its acknowledgement. Removing the identity guard loses Error.
+    @Test fun staleFreeLimitAcknowledgementPreservesNewerError() = kotlinx.coroutines.runBlocking {
+        var captureActive = true
+        val engine = ForwardRecordingEngine(
+            readSinceProvider = { cursor, _ -> ReadSinceResult.Data(ByteArray(0), cursor, cursor, 0L) },
+            writeCursorProvider = { if (captureActive) 0L else null },
+            oldestCursorProvider = { if (captureActive) 0L else null },
+            exportFloorAdvancerProvider = { null }, gapsProvider = { emptyList() },
+            sink = FakeStreamingSink(),
+            writerFactory = { target, config -> FakeStreamingAudioWriter(target, config) },
+            entitlement = { cc.machado.audioblackbox.billing.Entitlement.Free },
+            freeCapMillis = 0L,
+        )
+        try {
+            engine.start()
+            val cap = kotlinx.coroutines.withTimeout(5000) {
+                engine.state.first { it is ForwardRecordingState.Success }
+            } as ForwardRecordingState.Success
+            assertTrue(cap.freeLimitReached)
+            cc.machado.audioblackbox.service.clearFreeLimitNoticeOnPro(
+                kotlinx.coroutines.flow.flowOf(cap),
+                kotlinx.coroutines.flow.flowOf(cc.machado.audioblackbox.billing.Entitlement.Pro(
+                    cc.machado.audioblackbox.billing.ProSource.PURCHASE,
+                )),
+            ) { observed ->
+                org.junit.Assert.assertSame(cap, observed)
+                captureActive = false
+                val newer = engine.start() as ForwardRecordingState.Error
+                assertEquals(ForwardRecordingFailureReason.CAPTURE_NOT_ACTIVE, newer.reason)
+                engine.acknowledgeTerminalState(observed)
+                org.junit.Assert.assertSame("Stale cap acknowledgement must preserve newer Error", newer, engine.state.value)
+                engine.acknowledgeTerminalState(newer)
+                assertEquals(ForwardRecordingState.Idle, engine.state.value)
+            }
+        } finally { engine.stop() }
+    }
+
     @Test
     fun `acknowledgeTerminalState resets state from Success or Error to Idle`() {
         val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1)
@@ -549,7 +587,7 @@ class ForwardRecordingEngineTest {
         engine.stop()
         assertTrue("state must be Success", engine.state.value is ForwardRecordingState.Success)
 
-        engine.acknowledgeTerminalState()
+        engine.acknowledgeTerminalState(engine.state.value)
         assertTrue("state must reset to Idle", engine.state.value is ForwardRecordingState.Idle)
     }
 

@@ -26,7 +26,7 @@ Funciones
 
 Privacidad
 • La propia app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) se comunica con Google para procesar la compra opcional y comprobar el derecho a Pro; su biblioteca también envía sus propios diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube.
-• El audio permanece en la memoria hasta que lo guardas. Tus grabaciones nunca se suben: los archivos se guardan en la carpeta Recordings/Blackbox del móvil (Music/Blackbox en Android 10 y 11), bajo tu control.
+• El audio del búfer permanece en RAM hasta que guardas o inicias Directo. Tus grabaciones nunca se suben: los archivos se guardan en la carpeta Recordings/Blackbox del móvil (Music/Blackbox en Android 10 y 11), bajo tu control.
 • De código abierto con licencia GPL-3.0, con mantenimiento activo y todo el código en GitHub.
 
 Graba con responsabilidad

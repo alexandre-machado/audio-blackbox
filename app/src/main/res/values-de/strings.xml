@@ -244,7 +244,7 @@
     <string name="settings_specs_persistence_label">Speichermodus</string>
     <string name="settings_specs_persistence_value">MediaStore (lokaler Speicher)</string>
     <string name="settings_privacy_title">Datenschutz &amp; lokale Verarbeitung</string>
-    <string name="settings_privacy_explanation">Audio Blackbox behält dein Audio auf deinem Gerät. Mikrofonaudio liegt nur flüchtig im RAM und wird automatisch überschrieben, und Aufnahmen verlassen das Telefon nie. Keine Werbung, keine Analytics, kein Konto, keine Cloud. Die einzige Netzwerknutzung ist die eigene Telemetrie der Google-Play-Billing-Bibliothek für den optionalen Pro-Kauf.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox speichert Aufnahmen auf deinem Gerät und sendet selbst weder Audio noch Nutzungsanalysen. Gepuffertes Audio bleibt bis zum Speichern oder Start von Live im RAM; Live schreibt in eine lokale Datei. Keine Werbung, kein Konto, kein Cloud-Speicher. Google Play Billing (Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln, die Berechtigung zu prüfen und eigene Diagnosedaten zu senden.</string>
     <string name="settings_retention_title">Aufbewahrungsfenster des Puffers</string>
     <string name="settings_retention_explanation">Wie viel Audio der Puffer im Gerätespeicher behält. Ein größerer Wert braucht mehr Speicher. Änderungen werden kurz nach dem letzten Anpassen automatisch übernommen.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
@@ -367,7 +367,7 @@
     <string name="gallery_details_storage">Speicherort</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="pro_title">Pro</string>
-    <string name="pro_explanation">Kostenlose Live-Aufnahmen dauern bis zu 2 Stunden pro Sitzung. Schalte Pro einmalig frei, um ohne Zeitlimit aufzunehmen.</string>
+    <string name="pro_explanation">Gratis: 2 Stunden Live pro Sitzung, plus gepuffertes Audio von vor dem Tippen. Pro einmalig freischalten für unbegrenztes Live.</string>
     <string name="pro_unlock">Pro freischalten</string>
     <string name="pro_store_unavailable">Store nicht verfügbar</string>
     <string name="pro_price_loading">Preis wird abgerufen…</string>

@@ -178,9 +178,11 @@ class ForwardRecordingEngine(
     private val cancelRequested = AtomicBoolean(false)
     private var wakeUpLatch = CountDownLatch(0)
 
-    fun acknowledgeTerminalState() {
+    /** Clear only the observed outcome; a newer session may have finished before this call. */
+    fun acknowledgeTerminalState(expected: ForwardRecordingState) {
         synchronized(lock) {
             val current = stateValue
+            if (current !== expected) return
             if (current is ForwardRecordingState.Success || current is ForwardRecordingState.Error) {
                 stateValue = ForwardRecordingState.Idle
             }

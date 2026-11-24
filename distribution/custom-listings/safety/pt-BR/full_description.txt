@@ -19,7 +19,7 @@ Sempre à mão
 
 O seu áudio fica no seu celular
 • O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem.
-• O áudio fica na memória até você salvar. As suas gravações nunca são enviadas: os arquivos salvos vão para a pasta Recordings/Blackbox do seu celular (Music/Blackbox no Android 10 e 11), sob o seu controle.
+• O áudio do buffer fica na memória até você salvar ou iniciar Ao vivo. As suas gravações nunca são enviadas: os arquivos salvos vão para a pasta Recordings/Blackbox do seu celular (Music/Blackbox no Android 10 e 11), sob o seu controle.
 • De código aberto (GPL-3.0), mantido ativamente, com todo o código no GitHub, para qualquer pessoa conferir o que ele faz.
 
 Grave com responsabilidade

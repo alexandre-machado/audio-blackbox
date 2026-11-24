@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * the dashboard keep saying why it stopped. Once the user is Pro that message ("Pro removes this
  * limit") is no longer true, so this calls [acknowledge] (the engine's
  * `acknowledgeTerminalState`, which resets to Idle and is a no-op unless the state is still
- * terminal) the moment both conditions hold. Both surfaces render from that one state, so both
- * clear together.
+ * the same terminal instance) the moment both conditions hold. Both surfaces render from that
+ * one state, so both clear together.
  *
  * Only the cap outcome is acted on. A user-stopped `Success` keeps its own short visibility timer
  * in [RecorderService], and Free or Unknown never clears the notice.
@@ -21,11 +21,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 internal suspend fun clearFreeLimitNoticeOnPro(
     forwardState: Flow<ForwardRecordingState>,
     entitlement: Flow<Entitlement>,
-    acknowledge: () -> Unit,
+    acknowledge: (ForwardRecordingState) -> Unit,
 ) {
     combine(forwardState, entitlement) { state, current ->
-        state is ForwardRecordingState.Success && state.freeLimitReached && current is Entitlement.Pro
+        state.takeIf {
+            it is ForwardRecordingState.Success && it.freeLimitReached && current is Entitlement.Pro
+        }
     }
         .distinctUntilChanged()
-        .collect { superseded -> if (superseded) acknowledge() }
+        .collect { superseded -> if (superseded != null) acknowledge(superseded) }
 }

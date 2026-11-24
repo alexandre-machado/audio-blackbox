@@ -18,8 +18,9 @@
         tools:node="remove" />
 
     <!--
-      Privacy invariant: recorded audio never leaves the device. The only network use is
-      Google Play Billing's own library telemetry. No ads, no analytics SDK, no AD_ID.
+      Privacy invariant: the app itself sends no audio or usage analytics.
+      Google Play Billing (Play services) communicates with Google to process the optional
+      purchase, check entitlement and send its own diagnostics. No ads, no analytics SDK, no AD_ID.
     -->
 
     <!--

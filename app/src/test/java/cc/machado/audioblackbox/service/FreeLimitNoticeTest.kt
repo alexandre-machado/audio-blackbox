@@ -17,16 +17,16 @@ class FreeLimitNoticeTest {
     private val capSaved = ForwardRecordingState.Success("live.m4a", 8L, freeLimitReached = true)
 
     /**
-     * Same contract as `ForwardRecordingEngine.acknowledgeTerminalState`: a terminal state resets
-     * to Idle, anything else is left alone. Counting calls lets the test tell "cleared" apart from
-     * "the state happened to change some other way".
+     * Collector fake: assert that it forwards the observed instance and count acknowledgements.
+     * The stale-ack race is covered against the real engine in ForwardRecordingEngineTest.
      */
     private class Engine(initial: ForwardRecordingState) {
         val state = MutableStateFlow(initial)
         var acknowledgements = 0
-        fun acknowledge() {
+        fun acknowledge(expected: ForwardRecordingState) {
             acknowledgements++
             val current = state.value
+            org.junit.Assert.assertSame("Must acknowledge the observed cap outcome", expected, current)
             if (current is ForwardRecordingState.Success || current is ForwardRecordingState.Error) {
                 state.value = ForwardRecordingState.Idle
             }

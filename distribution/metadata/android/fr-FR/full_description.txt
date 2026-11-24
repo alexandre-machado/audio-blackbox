@@ -26,7 +26,7 @@ Fonctionnalités
 
 Confidentialité
 • L'app elle-même n'envoie ni audio ni statistiques d'utilisation. Google Play Billing (services Google Play) communique avec Google pour traiter l'achat facultatif et vérifier le droit à Pro ; sa bibliothèque envoie aussi ses propres diagnostics d'utilisation et d'erreurs. Sans publicité, compte ni stockage audio dans le cloud.
-• L'audio reste en mémoire jusqu'à sa sauvegarde. Vos enregistrements ne sont jamais envoyés : les fichiers vont dans le dossier Recordings/Blackbox du téléphone (Music/Blackbox sur Android 10 et 11), sous votre contrôle.
+• L'audio du tampon reste en RAM jusqu'à la sauvegarde ou au lancement de Direct. Vos enregistrements ne sont jamais envoyés : les fichiers vont dans le dossier Recordings/Blackbox du téléphone (Music/Blackbox sur Android 10 et 11), sous votre contrôle.
 • Open source sous GPL-3.0, activement maintenue, avec tout le code sur GitHub.
 
 Enregistrez de manière responsable

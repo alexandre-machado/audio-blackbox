@@ -244,7 +244,7 @@
     <string name="settings_specs_persistence_label">Modo de persistencia</string>
     <string name="settings_specs_persistence_value">MediaStore (almacenamiento local)</string>
     <string name="settings_privacy_title">Privacidad &amp; procesamiento local</string>
-    <string name="settings_privacy_explanation">Audio Blackbox mantiene tu audio en tu dispositivo. El audio del micrófono se guarda en RAM temporal y se sobrescribe automáticamente, y las grabaciones nunca salen del teléfono. Sin anuncios, sin analíticas, sin cuenta, sin nube. El único uso de red es la telemetría propia de la biblioteca de Google Play Billing para la compra opcional de Pro.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox guarda las grabaciones en tu dispositivo y no envía audio ni análisis de uso. El audio del búfer permanece en RAM hasta que guardas o inicias Directo, que graba en un archivo local. Sin anuncios, cuenta ni almacenamiento en la nube. Google Play Billing (servicios de Play) se comunica con Google para procesar la compra opcional, comprobar el derecho de acceso y enviar sus propios diagnósticos.</string>
     <string name="settings_retention_title">Ventana de retención del búfer</string>
     <string name="settings_retention_explanation">Cuánto audio conserva el búfer en la memoria del dispositivo. Un valor mayor usa más memoria. Los cambios se aplican automáticamente poco después de que dejes de ajustarlo.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
@@ -367,7 +367,7 @@
     <string name="gallery_details_storage">Almacenamiento</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="pro_title">Pro</string>
-    <string name="pro_explanation">Las grabaciones en directo gratuitas duran hasta 2 horas por sesión. Desbloquea Pro con un único pago para grabar sin límite.</string>
+    <string name="pro_explanation">Gratis: 2 horas de Directo por sesión, más el audio del búfer anterior al toque. Desbloquea Pro con un único pago para Directo ilimitado.</string>
     <string name="pro_unlock">Desbloquear Pro</string>
     <string name="pro_store_unavailable">Tienda no disponible</string>
     <string name="pro_price_loading">Consultando precio…</string>

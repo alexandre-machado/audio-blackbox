@@ -290,7 +290,7 @@ class RecorderService : Service() {
                     (state is ForwardRecordingState.Success || state is ForwardRecordingState.Error)
                 ) {
                     delay(EXPORT_OUTCOME_VISIBLE_MILLIS)
-                    forwardRecordingEngine.acknowledgeTerminalState()
+                    forwardRecordingEngine.acknowledgeTerminalState(state)
                 }
             }
         }

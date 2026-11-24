@@ -288,7 +288,7 @@
     <string name="settings_specs_persistence_label">Persistence mode</string>
     <string name="settings_specs_persistence_value">MediaStore (Local storage)</string>
     <string name="settings_privacy_title">Privacy &amp; local processing</string>
-    <string name="settings_privacy_explanation">Audio Blackbox keeps your audio on your device. Microphone audio is kept in transient RAM and overwritten automatically, and recordings never leave the phone. No ads, no analytics, no account, no cloud. The only network use is Google Play Billing\'s own library telemetry for the optional Pro purchase.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox keeps recordings on your device and itself sends no audio or usage analytics. Buffered audio stays in RAM until you save it or start Live, which records to a local file. No ads, account or cloud storage. Google Play Billing (Play services) communicates with Google to process the optional purchase, check entitlement and send its own diagnostics.</string>
     <string name="settings_retention_title">Rolling buffer retention window</string>
     <string name="settings_retention_explanation">How much audio the buffer keeps in device memory. A larger value uses more memory. Changes apply automatically a moment after you stop adjusting.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
@@ -429,7 +429,7 @@
     <string name="gallery_details_storage">Storage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="pro_title">Pro</string>
-    <string name="pro_explanation">Free live recordings last up to 2 hours per session. Unlock Pro once for unlimited live recording.</string>
+    <string name="pro_explanation">Free: 2 hours of Live per session, plus buffered audio from before the tap. Unlock Pro once for unlimited Live.</string>
     <string name="pro_unlock">Unlock Pro</string>
     <string name="pro_store_unavailable">Store unavailable</string>
     <string name="pro_price_loading">Checking price…</string>

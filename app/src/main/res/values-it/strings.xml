@@ -244,7 +244,7 @@
     <string name="settings_specs_persistence_label">Modalità di persistenza</string>
     <string name="settings_specs_persistence_value">MediaStore (memoria locale)</string>
     <string name="settings_privacy_title">Privacy &amp; elaborazione locale</string>
-    <string name="settings_privacy_explanation">Audio Blackbox tiene il tuo audio sul dispositivo. L\'audio del microfono resta in RAM temporanea e viene sovrascritto automaticamente, e le registrazioni non lasciano mai il telefono. Niente pubblicità, niente analytics, nessun account, nessun cloud. L\'unico uso della rete è la telemetria della libreria Google Play Billing per l\'acquisto facoltativo di Pro.</string>
+    <string name="settings_privacy_explanation">Audio Blackbox conserva le registrazioni sul dispositivo e non invia audio né analisi di utilizzo. L’audio nel buffer resta in RAM finché non salvi o avvii Live, che registra in un file locale. Niente pubblicità, account o archiviazione cloud. Google Play Billing (servizi Play) comunica con Google per elaborare l’acquisto facoltativo, verificare il diritto di accesso e inviare la propria diagnostica.</string>
     <string name="settings_retention_title">Finestra di conservazione del buffer</string>
     <string name="settings_retention_explanation">Quanto audio il buffer conserva nella memoria del dispositivo. Un valore più alto usa più memoria. Le modifiche vengono applicate automaticamente poco dopo che smetti di regolare.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
@@ -367,7 +367,7 @@
     <string name="gallery_details_storage">Archiviazione</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="pro_title">Pro</string>
-    <string name="pro_explanation">Le registrazioni dal vivo gratuite durano fino a 2 ore per sessione. Sblocca Pro con un acquisto unico per registrare senza limiti.</string>
+    <string name="pro_explanation">Gratis: 2 ore di Live per sessione, più l’audio nel buffer prima del tocco. Sblocca Pro una volta per Live illimitato.</string>
     <string name="pro_unlock">Sblocca Pro</string>
     <string name="pro_store_unavailable">Store non disponibile</string>
     <string name="pro_price_loading">Verifica del prezzo…</string>

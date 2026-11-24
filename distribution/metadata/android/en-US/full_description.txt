@@ -1,6 +1,6 @@
 Audio Blackbox is a retroactive audio recorder: an audio dashcam that keeps the last minutes of sound in your phone's memory, so you can record past audio after it happened.
 
-Audio is written to storage when you tap Save or start Live or start Live, and your recordings never leave your phone: the app never uploads your audio anywhere.
+Audio is written to storage when you tap Save or start Live, and your recordings never leave your phone: the app never uploads your audio anywhere.
 
 Made for
 • Musicians and songwriters: keep the riff or melody you just improvised, without having pressed record first.
@@ -26,7 +26,7 @@ Features
 
 Privacy
 • The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage.
-• Audio stays in memory until you save it. Your recordings are never uploaded: saved files go to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control them.
+• Buffered audio stays in memory until you save it or start Live. Your recordings are never uploaded: saved files go to your phone's Recordings/Blackbox folder (Music/Blackbox on Android 10 and 11), where you control them.
 • Open source under GPL-3.0, actively maintained, with the full source code on GitHub.
 
 Record responsibly
