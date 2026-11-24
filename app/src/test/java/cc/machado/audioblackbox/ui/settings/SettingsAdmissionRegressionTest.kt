@@ -42,6 +42,7 @@ class SettingsAdmissionRegressionTest {
             }
             val capacity = MutableStateFlow(initial)
             val vm = SettingsViewModel(
+                admissionDispatcher = StandardTestDispatcher(),
                 captureState = MutableStateFlow(CaptureState.Idle),
                 capacityMinutesFlow = capacity,
                 qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE),
@@ -105,6 +106,7 @@ class SettingsAdmissionRegressionTest {
             service.switchSettings(5, QualityPreset.HIGH_FIDELITY)
             val prefs = InMemoryRetentionWindowPreferences(initialMinutes = 5)
             val vm = SettingsViewModel(
+                admissionDispatcher = StandardTestDispatcher(),
                 captureState = MutableStateFlow(CaptureState.Idle),
                 retentionWindowPreferences = prefs,
                 maxMemoryBytesProvider = { 256L * 1024 * 1024 },
@@ -140,6 +142,7 @@ class SettingsAdmissionRegressionTest {
             val prefs = InMemoryRetentionWindowPreferences(initialMinutes = 5)
             var attempts = 0
             val vm = SettingsViewModel(
+                admissionDispatcher = StandardTestDispatcher(),
                 captureState = MutableStateFlow(CaptureState.Idle),
                 capacityMinutesFlow = MutableStateFlow(5),
                 qualityPresetFlow = MutableStateFlow(QualityPreset.VOICE),

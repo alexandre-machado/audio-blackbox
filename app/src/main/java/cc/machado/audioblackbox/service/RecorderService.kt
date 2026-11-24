@@ -46,7 +46,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Foreground microphone service (issue #3). Owns the single [AudioCaptureEngine] instance for
@@ -75,12 +74,23 @@ class RecorderService : Service() {
 
     private lateinit var audioManager: AudioManager
 
-    // Service-scoped: collects engine.state reactively (see onCreate) so the notification can
-    // never go stale between the two user-initiated call sites, and hosts the off-main-thread
-    // engine.stop() dispatch (see stopServiceCompletely). SupervisorJob so a failure in one
-    // launched child (there is normally only ever one at a time) cannot cancel the scope itself.
-    // Cancelled in onDestroy.
+    // Service-scoped observers are cancelled in onDestroy. Capture commands use a separate
+    // process queue so cleanup remains ordered with admission from a new service instance.
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Main-thread-owned queue preserves start/forward/stop order across worker dispatch.
+    private val captureCommands get() = processCaptureCommands
+    private val lifecycle by lazy {
+        RecorderLifecycle(captureCommands, captureOwnership,
+            stopCapture = { engine.stop() },
+            stopForward = { forwardRecordingEngine.stop() },
+            reportRefusal = { engine.reportForegroundPromotionRefused(
+                CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED, it) },
+            finishService = { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() })
+    }
+
+    private fun enqueueCaptureCommand(command: suspend () -> Unit) {
+        captureCommands.enqueue(command)
+    }
 
     // See PeriodicNotificationRefresher's doc: supplies the "keep refreshing while Recording
     // doesn't transition" tick the collector below cannot, since captureState only emits on a
@@ -93,7 +103,6 @@ class RecorderService : Service() {
     }
 
     private val notificationRefresher = PeriodicNotificationRefresher(captureState)
-    private var isGracefullyStopping = false
 
     // Built lazily (not in the companion, unlike `engine`) because it needs a Context
     // (MediaStoreSink -> ContentResolver; AacPayloadEncoder -> cacheDir for its temp file, see its
@@ -387,20 +396,9 @@ class RecorderService : Service() {
 
     override fun onDestroy() {
         audioManager.unregisterAudioRecordingCallback(recordingCallback)
-        // Defensive cleanup for the case where this service is destroyed some other way than
-        // through stopServiceCompletely() (e.g. the OS force-destroys it directly). In the common
-        // case stopServiceCompletely() has already driven engine.stop() to completion before ever
-        // calling stopSelf(), so running engine.stop() asynchronously here is not only redundant
-        // but would race a subsequent startIntent() by stopping the next session asynchronously.
-        if (!isGracefullyStopping) {
-            Thread({
-                forwardRecordingEngine.stop()
-                engine.stop()
-            }, "RecorderService-onDestroy-stop").apply {
-                isDaemon = true
-                start()
-            }
-        }
+        // Cleanup joins admission through the process queue and checks session ownership there.
+        // It cannot stop a newer instance's session or erase a graceful stop's terminal error.
+        lifecycle.destroy()
         serviceScope.cancel()
         _isServiceRunning.value = false
         super.onDestroy()
@@ -421,7 +419,7 @@ class RecorderService : Service() {
             Log.w(TAG, "handleStart(): RECORD_AUDIO not granted, refusing to start capture")
             return
         }
-        engine.start()
+        lifecycle.start { engine.start() }
         // No explicit refreshNotification() call here: the serviceScope collector registered in
         // onCreate() reacts to the engine.state emission engine.start() just produced. Relying on
         // that single reactive path (rather than this call site plus the collector) is the point
@@ -434,7 +432,7 @@ class RecorderService : Service() {
      *
      * `engine.stop()` blocks until the capture thread's cleanup -- including [RingBuffer.clear],
      * an `Arrays.fill` over the whole ring buffer -- has fully run, which is small at the default
-     * retention window but can be seconds at a long one. Dispatched on [serviceScope] with
+     * retention window but can be seconds at a long one. Dispatched on the process queue with
      * [Dispatchers.Default] so that join never happens on this Service's main thread (PR #23
      * review, `@rev` finding 3), then hops back to Main to remove the notification and stop the
      * service only once capture has actually finished -- never before, so the persistent
@@ -458,30 +456,11 @@ class RecorderService : Service() {
      *    capture thread and `AudioRecord` cannot be left running behind it. Tear down for real and
      *    report the reason, so the stop the user did not ask for is not also unexplained.
      *
-     * Only when neither holds -- a refused *start*, with nothing running -- is the original
-     * response correct: nothing was ever opened, so there is nothing to release, and the Error
-     * recorded on the process-lifetime `engine.state` outlives this instance for the widget and
-     * the dashboard to render.
+     * Never infer safety from an Idle snapshot: a worker may be opening capture concurrently.
+     * Cancel unstarted admission and always queue teardown before reporting/removing the service.
      */
     private fun handleForegroundPromotionRefused(action: String?, refusalMessage: String): Int {
-        val captureWasLive = engine.state.value.let {
-            it is CaptureState.Recording || it is CaptureState.Paused
-        }
-        when {
-            action == ACTION_STOP || action == null -> stopServiceCompletely()
-            captureWasLive -> stopServiceCompletely(reportRefusalAfterStop = refusalMessage)
-            else -> {
-                engine.reportForegroundPromotionRefused(
-                    CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
-                    refusalMessage,
-                )
-                // `isGracefullyStopping = true` stops onDestroy()'s defensive cleanup thread from
-                // immediately overwriting this Error back to Idle -- that path exists for a
-                // session that was genuinely mid-capture, which this branch never was.
-                isGracefullyStopping = true
-                stopSelf()
-            }
-        }
+        lifecycle.refuse(if (action == ACTION_STOP || action == null) null else refusalMessage)
         return START_NOT_STICKY
     }
 
@@ -495,21 +474,7 @@ class RecorderService : Service() {
      *   [Dispatchers.Default] would not be ordered with respect to each other.
      */
     private fun stopServiceCompletely(reportRefusalAfterStop: String? = null) {
-        isGracefullyStopping = true
-        serviceScope.launch(Dispatchers.Default) {
-            forwardRecordingEngine.stop()
-            engine.stop()
-            if (reportRefusalAfterStop != null) {
-                engine.reportForegroundPromotionRefused(
-                    CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
-                    reportRefusalAfterStop,
-                )
-            }
-            withContext(Dispatchers.Main.immediate) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
-        }
+        lifecycle.stop(reportRefusalAfterStop)
     }
 
     private fun handleStartForward() {
@@ -519,16 +484,14 @@ class RecorderService : Service() {
             Log.w(TAG, "handleStartForward(): RECORD_AUDIO not granted, refusing to start")
             return
         }
-        if (engine.state.value is CaptureState.Idle) {
-            handleStart()
-        }
-        serviceScope.launch(Dispatchers.Default) {
+        lifecycle.start {
+            engine.start()
             forwardRecordingEngine.start()
         }
     }
 
     private fun handleStopForward() {
-        serviceScope.launch(Dispatchers.Default) {
+        enqueueCaptureCommand {
             forwardRecordingEngine.stop()
         }
     }
@@ -628,6 +591,11 @@ class RecorderService : Service() {
     }
 
     companion object {
+        // Process lifetime: old-instance cleanup and new-instance starts share one ordering.
+        private val processCaptureCommands by lazy {
+            CaptureCommandQueue(CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+        }
+        private val captureOwnership = CaptureOwnership()
         private const val TAG = "RecorderService"
         private const val MILLIS_PER_MINUTE = 60_000L
         private const val MIN_EXPORT_ANIMATION_MILLIS = 500L
