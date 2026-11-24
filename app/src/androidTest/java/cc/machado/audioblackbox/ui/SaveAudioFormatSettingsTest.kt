@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -59,8 +60,15 @@ class SaveAudioFormatSettingsTest {
             .performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(context.getString(R.string.settings_save_audio_format))
             .performScrollTo().performClick()
-        rule.onAllNodesWithText("Opus").onLast().assertIsNotEnabled()
-        rule.onNodeWithText(context.getString(R.string.settings_format_aac)).performClick()
+        // The menu lives in a popup window. Wait (bounded) for its item to exist, then fire the
+        // item's real click action instead of injecting touch into the popup. The touch-injection
+        // route failed on CI with the node gone mid-gesture, while the semantics route still
+        // drives the production onClick -> onSelect wiring asserted below.
+        val aacItem = hasText(context.getString(R.string.settings_format_aac)) and hasClickAction()
+        rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(aacItem).fetchSemanticsNodes().size == 1 }
+        rule.onAllNodes(hasText("Opus") and hasClickAction()).onLast().assertIsNotEnabled()
+        rule.onNode(aacItem).assertIsDisplayed().assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals(SaveAudioFormat.AAC, selected.value)
         rule.onNodeWithText(context.getString(R.string.settings_format_aac_helper))
