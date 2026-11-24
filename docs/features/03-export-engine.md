@@ -5,7 +5,7 @@
 Tracked in [#5](https://github.com/alexandre-machado/audio-blackbox/issues/5).
 
 ## Safe Buffer Reading (Lookback Save & Continuous Live Recording)
-`Save` (`ExportEngine.kt`) exports the buffered audio accumulated since the last save (or the entire buffer on the first save). The old fixed-window selector was retired in `#121`, and each successful save advances the ring buffer's export floor (`#410`) to the end of the saved window so consecutive saves never overlap. `Live` (`ForwardRecordingEngine.kt`) starts a forward recording that drains the buffered past first and then continues encoding newly captured audio into the same file until stopped, advancing the export floor when it finishes.
+`Save` (`ExportEngine.kt`) exports the buffered audio accumulated since the last save (or the entire buffer on the first save). The old fixed-window selector was retired in `#121`, and each successful save advances the ring buffer's export floor (`#410`) to the end of the saved window so consecutive saves never overlap. `Live` (`ForwardRecordingEngine.kt`) saves the buffered audio from before the tap and continues encoding newly captured audio into a single `.aac` (ADTS) file, playable while recording, advancing the export floor when it finishes. Live recording time is limited to 2 hours on the free plan, followed by automatic saving; the file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
 
 Both paths drain the ring buffer in bounded 4 KB chunks via `readSince` (`#72`) rather than allocating a second full-window copy, so capture continues uninterrupted while the file is written and the capture thread is never blocked for more than a single chunk copy.
 

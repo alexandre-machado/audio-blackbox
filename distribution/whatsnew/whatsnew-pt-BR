@@ -1,6 +1,1 @@
-Novidades:
-• Pro: desbloqueio opcional, com pagamento único, para gravação ao vivo ilimitada. O resto continua gratuito
-• Na versão gratuita, a gravação ao vivo é salva automaticamente ao chegar a 2 horas
-• Instalou antes desta atualização? O Pro já é seu, sem custo
-• Novo link "Apoie o projeto" nos Ajustes
-• O áudio gravado continua sem sair do celular. O app agora tem acesso à rede, usado só pela biblioteca de cobrança do Google Play
+Pro: pagamento único opcional. Instalações antes de 20/12/2026 03:00 UTC recebem Pro grátis. Ao vivo salva o passado do buffer e continua em um .aac ADTS, reproduzível durante a gravação. Grátis: salva após 2 horas ao vivo; o passado torna o arquivo mais longo. Pro remove esse limite. O app não envia áudio nem analytics de uso. Google Play Billing se conecta ao Google para compras e verificação do Pro, com diagnósticos próprios.

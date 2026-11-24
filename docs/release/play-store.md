@@ -36,7 +36,7 @@ can complete until these land.
    link with edit access, not a localhost/staging URL) and it must say, plainly,
    what issue #48 already establishes as true: audio is captured to a rolling
    in-memory buffer, is written to disk only when the user explicitly saves, never
-   leaves the device, and there is no network transmission. I did not draft hosting
+   leaves the device via the app. Google Play Billing communicates with Google for the optional purchase, entitlement checks and its own diagnostics; the app itself sends no audio or usage analytics. I did not draft hosting
    for this (no CMS/domain decision to make on the owner's behalf) — draft copy is
    below in section D so the owner only has to decide *where* to host it (GitHub
    Pages off this repo's `docs/`, a static page, etc.), not *what* it says.
@@ -226,21 +226,10 @@ in place first, per issue #48's own stated sequencing.
     entire function.)
   - Is this data required or optional: **Required** (the app cannot function
     without microphone access).
-  - Data collected is **not transmitted off-device** — there is no network
-    request in the codebase transmitting audio or any other data (verified: no
-    networking library/dependency in `app/build.gradle.kts`, no `http`/`https`
-    references in `app/src/main`). This is the strongest fact in the whole
-    submission — state it identically in the Data safety form and the privacy
-    policy so they can't be read as contradicting each other. Issue #48 flags
-    inconsistency between the two as a common rejection cause; this is is the
-    place to get it verbatim-consistent.
-  - **Superseded (#440/#441, 2026-10-15):** the "no networking dependency"
-    fact above is no longer true. Google Play Billing (`billing-ktx`) now
-    brings `INTERNET`/`ACCESS_NETWORK_STATE` and sends its own library
-    telemetry from the app process. Audio is still never transmitted. Whether
-    that telemetry must be declared in Data safety is open in #446; keep the
+  - Recorded audio is **not transmitted off-device by the app**. The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage. The merged manifest includes `INTERNET`, `ACCESS_NETWORK_STATE` and `com.android.vending.BILLING`.
+  - Billing telemetry declarations remain open in #446; keep the
     form and `docs/release/privacy-policy.html` consistent with each other.
-  - Is data encrypted in transit: **N/A — not transmitted.**
+  - Is audio encrypted in transit: **N/A — the app does not transmit audio.** Assess Billing traffic separately for the Data safety submission (#446).
   - Can users request deletion: **Yes** — describe as: uninstalling the app
     deletes the in-memory buffer and any saved recordings remain in the user's own
     `Recordings/Blackbox/`/`Music/Blackbox/` folder (i.e. it's the user's own
@@ -248,10 +237,10 @@ in place first, per issue #48's own stated sequencing.
     mechanism for). Issue #7's in-app gallery has since merged (`#61`) and
     includes a delete action — that's the direct in-app path to mention on the
     form.
-- **Security practices**: no data is transmitted, so most of this section
-  (encryption in transit, independent security review) is not applicable — do not
-  claim security practices for data flows that don't exist; select "data isn't
-  transmitted" where the form allows it rather than over-claiming encryption.
+- **Security practices**: the app does not transmit audio or usage analytics itself.
+  Google Play Billing communicates with Google for purchases, entitlement checks
+  and its own diagnostics. Assess those SDK data flows in the form (#446); do not
+  select a blanket "data isn't transmitted" answer for the Pro build.
 
 ### Permissions declared in the manifest (for reference, already correct in code)
 
@@ -393,7 +382,7 @@ entry is resolved below.
 
 **Superseded (issue #419).** The drafts that used to sit here described a fixed
 window selector (5/15/30/60 minutes) that no longer exists (it was retired in #121,
-and the window has had no fixed maximum since #298). The published listing text now
+and the buffer grows only up to the app's safe memory limit for the selected quality, without a product-imposed duration cap). The published listing text now
 lives in `distribution/metadata/android/{en-US,pt-BR}/` (title, short and full
 description), and its constraints, including the messaging rules and the
 consent disclaimer, are recorded in `docs/release/store-listing.md` section 1.

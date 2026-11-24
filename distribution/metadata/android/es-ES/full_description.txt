@@ -1,6 +1,6 @@
-Audio Blackbox es un grabador retroactivo: una dashcam de audio que conserva los últimos minutos de sonido en la memoria de tu móvil para que puedas grabar el pasado después de que ocurra. ¿Has tocado un riff que quieres conservar? ¿Te has perdido el inicio de una cita o de una explicación en clase? ¿Acabas de oír instrucciones que volverás a necesitar? Toca Guardar y esos minutos se convierten en un archivo de audio. Funciona como grabadora de voz en segundo plano con búfer circular, siempre con una notificación visible.
+Audio Blackbox es un grabador retroactivo: una dashcam de audio que conserva los últimos minutos de sonido en la memoria de tu móvil para que puedas grabar el pasado después de que ocurra.
 
-No se escribe nada en el almacenamiento hasta que tocas Guardar, y tus grabaciones nunca salen del móvil: la app nunca sube tu audio a ningún sitio.
+El audio permanece en RAM hasta que tocas Guardar o inicias Directo, y tus grabaciones nunca salen del móvil: la app nunca sube tu audio a ningún sitio.
 
 Pensada para
 • Músicos y compositores: conserva el riff o la melodía que acabas de improvisar sin haber pulsado grabar antes.
@@ -13,9 +13,9 @@ Pensada para
 Cómo funciona
 • Activa la grabación continua. Una notificación permanece visible durante todo el tiempo que la app graba.
 • El audio va a un búfer circular en RAM. Cuando se llena, el audio más antiguo se sustituye por el más reciente.
-• El búfer tiene un mínimo de 5 minutos y se ajusta en pasos de 5 minutos. No hay un máximo fijo: la app calcula cuánto puede almacenar tu móvil de forma segura con el perfil de calidad elegido y muestra ese límite en Ajustes.
+• El búfer parte de 5 minutos, ajustables en pasos de 5, hasta el límite seguro de memoria de la app para la calidad elegida. No hay un tope de duración impuesto por el producto; Ajustes muestra el límite actual.
 • Guardar escribe el audio del búfer desde el último guardado (todo el búfer la primera vez) en un archivo AAC (.m4a), de modo que los archivos nunca se solapan.
-• Directo inicia una grabación que conserva el pasado del búfer y continúa hasta que la detienes. En la versión gratuita, la grabación en directo se guarda automáticamente al llegar a 2 horas. El desbloqueo Pro opcional, de pago único, elimina ese límite.
+• Directo guarda el audio del búfer anterior al toque y continúa en un único archivo .aac (ADTS), reproducible mientras se graba. El tiempo de grabación en directo está limitado a 2 horas en el plan gratuito; después, el archivo se guarda automáticamente. El archivo puede superar las 2 horas porque incluye el pasado del búfer. Pro, de pago único, elimina el límite de tiempo en directo.
 
 Funciones
 • Tres perfiles de calidad: Voz (16 kHz mono, el búfer más largo), Equilibrado (32 kHz mono) y Alta fidelidad (44,1 kHz estéreo, que puede usar más de un micrófono en los móviles que los tengan). Una mayor calidad usa más memoria por minuto, por lo que el búfer se acorta.
@@ -25,7 +25,7 @@ Funciones
 • Reproductor integrado para escuchar, desplazarte por el audio, compartir y eliminar las grabaciones guardadas.
 
 Privacidad
-• El audio grabado nunca sale del móvil. Sin cuenta, anuncios, analítica ni nube. El único uso de red es la propia biblioteca de facturación de Google Play, para la compra opcional de Pro.
+• La propia app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) se comunica con Google para procesar la compra opcional y comprobar el derecho a Pro; su biblioteca también envía sus propios diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube.
 • El audio permanece en la memoria hasta que lo guardas. Tus grabaciones nunca se suben: los archivos se guardan en la carpeta Recordings/Blackbox del móvil (Music/Blackbox en Android 10 y 11), bajo tu control.
 • De código abierto con licencia GPL-3.0, con mantenimiento activo y todo el código en GitHub.
 

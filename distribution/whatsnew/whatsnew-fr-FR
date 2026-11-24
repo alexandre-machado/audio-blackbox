@@ -1,6 +1,1 @@
-Nouveautés :
-• Pro : déblocage facultatif en achat unique pour l'enregistrement en direct illimité. Tout le reste reste gratuit
-• En version gratuite, un enregistrement en direct est sauvegardé automatiquement au bout de 2 heures
-• Installée avant cette mise à jour ? Pro vous est offert
-• Nouveau lien « Soutenir le projet » dans les Paramètres
-• L'audio enregistré ne quitte toujours pas le téléphone. L'app a désormais accès au réseau, utilisé uniquement par la facturation Google Play
+Pro : achat unique facultatif. Installations avant le 20/12/2026 03:00 UTC : Pro offert. Direct garde le passé du tampon et continue dans un .aac ADTS, lisible pendant l'enregistrement. Gratuit : sauvegarde après 2 h de direct ; le passé allonge le fichier. Pro supprime ce plafond. L'app n'envoie ni audio ni statistiques d'utilisation. Google Play Billing contacte Google pour les achats et les droits Pro, avec ses propres diagnostics.

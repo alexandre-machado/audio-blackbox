@@ -1,6 +1,1 @@
-What's new:
-• Pro: an optional one-time unlock for unlimited live recording. Everything else stays free
-• In the free version, live recordings save automatically at 2 hours
-• Installed before this update? Pro is already yours, at no cost
-• New "Support the project" link in Settings
-• Recorded audio still never leaves your phone. The app now has network access, used only by Google Play's billing library
+Pro: optional one-time unlock. Installs before 2026-12-20 03:00 UTC get Pro free. Live saves the buffered past and continues in one .aac ADTS file, playable while recording. Free: auto-save after 2 hours of live time; the buffered past makes the file longer. Pro removes that cap. The app sends no audio or usage analytics. Google Play Billing contacts Google for purchases and entitlement checks, with its own diagnostics.
