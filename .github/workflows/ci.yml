@@ -1,4 +1,6 @@
-name: CI
+name: Android CI and Play Release
+run-name: >-
+  Android · ${{ github.event_name }} · ${{ github.event.pull_request.title || github.ref_name }} · #${{ github.run_number }}.${{ github.run_attempt }} · ${{ github.event_name == 'pull_request' && 'checks' || (inputs.sync_only && 'listing sync' || (inputs.track || (startsWith(github.ref, 'refs/tags/v') && 'alpha' || 'internal'))) }}
 
 # Issue #399: this workflow used to be push[main]+pull_request[main] only, with the Play Store
 # release living in a separate, independent playstore.yml that fired on the same push[main] event
@@ -71,6 +73,7 @@ env:
 
 jobs:
   build:
+    name: Android / Build, unit tests and lint
     runs-on: self-hosted
     # Security guard: never execute external fork PRs on self-hosted runner. Issue #399: also
     # skip on a workflow_dispatch requesting sync_only (metadata-only Play Store sync) -- there is
@@ -166,7 +169,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: lint-report
+          name: lint-report-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -193,6 +196,7 @@ jobs:
   # cold boot costs -- so the cache is gone; do not reintroduce it without new evidence that a
   # restored snapshot actually boots reliably on this runner pool.
   instrumented-tests:
+    name: Android / Instrumented tests and screenshots
     runs-on: self-hosted
     # Security guard: never execute external fork PRs on self-hosted runner. Issue #399: also
     # skip on a workflow_dispatch requesting sync_only, same reasoning as the `build` job above.
@@ -382,7 +386,7 @@ jobs:
       # deterministically rather than sampling a running animation. Do not weaken this to a
       # perceptual/tolerance diff -- if a future case turns out not to be reproducible, that is a
       # STOP-and-report situation (see issue #231), not a reason to loosen the comparison quietly.
-      - name: Gate committed screenshots against this run's captures (issue #231)
+      - name: Verify and refresh committed screenshots
         if: success()
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -580,7 +584,7 @@ jobs:
               {
                 echo "### Failed to push refreshed screenshots to ${PR_HEAD_REF}"
                 echo ""
-                echo "Attempted twice (once, then once more after re-fetching) and both attempts were rejected as stale: ${PR_HEAD_REF} moved again during this run. Re-run this job, or apply this run's 'screen-captures' artifact locally and push, then re-run."
+                echo "Attempted twice (once, then once more after re-fetching) and both attempts were rejected as stale: ${PR_HEAD_REF} moved again during this run. Re-run this job, or apply this run's 'screen-captures-${GITHUB_JOB}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' artifact locally and push, then re-run."
               } >> "$GITHUB_STEP_SUMMARY"
               exit 1
             fi
@@ -604,7 +608,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: screen-captures
+          name: screen-captures-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/screen-captures/
           if-no-files-found: ignore
 
@@ -614,6 +618,7 @@ jobs:
   # (upserted, keyed by the <!-- custom-listing-diff --> marker). It never talks to Play, holds no
   # Play secrets, and nothing depends on it: not `build`, not `instrumented-tests`, not deploy.
   custom-listing-diff:
+    name: Play / Custom listing diff
     runs-on: self-hosted
     # Same fork guard as the other jobs, and pull_request only (there is no PR to comment on
     # otherwise).
@@ -666,6 +671,7 @@ jobs:
   # `build`/`instrumented-tests` exactly like a push to main -- a tag reaching this job with
   # untested code is exactly the hole this issue closes, so this is deliberate, not incidental.
   deploy-playstore:
+    name: Play / Publish bundle and sync listing
     needs: [build, instrumented-tests]
     runs-on: self-hosted
     # github.repository guard preserved from playstore.yml. Deploy only follows push (main or a
@@ -763,7 +769,7 @@ jobs:
         if: ${{ !inputs.sync_only }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: r8-mapping-${{ github.run_number }}-${{ github.sha }}
+          name: r8-mapping-${{ github.run_number }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: error
           retention-days: 90

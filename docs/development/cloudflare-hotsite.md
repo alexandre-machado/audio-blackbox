@@ -173,7 +173,8 @@ bash scripts/ops/test-cloudflare-ci-token-plan.sh
 bash scripts/ops/test-cloudflare-ci-token-plan.sh --mutations
 ```
 
-`.github/workflows/terraform.yml` runs these checks on a fresh GitHub-hosted
+`Infrastructure Validation` (`.github/workflows/terraform.yml`, check
+`Infrastructure / Validate Cloudflare token plan`) runs these checks on a fresh GitHub-hosted
 runner for pull requests and main pushes, with read-only contents permission,
 no environment or secrets, Terraform 1.17.2, and `hashicorp/setup-terraform`
 v4.0.1 pinned to `dfe3c3f87815947d99a8997f908cb6525fc44e9e`.
@@ -204,12 +205,12 @@ deploy step receives the token.
 
 ## 3. First deployment, before DNS cutover
 
-Run **Actions > Deploy GitHub Pages > Run workflow**, selecting **main**, or push
+Run **Actions > Site Build and Deploy > Run workflow**, selecting **main**, or push
 a change under `docs/**` to main. Cloudflare configuration and staging-script
 changes also trigger this workflow. Do not dispatch an older branch after cutover.
 
 The build renders Jekyll in production mode, validates SEO/analytics and Liquid,
-and uploads the `github-pages` artifact. The job graph is `build → deploy` (Pages)
+and uploads the `github-pages` artifact. The job-id graph is `build → deploy` (Pages)
 and `build → validate-cloudflare → deploy-cloudflare`. Cloudflare/npm failures
 cannot block Pages. Validation downloads the artifact, stages it, runs Worker
 tests and a credential-free dry-run. Deployment consumes the same artifact;
@@ -383,10 +384,10 @@ published, consistent with the other development docs.
 
 ## Why the Cloudflare jobs run on GitHub-hosted runners (do not move them back)
 
-`validate-cloudflare` and `deploy-cloudflare` deliberately run on `ubuntu-latest`. Every other job in this repo, including the Jekyll `build` and the GitHub Pages `deploy`, runs on the self-hosted runner. This exception was approved by the infrastructure owner on 2026-11-23 (PR #461, `@sec` SEC-1).
+`Site / Test and dry-run Cloudflare` and `Site / Deploy Cloudflare` deliberately run on `ubuntu-latest`, as does `Infrastructure / Validate Cloudflare token plan`. The Android/Play jobs, `Site / Build and validate Jekyll`, and `Site / Deploy GitHub Pages` run on the self-hosted runner. The Cloudflare runner isolation was approved by the infrastructure owner on 2026-11-23 (PR #461, `@sec` SEC-1).
 
-The self-hosted runner is persistent, and `build` runs ~90 third-party gems as the same user. A compromised gem could tamper with `~/.gitconfig` (which `actions/checkout` copies), with runner binaries, or with another job's environment before the Cloudflare token is used. A fresh GitHub-hosted VM per job removes that path. The repo is public, so hosted minutes cost nothing. The vaelo.club hotsite deploy uses the same arrangement. The artifact handed over from the self-hosted build is additionally refused if it contains anything other than regular files and directories (SEC-8).
+The self-hosted runner is persistent, and `Site / Build and validate Jekyll` runs ~90 third-party gems as the same user. A compromised gem could tamper with `~/.gitconfig` (which `actions/checkout` copies), with runner binaries, or with another job's environment before the Cloudflare token is used. A fresh GitHub-hosted VM per job removes that path. The repo is public, so hosted minutes cost nothing. The vaelo.club hotsite deploy uses the same arrangement. The artifact handed over from the self-hosted build is additionally refused if it contains anything other than regular files and directories (SEC-8).
 
 ## Only one deploy path: GitHub Actions
 
-Deploys must go only through the `deploy-cloudflare` job, which is gated by the `cloudflare-hotsite` environment and limited to `main`. **Do not connect Cloudflare Workers Builds (the Git integration) to this repository.** It would add a second deploy path outside that gate, with per-branch preview builds, and its build image cannot run this repo's Jekyll toolchain. If it is connected, disconnect it under Workers & Pages > the Worker > Settings > Builds.
+Deploys must go only through the `Site / Deploy Cloudflare` job (id `deploy-cloudflare`), which is gated by the `cloudflare-hotsite` environment and limited to `main`. **Do not connect Cloudflare Workers Builds (the Git integration) to this repository.** It would add a second deploy path outside that gate, with per-branch preview builds, and its build image cannot run this repo's Jekyll toolchain. If it is connected, disconnect it under Workers & Pages > the Worker > Settings > Builds.

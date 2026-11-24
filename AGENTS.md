@@ -164,7 +164,7 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
 
 - **Never hand-edit or hand-update the Play Store listing images or hotsite screenshots** ([#228](https://github.com/alexandre-machado/audio-blackbox/issues/228), [#231](https://github.com/alexandre-machado/audio-blackbox/issues/231)):
   - `distribution/metadata/android/{en-US,pt-BR}/images/phoneScreenshots/*.png` and `docs/assets/screenshot_*.png` are produced by `ScreenshotCaptureTest` on the CI emulator and copied onto their committed destinations by [`scripts/ci/refresh-store-captures.sh`](scripts/ci/refresh-store-captures.sh), not authored or retouched by hand.
-  - The `instrumented-tests` CI job runs that script every build, diffs the nine destinations byte-for-byte against this run's captures, and auto-commits any drift onto a pull request's own branch (failing instead on a direct push to `main`, where auto-committing has nowhere safe to land). Twice before ([#227](https://github.com/alexandre-machado/audio-blackbox/pull/227), [#228](https://github.com/alexandre-machado/audio-blackbox/issues/228)) these images silently fell out of sync with the UI they claim to show because nothing checked them; this gate is what closes that gap.
+  - The `Android / Instrumented tests and screenshots` CI job (id `instrumented-tests`) runs that script every build, diffs the nine destinations byte-for-byte against this run's captures, and auto-commits any drift onto a pull request's own branch (failing instead on a direct push to `main`, where auto-committing has nowhere safe to land). Twice before ([#227](https://github.com/alexandre-machado/audio-blackbox/pull/227), [#228](https://github.com/alexandre-machado/audio-blackbox/issues/228)) these images silently fell out of sync with the UI they claim to show because nothing checked them; this gate is what closes that gap.
 
 ---
 
@@ -193,11 +193,23 @@ signal to proceed — it means the gate has not run.**
 
 ### Every marker names the SHA it reviewed, and the CI conclusion for that SHA
 
+Use the current display/check names from `gh pr checks` in the CI conclusion, not job ids.
+For older PR markers, #471 renamed checks as follows (job ids remain unchanged):
+`build` (CI) → `Android / Build, unit tests and lint`;
+`instrumented-tests` → `Android / Instrumented tests and screenshots`;
+`custom-listing-diff` → `Play / Custom listing diff`;
+`deploy-playstore` → `Play / Publish bundle and sync listing`;
+`build` (Pages) → `Site / Build and validate Jekyll`;
+`deploy` → `Site / Deploy GitHub Pages`;
+`validate-cloudflare` → `Site / Test and dry-run Cloudflare`;
+`deploy-cloudflare` → `Site / Deploy Cloudflare`;
+`cloudflare-ci-token` → `Infrastructure / Validate Cloudflare token plan`.
+
 - **Name the SHA.** A verdict is about one commit. When a PR is updated after a review, the
   existing markers no longer cover it and the gate must run again at the new HEAD.
 - **State the CI conclusion for that same SHA, checked directly (`gh pr checks`), not assumed.**
   On [#278](https://github.com/alexandre-machado/audio-blackbox/pull/278) (2026-09-02) both
-  specialists issued PASS at a SHA whose `instrumented-tests` job was failing; neither had
+  specialists issued PASS at a SHA whose `Android / Instrumented tests and screenshots` job (then named `instrumented-tests`) was failing; neither had
   looked. That failure turned out to be environmental, but nothing in the process would have
   distinguished it from a real regression, and two PASS verdicts stood in front of it. A green
   suite is not sufficient for a PASS, but a red one forbids issuing one silently.

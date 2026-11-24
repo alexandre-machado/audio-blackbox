@@ -131,7 +131,7 @@ android {
             // vital rated the unminified build at 1% obfuscation, below its 25% per-category bar.
             // Keep rules live in proguard-rules.pro; every one names its runtime caller. The
             // mapping.txt this produces is embedded in the AAB and also uploaded explicitly by
-            // the deploy-playstore job in .github/workflows/ci.yml.
+            // the Play / Publish bundle and sync listing job (id deploy-playstore) in .github/workflows/ci.yml.
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")

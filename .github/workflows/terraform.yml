@@ -1,4 +1,6 @@
-name: Terraform validation
+name: Infrastructure Validation
+run-name: >-
+  Infrastructure · ${{ github.event_name }} · ${{ github.event.pull_request.title || github.ref_name }} · #${{ github.run_number }}.${{ github.run_attempt }}
 
 on:
   pull_request:
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   cloudflare-ci-token:
+    name: Infrastructure / Validate Cloudflare token plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -21,7 +24,11 @@ jobs:
         with:
           terraform_version: 1.17.2
           terraform_wrapper: false
-      - run: terraform fmt -check -recursive
-      - run: terraform -chdir=infra/terraform/cloudflare-ci-token init -backend=false -input=false -lockfile=readonly
-      - run: terraform -chdir=infra/terraform/cloudflare-ci-token validate
-      - run: bash scripts/ops/test-cloudflare-ci-token-plan.sh --mutations
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+      - name: Initialize Terraform without backend
+        run: terraform -chdir=infra/terraform/cloudflare-ci-token init -backend=false -input=false -lockfile=readonly
+      - name: Validate Terraform configuration
+        run: terraform -chdir=infra/terraform/cloudflare-ci-token validate
+      - name: Test token plan and mutations
+        run: bash scripts/ops/test-cloudflare-ci-token-plan.sh --mutations
