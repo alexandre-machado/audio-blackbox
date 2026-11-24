@@ -278,7 +278,7 @@ fi
 printf '%s\n' "$HEADROOM_OUTPUT"
 
 # #433: Phase 1 includes the Ogg truncation qualification. A failure above is the owner's
-# stop gate; never proceed to a different muxer or hide a failed prefix behind a repaired copy.
+# stop gate under AB-2411-44: RAW one-page reader limitations are logged, but repair must pass.
 # The first instrumentation process is deliberately killed with its production Live writer open.
 log "Starting the Opus live process-kill qualification..."
 command -v timeout >/dev/null || fail "timeout is required for the process-kill qualification."

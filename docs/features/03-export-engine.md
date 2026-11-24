@@ -13,6 +13,13 @@ Both paths drain the ring buffer in bounded 4 KB chunks via `readSince` (`#72`) 
 
 Save audio format is free, with no Pro unlock required: AAC (default) saves .m4a files with Save, or choose Opus (.ogg) for both Save and Live. AAC (.m4a): wider compatibility. Opus (.ogg): smaller voice files. Some players and messaging apps may not open them. With AAC selected: Live stays AAC (.aac), playable while recording. Wait until recording ends to play Opus audio. If the app closes unexpectedly, saved audio may be recoverable, but the ending may be lost and some players may not open the file. On reopening after an unexpected close, Opus audio already written is recovered; the incomplete final Ogg page is discarded, so the ending may be lost. Opus may be unavailable on some devices; the option is disabled with the reason shown.
 
+Known Opus reader limitation (owner decision AB-2411-44, 2026-11-24): Android's Ogg
+extractor/decoder returns empty PCM for one complete audio page followed by a torn page,
+identically with MediaMuxer and our provider. Startup recovery repairs the file before the
+gallery; every repaired cut retaining at least one audio page must decode and prepare.
+Raw one-page cuts are logged/counted as `KNOWN_READER_LIMITATION`; raw cuts retaining two
+or more audio pages must still pass qualification.
+
 ## PCM to File Conversion
 Encapsulate the raw memory bytes into a playable file format, via a pluggable `PayloadEncoder`
 (issue #32).

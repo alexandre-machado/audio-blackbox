@@ -59,6 +59,19 @@ PR #28 round 4). None of these tests use a retry wrapper, a bare `sleep` standin
 assertion, or `@FlakyTest` — they poll real, bounded state (`CaptureState`, `PauseGap` count, a
 committed `MediaStore` row) with generous timeouts instead.
 
+### Ogg prefix qualification (#433)
+
+Owner decision AB-2411-44 (2026-11-24) requires `OggPrefixQualificationTest` to pass for
+100% of repaired cuts with at least one complete audio page (non-empty PCM matching the
+reference prefix and MediaPlayer prepare), and 100% of raw cuts with at least two complete
+audio pages under the existing checks. Raw cuts with exactly one complete audio page are
+logged individually and counted as `KNOWN_READER_LIMITATION`, with only their repaired
+copies required to pass. Android's Ogg extractor/decoder returns empty PCM for one complete
+audio page plus a torn next page, identically with MediaMuxer and our provider; startup
+recovery repairs before the gallery. RAW and REPAIRED failures remain separate.
+After Phase 1 and its capture/headroom checks pass, `run-instrumented-tier.sh` proceeds to
+the external kill/restart handshake in `OpusProcessKillTest`.
+
 ### What's covered here vs. deferred to Tier 2
 
 | Candidate test (issue #34) | Where |
