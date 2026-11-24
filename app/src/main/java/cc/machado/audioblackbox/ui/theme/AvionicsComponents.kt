@@ -17,6 +17,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.text.modifiers.TextAutoSizeLayoutScope
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +39,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -301,7 +307,7 @@ fun AvionicsLabelValueRow(
  *   fire (mirrors the existing 500 ms debounce in `SaveSection`, which callers keep doing
  *   independently -- this primitive does not replace that guard).
  * - **Toggled / save-and-end state**: same primitive, different [label]/[caption] and
- *   optional save glyph. The live primary action retains [FlightOrange]; state colors belong
+ *   matching title styling. The live primary action retains [FlightOrange]; state colors belong
  *   to annunciators. This is one control whose action changes with the recording state.
  *
  * Content description: pass the *existing* accessibility strings
@@ -314,7 +320,30 @@ fun AvionicsLabelValueRow(
  * control is hand-rolled.
  */
 val PANEL_BUTTON_MIN_HEIGHT = 48.dp
-const val PANEL_BUTTON_ICON_TEST_TAG = "panel-button-icon"
+const val PANEL_ROW_STACKED_TAG = "panel-row-stacked"
+const val PANEL_ROW_SIDE_BY_SIDE_TAG = "panel-row-side-by-side"
+
+// Prefer one line at every step; if none fits, wrap at the readable minimum.
+private object PanelTitleAutoSize : TextAutoSize {
+    override fun equals(other: Any?) = other === this
+    override fun hashCode() = javaClass.hashCode()
+    override fun TextAutoSizeLayoutScope.getFontSize(
+        constraints: Constraints, text: AnnotatedString,
+    ): TextUnit {
+        for (step in 8 downTo 0) {
+            val size = (11f + step * 0.25f).sp
+            val layout = performLayout(constraints, text, size)
+            if (layout.lineCount == 1 && !layout.hasVisualOverflow) return size
+        }
+        return 11.sp
+    }
+}
+
+@Composable
+private fun panelTitleStyle() = LocalTextStyle.current.copy(
+    fontFamily = FontFamily.Monospace, fontWeight = FontWeight.ExtraBold,
+    fontSize = 13.sp, letterSpacing = 0.06.sp,
+)
 
 @Composable
 fun AvionicsPanelButton(
@@ -329,8 +358,6 @@ fun AvionicsPanelButton(
     contentDescription: String? = null,
     // Exposes the actual caption layout for bounds checks; null keeps the normal text fast path.
     onCaptionTextLayout: ((TextLayoutResult) -> Unit)? = null,
-    // Optional decorative slot; callers must apply the supplied modifier to the icon.
-    icon: (@Composable (Modifier) -> Unit)? = null,
 ) {
     // `interactable`, not `enabled`, drives every visual below: an in-progress control is not
     // `enabled = false` (the caller still wants the click wired so a second tap is absorbed rather
@@ -395,23 +422,14 @@ fun AvionicsPanelButton(
                         ),
                 )
             }
-            // Captions still wrap and determine height; titles shrink before truncating.
+            // Shrink first; at extreme font scales preserve the complete title by wrapping.
             Column(modifier = Modifier.weight(1f)) {
-                if (icon != null) {
-                    Box(Modifier.testTag(PANEL_BUTTON_ICON_TEST_TAG)) {
-                        icon(Modifier.testTag("$PANEL_BUTTON_ICON_TEST_TAG-content"))
-                    }
-                }
                 Text(
                     text = label.uppercase(),
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 13.sp,
-                    autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 13.sp, stepSize = 0.25.sp),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    letterSpacing = 0.06.sp,
+                    style = panelTitleStyle(),
+                    autoSize = PanelTitleAutoSize,
+                    softWrap = true,
+                    maxLines = Int.MAX_VALUE,
                     color = labelColor,
                 )
                 if (caption != null) {
@@ -472,19 +490,39 @@ fun PulsingDot(
  * smallest supported width (360dp, `CompactHarnessApp`) leaves only ~280dp inside the engine card
  * after its own padding, which is not enough for two labelled buttons with captions side by side
  * without truncating the caption issue #335 needs to keep visible (buffer duration / disable
- * reason). Stacking there costs vertical space, never legibility.
+ * reason). At wider widths both titles must also fit at 11sp in their half-width
+ * content areas, measured with the same style and density as the buttons.
  */
 val PANEL_ROW_STACK_BELOW = 400.dp
 
 @Composable
 fun AvionicsPanelButtonRow(
+    saveLabel: String,
+    liveLabel: String,
+    saveInProgress: Boolean = false,
     modifier: Modifier = Modifier,
     save: @Composable () -> Unit,
     live: @Composable () -> Unit,
 ) {
+    val measurer = rememberTextMeasurer()
+    val style = panelTitleStyle().copy(fontSize = 11.sp)
+    val density = LocalDensity.current
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        if (maxWidth < PANEL_ROW_STACK_BELOW) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Each half loses 28dp padding, 9dp LED (14dp spinner) and 10dp gap.
+        val halfWidth = (constraints.maxWidth - with(density) { 8.dp.roundToPx() }) / 2
+        val titlesFit = listOf(saveLabel to saveInProgress, liveLabel to false).all { (label, progress) ->
+            val chromeWidth = with(density) { (28.dp + 10.dp + if (progress) 14.dp else 9.dp).roundToPx() }
+            val contentWidth = (halfWidth - chromeWidth).coerceAtLeast(0)
+            !measurer.measure(
+                label.uppercase(), style = style, softWrap = false,
+                constraints = Constraints(maxWidth = contentWidth),
+            ).hasVisualOverflow
+        }
+        if (maxWidth < PANEL_ROW_STACK_BELOW || !titlesFit) {
+            Column(
+                modifier = Modifier.testTag(PANEL_ROW_STACKED_TAG),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 save()
                 live()
             }
@@ -493,7 +531,7 @@ fun AvionicsPanelButtonRow(
             // propagateMinConstraints stretches the other to match, so a wrapped caption on
             // one side never leaves the pair visibly uneven.
             Row(
-                modifier = Modifier.height(IntrinsicSize.Min),
+                modifier = Modifier.testTag(PANEL_ROW_SIDE_BY_SIDE_TAG).height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { save() }

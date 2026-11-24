@@ -831,6 +831,7 @@ internal fun ActionPanelRow(
     }
 
     AvionicsPanelButtonRow(
+        saveLabel = saveLabel, liveLabel = liveLabel, saveInProgress = isExporting,
         save = {
             AvionicsPanelButton(
                 label = saveLabel,

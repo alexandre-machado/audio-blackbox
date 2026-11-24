@@ -14,9 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextLayoutResult
@@ -29,7 +27,13 @@ import cc.machado.audioblackbox.R
 import cc.machado.audioblackbox.ui.dashboard.*
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsPanelButton
-import cc.machado.audioblackbox.ui.theme.PANEL_BUTTON_ICON_TEST_TAG
+import cc.machado.audioblackbox.ui.theme.PANEL_ROW_STACKED_TAG
+import cc.machado.audioblackbox.ui.theme.PANEL_ROW_SIDE_BY_SIDE_TAG
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import kotlin.math.abs
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -41,25 +45,45 @@ import org.junit.Test
 class LiveButtonTitleLayoutTest {
     @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
-    /** Oracle controls use the real Surface > Row > Column button and the same absence
-     * assertions as the dashboard test. Restoring a decorative icon must fail independently
-     * of title wrapping. No reflection into Compose's private layout tree is needed.
+    /** Oracle: the original untagged, null-description Icon above the title changes both
+     * height and title offset. Each assertion must reject it independently (Tier 1 CI).
      */
-    @Test fun realButtonWithDecorativeIconFailsBothAbsenceChecks() {
+    @Test fun originalIconStructureFailsGeometryChecks() {
         composeRule.setContent {
             AudioBlackboxTheme {
-                AvionicsPanelButton(
-                    label = "Live", onClick = {}, modifier = Modifier.testTag("icon-control"),
-                    icon = { modifier ->
-                        Icon(painterResource(R.drawable.ic_pause), contentDescription = null,
-                            modifier = modifier)
-                    },
-                )
+                Column(Modifier.width(360.dp)) {
+                    AvionicsPanelButton(label = "LIVE", caption = "00:42", onClick = {},
+                        modifier = Modifier.testTag("baseline"))
+                    LegacyControl("original-icon")
+                }
             }
         }
-        assertThrows(AssertionError::class.java) { assertNoIconSlot("icon-control") }
-        val painterFailure = assertThrows(AssertionError::class.java) { assertNoPainter("icon-control") }
-        assertEquals("icon-control: must not draw an icon", painterFailure.message)
+        val heightFailure = assertThrows(AssertionError::class.java) {
+            assertEqualHeights("baseline", "original-icon")
+        }
+        assertTrue(heightFailure.message.orEmpty().contains("button heights"))
+        val offsetFailure = assertThrows(AssertionError::class.java) {
+            assertEqualTitleOffsets("baseline", "LIVE", "original-icon", "LIVE")
+        }
+        assertTrue(offsetFailure.message.orEmpty().contains("title top offsets"))
+    }
+
+    @Composable
+    private fun LegacyControl(tag: String) {
+        Surface(onClick = {}, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag)) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Icon(painterResource(R.drawable.ic_pause), contentDescription = null)
+                    Text("LIVE", fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, letterSpacing = 0.06.sp)
+                    Text("00:42", fontFamily = FontFamily.Monospace, fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 1.dp))
+                }
+            }
+        }
     }
 
     /** Oracle: the one-line assertion rejects a real wrapping Text with auto-size disabled.
@@ -82,14 +106,13 @@ class LiveButtonTitleLayoutTest {
 
     private data class Scenario(
         val locale: String = "en", val recording: Boolean = false,
-        val width: Int = 280, val fontScale: Float = 1f,
+        val width: Int = 360, val fontScale: Float = 1f,
     )
 
-    /** Independent oracles: no icon slot/painter, and BOTH titles have exactly one line.
-     * Widths are the row's available widths, not the outer window: card/gutter padding would
-     * otherwise keep a 412dp window below the 400dp breakpoint and vacuously test stacking.
-     * 280dp is the existing 360dp compact-window content width. 412/480dp exercise two-up.
-     * These controls and the matrix execute in Tier 1 CI; compilation is not execution.
+    /** Oracle: both complete titles remain one line in the normal matrix. Geometry rejects
+     * extra content above either title, independently of decorative-icon semantics.
+     * Widths are row content widths so 412/480 exercise the actual two-column branch.
+     * Tier 1 CI executes these assertions; host compilation is not execution.
      */
     @Test fun liveTitleMatchesSaveInBothStatesAndAllLocales() {
         val scenario = mutableStateOf(Scenario())
@@ -122,37 +145,59 @@ class LiveButtonTitleLayoutTest {
                 }
             }
         }
-        for (width in listOf(280, 412, 480)) {
-            for (scale in listOf(1f, 1.3f)) {
+        for (width in listOf(360, 412, 480)) {
+            for (scale in (if (width == 360) listOf(1f, 1.3f, 2f) else listOf(1f, 1.3f))) {
                 for (tag in listOf("en", "pt-BR", "de", "es", "fr", "it")) {
                     for (recording in listOf(false, true)) {
                         composeRule.runOnIdle { scenario.value = Scenario(tag, recording, width, scale) }
                         val case = "$tag recording=$recording width=$width scale=$scale"
                         val liveTag = if (recording) FORWARD_STOP_BUTTON_TEST_TAG else FORWARD_START_BUTTON_TEST_TAG
-                        assertNoIconSlot(liveTag)
-                        assertNoPainter(liveTag)
                         val saveBounds = composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG).getUnclippedBoundsInRoot()
                         val liveBounds = composeRule.onNodeWithTag(liveTag).getUnclippedBoundsInRoot()
-                        if (width >= 400) {
-                            assertEquals("$case: side-by-side tops", saveBounds.top, liveBounds.top)
-                            assertTrue("$case: side-by-side columns", liveBounds.left >= saveBounds.right)
-                        } else {
-                            assertTrue("$case: stacked rows", liveBounds.top >= saveBounds.bottom)
-                        }
                         val config = Configuration(composeRule.activity.resources.configuration).apply {
                             setLocale(Locale.forLanguageTag(tag))
                         }
                         val resources = composeRule.activity.createConfigurationContext(config).resources
                         val saveTitle = resources.getString(R.string.dashboard_panel_save_label).uppercase()
                         val liveTitle = resources.getString(forwardActionResources(recording).label).uppercase()
-                        for ((buttonTag, title) in listOf(SAVE_BUTTON_TEST_TAG to saveTitle, liveTag to liveTitle)) {
-                            val layout = titleLayout(buttonTag, title)
-                            assertSingleLine("$case: $buttonTag", layout.lineCount)
+                        // Re-measure each actual rendered title at 11sp using its resolved
+                        // font and density, independently of the row's layout tag.
+                        val layouts = listOf(SAVE_BUTTON_TEST_TAG to saveTitle, liveTag to liveTitle)
+                            .map { (buttonTag, title) -> buttonTag to titleLayout(buttonTag, title) }
+                        val density = layouts.first().second.layoutInput.density
+                        val halfContent = with(density) { ((width.dp - 8.dp) / 2 - 47.dp).roundToPx() }
+                        val fits = layouts.all { (_, layout) ->
+                            val input = layout.layoutInput
+                            val paragraph = androidx.compose.ui.text.ParagraphIntrinsics(
+                                text = input.text.text,
+                                style = input.style.copy(fontSize = 11.sp),
+                                density = input.density,
+                                fontFamilyResolver = input.fontFamilyResolver,
+                            )
+                            kotlin.math.ceil(paragraph.maxIntrinsicWidth).toInt() <= halfContent
+                        }
+                        val stacked = width < 400 || !fits
+                        composeRule.onNodeWithTag(if (stacked) PANEL_ROW_STACKED_TAG else PANEL_ROW_SIDE_BY_SIDE_TAG)
+                            .assertExists()
+                        composeRule.onNodeWithTag(if (stacked) PANEL_ROW_SIDE_BY_SIDE_TAG else PANEL_ROW_STACKED_TAG)
+                            .assertDoesNotExist()
+                        if (stacked) assertTrue("$case: stacked rows", liveBounds.top >= saveBounds.bottom)
+                        else {
+                            assertEquals("$case: side-by-side tops", saveBounds.top, liveBounds.top)
+                            assertTrue("$case: side-by-side columns", liveBounds.left >= saveBounds.right)
+                        }
+                        android.util.Log.i("LiveTitleMatrix", "$case stacked=$stacked")
+                        for ((buttonTag, layout) in layouts) {
+                            assertFalse("$case $buttonTag: no visual overflow", layout.hasVisualOverflow)
+                            assertEquals("$case $buttonTag: complete title", layout.layoutInput.text.length,
+                                layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+                            if (scale < 2f) assertSingleLine("$case: $buttonTag", layout.lineCount)
                             val size = layout.layoutInput.style.fontSize.value
                             assertTrue("$case: title size $size stays within 11–13sp", size in 11f..13f)
-                            if (layout.isLineEllipsized(0)) {
-                                assertEquals("$case: shrink to minimum before ellipsis", 11f, size, 0.01f)
-                            }
+                        }
+                        if (layouts.all { it.second.lineCount == 1 }) {
+                            assertEqualHeights(SAVE_BUTTON_TEST_TAG, liveTag)
+                            assertEqualTitleOffsets(SAVE_BUTTON_TEST_TAG, saveTitle, liveTag, liveTitle)
                         }
                     }
                 }
@@ -174,28 +219,21 @@ class LiveButtonTitleLayoutTest {
         assertEquals("$case: title must occupy exactly one line", 1, lines)
     }
 
-    private fun assertNoIconSlot(buttonTag: String) {
-        composeRule.onAllNodes(
-            hasAnyAncestor(hasTestTag(buttonTag)) and hasTestTag(PANEL_BUTTON_ICON_TEST_TAG),
-            useUnmergedTree = true,
-        ).assertCountEquals(0)
-        composeRule.onAllNodes(
-            hasAnyAncestor(hasTestTag(buttonTag)) and
-                SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Image),
-            useUnmergedTree = true,
-        ).assertCountEquals(0)
+    private fun assertEqualHeights(saveTag: String, liveTag: String) {
+        val save = composeRule.onNodeWithTag(saveTag).getUnclippedBoundsInRoot()
+        val live = composeRule.onNodeWithTag(liveTag).getUnclippedBoundsInRoot()
+        assertTrue("$liveTag: button heights must match within 1dp",
+            abs((save.bottom - save.top).value - (live.bottom - live.top).value) <= 1f)
     }
 
-    // Secondary painter check uses public modifier inspection on semantics-bearing nodes.
-    // The slot supplies a tag even for null-description icons. The primary slot check above
-    // also catches callers that forget to apply that modifier. No private child traversal.
-    private fun assertNoPainter(buttonTag: String) {
-        val nodes = composeRule.onAllNodes(hasAnyAncestor(hasTestTag(buttonTag)),
-            useUnmergedTree = true).fetchSemanticsNodes()
-        composeRule.runOnIdle {
-            assertFalse("$buttonTag: must not draw an icon", nodes.any { node ->
-                node.layoutInfo.getModifierInfo().any { it.modifier.javaClass.simpleName.contains("Painter") }
-            })
+    private fun assertEqualTitleOffsets(saveTag: String, saveTitle: String, liveTag: String, liveTitle: String) {
+        fun offset(tag: String, title: String): Float {
+            val button = composeRule.onNodeWithTag(tag).getUnclippedBoundsInRoot()
+            val text = composeRule.onNode(hasText(title) and hasAnyAncestor(hasTestTag(tag)),
+                useUnmergedTree = true).getUnclippedBoundsInRoot()
+            return (text.top - button.top).value
         }
+        assertTrue("$liveTag: title top offsets must match within 1dp",
+            abs(offset(saveTag, saveTitle) - offset(liveTag, liveTitle)) <= 1f)
     }
 }

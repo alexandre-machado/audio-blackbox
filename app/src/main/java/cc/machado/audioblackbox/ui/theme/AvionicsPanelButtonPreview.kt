@@ -198,6 +198,7 @@ private fun PanelPairDemo(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AvionicsCardHeaderBar(label = "ACTION PANEL // BUFFER + LIVE")
                 AvionicsPanelButtonRow(
+                    saveLabel = saveLabel, liveLabel = liveLabel, saveInProgress = saveInProgress,
                     save = {
                         AvionicsPanelButton(
                             label = saveLabel.uppercase(),
@@ -235,6 +236,8 @@ private fun PanelPairDemo(
 private fun PreviewLiveTwoUpRow() {
     AudioBlackboxTheme {
         AvionicsPanelButtonRow(
+            saveLabel = stringResource(R.string.dashboard_panel_save_label),
+            liveLabel = stringResource(R.string.dashboard_panel_live_stop_label),
             save = {
                 AvionicsPanelButton(
                     label = stringResource(R.string.dashboard_panel_save_label),
