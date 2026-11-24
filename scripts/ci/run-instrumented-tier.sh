@@ -55,6 +55,68 @@ FAKE_CALLER_NUMBER="5551234567"
 
 command -v adb >/dev/null 2>&1 || fail "adb not found on PATH."
 
+# Exact argv pairs, not substring/regex matches: a similarly named AVD or port is not ours.
+is_job_qemu() {
+  local proc="$1" i avd=false port=false
+  local -a args=()
+  [[ -r "$proc/cmdline" ]] || return 1
+  mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || return 1
+  [[ ${#args[@]} -gt 0 ]] || return 1
+  [[ "${args[0]##*/}" == qemu-system-* ]] || return 1
+  for ((i=1; i<${#args[@]}-1; i++)); do
+    [[ "${args[i]}" == -avd && "${args[i+1]}" == "$AVD_NAME" ]] && avd=true
+    [[ "${args[i]}" == -port && "${args[i+1]}" == "$EMULATOR_PORT" ]] && port=true
+  done
+  [[ "$avd" == true && "$port" == true ]]
+}
+
+wait_for_emulator_exit() {
+  local deadline=$((SECONDS + 10)) devices
+  while ((SECONDS < deadline)); do
+    # Count offline serials too; a failed adb query is not proof of disappearance.
+    if devices=$(timeout -k 1 2 adb devices 2>/dev/null); then
+      if ! awk -v serial="$ANDROID_SERIAL" '$1 == serial { found=1 } END { exit !found }' <<< "$devices"; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+shutdown_ci_emulator() {
+  local status=$? proc pid
+  local -a matches=()
+  trap - EXIT
+  set +e
+  timeout -k 2 15 adb -s "$ANDROID_SERIAL" emu kill
+  if ! wait_for_emulator_exit; then
+    printf '::warning::%s did not disappear; attempting bounded, AVD-and-port-scoped qemu fallback.\n' "$ANDROID_SERIAL" >&2
+    for proc in /proc/[0-9]*; do
+      is_job_qemu "$proc" && matches+=("$proc")
+    done
+    if [[ ${#matches[@]} -eq 1 ]] && is_job_qemu "${matches[0]}"; then
+      proc="${matches[0]}"
+      pid="${proc##*/}"
+      # SIGKILL avoids another unbounded graceful-shutdown wait after the console failed.
+      kill -KILL "$pid" || printf '::warning::Could not kill CI qemu PID %s.\n' "$pid" >&2
+      wait_for_emulator_exit || printf '::warning::%s still listed after qemu fallback.\n' "$ANDROID_SERIAL" >&2
+    else
+      printf '::warning::Found %s matching qemu processes (or identity changed); killing none.\n' "${#matches[@]}" >&2
+    fi
+  fi
+  exit "$status"
+}
+
+# Register before any test/build failure can exit. Local callers retain their running AVD.
+# The action supplies EMULATOR_PORT and ANDROID_SERIAL from its emulator-port input.
+if [[ "${CI_EMULATOR_SHUTDOWN:-}" == true ]]; then
+  [[ "${EMULATOR_PORT:-}" == 5600 && "${ANDROID_SERIAL:-}" == emulator-5600 && -n "${AVD_NAME:-}" ]] ||
+    fail "CI cleanup requires the dedicated emulator-5600 and an explicit AVD_NAME."
+  command -v timeout >/dev/null || fail "timeout is required for bounded CI shutdown."
+  trap shutdown_ci_emulator EXIT
+fi
+
 # --- Resolve exactly one emulator serial --------------------------------
 # Deliberately only matches "emulator-*" serials: this script must never drive a physically
 # attached device (the repo owner's S25 may be connected while this runs elsewhere) even if one
@@ -68,14 +130,14 @@ fi
 # refusing to run (which is what happened when a manually started emulator-5556 collided with
 # CI's emulator-5554 and failed the tier before a single test ran), pick *our own* AVD out of the
 # list. Only fall back to "there must be exactly one" when there is nothing to match against.
-if [[ "${#EMULATOR_SERIALS[@]}" -gt 1 ]]; then
-  if [[ -n "${ANDROID_SERIAL:-}" ]]; then
-    # An explicit override always wins, and must actually be present.
-    if ! printf '%s\n' "${EMULATOR_SERIALS[@]}" | grep -qx "$ANDROID_SERIAL"; then
-      fail "ANDROID_SERIAL=$ANDROID_SERIAL is not among the booted emulators (${EMULATOR_SERIALS[*]})."
-    fi
-    SERIAL="$ANDROID_SERIAL"
-  elif [[ -n "${AVD_NAME:-}" ]]; then
+if [[ -n "${ANDROID_SERIAL:-}" ]]; then
+  # An explicit override always wins, even when the only listed emulator is someone else's.
+  if ! printf '%s\n' "${EMULATOR_SERIALS[@]}" | grep -Fxq -- "$ANDROID_SERIAL"; then
+    fail "ANDROID_SERIAL=$ANDROID_SERIAL is not among the booted emulators (${EMULATOR_SERIALS[*]})."
+  fi
+  SERIAL="$ANDROID_SERIAL"
+elif [[ "${#EMULATOR_SERIALS[@]}" -gt 1 ]]; then
+  if [[ -n "${AVD_NAME:-}" ]]; then
     # Ask each emulator which AVD it is running and keep the one this workflow created.
     SERIAL=""
     for candidate in "${EMULATOR_SERIALS[@]}"; do

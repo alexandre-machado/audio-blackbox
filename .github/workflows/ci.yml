@@ -296,9 +296,39 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # Shared WSL network: 5554/5555 belong to another project (#462).
+      # Refuse an occupied dedicated pair; never evict its owner.
+      - name: Check dedicated emulator ports
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! listeners=$(ss -H -ltn); then
+            echo "::error::Cannot inspect CI emulator ports; refusing to start."
+            exit 1
+          fi
+          for port in 5600 5601; do
+            if awk -v port="$port" '$4 ~ (":" port "$") { found=1 } END { exit !found }' <<< "$listeners"; then
+              echo "::error::CI emulator port $port is occupied; refusing to start or kill its owner."
+              exit 1
+            fi
+            # Probe shared WSL localhost too: another distro's listener may not appear in ss.
+            for host in 127.0.0.1 ::1; do
+              status=0
+              timeout -k 1 2 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$host" "$port" 2>/dev/null || status=$?
+              if [[ "$status" != 1 ]]; then
+                echo "::error::CI emulator port $port is occupied or could not be checked (probe status $status); refusing to start."
+                exit 1
+              fi
+            done
+          done
+
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          ANDROID_SERIAL: emulator-5600
+          CI_EMULATOR_SHUTDOWN: "true"
         with:
+          emulator-port: 5600
           api-level: ${{ env.API_LEVEL }}
           target: ${{ env.TARGET }}
           arch: ${{ env.ARCH }}
