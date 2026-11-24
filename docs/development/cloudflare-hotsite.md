@@ -84,12 +84,15 @@ The pinned latest stable provider checked on 2026-11-24 is **5.29.0**. Schemas:
 and [`cloudflare_zone`](https://registry.terraform.io/providers/cloudflare/cloudflare/5.29.0/docs/data-sources/zone).
 The `_list` data source accepts optional `account_id`, `name`, `scope`, and
 `max_items` (default 1000). Its `result` list contains `id`, `name`, `scopes`,
-`is_selectable`, and `category` (checked against the
+`category` and, per the schema, `is_selectable` (checked against the
 [v5.29.0 registry source](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.29.0/docs/data-sources/account_api_token_permission_groups_list.md)).
 Pass raw names: the SDK URL-encodes them despite
 the registry example showing encoded names. Terraform selects exactly one
-exact-name, matching-scope group with `is_selectable = true` and a non-empty ID;
-null attributes fail closed. The non-list data source cannot decode the API's
+exact-name, matching-scope group with a non-empty ID that is not explicitly
+unselectable: `is_selectable = false` is rejected, but a missing or null
+`is_selectable` is accepted, because the real API response on record (#7212 debug
+log) omits the field. A missing name, scope or ID still fails closed, and if a group
+is not grantable, Cloudflare itself refuses to create the token. The non-list data source cannot decode the API's
 array response in 5.29.0 ([#7212](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7212)).
 The zone data source remains: its list-then-detail decoding is covered by the
 mock plan test. The provider uses `CLOUDFLARE_API_TOKEN` automatically.
