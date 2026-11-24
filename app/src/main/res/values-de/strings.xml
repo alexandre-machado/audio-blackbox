@@ -246,7 +246,6 @@
     <string name="settings_privacy_title">Datenschutz &amp; lokale Verarbeitung</string>
     <string name="settings_privacy_explanation">Audio Blackbox speichert Aufnahmen auf deinem Gerät und sendet selbst weder Audio noch Nutzungsanalysen. Gepuffertes Audio bleibt bis zum Speichern oder Start von Live im RAM; Live schreibt in eine lokale Datei. Keine Werbung, kein Konto, kein Cloud-Speicher. Google Play Billing (Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln, die Berechtigung zu prüfen und eigene Diagnosedaten zu senden.</string>
     <string name="settings_retention_title">Aufbewahrungsfenster des Puffers</string>
-    <string name="settings_retention_explanation">Wie viel Audio der Puffer im Gerätespeicher behält. Ein größerer Wert braucht mehr Speicher. Änderungen werden kurz nach dem letzten Anpassen automatisch übernommen.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d Minuten, etwa %2$d Megabyte, derzeit aktiv</string>
@@ -288,9 +287,10 @@
     <string name="settings_consumption_io_value">0 KB/s (nur RAM)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Aufbewahrungsfenster verkleinert</string>
+    <string name="settings_retention_clamp_notice_title">Vorübergehende Speichergrenze</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Dein Aufbewahrungsfenster wurde von %1$d auf %2$d Minuten verkleinert, weil es auf diesem Gerät nicht mehr passt.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Gespeichert sind %1$d Min.; aktuell eingestellt sind %2$d Min. Die gespeicherte Wahl wird beim nächsten App-Start anhand des verfügbaren Speichers geprüft.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Bis zu %1$d Min. bei dieser Qualität — begrenzt durch den von Android zugeteilten App-Speicher, nicht den gesamten RAM.</string>
     <string name="settings_retention_clamp_notice_dismiss">Verstanden</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -381,4 +381,5 @@
     <string name="gallery_newly_saved">Aufnahme gespeichert</string>
     <string name="dashboard_panel_save_caption_live">Live speichern</string>
     <string name="dashboard_save_button_cd_live">Speichern ist während der Live-Aufnahme nicht nötig: Die Live-Datei wird während der Aufnahme gespeichert</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Änderung ausstehend — aktiver Puffer: %1$d Min.</string>
 </resources>

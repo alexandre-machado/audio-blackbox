@@ -51,10 +51,8 @@ import kotlinx.coroutines.launch
  * that ends up committed, with no separate "torn state" handling required.
  *
  * If the engine refuses the resulting resize (issue #272), the previous, still-running setting stays
- * in force: [_resizeError] surfaces the real numbers, and the pending value is reset back to the
- * committed one so the stepper's displayed value matches what is actually running. With no Apply
- * button left, that reversion plus [_resizeError] is the *only* feedback channel a refused change
- * has -- see [commitPending].
+ * in force: [_resizeError] surfaces the real numbers, while the requested preset and minutes
+ * remain visibly pending. A refusal is not retried on navigation; only a new edit attempts again.
  *
  * ## Navigating away inside the debounce window (`@rev` finding on PR #304)
  * [onCleared] flushes any still-dirty pending edit immediately, on [commitFlushScope] -- a
@@ -77,13 +75,15 @@ class SettingsViewModel(
     // Issue #299: the single injectable seam behind commitPending's actual switch attempt --
     // defaults to the real RecorderService.switchSettings (issue #272's refusal-aware
     // dynamic-switch entry point) in production, and is what a test substitutes a deterministic
-    // fake for to drive the refusal-reverts-the-displayed-value path without needing to force a
+    // fake for to drive the refusal-keeps-the-pending-value path without needing to force a
     // real JVM heap over its actual ceiling.
     private val onSwitchSettings: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.switchSettings(m, p) },
-    private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = { m, p -> RecorderService.rebuildEngineIfIdle(m, p) },
-    private val onSwitchQualityPreset: (QualityPreset) -> Unit = { RecorderService.switchQualityPreset(it) },
+    // Idle apply seam retained for regression coverage. Production uses the same service switch;
+    // it updates activeConfig even without a ring buffer, so no subsequent rebuild is needed.
+    private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = onSwitchSettings,
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
     private val usedMemoryBytesProvider: () -> Long = { Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() },
+    private val currentBufferAllocationBytesProvider: () -> Long = RecorderService::currentBufferAllocationBytes,
     // Issue #298: DeviceMemoryBudget.maxRetentionMinutes's second, independent limit --
     // ActivityManager.MemoryInfo.availMem in production (wired by MainActivity, the same pattern as
     // batteryStatusProvider below), null by default so a JVM test that doesn't care about this term
@@ -96,6 +96,12 @@ class SettingsViewModel(
 
     private val _pendingMinutes = MutableStateFlow<Int?>(null)
     private val _pendingPreset = MutableStateFlow<QualityPreset?>(null)
+    private var pendingWasRefused = false
+
+    // Suppress the limit notice across the engine -> DataStore handoff. Keep the target until
+    // the UI combine itself has observed both sides, not merely until the write returns: its
+    // storedMinutes input can still be queued then. A real later clamp remains visible.
+    private val _retentionApplyTarget = MutableStateFlow<Int?>(null)
 
     // Non-null exactly while there is an unacknowledged "your settings change could not be
     // applied" refusal (issue #272) -- a real, user-visible signal for a resize the engine
@@ -121,9 +127,13 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(capacityMinutesFlow, qualityPresetFlow, ::Pair),
         combine(_pendingMinutes, _pendingPreset, ::Pair),
-        retentionWindowPreferences.clampNoticeFlow,
+        combine(retentionWindowPreferences.clampNoticeFlow, retentionWindowPreferences.storedMinutesFlow, ::Pair),
         _resizeError,
-    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), clampNotice, resizeError ->
+        _retentionApplyTarget,
+    ) { (committedMins, committedPreset), (pendingMins, pendingPreset), (clampNotice, storedMinutes), resizeError, applyTarget ->
+        if (applyTarget != null && storedMinutes == applyTarget && committedMins == capacityMinutesFlow.value) {
+            _retentionApplyTarget.compareAndSet(applyTarget, null)
+        }
         val effectivePendingMins = pendingMins ?: committedMins
         val effectivePendingPreset = pendingPreset ?: committedPreset
         mapUiState(
@@ -132,12 +142,16 @@ class SettingsViewModel(
             committedPreset = committedPreset,
             pendingPreset = effectivePendingPreset,
             clampNotice = clampNotice,
+            storedMinutes = storedMinutes,
             resizeError = resizeError,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
+            currentBufferAllocationBytes = currentBufferAllocationBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
             batteryStatus = batteryStatusProvider(),
-        )
+        ).let { state ->
+            if (applyTarget != null) state.copy(retentionLimit = null) else state
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -158,20 +172,19 @@ class SettingsViewModel(
             resizeError = _resizeError.value,
             maxMemoryBytes = maxMemoryBytesProvider(),
             usedMemoryBytes = usedMemoryBytesProvider(),
+            currentBufferAllocationBytes = currentBufferAllocationBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
             batteryStatus = batteryStatusProvider(),
         ),
     )
 
     private fun maxRetentionForPreset(preset: QualityPreset): Int {
-        val committedMinutes = capacityMinutesFlow.value
-        val committedPreset = qualityPresetFlow.value
-        val currentBufferBytes = committedPreset.config(bufferDurationMinutes = committedMinutes).totalBufferBytes
-        val nonBufferUsedBytes = (usedMemoryBytesProvider() - currentBufferBytes).coerceAtLeast(0L)
-        return DeviceMemoryBudget.maxRetentionMinutes(
-            config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-            maxHeapBytes = maxMemoryBytesProvider(),
-            usedHeapBytes = nonBufferUsedBytes,
+        return DeviceMemoryBudget.currentMaxRetentionMinutes(
+            preset = preset,
+            memoryBudget = cc.machado.audioblackbox.audio.MemoryBudget {
+                cc.machado.audioblackbox.audio.MemorySample(maxMemoryBytesProvider(), usedMemoryBytesProvider())
+            },
+            currentBufferAllocationBytes = currentBufferAllocationBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
         )
     }
@@ -247,7 +260,7 @@ class SettingsViewModel(
         commitJob?.cancel()
         val minutes = currentPendingMinutes()
         val preset = currentPendingPreset()
-        if (minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value) {
+        if (!pendingWasRefused && (minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value)) {
             commitFlushScope.launch { commitPending(afterClear = true) }
         }
     }
@@ -259,6 +272,7 @@ class SettingsViewModel(
      * fire, which is exactly what makes a preset tap followed by a run of stepper taps collapse
      * into the single [commitPending] call at the bottom of the burst, not one per tap. */
     private fun scheduleDebouncedCommit() {
+        pendingWasRefused = false
         commitJob?.cancel()
         commitJob = viewModelScope.launch {
             delay(DEBOUNCE_MILLIS)
@@ -280,9 +294,8 @@ class SettingsViewModel(
      * StateFlows [RecorderService.switchSettings] updates on success -- if the live buffer's resize
      * actually applied. Persisting unconditionally would leave the stored preference and the
      * engine's actual capacity out of sync whenever a resize was refused, and would silently hide
-     * the refusal from the user on top of that. On a refusal, [resetPending] reverts the displayed
-     * (pending) value back to the still-active committed one -- with no Apply button, this revert
-     * plus [_resizeError] is the *only* signal the user gets that their tap did not take effect. */
+     * the refusal from the user on top of that. On refusal, both requested values remain pending,
+     * alongside [_resizeError] and the still-active committed duration. */
     private suspend fun commitPending(afterClear: Boolean = false) {
         val minutes = currentPendingMinutes()
         val preset = currentPendingPreset()
@@ -292,14 +305,26 @@ class SettingsViewModel(
             return
         }
         _resizeError.value = null
-        val applied = onSwitchSettings(minutes, preset)
-        if (applied) {
-            retentionWindowPreferences.setBufferDurationMinutes(minutes)
-            retentionWindowPreferences.setQualityPreset(preset)
+        _retentionApplyTarget.value = minutes
+        // Exactly one application attempt. An idle rebuild's refusal is just as binding as
+        // a live resize's; never persist first or independently resample after applying.
+        val applied = if (captureState.value is CaptureState.Idle) {
             onRebuildEngine(minutes, preset)
-            onSwitchQualityPreset(preset)
+        } else {
+            onSwitchSettings(minutes, preset)
+        }
+        if (applied) {
+            try {
+                retentionWindowPreferences.setSettings(minutes, preset)
+            } catch (failure: Exception) {
+                // A failed/cancelled write is a real divergence, not a successful handoff.
+                _retentionApplyTarget.value = null
+                throw failure
+            }
             resetPending()
         } else {
+            _retentionApplyTarget.value = null
+            pendingWasRefused = true
             val refusal = RecorderService.resizeRefusalFlow.value
             RecorderService.acknowledgeResizeRefusal()
             val info = describeRefusal(refusal, minutes)
@@ -316,10 +341,7 @@ class SettingsViewModel(
                 // ends of the same unenforced main-thread invariant -- see that function's doc.
                 stashPersistedResizeError(info)
             }
-            // Revert the displayed value to what is actually running (issue #299 requirement:
-            // with no Apply button, this is the only way the stepper does not keep showing a
-            // value that never took).
-            resetPending()
+            // Keep both requested values pending. The committed value remains unchanged.
         }
     }
 
@@ -478,16 +500,18 @@ class SettingsViewModel(
             maxMemoryBytes: Long = Runtime.getRuntime().maxMemory(),
             usedMemoryBytes: Long = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
             availableSystemBytes: Long? = null,
+            currentBufferAllocationBytes: Long = 0L,
+            storedMinutes: Int = committedMinutes,
             batteryStatus: cc.machado.audioblackbox.telemetry.BatteryStatus = cc.machado.audioblackbox.telemetry.BatteryStatus(),
         ): SettingsUiState {
-            val currentBufferBytes = committedPreset.config(bufferDurationMinutes = committedMinutes).totalBufferBytes
-            val nonBufferUsedBytes = (usedMemoryBytes - currentBufferBytes).coerceAtLeast(0L)
 
             val presetOptions = QualityPreset.entries.map { preset ->
-                val maxRetention = DeviceMemoryBudget.maxRetentionMinutes(
-                    config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-                    maxHeapBytes = maxMemoryBytes,
-                    usedHeapBytes = nonBufferUsedBytes,
+                val maxRetention = DeviceMemoryBudget.currentMaxRetentionMinutes(
+                    preset = preset,
+                    memoryBudget = cc.machado.audioblackbox.audio.MemoryBudget {
+                        cc.machado.audioblackbox.audio.MemorySample(maxMemoryBytes, usedMemoryBytes)
+                    },
+                    currentBufferAllocationBytes = currentBufferAllocationBytes,
                     availableSystemBytes = availableSystemBytes,
                 )
                 QualityPresetOption(
@@ -501,17 +525,15 @@ class SettingsViewModel(
             // firstOrNull{} here can only ever be null if pendingPreset itself is somehow not a
             // real QualityPreset entry -- which the type system already rules out.
             val currentPresetMax = presetOptions.first { it.preset == pendingPreset }.maxRetentionMinutes
-            val clampedPendingMinutes = pendingMinutes.coerceAtMost(currentPresetMax)
-
             val stepper = RetentionStepperUiState(
-                pendingMinutes = clampedPendingMinutes,
+                pendingMinutes = pendingMinutes,
                 committedMinutes = committedMinutes,
                 approxPendingRamMb = (
-                    pendingPreset.config(bufferDurationMinutes = clampedPendingMinutes).totalBufferBytes / BYTES_PER_MB
+                    pendingPreset.config(bufferDurationMinutes = pendingMinutes).totalBufferBytes / BYTES_PER_MB
                 ).toInt(),
-                canDecrement = clampedPendingMinutes > AudioConfig.RETENTION_WINDOW_MIN_MINUTES,
-                canIncrement = clampedPendingMinutes < currentPresetMax,
-                isDirty = clampedPendingMinutes != committedMinutes || pendingPreset != committedPreset,
+                canDecrement = pendingMinutes > AudioConfig.RETENTION_WINDOW_MIN_MINUTES,
+                canIncrement = pendingMinutes < currentPresetMax,
+                isDirty = pendingMinutes != committedMinutes || pendingPreset != committedPreset,
                 maxSelectableMinutes = currentPresetMax,
             )
 
@@ -534,11 +556,17 @@ class SettingsViewModel(
                 retentionStepper = stepper,
                 qualityPresets = presetOptions,
                 selectedPreset = pendingPreset,
-                clampNotice = clampNotice,
+                // A queued preference notice may outlive the sample that created it.
+                // Its current-setting claim must still describe the committed engine config.
+                clampNotice = clampNotice?.copy(newMinutes = committedMinutes),
                 telemetry = telemetry,
                 resizeError = resizeError,
+                retentionLimit = clampNoticeForSettings(storedMinutes, committedMinutes),
             )
         }
+
+        private fun clampNoticeForSettings(storedMinutes: Int, committedMinutes: Int): ClampNotice? =
+            if (storedMinutes != committedMinutes) ClampNotice(storedMinutes, committedMinutes) else null
 
         /** Standard [ViewModelProvider.Factory] wiring, used from [cc.machado.audioblackbox.ui.MainActivity]'s
          * `viewModel(factory = ...)` call -- same shape as [cc.machado.audioblackbox.ui.dashboard.DashboardViewModel.Factory]

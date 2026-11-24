@@ -251,7 +251,6 @@
     <string name="settings_privacy_title">Confidentialité &amp; traitement local</string>
     <string name="settings_privacy_explanation">Audio Blackbox garde les enregistrements sur votre appareil et n’envoie lui-même ni audio ni analyses d’utilisation. L’audio du tampon reste en RAM jusqu’à la sauvegarde ou au lancement de Direct, qui enregistre dans un fichier local. Sans publicité, compte ni stockage cloud. Google Play Billing (services Play) communique avec Google pour traiter l’achat facultatif, vérifier les droits et envoyer ses propres diagnostics.</string>
     <string name="settings_retention_title">Fenêtre de conservation de la mémoire tampon</string>
-    <string name="settings_retention_explanation">Quantité d\'audio que la mémoire tampon garde dans la mémoire de l\'appareil. Une valeur plus élevée utilise plus de mémoire. Les modifications s\'appliquent automatiquement peu après votre dernier réglage.</string>
     <string name="settings_retention_value">%1$d min (~%2$d Mo)</string>
     <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutes, environ %2$d mégaoctets, actif</string>
@@ -293,9 +292,10 @@
     <string name="settings_consumption_io_value">0 Ko/s (RAM uniquement)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Fenêtre de conservation réduite</string>
+    <string name="settings_retention_clamp_notice_title">Limite temporaire de mémoire</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Votre fenêtre de conservation a été réduite de %1$d à %2$d minutes, car elle ne tient plus sur cet appareil.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Votre choix enregistré est de %1$d min ; le réglage actuel est de %2$d min. Le choix enregistré sera vérifié selon la mémoire disponible au prochain démarrage de l\'app.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Jusqu’à %1$d min à cette qualité — selon la mémoire accordée par Android à l\'app, pas toute la RAM du téléphone.</string>
     <string name="settings_retention_clamp_notice_dismiss">Compris</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -386,4 +386,5 @@
     <string name="gallery_newly_saved">Enregistrement sauvegardé</string>
     <string name="dashboard_panel_save_caption_live">Sauvegarde live</string>
     <string name="dashboard_save_button_cd_live">Il est inutile de toucher Sauver pendant l’enregistrement en direct : le fichier est sauvegardé au fur et à mesure.</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Modification en attente — tampon actif : %1$d min.</string>
 </resources>

@@ -66,6 +66,9 @@ interface RetentionWindowPreferences {
      * ever chosen a value (first run, or a fresh install). */
     val bufferDurationMinutesFlow: Flow<Int>
 
+    /** Durable choice, unaffected by a temporary memory ceiling or notice acknowledgement. */
+    val storedMinutesFlow: Flow<Int> get() = bufferDurationMinutesFlow
+
     /** Synchronous read of the same value [bufferDurationMinutesFlow] would currently emit --
      * used exactly once, by [cc.machado.audioblackbox.AudioBlackboxApplication.onCreate], to
      * preload the value [cc.machado.audioblackbox.service.RecorderService]'s companion object
@@ -108,6 +111,11 @@ interface RetentionWindowPreferences {
 
     /** Persists [preset]. */
     suspend fun setQualityPreset(preset: QualityPreset)
+
+    suspend fun setSettings(minutes: Int, preset: QualityPreset) {
+        setQualityPreset(preset)
+        setBufferDurationMinutes(minutes)
+    }
 }
 
 /** What [RetentionWindowPreferences.clampNoticeFlow] hands the UI to render "your retention
@@ -180,24 +188,17 @@ internal fun clampNoticeFor(stored: Int?, maxRetentionMinutes: Int): ClampNotice
 
 /**
  * Production default for "what is this device's current ceiling for [preset]" (issue #298): reads
- * the real, live JVM heap through [DeviceMemoryBudget.maxRetentionMinutes] -- no
- * `availableSystemBytes` here, since this free function has no `Context` to read
- * `ActivityManager.MemoryInfo` from (the heap term alone is still a real, live measurement, not a
- * guess). Callers that do have a `Context` -- [cc.machado.audioblackbox.service.RecorderService]'s
- * instance methods -- pass their own provider instead of relying on this default; see that class's
- * `availableSystemBytesProvider`.
+ * the real, live JVM heap and current buffer allocation through
+ * [DeviceMemoryBudget.currentMaxRetentionMinutes]. Its default system-memory argument reads
+ * [DeviceMemoryBudget.availableSystemBytesProvider], installed by AudioBlackboxApplication.
+ * No Context is needed here; until that provider is installed, its null result means heap-only.
  */
 internal fun defaultMaxRetentionMinutesProvider(preset: QualityPreset): Int =
-    DeviceMemoryBudget.maxRetentionMinutes(
-        config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-        maxHeapBytes = Runtime.getRuntime().maxMemory(),
-        usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
-    )
+    DeviceMemoryBudget.currentMaxRetentionMinutes(preset)
 
 /**
- * Same computation as [defaultMaxRetentionMinutesProvider], but also folds in
- * [getAvailableSystemBytes] as [DeviceMemoryBudget.maxRetentionMinutes]'s independent
- * `availableSystemBytes` term.
+ * Same computation as [defaultMaxRetentionMinutesProvider], with an explicit
+ * [getAvailableSystemBytes] provider for the independent system-memory term.
  *
  * `@rev` review on PR #300, finding 1 (HIGH): extracted specifically so a JVM test can exercise
  * the *exact* provider [DataStoreRetentionWindowPreferences]'s `operator fun invoke(context)`
@@ -208,13 +209,17 @@ internal fun defaultMaxRetentionMinutesProvider(preset: QualityPreset): Int =
  * `DeviceMemoryBudgetDrivenRetentionWindowPreferencesTest` for the regression test built against
  * this function directly.
  */
-internal fun systemAwareMaxRetentionMinutesProvider(getAvailableSystemBytes: () -> Long?): (QualityPreset) -> Int =
+internal fun systemAwareMaxRetentionMinutesProvider(
+    getAvailableSystemBytes: () -> Long?,
+    memoryBudget: cc.machado.audioblackbox.audio.MemoryBudget = cc.machado.audioblackbox.audio.MemoryBudget.REAL,
+    allocationBytes: () -> Long = { DeviceMemoryBudget.currentBufferAllocationBytesProvider() },
+): (QualityPreset) -> Int =
     { preset ->
-        DeviceMemoryBudget.maxRetentionMinutes(
-            config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-            maxHeapBytes = Runtime.getRuntime().maxMemory(),
-            usedHeapBytes = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(),
+        DeviceMemoryBudget.currentMaxRetentionMinutes(
+            preset = preset,
+            memoryBudget = memoryBudget,
             availableSystemBytes = getAvailableSystemBytes(),
+            currentBufferAllocationBytes = allocationBytes(),
         )
     }
 
@@ -262,7 +267,20 @@ class DataStoreRetentionWindowPreferences(
         resolveStoredRetentionMinutes(prefs[KEY_BUFFER_DURATION_MINUTES], maxRetentionMinutesProvider(preset))
     }
 
+    override val storedMinutesFlow: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[KEY_BUFFER_DURATION_MINUTES]?.takeIf(::isOnStepAndAtLeastMinimum)
+            ?: AudioConfig.DEFAULT_BUFFER_DURATION_MINUTES
+    }
+
     override suspend fun currentBufferDurationMinutes(): Int = bufferDurationMinutesFlow.first()
+
+    override suspend fun setSettings(minutes: Int, preset: QualityPreset) {
+        require(isOnStepAndAtLeastMinimum(minutes))
+        dataStore.edit { prefs ->
+            prefs[KEY_BUFFER_DURATION_MINUTES] = minutes
+            prefs[KEY_QUALITY_PRESET] = preset.name
+        }
+    }
 
     /** Issue #317: `require()` now only guards the two fixed, device-independent bounds
      * ([isOnStepAndAtLeastMinimum]) -- off-step or below floor is a genuine caller bug. It no
@@ -335,8 +353,8 @@ class DataStoreRetentionWindowPreferences(
          *
          * `@rev` review on PR #300, finding 1 (HIGH): this is the one production construction site
          * for the class that is the *sole* source of [RetentionWindowPreferences.clampNoticeFlow],
-         * so it is not enough for it to default to [defaultMaxRetentionMinutesProvider] (heap-only,
-         * no `Context`) the way the bare constructor above does for JVM tests -- a real `Context` is
+         * so this factory explicitly supplies the system-memory source rather than depending on
+         * application initialization of the default provider. A real `Context` is
          * available right here, so this factory folds in
          * [cc.machado.audioblackbox.telemetry.PowerTelemetry.getAvailableSystemBytes] the same way
          * [cc.machado.audioblackbox.ui.MainActivity] already does for `SettingsViewModel`. Without
@@ -382,10 +400,12 @@ class InMemoryRetentionWindowPreferences(
 ) : RetentionWindowPreferences {
 
     private val state = kotlinx.coroutines.flow.MutableStateFlow(initialMinutes)
+    private val storedState = kotlinx.coroutines.flow.MutableStateFlow(initialMinutes)
     private val clampNoticeState = kotlinx.coroutines.flow.MutableStateFlow(initialClampNotice)
     private val qualityPresetState = kotlinx.coroutines.flow.MutableStateFlow(initialQualityPreset)
 
     override val bufferDurationMinutesFlow: Flow<Int> = state
+    override val storedMinutesFlow: Flow<Int> = storedState
 
     override suspend fun currentBufferDurationMinutes(): Int = state.value
 
@@ -403,6 +423,7 @@ class InMemoryRetentionWindowPreferences(
                 "and a multiple of ${AudioConfig.RETENTION_WINDOW_STEP_MINUTES}, was $minutes"
         }
         val ceiling = maxRetentionMinutesProvider(qualityPresetState.value)
+        storedState.value = minutes
         if (minutes > ceiling) {
             clampNoticeState.value = ClampNotice(previousMinutes = minutes, newMinutes = ceiling)
             state.value = ceiling

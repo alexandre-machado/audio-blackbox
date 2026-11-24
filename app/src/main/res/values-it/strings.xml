@@ -246,7 +246,6 @@
     <string name="settings_privacy_title">Privacy &amp; elaborazione locale</string>
     <string name="settings_privacy_explanation">Audio Blackbox conserva le registrazioni sul dispositivo e non invia audio né analisi di utilizzo. L’audio nel buffer resta in RAM finché non salvi o avvii Live, che registra in un file locale. Niente pubblicità, account o archiviazione cloud. Google Play Billing (servizi Play) comunica con Google per elaborare l’acquisto facoltativo, verificare il diritto di accesso e inviare la propria diagnostica.</string>
     <string name="settings_retention_title">Finestra di conservazione del buffer</string>
-    <string name="settings_retention_explanation">Quanto audio il buffer conserva nella memoria del dispositivo. Un valore più alto usa più memoria. Le modifiche vengono applicate automaticamente poco dopo che smetti di regolare.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minuti, circa %2$d megabyte, attualmente attivo</string>
@@ -288,9 +287,10 @@
     <string name="settings_consumption_io_value">0 KB/s (solo RAM)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Finestra di conservazione ridotta</string>
+    <string name="settings_retention_clamp_notice_title">Limite temporaneo di memoria</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">La finestra di conservazione è stata ridotta da %1$d a %2$d minuti perché non rientra più in questo dispositivo.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">La scelta salvata è %1$d min; l\'impostazione attuale è %2$d min. La scelta salvata sarà verificata in base alla memoria disponibile al prossimo avvio dell\'app.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Fino a %1$d min con questa qualità — limitato dalla memoria che Android assegna all\'app, non dalla RAM totale del telefono.</string>
     <string name="settings_retention_clamp_notice_dismiss">Ho capito</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -381,4 +381,5 @@
     <string name="gallery_newly_saved">Registrazione salvata</string>
     <string name="dashboard_panel_save_caption_live">Salvataggio live</string>
     <string name="dashboard_save_button_cd_live">Non serve salvare durante la registrazione live: il file viene salvato mentre si registra</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Modifica in sospeso — buffer attivo: %1$d min.</string>
 </resources>

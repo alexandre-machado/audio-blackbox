@@ -148,6 +148,10 @@ internal fun emptyBufferDashboardFixture() = DashboardViewModel.mapUiState(
 internal fun settingsFixture() = SettingsViewModel.mapUiState(
     committedMinutes = 30,
     pendingMinutes = 45,
+    maxMemoryBytes = 256L * 1024 * 1024,
+    usedMemoryBytes = 32L * 1024 * 1024,
+    currentBufferAllocationBytes = 0L,
+    availableSystemBytes = 1024L * 1024 * 1024,
 )
 
 internal fun galleryFixture() = cc.machado.audioblackbox.ui.gallery.GalleryUiState(
@@ -198,6 +202,11 @@ private const val SHOWCASE_INPUT_LEVEL = 0.62f
 internal fun showcaseSettingsFixture() = SettingsViewModel.mapUiState(
     committedMinutes = 30,
     pendingMinutes = 30,
+    // Pin every admission input: store captures must not depend on emulator heap/GC timing.
+    maxMemoryBytes = 256L * 1024 * 1024,
+    usedMemoryBytes = 32L * 1024 * 1024,
+    currentBufferAllocationBytes = 0L,
+    availableSystemBytes = 1024L * 1024 * 1024,
 )
 
 /**

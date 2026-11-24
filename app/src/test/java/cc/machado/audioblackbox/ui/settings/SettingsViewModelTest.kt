@@ -85,8 +85,9 @@ class SettingsViewModelTest {
         val vm = SettingsViewModel(
             captureState = MutableStateFlow(CaptureState.Idle),
             capacityMinutesFlow = MutableStateFlow(40),
-            maxMemoryBytesProvider = { 130_000_000L },
+            maxMemoryBytesProvider = { 135_000_000L },
             usedMemoryBytesProvider = { 86_800_000L },
+            currentBufferAllocationBytesProvider = { 76_800_000L },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -178,7 +179,7 @@ class SettingsViewModelTest {
         advanceTimeBy(SettingsViewModel.DEBOUNCE_MILLIS)
         runCurrent()
 
-        assertEquals(listOf(35 to cc.machado.audioblackbox.audio.QualityPreset.VOICE), switchCalls)
+        assertTrue("Idle applies through the rebuild path only", switchCalls.isEmpty())
         assertEquals(listOf(35 to cc.machado.audioblackbox.audio.QualityPreset.VOICE), rebuildCalls)
         assertEquals(35, preferences.currentBufferDurationMinutes())
         assertFalse(
@@ -198,7 +199,6 @@ class SettingsViewModelTest {
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
-            onRebuildEngine = { _, _ -> true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -261,7 +261,6 @@ class SettingsViewModelTest {
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
             retentionWindowPreferences = preferences,
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
-            onRebuildEngine = { _, _ -> true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -293,7 +292,6 @@ class SettingsViewModelTest {
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
-            onRebuildEngine = { _, _ -> true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }
@@ -376,7 +374,6 @@ class SettingsViewModelTest {
             capacityMinutesFlow = MutableStateFlow(30),
             retentionWindowPreferences = preferences,
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
-            onRebuildEngine = { _, _ -> true },
         )
         val store = ViewModelStore()
         store.put("settings", vm)
@@ -474,7 +471,7 @@ class SettingsViewModelTest {
     // ---- Issue #272 refusal path (surfaced through issue #299's only remaining feedback channel) ----
 
     @Test
-    fun `a refused commit reverts the displayed value to what is running and surfaces resizeError`() = runTest(testDispatcher) {
+    fun `a refused commit keeps the pending value and surfaces resizeError`() = runTest(testDispatcher) {
         val preferences = InMemoryRetentionWindowPreferences(initialMinutes = 30)
         val rebuildCalls = mutableListOf<Pair<Int, cc.machado.audioblackbox.audio.QualityPreset>>()
         val vm = SettingsViewModel(
@@ -501,11 +498,11 @@ class SettingsViewModelTest {
         )
         assertEquals(30, preferences.currentBufferDurationMinutes())
         assertEquals(
-            "with no Apply button, the pending display must revert to what is actually running",
-            30,
+            "the refused choice stays pending",
+            35,
             observed.last().retentionStepper.pendingMinutes,
         )
-        assertFalse(observed.last().retentionStepper.isDirty)
+        assertTrue(observed.last().retentionStepper.isDirty)
         assertEquals(
             "the refusal must surface the real requested minutes -- the only feedback channel left",
             35,
@@ -543,7 +540,6 @@ class SettingsViewModelTest {
             capacityMinutesFlow = cc.machado.audioblackbox.service.RecorderService.bufferDurationMinutesFlow,
             qualityPresetFlow = cc.machado.audioblackbox.service.RecorderService.qualityPresetFlow,
             retentionWindowPreferences = preferences,
-            onRebuildEngine = { m, p -> cc.machado.audioblackbox.service.RecorderService.rebuildEngineIfIdle(m, p) },
             // Deliberately far above RecorderService's live 95 -- this is what lets the stepper
             // offer 100 in the first place, exactly like the captured "was 100" production crashes.
             maxMemoryBytesProvider = { Long.MAX_VALUE / 4 },
@@ -570,8 +566,8 @@ class SettingsViewModelTest {
             preferences.currentBufferDurationMinutes(),
         )
         assertEquals(
-            "with no Apply button, the pending display must revert to what is actually running",
-            90,
+            "the refused choice stays pending",
+            100,
             observed.last().retentionStepper.pendingMinutes,
         )
         assertEquals(
@@ -595,7 +591,6 @@ class SettingsViewModelTest {
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
             retentionWindowPreferences = preferences,
             onSwitchSettings = { minutes, preset -> switchCalls += (minutes to preset); true },
-            onRebuildEngine = { _, _ -> true },
             maxMemoryBytesProvider = { 256 * 1024 * 1024L },
             usedMemoryBytesProvider = { 30 * 1024 * 1024L },
         )
@@ -738,6 +733,7 @@ class SettingsViewModelTest {
         // Without subtracting the buffer, remaining budget would be only (256*0.85 - 100) = 117.6 MB -> 9.6 min -> 5 min for HIFI.
         // With active buffer excluded, remaining budget is (256*0.85 - 17.6) = 200 MB -> 16.4 min -> 15 min for HIFI.
         val stateWithActiveBuffer = SettingsViewModel.mapUiState(
+            currentBufferAllocationBytes = 86_400_000L,
             committedMinutes = 45,
             pendingMinutes = 45,
             committedPreset = cc.machado.audioblackbox.audio.QualityPreset.VOICE,
@@ -763,9 +759,7 @@ class SettingsViewModelTest {
             qualityPresetFlow = MutableStateFlow(cc.machado.audioblackbox.audio.QualityPreset.VOICE),
             retentionWindowPreferences = preferences,
             onStopEngine = { stopCalls++ },
-            onSwitchSettings = { _, _ -> true },
-            onRebuildEngine = { _, _ -> true },
-            onSwitchQualityPreset = { switchedPresets += it },
+            onSwitchSettings = { _, preset -> switchedPresets += preset; true },
         )
         val observed = mutableListOf<SettingsUiState>()
         val job = launch { vm.uiState.collect { observed += it } }

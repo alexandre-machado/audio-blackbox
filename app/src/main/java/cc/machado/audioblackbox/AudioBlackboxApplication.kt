@@ -43,6 +43,9 @@ class AudioBlackboxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        cc.machado.audioblackbox.audio.DeviceMemoryBudget.availableSystemBytesProvider = {
+            cc.machado.audioblackbox.telemetry.PowerTelemetry.getAvailableSystemBytes(this)
+        }
         val preferences: RetentionWindowPreferences = DataStoreRetentionWindowPreferences(this)
         PreloadedRetentionWindow.minutes = runBlocking { preferences.currentBufferDurationMinutes() }
         PreloadedRetentionWindow.preset = runBlocking { preferences.currentQualityPreset() }

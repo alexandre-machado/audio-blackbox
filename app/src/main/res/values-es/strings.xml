@@ -246,7 +246,6 @@
     <string name="settings_privacy_title">Privacidad &amp; procesamiento local</string>
     <string name="settings_privacy_explanation">Audio Blackbox guarda las grabaciones en tu dispositivo y no envía audio ni análisis de uso. El audio del búfer permanece en RAM hasta que guardas o inicias Directo, que graba en un archivo local. Sin anuncios, cuenta ni almacenamiento en la nube. Google Play Billing (servicios de Play) se comunica con Google para procesar la compra opcional, comprobar el derecho de acceso y enviar sus propios diagnósticos.</string>
     <string name="settings_retention_title">Ventana de retención del búfer</string>
-    <string name="settings_retention_explanation">Cuánto audio conserva el búfer en la memoria del dispositivo. Un valor mayor usa más memoria. Los cambios se aplican automáticamente poco después de que dejes de ajustarlo.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutos, unos %2$d megabytes, activo ahora</string>
@@ -288,9 +287,10 @@
     <string name="settings_consumption_io_value">0 KB/s (solo RAM)</string>
 
     <!-- Clamp-down notice (issue #298) -->
-    <string name="settings_retention_clamp_notice_title">Ventana de retención reducida</string>
+    <string name="settings_retention_clamp_notice_title">Límite temporal de memoria</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu ventana de retención se ha reducido de %1$d a %2$d minutos porque ya no cabe en este dispositivo.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu elección guardada es %1$d min; el ajuste actual es %2$d min. La elección guardada se comprobará según la memoria disponible al iniciar la app de nuevo.</string>
+    <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Hasta %1$d min con esta calidad — limitado por la memoria que Android da a la app, no por toda la RAM del teléfono.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendido</string>
 
     <!-- Resize-refused notice (issue #272) -->
@@ -381,4 +381,5 @@
     <string name="gallery_newly_saved">Grabación guardada</string>
     <string name="dashboard_panel_save_caption_live">Guardando live</string>
     <string name="dashboard_save_button_cd_live">No hace falta guardar durante la grabación en directo: el archivo se guarda mientras se graba</string>
+    <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Cambio pendiente — búfer activo: %1$d min.</string>
 </resources>

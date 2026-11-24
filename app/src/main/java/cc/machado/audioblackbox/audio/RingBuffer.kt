@@ -123,10 +123,18 @@ data class FormatSegment(
 fun interface MemoryBudget {
     fun sample(): MemorySample
 
+    /** One best-effort hint before idle allocation is refused; never called by the capture loop.
+     * Fakes may override this to model garbage becoming reclaimable without running real GC. */
+    fun reclaim() = Unit
+
     companion object {
-        val REAL: MemoryBudget = MemoryBudget {
-            val rt = Runtime.getRuntime()
-            MemorySample(maxHeapBytes = rt.maxMemory(), usedHeapBytes = rt.totalMemory() - rt.freeMemory())
+        val REAL: MemoryBudget = object : MemoryBudget {
+            override fun sample(): MemorySample {
+                val rt = Runtime.getRuntime()
+                return MemorySample(maxHeapBytes = rt.maxMemory(), usedHeapBytes = rt.totalMemory() - rt.freeMemory())
+            }
+
+            override fun reclaim() = Runtime.getRuntime().gc()
         }
     }
 }
@@ -556,17 +564,8 @@ class RingBuffer(
             val oldCapacity = _capacityBytes
             if (newCapacityBytes == oldCapacity) return ResizeOutcome.Applied
 
-            val sample = memoryBudget.sample()
-            val netGrowthBytes = maxOf(0L, newCapacityBytes.toLong() - oldCapacity.toLong())
-            val projectedPeakBytes = sample.usedHeapBytes + netGrowthBytes + 2L * chunkSizeBytes
-            val safeHeapBytes = (sample.maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
-            if (projectedPeakBytes > safeHeapBytes) {
-                return ResizeOutcome.Refused(
-                    requestedCapacityBytes = newCapacityBytes,
-                    projectedPeakBytes = projectedPeakBytes,
-                    maxHeapBytes = sample.maxHeapBytes,
-                )
-            }
+            DeviceMemoryBudget.allocationRefusal(newCapacityBytes, oldCapacity, memoryBudget, chunkSizeBytes)
+                ?.let { return it }
 
             val oldOldest = oldestAvailableLocked()
             val availableBytes = totalWritten - oldOldest
@@ -1035,9 +1034,9 @@ class RingBuffer(
         }
     }
 
-    private companion object {
-        const val MARKER_CAPACITY = 8192
-        const val MILLIS_PER_SECOND = 1000L
+    internal companion object {
+        private const val MARKER_CAPACITY = 8192
+        private const val MILLIS_PER_SECOND = 1000L
 
         /**
          * Production chunk granularity for the segmented backing store (issue #277): small enough
@@ -1050,13 +1049,13 @@ class RingBuffer(
         const val DEFAULT_CHUNK_SIZE_BYTES = 1 * 1024 * 1024
 
         /** Shared empty payload so an idle [readSince] poll allocates nothing at all. */
-        val EMPTY = ByteArray(0)
+        private val EMPTY = ByteArray(0)
 
         /**
          * Shared zero-length placeholder [resize] swaps into a drained source chunk's slot
          * (issue #277): replacing the strong reference lets the real chunk's bytes be reclaimed
          * immediately instead of staying reachable (via [chunks]) for the rest of the resize.
          */
-        val EMPTY_CHUNK = ByteArray(0)
+        private val EMPTY_CHUNK = ByteArray(0)
     }
 }
