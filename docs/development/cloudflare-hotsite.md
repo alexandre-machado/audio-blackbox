@@ -34,6 +34,116 @@ Scripts Edit remains account-wide and Routes Edit zone-wide. Optionally restrict
 client IPs only if the runner has a stable, known egress IP; a changing egress
 would otherwise break deployment.
 
+### Pre-filled dashboard alternative (verified 2026-11-24)
+
+Cloudflare documents [token template URLs](https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/).
+The confirmed short keys/types are `workers_scripts/edit`, `workers_routes/edit`,
+and `zone/read`. They respectively upload the Worker/assets, manage the route,
+and resolve `zone_name: machado.cc`.
+
+For a **user-owned** deploy token, substitute `ACCOUNT_ID` with the account's
+32-character ID and `ZONE_ID` with the ID of **machado.cc in that account** in
+this URL, then open it (IDs are not credentials):
+
+```text
+https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_routes%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22zone%22%2C%22type%22%3A%22read%22%7D%5D&accountId=ACCOUNT_ID&zoneId=ZONE_ID&name=audio-blackbox-hotsite-deploy
+```
+
+Review all three permissions and the single-account/single-zone scopes before
+creating it: user templates silently drop unresolved keys. This link was checked
+against documentation, not exercised in an authenticated dashboard.
+Account-owned template URLs instead use
+`https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=...&name=...`;
+they **do not support `accountId` or `zoneId` scoping parameters**. Do not use that
+format expecting it to preselect machado.cc. The script below sets account-owned
+token scopes explicitly through the API.
+
+### Owner-machine automation (account-owned deploy token)
+
+Prepare the protected GitHub environment in section 2 first. Install Bash, curl,
+jq and GitHub CLI and authenticate `gh` with access to environment secrets.
+Run from the repository root on your own trusted machine; never run this helper
+in CI. No credentials are needed to inspect the request:
+
+```bash
+bash scripts/ops/cloudflare-create-deploy-token.sh --dry-run --set-account-var
+```
+
+Stdout is the request JSON with placeholder resource/permission IDs. Stderr lists
+the permission names to resolve and GitHub commands with the secret redacted.
+The same policy builder is used for real requests. The default expiry is 365 days
+from execution; override with `--expires-on YYYY-MM-DDTHH:MM:SSZ` (future UTC).
+
+Create a temporary master token in Cloudflare's dashboard with **Account >
+Account API Tokens > Edit**, scoped only to the target account (API name:
+`Account API Tokens Write`). This is the minimal token-creation permission.
+For this helper's mandatory zone lookup, also grant **Zone > Zone > Read**,
+scoped only to **machado.cc**. Token management alone does not authorize zone
+lookup. Set a short expiry, e.g. one hour. The creating member needs API Token
+Provisioning capability or Super Administrator status, and permission to grant
+the requested Worker and zone permissions; see
+[account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/).
+
+The master must **never** enter CI, the repo, shell history, or any GitHub secret
+or environment. In a fresh, untraced Bash shell, use a hidden prompt (do not type
+the token as a command or argument):
+
+```bash
+set +x
+read -r -s -p 'Temporary Cloudflare master token: ' CLOUDFLARE_MASTER_TOKEN
+printf '\n'
+export CLOUDFLARE_MASTER_TOKEN
+bash scripts/ops/cloudflare-create-deploy-token.sh --account-id ACCOUNT_ID --set-account-var
+unset CLOUDFLARE_MASTER_TOKEN
+```
+
+Replace `ACCOUNT_ID` before running, or export `CLOUDFLARE_ACCOUNT_ID` and omit
+`--account-id`. Omit `--set-account-var` to preserve the existing GitHub variable.
+Unset the parent-shell master variable even if the helper fails. Delete/revoke
+the temporary master in the Cloudflare dashboard immediately after use; local
+variable cleanup does not revoke it.
+
+The helper resolves machado.cc with `GET /zones?name=machado.cc&account.id=...`,
+then resolves exact permission **names and scopes** through
+[`GET /accounts/{account_id}/tokens/permission_groups`](https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/subresources/permission_groups/methods/list/).
+Missing, ambiguous or explicitly unselectable groups stop execution. IDs are
+never hardcoded. Cloudflare's
+[creation guide](https://developers.cloudflare.com/fundamentals/api/how-to/create-via-api/)
+also documents `/user/tokens/permission_groups` for user-owned tokens; that is
+not the endpoint used here.
+
+[`POST /accounts/{account_id}/tokens`](https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/create/)
+accepts `name`, `expires_on`, and `policies` containing `effect: allow`,
+`permission_groups: [{id: ...}]`, and `resources`. The two policies grant:
+
+- `Workers Scripts Write` on `com.cloudflare.api.account.<account_id>`.
+- `Workers Routes Write` and `Zone Read` on `com.cloudflare.api.account.zone.<zone_id>`.
+
+Each resource value is `"*"` (all operations allowed by those permissions on that
+specific resource), not a wildcard resource identifier. The account endpoint
+requires `Account API Tokens Write`; `API Tokens Write` is the user-token API
+permission and is not a substitute. The
+[zone lookup API](https://developers.cloudflare.com/api/resources/zones/methods/list/)
+separately requires Zone Read.
+
+The helper keeps the master out of curl arguments and child environments,
+disables curl configuration/tracing, and suppresses raw API/error output. The
+creation response exists only in shell memory; after validation, jq streams
+`.result.value` directly into `gh secret set` over stdin. No token is printed or
+written to a temporary file. Exit/signal traps clear sensitive shell variables.
+This is not protection against a compromised owner machine or process-memory
+inspection. Never source the script, enable verbose shell tracing, or capture a
+debug session containing credentials.
+
+Record the deploy token's expiry and rotate before it: create a fresh temporary
+master, rerun the helper to replace the environment secret, revoke the master,
+and verify a successful main-branch deployment before revoking the old deploy
+token. If upload fails or creation times out, inspect the account token list and
+revoke the newly created/orphan token before retrying; creation is not retried
+automatically. If the optional variable update fails, the secret may already
+have changed. No real API creation or deployment has been validated without
+owner credentials.
+
 ## 2. Configure GitHub Actions
 
 In `alexandre-machado/audio-blackbox`, open **Settings > Environments** and create
