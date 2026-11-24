@@ -14,7 +14,7 @@
 #     this script deliberately does not attempt itself; it fails loudly instead of trying sudo).
 #
 # On a machine without the kvm-group fix applied, this script fails at the "boot" step rather
-# than silently running an unusably slow software-emulated instance -- CI (.github/workflows/ci.yml,
+# than silently running an unusably slow software-emulated instance -- CI (.github/workflows/android.yml,
 # job "Android / Instrumented tests and screenshots") is the verification loop until that fix lands locally.
 
 set -euo pipefail
@@ -46,7 +46,7 @@ command -v emulator   >/dev/null 2>&1 || fail "emulator binary not found -- inst
 # --- KVM check: fail loudly, never sudo ------------------------------------
 if [[ -e /dev/kvm ]]; then
   if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
-    fail "/dev/kvm exists but is not readable/writable by $(id -un). This needs 'sudo usermod -aG kvm \$USER' plus a re-login -- that is not something this script will do for you. Until then, use CI (job 'Android / Instrumented tests and screenshots' in .github/workflows/ci.yml) as the verification loop."
+    fail "/dev/kvm exists but is not readable/writable by $(id -un). This needs 'sudo usermod -aG kvm \$USER' plus a re-login -- that is not something this script will do for you. Until then, use CI (job 'Android / Instrumented tests and screenshots' in .github/workflows/android.yml) as the verification loop."
   fi
 else
   fail "/dev/kvm not found -- hardware-accelerated emulation is unavailable on this machine. Use CI as the verification loop."

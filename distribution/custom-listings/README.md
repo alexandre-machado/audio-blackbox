@@ -26,7 +26,7 @@ For that reason:
 
 - `scripts/ci/sync-play-store-metadata.py` only reads `distribution/metadata/android/` and must
   never be pointed at this tree.
-- The `Play / Publish bundle and sync listing` job (id `deploy-playstore`) in `.github/workflows/ci.yml` never reads this directory. Its listing
+- The `Play / Publish bundle and sync listing` job (id `deploy-playstore`) in `.github/workflows/android.yml` never reads this directory. Its listing
   sync is gated on changes under `distribution/metadata/` only.
 
 ## The process

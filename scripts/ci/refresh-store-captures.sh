@@ -15,7 +15,7 @@
 #
 # Fails loudly, on purpose, if any expected source file is missing: a partial refresh that
 # silently skips a file is the exact failure mode issue #231 exists to prevent. Usable both from
-# CI (.github/workflows/ci.yml's Android / Instrumented tests and screenshots job) and locally, against any
+# CI (.github/workflows/android.yml's Android / Instrumented tests and screenshots job) and locally, against any
 # build/screen-captures/ directory populated the same way (e.g. by
 # scripts/run-instrumented-tests.sh).
 

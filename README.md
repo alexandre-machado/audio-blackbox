@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml"><img src="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/ci.yml/badge.svg" alt="Android CI and Play Release status"></a>
+  <a href="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/android.yml"><img src="https://github.com/alexandre-machado/audio-blackbox/actions/workflows/android.yml/badge.svg" alt="Android CI and Play Release status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
   <a href="https://developer.android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-3DDC84.svg?logo=android&logoColor=white" alt="Android Platform"></a>
   <a href="https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"><img src="https://img.shields.io/badge/Privacy-Audio%20stays%20on%20device%20%7C%20No%20ads-success.svg" alt="Privacy: audio stays on device, no ads"></a>

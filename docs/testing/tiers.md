@@ -17,7 +17,7 @@ Runs on the JVM, no device or emulator, via `app/src/test/`. Covers everything e
 plain Kotlin/Mockito against a seam (`audioRecordFactory`, `ExportSink`, fake clocks): ring
 buffer arithmetic, gap-fill/WAV byte layout with synthetic multi-gap fixtures, permission
 resolution, state machines. This is the fast, deterministic majority of the coverage and is
-required green on every PR (`.github/workflows/ci.yml`, check `Android / Build, unit tests and lint`, job id `build`).
+required green on every PR (`.github/workflows/android.yml`, check `Android / Build, unit tests and lint`, job id `build`).
 
 ## Tier 1 — instrumented tests on an emulator, in CI on every PR
 
@@ -32,7 +32,7 @@ lifecycle, and — the reason this tier exists — a **real telephony interrupti
 `AudioManager.AudioRecordingCallback.isClientSilenced` and the exact scenario PR #28's critical
 bug (audio mis-spliced after the *second* interruption) lived in.
 
-Runs in CI on every PR (`.github/workflows/ci.yml`, check `Android / Instrumented tests and screenshots`, job id `instrumented-tests`), with a fresh AVD
+Runs in CI on every PR (`.github/workflows/android.yml`, check `Android / Instrumented tests and screenshots`, job id `instrumented-tests`), with a fresh AVD
 created and booted from cold on every run — no boot-snapshot cache. An earlier version of this
 job cached the AVD boot snapshot across runs to bound the added wall-clock, but every run that
 restored that cached snapshot failed to boot (`adb: device offline`, then a boot timeout, before

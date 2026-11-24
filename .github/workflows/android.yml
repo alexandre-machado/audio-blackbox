@@ -69,7 +69,20 @@ permissions:
   contents: read
 
 env:
+  # Renaming ci.yml resets the counter: old 100 + run number reached ~#680 (777+).
+  # 2000 + 1 = 2001 exceeds old values, including intervening merges. Never lower this.
+  VERSION_CODE_OFFSET: 2000
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+# Owner decision 2026-11-24 (AB-2411-34): a newer push to the same PR branch cancels the older
+# PR run, so the single self-hosted runner is not spent on obsolete SHAs. Anything that is not a
+# pull_request (push to main, v* tags, workflow_dispatch, i.e. every deploy/Play/listing run)
+# gets a group keyed by its own run_id: it never shares a group, so it can be neither cancelled
+# nor superseded while pending. GitHub replaces a pending run in the same group even when
+# cancel-in-progress is false, so a shared main group would silently drop a middle merge's deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -202,7 +215,7 @@ jobs:
     # skip on a workflow_dispatch requesting sync_only, same reasoning as the `build` job above.
     if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && !(github.event_name == 'workflow_dispatch' && inputs.sync_only)
     timeout-minutes: 30
-    # Scoped to this job only -- ci.yml:9-10 keeps contents: read at workflow level for every
+    # Scoped to this job only -- the workflow-level permissions block keeps contents: read at workflow level for every
     # other job. Needed here, and only here, so the "commit refreshed screenshots" step below
     # (issue #231) can push to the PR head branch. The fork guard above (job-level `if:`) already
     # ensures this only ever runs against a branch in this repository, never an external fork's.
@@ -655,7 +668,7 @@ jobs:
   # same push[main] event as `build`/`instrumented-tests` above, with no `needs:` between them --
   # on the single self-hosted runner all three jobs just serialized in whatever order the queue
   # handed them out, so a merge to main could reach the Play Store internal track before the tests
-  # for that same commit had even started, let alone passed. Folding this job into ci.yml with
+  # for that same commit had even started, let alone passed. Folding this job into android.yml with
   # `needs: [build, instrumented-tests]` makes that ordering a hard dependency instead of a queue
   # accident: this job cannot start until both finish, and it will not run at all if either fails.
   #
@@ -665,7 +678,7 @@ jobs:
   # fork or not. A fork PR is already blocked from `build`/`instrumented-tests` by their own guard
   # above; this job's guard is independent of that and blocks pull_request outright regardless.
   #
-  # Trigger behavior change, called out explicitly per issue #399: `ci.yml` previously did not run
+  # Trigger behavior change, called out explicitly per issue #399: this workflow previously did not run
   # on tag pushes at all (`playstore.yml` had its own `tags: ['v*']` push filter with no test gate
   # behind it). Tags now flow through the same push trigger as main and are therefore gated by
   # `build`/`instrumented-tests` exactly like a push to main -- a tag reaching this job with

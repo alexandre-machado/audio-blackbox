@@ -168,6 +168,11 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
 
 ---
 
+- **CI concurrency: only PR runs are cancellable** (owner decision 2026-11-24, AB-2411-34):
+  - `android.yml` and `infrastructure.yml` use `concurrency.group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}` with `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`. A newer push to a PR branch cancels that branch's older run, so the single self-hosted runner is not spent on obsolete SHAs.
+  - Push to `main`, `v*` tags and `workflow_dispatch` (every Play upload, listing sync and deploy) get a group keyed by their own `run_id`, so they are **never cancelled or superseded**. Do not "simplify" the group to workflow + ref: GitHub replaces a *pending* run in the same group even with `cancel-in-progress: false`, so a shared `main` group would silently drop a middle merge's deploy. Job-level groups (`playstore-release`, `pages`, `custom-listing-diff-<PR>`) are unchanged.
+  - The bot's screenshot auto-commit on a PR is itself a push that does not trigger workflows (`action_required`); a human push on top (an empty commit is fine) re-runs CI for that SHA.
+
 ## 10. Pre-Merge Gate: `@sec` and `@rev` Markers
 
 Every pull request must pass a dual specialist review before merging:
@@ -204,6 +209,17 @@ For older PR markers, #471 renamed checks as follows (job ids remain unchanged):
 `validate-cloudflare` → `Site / Test and dry-run Cloudflare`;
 `deploy-cloudflare` → `Site / Deploy Cloudflare`;
 `cloudflare-ci-token` → `Infrastructure / Validate Cloudflare token plan`.
+
+Workflow file migration (#471/#473): `ci.yml` → `android.yml`, `pages.yml` → `site.yml`,
+`terraform.yml` → `infrastructure.yml` (all under `.github/workflows/`). Use new filenames
+in dispatch commands, badges and filters; display names and job ids stay unchanged.
+Renaming resets `GITHUB_RUN_NUMBER`. Android CI must set integer `VERSION_CODE_OFFSET=2000`;
+versionCode = offset + run number (first run = 2001). Never lower the offset.
+Absent-only fallback 100 preserves legacy numbering; malformed offsets fail. Play internal
+already received 777, so CI release task graphs reject codes below `VERSION_CODE_FLOOR=778`.
+Debug/test-only CI is exempt (normal PR runs still use 2000 + N). Local codes remain the
+commit count. Names remain `v<UTC date>.<versionCode>-<sha7>` in CI and
+`v<UTC date>.0-<sha7>-dev` locally.
 
 - **Name the SHA.** A verdict is about one commit. When a PR is updated after a review, the
   existing markers no longer cover it and the gate must run again at the new HEAD.

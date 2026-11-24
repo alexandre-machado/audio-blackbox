@@ -173,7 +173,7 @@ bash scripts/ops/test-cloudflare-ci-token-plan.sh
 bash scripts/ops/test-cloudflare-ci-token-plan.sh --mutations
 ```
 
-`Infrastructure Validation` (`.github/workflows/terraform.yml`, check
+`Infrastructure Validation` (`.github/workflows/infrastructure.yml`, check
 `Infrastructure / Validate Cloudflare token plan`) runs these checks on a fresh GitHub-hosted
 runner for pull requests and main pushes, with read-only contents permission,
 no environment or secrets, Terraform 1.17.2, and `hashicorp/setup-terraform`
