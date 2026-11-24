@@ -578,6 +578,8 @@ class ScreenLayoutTest {
             assertIsEnabled()
         }
         composeRule.onNodeWithTag(FORWARD_START_BUTTON_TEST_TAG).assertDoesNotExist()
+        // Oracle: live already writes the file; a separate Save must be disabled.
+        composeRule.onNodeWithTag(SAVE_BUTTON_TEST_TAG).assertIsNotEnabled()
     }
 
     /**

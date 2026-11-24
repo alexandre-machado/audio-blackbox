@@ -41,5 +41,6 @@ deliberately — see issue #3). Decided from the running OS (`Build.VERSION.SDK_
 already sitting in the app's pre-issue-#33 `Music/Recordings/` location are not migrated or
 deleted. Naming scheme (`ExportEngine.kt`, `ForwardRecordingEngine.kt`, `MediaStoreSink.kt`):
 `blackbox_<yyyy-MM-dd_HH-mm-ss>_<N>min.<extension>` (or `_<N>s.<extension>` for sub-minute saves, and
-`blackbox_<yyyy-MM-dd_HH-mm-ss>_forward.<extension>` for `Live` forward recordings; `.m4a` by default,
-`.wav` if `WavPayloadEncoder` is used).
+`blackbox_<yyyy-MM-dd_HH-mm-ss>_forward.aac` for `Live` forward recordings: AAC ADTS in a
+single file that stays playable while it records). Save exports use `.m4a`; only the unwired
+`WavPayloadEncoder` export option uses `.wav`, never Live.

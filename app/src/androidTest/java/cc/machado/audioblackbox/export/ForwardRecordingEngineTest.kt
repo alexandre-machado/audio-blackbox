@@ -66,7 +66,7 @@ class ForwardRecordingEngineTest {
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val buffer = RingBuffer(capacityBytes = 80_000, bytesPerSecond = config.bytesPerSecond)
 
-        val name = "blackbox_${runId}_goertzel_test.m4a"
+        val name = "blackbox_${runId}_goertzel_test.aac"
         val engine = ForwardRecordingEngine(
             exportFloorAdvancerProvider = { null },
             config = config,
@@ -105,7 +105,7 @@ class ForwardRecordingEngineTest {
         assertNotNull("recording row must exist in MediaStore", row)
         insertedUris += row!!.uri
 
-        val tempFile = File.createTempFile("forward_test_read_", ".m4a", context.cacheDir)
+        val tempFile = File.createTempFile("forward_test_read_", ".aac", context.cacheDir)
         try {
             resolver.openInputStream(row.uri)!!.use { input ->
                 FileOutputStream(tempFile).use { output ->
@@ -137,7 +137,7 @@ class ForwardRecordingEngineTest {
         val buffer = RingBuffer(capacityBytes = 160_000, bytesPerSecond = config.bytesPerSecond)
 
         val gaps = mutableListOf<PauseGap>()
-        val name = "blackbox_${runId}_gap_test.m4a"
+        val name = "blackbox_${runId}_gap_test.aac"
 
         val engine = ForwardRecordingEngine(
             exportFloorAdvancerProvider = { null },
@@ -182,7 +182,7 @@ class ForwardRecordingEngineTest {
         assertNotNull("recording row must exist", row)
         insertedUris += row!!.uri
 
-        val tempFile = File.createTempFile("forward_gap_read_", ".m4a", context.cacheDir)
+        val tempFile = File.createTempFile("forward_gap_read_", ".aac", context.cacheDir)
         try {
             resolver.openInputStream(row.uri)!!.use { input ->
                 FileOutputStream(tempFile).use { output ->
@@ -210,7 +210,7 @@ class ForwardRecordingEngineTest {
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val buffer = RingBuffer(capacityBytes = 80_000, bytesPerSecond = config.bytesPerSecond)
 
-        val name = "blackbox_${runId}_concurrent_snap.m4a"
+        val name = "blackbox_${runId}_concurrent_snap.aac"
         val engine = ForwardRecordingEngine(
             exportFloorAdvancerProvider = { null },
             config = config,
@@ -276,7 +276,7 @@ class ForwardRecordingEngineTest {
         val config = AudioConfig(sampleRateHz = sampleRateHz, channelCount = 1)
         val buffer = RingBuffer(capacityBytes = 200_000, bytesPerSecond = config.bytesPerSecond)
 
-        val name = "blackbox_${runId}_refinalize_test.m4a"
+        val name = "blackbox_${runId}_refinalize_test.aac"
         val engine = ForwardRecordingEngine(
             exportFloorAdvancerProvider = { null },
             config = config,
@@ -362,7 +362,7 @@ class ForwardRecordingEngineTest {
         val buffer = RingBuffer(capacityBytes = 80_000, bytesPerSecond = config.bytesPerSecond)
 
         repeat(3) { sessionIndex ->
-            val name = "blackbox_${runId}_seq_${sessionIndex}.m4a"
+            val name = "blackbox_${runId}_seq_${sessionIndex}.aac"
             val engine = ForwardRecordingEngine(
                 exportFloorAdvancerProvider = { null },
                 config = config,

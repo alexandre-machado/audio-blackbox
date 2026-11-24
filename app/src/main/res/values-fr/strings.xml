@@ -240,7 +240,7 @@
     <string name="settings_specs_format_label">Format audio</string>
     <string name="settings_specs_format_value">PCM 16 bits (tampon circulaire)</string>
     <string name="settings_specs_export_label">Format d\'export</string>
-    <string name="settings_specs_export_value">AAC (.m4a) / WAV sans perte</string>
+    <string name="settings_specs_export_value">Sauver .m4a / En direct .aac</string>
     <string name="settings_specs_sample_rate_label">Fréquence d\'échantillonnage</string>
     <string name="settings_specs_sample_rate_value">16000 Hz</string>
     <string name="settings_specs_channels_label">Canaux</string>
@@ -370,4 +370,6 @@
     <string name="gallery_details_storage">Stockage</string>
     <string name="gallery_details_storage_value">Recordings / Blackbox</string>
     <string name="gallery_newly_saved">Enregistrement sauvegardé</string>
+    <string name="dashboard_panel_save_caption_live">Sauvegarde live</string>
+    <string name="dashboard_save_button_cd_live">Il est inutile de toucher Sauver pendant l’enregistrement en direct : le fichier est sauvegardé au fur et à mesure.</string>
 </resources>

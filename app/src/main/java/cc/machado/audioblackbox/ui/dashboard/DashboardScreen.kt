@@ -746,7 +746,8 @@ private fun ActionPanelRow(
 ) {
     var lastSaveClickTime by remember { mutableLongStateOf(0L) }
     val isExporting = uiState.saveState is SaveUiState.Exporting
-    val canSave = uiState.bufferedMillis > 0 && !isExporting
+    val canSave = uiState.canSave
+    val isSavingToLive = uiState.forwardRecordingState is ForwardRecordingUiState.Recording
     val bufferedClock = formatMillisAsClock(uiState.bufferedMillis)
     val capacityMinutes = (uiState.capacityMillis / 60_000L).toInt()
 
@@ -755,14 +756,17 @@ private fun ActionPanelRow(
     } else {
         stringResource(R.string.dashboard_panel_save_label)
     }
-    val saveCaption = when {
-        isExporting -> stringResource(R.string.dashboard_panel_save_caption_saving)
-        uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
-        uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
-        else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+    val saveCaption = when (val activeCaption = activeSaveCaptionResource(isExporting, isSavingToLive)) {
+        null -> when {
+            uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_panel_save_caption_no_audio)
+            uiState.isBufferFull -> stringResource(R.string.dashboard_panel_save_caption_full, capacityMinutes)
+            else -> stringResource(R.string.dashboard_panel_save_caption_buffered, bufferedClock)
+        }
+        else -> stringResource(activeCaption)
     }.uppercase()
     val saveCd = when {
         isExporting -> stringResource(R.string.dashboard_save_exporting_title)
+        isSavingToLive -> stringResource(R.string.dashboard_save_button_cd_live)
         uiState.bufferedMillis == 0L -> stringResource(R.string.dashboard_save_disabled_no_audio)
         uiState.isBufferFull -> stringResource(R.string.dashboard_save_button_cd_full, capacityMinutes)
         else -> stringResource(R.string.dashboard_save_button_cd_partial, bufferedClock)

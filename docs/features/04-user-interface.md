@@ -31,7 +31,7 @@ from recording and standby.
 ## Main Action Buttons (`Save` & `Live`)
 Inside the main engine card (`#335`), two avionics panel buttons control exports:
 - **`Save` (Lookback):** writes the buffered audio since the last save (or the full buffer on the first save) to a local `.m4a` file and advances the export floor (`#121`, `#410`) so consecutive saves never overlap. Disabled with a clear "No audio yet" caption when nothing new is buffered.
-- **`Live` (Continuous forward recording):** opens a new `.m4a` file that preserves the buffered past and keeps recording live until the user taps `Stop`.
+- **`Live` (Continuous forward recording):** opens a single `.aac` (AAC ADTS) file that preserves the buffered past, stays playable while it records, and keeps recording until the user taps `Save & end` (or `Stop`, which also saves it).
 
 ## Local Gallery
 A list view of previously saved audio files (`blackbox_*`), sorted by date and time, sourced from

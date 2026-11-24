@@ -62,7 +62,7 @@ Nothing touches your disk until you press save, and the app has no internet perm
 | **Internal Buffer** | 16-bit Linear PCM | Pre-allocated circular ring buffer in RAM |
 | **Sample Rate** | 16,000 Hz (Voice) / 32,000 Hz (Balanced) / 44,100 Hz (High Fidelity) | Optimized for voice clarity and low memory footprint |
 | **Channel Config** | Mono (Voice / Balanced) or Stereo (High Fidelity) | Maximizes retention duration per megabyte |
-| **Export Formats** | AAC LC (`.m4a`) | Hardware-accelerated `MediaCodec` streaming encoder |
+| **Export Formats** | AAC LC (`.m4a` for Save, `.aac` ADTS for Live) | Hardware-accelerated `MediaCodec` streaming encoder |
 | **Storage Destination** | `Recordings/Blackbox/` (Android 12+) or `Music/Blackbox/` (Android 10-11) | Standard Android `MediaStore` collection |
 | **Thread Architecture** | Dedicated Single-Writer | Capture thread performs zero disk I/O and zero IPC |
 

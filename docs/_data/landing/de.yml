@@ -40,7 +40,7 @@ feature_interrupt_desc: Belegt eine andere App im Vordergrund das Mikrofon, scha
 feature_battery: Schutz vor Akkuoptimierung des Herstellers
 feature_battery_desc: Ein Vordergrunddienst mit aktiver Benachrichtigung und einer Anleitung zum Ausnehmen der App von der Akkuoptimierung des Herstellers hält die Aufnahme auch bei ausgeschaltetem Bildschirm ohne Unterbrechung am Laufen.
 feature_player: Integrierter Audioplayer
-feature_player_desc: Höre deine gespeicherten <code>.m4a</code>-Aufnahmen (AAC) an, spule, lösche und teile sie über das Android-Teilen-Menü. Ein Startbildschirm-Widget startet oder stoppt die Aufnahme mit einem Tippen.
+feature_player_desc: Höre deine gespeicherten <code>.m4a</code>- und <code>.aac</code>-Aufnahmen (AAC) an, spule, lösche und teile sie über das Android-Teilen-Menü. Ein Startbildschirm-Widget startet oder stoppt die Aufnahme mit einem Tippen.
 design_tag: Designsystem der US-Luftfahrt
 design_title: Interaktiver Avionik-Designprototyp
 design_desc: 'Teste den interaktiven Cockpit-Simulator im Browser: VU-Meter in Echtzeit, Korry-Statusleuchten, Sicherheitsanhänger "REMOVE BEFORE FLIGHT" und Speicherpuffer als Flugbandanzeige.'

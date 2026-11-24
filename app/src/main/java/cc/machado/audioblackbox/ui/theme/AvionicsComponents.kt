@@ -69,6 +69,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -327,6 +328,8 @@ fun AvionicsPanelButton(
     ledColor: Color = FlightOrange,
     contentDescription: String? = null,
     @DrawableRes iconRes: Int? = null,
+    // Exposes the actual caption layout for bounds checks; null keeps the normal text fast path.
+    onCaptionTextLayout: ((TextLayoutResult) -> Unit)? = null,
 ) {
     // `interactable`, not `enabled`, drives every visual below: an in-progress control is not
     // `enabled = false` (the caller still wants the click wired so a second tap is absorbed rather
@@ -413,6 +416,7 @@ fun AvionicsPanelButton(
                 if (caption != null) {
                     Text(
                         text = caption,
+                        onTextLayout = onCaptionTextLayout,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 10.sp,
                         color = captionColor,

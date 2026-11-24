@@ -67,6 +67,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.machado.audioblackbox.R
+import cc.machado.audioblackbox.export.StreamingAdtsWriter
 import cc.machado.audioblackbox.ui.ScreenHeader
 import cc.machado.audioblackbox.ui.theme.AudioBlackboxTheme
 import cc.machado.audioblackbox.ui.theme.AvionicsCard
@@ -594,6 +595,8 @@ private fun RecordingCard(
 private fun RecordingSpecificationsCard(recording: RecordingItem) {
     val formatLabel = if (recording.mimeType.contains("wav", ignoreCase = true) || recording.displayName.endsWith(".wav", ignoreCase = true)) {
         "WAV (.wav)"
+    } else if (StreamingAdtsWriter.accepts(recording.mimeType, recording.displayName)) {
+        "AAC (.aac)"
     } else {
         "AAC (.m4a)"
     }
