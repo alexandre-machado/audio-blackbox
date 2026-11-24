@@ -296,9 +296,50 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # Shared WSL network (#462): other distros' emulators can hold any port in the action's
+      # range, so no port is hardcoded. Pick the first even console port N in 5554-5584 (the
+      # range the pinned action accepts) whose N and N+1 (adb) are both free; never evict an
+      # owner. Every later step uses only emulator-$N.
+      - name: Pick a free emulator port
+        id: emu-port
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! listeners=$(ss -H -ltn); then
+            echo "::error::Cannot inspect listening ports; refusing to start the emulator."
+            exit 1
+          fi
+          port_busy() {
+            local port=$1 host status
+            if awk -v port="$port" '$4 ~ (":" port "$") { found=1 } END { exit !found }' <<< "$listeners"; then
+              return 0
+            fi
+            # Probe shared WSL localhost too: another distro's listener may not appear in ss.
+            for host in 127.0.0.1 ::1; do
+              status=0
+              timeout -k 1 2 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$host" "$port" 2>/dev/null || status=$?
+              # 1 = connection refused (free). Anything else (connected, timeout) counts as busy.
+              [[ "$status" == 1 ]] || return 0
+            done
+            return 1
+          }
+          for ((port = 5554; port <= 5584; port += 2)); do
+            if ! port_busy "$port" && ! port_busy "$((port + 1))"; then
+              echo "Using emulator console port $port (adb $((port + 1)))."
+              echo "port=$port" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::Every emulator port pair in 5554-5584 is occupied; refusing to start or kill any owner."
+          exit 1
+
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          ANDROID_SERIAL: emulator-${{ steps.emu-port.outputs.port }}
+          CI_EMULATOR_SHUTDOWN: "true"
         with:
+          emulator-port: ${{ steps.emu-port.outputs.port }}
           api-level: ${{ env.API_LEVEL }}
           target: ${{ env.TARGET }}
           arch: ${{ env.ARCH }}
