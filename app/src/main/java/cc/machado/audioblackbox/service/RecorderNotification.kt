@@ -155,7 +155,9 @@ object RecorderNotification {
             is ForwardRecordingState.Recording ->
                 context.getString(R.string.recorder_notification_forward_recording, formatDuration(forwardElapsedMillis))
             is ForwardRecordingState.Success ->
-                context.getString(R.string.recorder_notification_forward_success, forwardRecordingState.displayName)
+                if (forwardRecordingState.freeLimitReached) {
+                    context.getString(R.string.pro_limit_saved, forwardRecordingState.displayName)
+                } else context.getString(R.string.recorder_notification_forward_success, forwardRecordingState.displayName)
             is ForwardRecordingState.Error ->
                 context.getString(
                     if (forwardRecordingState.reason == cc.machado.audioblackbox.export.ForwardRecordingFailureReason.OPUS_UNAVAILABLE)
@@ -189,6 +191,10 @@ object RecorderNotification {
                 Action.STOP -> builder.addAction(0,
                     context.getString(R.string.recorder_notification_action_stop), stopIntent)
             }
+        }
+        // Issue #443: the cap message is longer than one collapsed line; let it expand in full.
+        if (forwardRecordingState is ForwardRecordingState.Success && forwardRecordingState.freeLimitReached) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
         }
         return builder.build()
     }

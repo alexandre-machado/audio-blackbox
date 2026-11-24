@@ -14,6 +14,7 @@ mockitoKotlin = "5.4.0"
 androidxTestRunner = "1.6.2"
 androidxTestRules = "1.6.1"
 datastorePreferences = "1.2.1"
+billing = "9.1.0"
 
 [libraries]
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
@@ -43,6 +44,7 @@ androidx-espresso-intents = { group = "androidx.test.espresso", name = "espresso
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTestRules" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

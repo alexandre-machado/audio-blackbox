@@ -109,8 +109,9 @@ def create_feature_graphic():
 
     text_x = 450
     
-    # Badge "100% PRIVATE • ZERO NETWORK EGRESS"
-    badge_text = "100% PRIVATE • ZERO NETWORK EGRESS"
+    # Badge (#445: the app now carries Play Billing's network permissions, so the old
+    # "ZERO NETWORK EGRESS" claim is gone; audio itself still never leaves the device)
+    badge_text = "AUDIO STAYS ON DEVICE • NO ADS • GPL-3.0"
     badge_w = 320
     badge_h = 28
     badge_y = 125
@@ -134,7 +135,7 @@ def create_feature_graphic():
     # Bullets (stacked cleanly)
     bullets_y = 330
     bullets = [
-        "✓ Rolling RAM buffer (5 to 60 min)",
+        "✓ Rolling RAM buffer, sized to your phone",
         "✓ Single-tap instant save to device storage",
         "✓ Pauses automatically during phone calls",
     ]

@@ -2,6 +2,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.Properties
+import java.util.TimeZone
 
 fun getGitCommitShortSha(): String {
     return try {
@@ -11,22 +12,6 @@ fun getGitCommitShortSha(): String {
         sha.ifBlank { "unknown" }
     } catch (_: Exception) {
         "unknown"
-    }
-}
-
-fun getGitBranch(): String {
-    val envBranch = System.getenv("GITHUB_HEAD_REF")?.takeIf { it.isNotBlank() }
-        ?: System.getenv("GITHUB_REF_NAME")?.takeIf { it.isNotBlank() }
-    if (!envBranch.isNullOrBlank()) {
-        return envBranch
-    }
-    return try {
-        val process = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD").start()
-        val branch = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
-        branch.ifBlank { "main" }
-    } catch (_: Exception) {
-        "main"
     }
 }
 
@@ -50,43 +35,34 @@ fun getGitCommitCount(): Int {
     }
 }
 
-fun getLatestGitTag(): String {
-    return try {
-        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0").start()
-        val tag = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
-        tag.ifBlank { "v0.3.1" }
-    } catch (_: Exception) {
-        "v0.3.1"
-    }
-}
-
+/**
+ * versionName = v{yy.MM.dd}.{build}-{sha7}, e.g. v26.11.24.718-0e46e80 (owner decision 2026-11-24).
+ *
+ * - Date: the build date in UTC (CI runners and the Play upload are UTC; a BRT date would flip
+ *   at 21:00 local and disagree with run timestamps).
+ * - Build: the versionCode (100 + GITHUB_RUN_NUMBER), not the raw run number, so the name
+ *   and the code always identify the same upload.
+ * - SHA: 7-character short commit SHA.
+ * - Local/debug builds (no GITHUB_RUN_NUMBER) use build 0 and a -dev suffix:
+ *   v{yy.MM.dd}.0-{sha7}-dev. A local build can never be mistaken for a CI upload.
+ * - Tag pushes (v*) are no longer special-cased: they build the same format, so a tag build's
+ *   name says which run and commit produced it. Tags still trigger the alpha publish exactly
+ *   as before; only the displayed name changes.
+ */
 fun computeDynamicVersionName(): String {
-    val refType = System.getenv("GITHUB_REF_TYPE")
-    val refName = System.getenv("GITHUB_REF_NAME")?.takeIf { it.isNotBlank() }
-    val branch = getGitBranch()
+    val date = SimpleDateFormat("yy.MM.dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }.format(Date())
     val sha = getGitCommitShortSha()
-    val buildNumber = computeDynamicVersionCode()
-    val latestTag = getLatestGitTag()
-
-    // A tag push (production release) uses the tag name directly (e.g. v0.3.1 / v0.3.2).
-    if (refType == "tag" && !refName.isNullOrBlank()) {
-        return refName
-    }
-    val effectiveBase = if (!refName.isNullOrBlank() && refName.startsWith("v") && !refName.contains("-") && refName.length > 2) {
-        refName
-    } else {
-        latestTag
-    }
-    return if (branch.startsWith("v") && branch != "v" && !branch.contains("-")) {
-        effectiveBase
-    } else {
-        "$effectiveBase.$buildNumber-$sha"
-    }
+    val ci = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() != null
+    return if (ci) "v$date.${computeDynamicVersionCode()}-$sha" else "v$date.0-$sha-dev"
 }
 
 fun computeBuildDate(): String {
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    // UTC, like the versionName date, so the two never disagree between 21:00 and 24:00 BRT.
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
     return dateFormat.format(Date())
 }
 
@@ -147,6 +123,7 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("long", "DEBUG_FREE_LIVE_CAP_MILLIS", "${providers.gradleProperty("freeLiveCapMillis").orNull?.toLong() ?: 0L}L")
             applicationIdSuffix = ".staging"
         }
         release {
@@ -216,6 +193,7 @@ dependencies {
     // Retention-window setting persistence (issue #45) -- DataStore, not SharedPreferences, for
     // new persisted state (see RetentionWindowPreferences's class doc for why).
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.billing.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -254,7 +232,7 @@ tasks.withType<Test> {
 }
 
 // Issue #148: Ensure the release merged manifest is always generated before unit tests run,
-// allowing ManifestPermissionSecurityTest to deterministically assert zero network permissions.
+// allowing ManifestPermissionSecurityTest to assert the exact approved permission allowlist.
 tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
     dependsOn("processReleaseMainManifest")
     inputs.file(layout.buildDirectory.file("intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"))

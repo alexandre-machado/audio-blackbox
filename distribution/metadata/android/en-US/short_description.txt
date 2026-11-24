@@ -1,1 +1,1 @@
-Audio dashcam: save the last minutes you just heard. Offline, stays on phone.
+Audio dashcam: save the last minutes you just heard. Audio stays on your phone.

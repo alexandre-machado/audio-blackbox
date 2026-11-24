@@ -43,6 +43,7 @@ internal fun HarnessApp(
     initialDestination: Destination,
     dashboardUiState: cc.machado.audioblackbox.ui.dashboard.DashboardUiState = dashboardFixture(),
     galleryUiState: cc.machado.audioblackbox.ui.gallery.GalleryUiState = galleryFixture(),
+    proState: ProCardState = ProCardState(),
 ) {
     var selected by rememberSaveable { mutableStateOf(initialDestination) }
     AudioBlackboxTheme {
@@ -73,6 +74,7 @@ internal fun HarnessApp(
                 )
                 Destination.SETTINGS -> SettingsScreen(
                     uiState = settingsFixture(),
+                    proState = proState,
                     onSelectQualityPreset = {},
                     onDecrement = {},
                     onIncrement = {},
@@ -103,9 +105,10 @@ internal fun CompactHarnessApp(
     initialDestination: Destination,
     dashboardUiState: cc.machado.audioblackbox.ui.dashboard.DashboardUiState = dashboardFixture(),
     galleryUiState: cc.machado.audioblackbox.ui.gallery.GalleryUiState = galleryFixture(),
+    proState: ProCardState = ProCardState(),
 ) {
     Box(modifier = Modifier.requiredSize(COMPACT_WINDOW_WIDTH, COMPACT_WINDOW_HEIGHT)) {
-        HarnessApp(initialDestination, dashboardUiState, galleryUiState)
+        HarnessApp(initialDestination, dashboardUiState, galleryUiState, proState)
     }
 }
 
@@ -256,7 +259,7 @@ internal fun showcaseGalleryFixture(): cc.machado.audioblackbox.ui.gallery.Galle
  * called in the language being captured.
  */
 @Composable
-internal fun ShowcaseApp(destination: Destination) {
+internal fun ShowcaseApp(destination: Destination, proState: ProCardState) {
     AudioBlackboxTheme {
         AppScaffold(
             selectedDestination = destination,
@@ -285,6 +288,7 @@ internal fun ShowcaseApp(destination: Destination) {
                 )
                 Destination.SETTINGS -> SettingsScreen(
                     uiState = showcaseSettingsFixture(),
+                    proState = proState,
                     onSelectQualityPreset = {},
                     onDecrement = {},
                     onIncrement = {},
