@@ -168,6 +168,8 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
 
 ---
 
+- **Play deploy kill switch** (owner order 2026-11-24, AB-2411-37): the repository variable `PLAY_ENABLED` gates the `deploy-playstore` job (`if: vars.PLAY_ENABLED != 'false' && ...`). The job is the only path that talks to Play (AAB upload, R8 mapping, listing sync, `sync_only`). With `PLAY_ENABLED=false`, merges to `main`, `v*` tags and `workflow_dispatch` still build and test, but the deploy job is **skipped**, so nothing reaches Play and no review restarts. Only the owner flips it (Settings → Secrets and variables → Actions → Variables). While it is `false`, do not re-run a skipped deploy, and verify on each `main` run that `deploy-playstore` shows **skipped**.
+
 ## 10. Pre-Merge Gate: `@sec` and `@rev` Markers
 
 Every pull request must pass a dual specialist review before merging:
