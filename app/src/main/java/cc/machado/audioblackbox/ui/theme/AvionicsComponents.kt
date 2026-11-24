@@ -423,7 +423,9 @@ fun AvionicsPanelButton(
                 )
             }
             // Shrink first; at extreme font scales preserve the complete title by wrapping.
-            Column(modifier = Modifier.weight(1f)) {
+            // Equal-height pairs may have different caption line counts. Anchor titles to
+            // the top padding rather than centering each differently sized text column.
+            Column(modifier = Modifier.weight(1f).align(Alignment.Top)) {
                 Text(
                     text = label.uppercase(),
                     style = panelTitleStyle(),

@@ -195,9 +195,11 @@ class LiveButtonTitleLayoutTest {
                             val size = layout.layoutInput.style.fontSize.value
                             assertTrue("$case: title size $size stays within 11–13sp", size in 11f..13f)
                         }
-                        if (layouts.all { it.second.lineCount == 1 }) {
-                            assertEqualHeights(SAVE_BUTTON_TEST_TAG, liveTag)
-                            assertEqualTitleOffsets(SAVE_BUTTON_TEST_TAG, saveTitle, liveTag, liveTitle)
+                        // Only a shared row promises equal geometry. Stacked buttons size
+                        // independently, including when their localized captions wrap.
+                        if (!stacked && layouts.all { it.second.lineCount == 1 }) {
+                            assertEqualHeights(SAVE_BUTTON_TEST_TAG, liveTag, case)
+                            assertEqualTitleOffsets(SAVE_BUTTON_TEST_TAG, saveTitle, liveTag, liveTitle, case)
                         }
                     }
                 }
@@ -219,21 +221,26 @@ class LiveButtonTitleLayoutTest {
         assertEquals("$case: title must occupy exactly one line", 1, lines)
     }
 
-    private fun assertEqualHeights(saveTag: String, liveTag: String) {
+    private fun assertEqualHeights(saveTag: String, liveTag: String, case: String = "control") {
         val save = composeRule.onNodeWithTag(saveTag).getUnclippedBoundsInRoot()
         val live = composeRule.onNodeWithTag(liveTag).getUnclippedBoundsInRoot()
-        assertTrue("$liveTag: button heights must match within 1dp",
+        assertTrue("$case $liveTag: button heights must match within 1dp",
             abs((save.bottom - save.top).value - (live.bottom - live.top).value) <= 1f)
     }
 
-    private fun assertEqualTitleOffsets(saveTag: String, saveTitle: String, liveTag: String, liveTitle: String) {
+    private fun assertEqualTitleOffsets(
+        saveTag: String, saveTitle: String, liveTag: String, liveTitle: String,
+        case: String = "control",
+    ) {
         fun offset(tag: String, title: String): Float {
             val button = composeRule.onNodeWithTag(tag).getUnclippedBoundsInRoot()
             val text = composeRule.onNode(hasText(title) and hasAnyAncestor(hasTestTag(tag)),
                 useUnmergedTree = true).getUnclippedBoundsInRoot()
             return (text.top - button.top).value
         }
-        assertTrue("$liveTag: title top offsets must match within 1dp",
-            abs(offset(saveTag, saveTitle) - offset(liveTag, liveTitle)) <= 1f)
+        val saveOffset = offset(saveTag, saveTitle)
+        val liveOffset = offset(liveTag, liveTitle)
+        assertTrue("$case $liveTag: title top offsets must match within 1dp (save=$saveOffset, live=$liveOffset)",
+            abs(saveOffset - liveOffset) <= 1f)
     }
 }
