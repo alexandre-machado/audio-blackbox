@@ -162,9 +162,10 @@ class AudioCaptureEngineTest {
 
                 val state = engine.state.value as CaptureState.Error
                 assertEquals("read() code $code", expectedReason, state.reason)
-                // state flips to Error slightly before the capture thread's finally reaches
-                // release() (buffer#clear() runs in between) -- allow it to catch up.
-                verify(record, org.mockito.kotlin.timeout(2_000)).release()
+                // Error precedes finally/release. Join real cleanup rather than racing a
+                // wall-clock Mockito timeout (especially while the full gate is compiling).
+                engine.stop()
+                verify(record).release()
             }
         }
     }
