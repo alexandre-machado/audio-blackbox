@@ -201,6 +201,7 @@ class ForwardRecordingEngine(
      * session; every call site converged on `true`, so the flag was deleted rather than pinned --
      * a knob with one legal value is exactly the seam that let this regress silently.
      *
+     * Call from a worker thread: journals and publishes the row before returning Recording.
      * @param customDisplayName Optional explicit filename.
      */
     fun start(customDisplayName: String? = null): ForwardRecordingState {
@@ -247,6 +248,21 @@ class ForwardRecordingEngine(
 
             val currentConfig = configProvider?.invoke() ?: config
 
+            // start() runs on the service's worker dispatcher. Complete the durable journal
+            // and publication before reporting Recording, so Gallery can see the session as
+            // soon as start returns. Codec construction still belongs to the drain thread.
+            try {
+                target.prepare()
+            } catch (e: Exception) {
+                try { target.abortUnstarted() } catch (_: Exception) {}
+                val err = ForwardRecordingState.Error(
+                    ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                    "Failed to prepare streaming target: ${e.message}", e,
+                )
+                stateValue = err
+                return err
+            }
+
             stopRequested.set(false)
             cancelRequested.set(false)
             wakeUpLatch = CountDownLatch(1)
@@ -260,7 +276,6 @@ class ForwardRecordingEngine(
 
             val drainThread = Thread({
                 val writer = try {
-                    target.prepare()
                     encoding.createWriter(target, currentConfig)
                 } catch (e: Exception) {
                     try { target.abortUnstarted() } catch (_: Exception) {}

@@ -34,7 +34,7 @@ internal fun recoverLiveRows(
     result
 }
 
-/** Durable journal, written on the drain thread before the first audio frame.
+/** Durable journal, written on the start worker before publication and the first audio frame.
  * Startup repairs torn Ogg tails before rescanning; it never deletes audio or changes ADTS.
  * Only the startup snapshot is serialized with registration; scanner IPC never holds that lock.
  * Active rows are excluded so startup cannot mistake this process's file for an interrupted one.

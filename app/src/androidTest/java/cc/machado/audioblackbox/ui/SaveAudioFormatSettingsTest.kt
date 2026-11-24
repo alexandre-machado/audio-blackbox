@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -58,8 +60,11 @@ class SaveAudioFormatSettingsTest {
         assertEquals(SaveAudioFormat.OPUS, selected.value)
         rule.onNodeWithText(context.getString(R.string.settings_format_opus_unavailable))
             .performScrollTo().assertIsDisplayed()
-        rule.onNode(hasText(context.getString(R.string.settings_format_opus)) and hasClickAction())
-            .performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
+        // The editable-text node has its own focus click. Invoke the outer menuAnchor's
+        // dropdown action in the unmerged tree, which actually expands the menu.
+        rule.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.DropdownList),
+            useUnmergedTree = true)
+            .performScrollTo().assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)
         // The menu lives in a popup window. Wait (bounded) for its item to exist, then fire the
         // item's real click action instead of injecting touch into the popup. The touch-injection
         // route failed on CI with the node gone mid-gesture, while the semantics route still

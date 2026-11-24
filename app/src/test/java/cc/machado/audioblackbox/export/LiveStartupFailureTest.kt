@@ -10,8 +10,6 @@ import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.RingBuffer
 import java.io.FileDescriptor
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import org.junit.Assert.*
 import org.junit.Test
 import org.mockito.Mockito
@@ -38,22 +36,36 @@ class LiveStartupFailureTest {
         verify(resolver).delete(uri, null, null)
     }
 
-    // Oracle: a journal blocked on real synchronization cannot hold up start() or write audio
-    // before it completes. No wall-clock performance threshold or sleep is used.
-    @Test fun journalRunsOffStartPathBeforeFirstAudio() {
-        val entered = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        withSink({ _, _ -> entered.countDown(); check(release.await(10, TimeUnit.SECONDS)) }) { sink, resolver, _ ->
+    // Oracle: start must synchronously journal and publish the real sink before returning
+    // Recording. Moving preparation back after the Recording transition fails even if the
+    // drain worker wins the race: registration refuses an already-announced session.
+    @Test fun startPublishesAacAfterJournalBeforeReturningRecording() {
+        lateinit var engine: ForwardRecordingEngine
+        var journaled = false
+        withSink({ _, _ ->
+            check(engine.state.value !is ForwardRecordingState.Recording) { "Recording announced before publication" }
+            journaled = true
+        }) { sink, resolver, uri ->
             val writer = mock<StreamingAudioWriter>()
-            val engine = engine(sink) { _, _ -> writer }
+            engine = engine(sink) { _, _ -> writer }
+            whenever(resolver.update(eq(uri), any(), anyOrNull(), anyOrNull())).thenAnswer {
+                assertTrue("Durable journal must precede publication", journaled)
+                1
+            }
             try {
                 assertTrue(engine.start() is ForwardRecordingState.Recording)
-                assertTrue(entered.await(10, TimeUnit.SECONDS))
-                verify(writer, never()).write(any(), any(), any())
-                verify(resolver, never()).update(any(), any(), anyOrNull(), anyOrNull())
-            } finally { release.countDown(); engine.stop() }
-            verify(resolver).update(any(), any(), anyOrNull(), anyOrNull())
+                verify(resolver).update(eq(uri), any(), anyOrNull(), anyOrNull())
+            } finally { engine.stop() }
         }
+    }
+
+    // Oracle: a failed journal cannot report Recording or leave its unpublished row behind.
+    @Test fun startReportsJournalFailureWithoutPublishing() = withSink({ _, _ -> throw IOException("journal") }) { sink, resolver, uri ->
+        val engine = engine(sink) { _, _ -> error("Writer must not be constructed") }
+        val result = engine.start()
+        assertEquals(ForwardRecordingFailureReason.SINK_OPEN_FAILED, (result as ForwardRecordingState.Error).reason)
+        verify(resolver, atLeastOnce()).delete(uri, null, null)
+        verify(resolver, never()).update(any(), any(), anyOrNull(), anyOrNull())
     }
 
     private fun engine(sink: StreamingExportSink, factory: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter): ForwardRecordingEngine {

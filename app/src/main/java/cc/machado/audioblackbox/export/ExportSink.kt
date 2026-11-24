@@ -71,8 +71,8 @@ interface StreamingExportSink {
  *   partial recorded audio is preserved on disk for the black box recording.
  */
 interface StreamingExportTarget : Closeable, AutoCloseable {
-    /** Journal then publish on the drain thread, before constructing the writer or accessing
-     * descriptors. Must be called before audio, without delaying the caller of start(). */
+    /** Journal then publish on the start worker, before reporting Recording, constructing the
+     * writer or accessing descriptors. The caller of start() must run off the main thread. */
     fun prepare() {}
 
     /** Only before the first audio write: delete the unusable published row. */
