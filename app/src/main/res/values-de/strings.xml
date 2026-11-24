@@ -368,4 +368,13 @@
     <string name="dashboard_panel_save_caption_live">Live speichern</string>
     <string name="dashboard_save_button_cd_live">Speichern ist während der Live-Aufnahme nicht nötig: Die Live-Datei wird während der Aufnahme gespeichert</string>
     <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Änderung ausstehend — aktiver Puffer: %1$d Min.</string>
+    <string name="settings_save_audio_format">Audioformat zum Speichern</string>
+    <string name="settings_format_aac">AAC (Standard)</string>
+    <string name="settings_format_opus">Opus</string>
+    <string name="settings_format_aac_helper">AAC (.m4a): breitere Kompatibilität.</string>
+    <string name="settings_format_opus_helper">Opus (.ogg): kleinere Sprachdateien. Einige Player und Messenger können sie möglicherweise nicht öffnen.</string>
+    <string name="settings_format_aac_live">Live bleibt AAC (.aac), während der Aufnahme abspielbar.</string>
+    <string name="settings_format_opus_live">Warte bis zum Ende der Aufnahme, um Opus-Audio abzuspielen. Wenn die App unerwartet geschlossen wird, lässt sich bereits gespeichertes Audio möglicherweise wiederherstellen. Das Ende kann jedoch verloren gehen und einige Player können die Datei möglicherweise nicht öffnen.</string>
+    <string name="settings_format_opus_unavailable">Opus ist auf diesem Gerät nicht verfügbar.</string>
+    <string name="settings_format_save_error">Das Audioformat konnte nicht gespeichert werden. Versuche es erneut.</string>
 </resources>

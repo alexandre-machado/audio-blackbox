@@ -373,4 +373,13 @@
     <string name="dashboard_panel_save_caption_live">Sauvegarde live</string>
     <string name="dashboard_save_button_cd_live">Il est inutile de toucher Sauver pendant l’enregistrement en direct : le fichier est sauvegardé au fur et à mesure.</string>
     <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Modification en attente — tampon actif : %1$d min.</string>
+    <string name="settings_save_audio_format">Format audio à enregistrer</string>
+    <string name="settings_format_aac">AAC (par défaut)</string>
+    <string name="settings_format_opus">Opus</string>
+    <string name="settings_format_aac_helper">AAC (.m4a) : compatibilité plus large.</string>
+    <string name="settings_format_opus_helper">Opus (.ogg) : fichiers vocaux plus petits. Certains lecteurs et applications de messagerie peuvent ne pas les ouvrir.</string>
+    <string name="settings_format_aac_live">Le direct reste en AAC (.aac), lisible pendant l’enregistrement.</string>
+    <string name="settings_format_opus_live">Attendez la fin de l’enregistrement pour écouter un fichier Opus. Si l’application se ferme de façon inattendue, l’audio déjà enregistré peut être récupérable, mais la fin peut être perdue et certains lecteurs peuvent ne pas ouvrir le fichier.</string>
+    <string name="settings_format_opus_unavailable">Opus indisponible sur cet appareil.</string>
+    <string name="settings_format_save_error">Impossible de sauvegarder le format audio. Réessayez.</string>
 </resources>

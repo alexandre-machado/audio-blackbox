@@ -54,6 +54,9 @@ class AudioBlackboxApplication : Application() {
         ErrorLogFileHolder.file = java.io.File(applicationContext.filesDir, "export_errors.log")
 
         installCrashLogHandler()
+        Thread({
+            runCatching { cc.machado.audioblackbox.export.InterruptedLiveRecovery.recover(this) }
+        }, "InterruptedLiveRecovery").start()
     }
 
     /**

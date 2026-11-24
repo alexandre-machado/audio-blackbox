@@ -89,6 +89,13 @@ class RecorderService : Service() {
     private val recordingPreferences: RecordingPreferences by lazy {
         DataStoreRecordingPreferences(applicationContext)
     }
+    private val formatSelector by lazy {
+        val preferences = cc.machado.audioblackbox.settings.SaveAudioFormatPreferences(applicationContext)
+        cc.machado.audioblackbox.export.RecordingFormatSelector(
+            format = { kotlinx.coroutines.runBlocking { preferences.current() } },
+            tempDir = applicationContext.cacheDir,
+        )
+    }
 
     private val notificationRefresher = PeriodicNotificationRefresher(captureState)
     private var isGracefullyStopping = false
@@ -131,6 +138,7 @@ class RecorderService : Service() {
             config = captureConfig,
             sink = MediaStoreSink(applicationContext),
             payloadEncoder = AacPayloadEncoder(tempDir = applicationContext.cacheDir),
+            payloadEncoderProvider = { formatSelector.saveEncoder() },
             minExportDurationMillis = MIN_EXPORT_ANIMATION_MILLIS,
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             configProvider = { captureConfig },
@@ -149,6 +157,7 @@ class RecorderService : Service() {
             gapsProvider = { engine.gaps.value },
             sink = MediaStoreSink(applicationContext),
             writerFactory = { target, cfg -> StreamingAdtsWriter(target, cfg) },
+            liveEncodingProvider = { formatSelector.liveEncoding() },
             errorLogFile = java.io.File(applicationContext.filesDir, "export_errors.log"),
             // Issue #322: read fresh on every drain iteration, same reason as the providers above
             // (a rebuild replaces `engine` wholesale) and additionally so a preset change landing
@@ -180,6 +189,9 @@ class RecorderService : Service() {
     override fun onCreate() {
         super.onCreate()
         _isServiceRunning.value = true
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { cc.machado.audioblackbox.export.InterruptedLiveRecovery.recover(applicationContext) }
+        }
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         RecorderNotification.ensureChannel(this)
         audioManager.registerAudioRecordingCallback(recordingCallback, null)
@@ -1078,6 +1090,7 @@ internal fun buildExportEngine(
     minExportDurationMillis: Long,
     errorLogFile: java.io.File?,
     configProvider: () -> AudioConfig,
+    payloadEncoderProvider: () -> PayloadEncoder = { payloadEncoder },
 ): ExportEngine = ExportEngine(
     config = config,
     readSinceProvider = { cursor, maxBytes -> engineProvider().readSince(cursor, maxBytes) },
@@ -1091,6 +1104,7 @@ internal fun buildExportEngine(
     gapsProvider = { engineProvider().gaps.value },
     sink = sink,
     payloadEncoder = payloadEncoder,
+    payloadEncoderProvider = payloadEncoderProvider,
     segmentsProvider = { engineProvider().activeSegments() },
     minExportDurationMillis = minExportDurationMillis,
     errorLogFile = errorLogFile,

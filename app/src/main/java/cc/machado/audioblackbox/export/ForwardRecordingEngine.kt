@@ -120,6 +120,9 @@ class ForwardRecordingEngine(
     // un-retried first read. Blocking inside this hook until the state mutation is complete closes
     // both at once, since it runs strictly between them.
     private val onEnteringCleanStopDrain: () -> Unit = {},
+    private val liveEncodingProvider: () -> LiveEncoding = {
+        LiveEncoding(StreamingAdtsWriter.MIME_TYPE, StreamingAdtsWriter.FILE_EXTENSION, writerFactory)
+    },
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -204,9 +207,17 @@ class ForwardRecordingEngine(
                 return err
             }
 
-            val displayName = customDisplayName ?: generateDisplayName(Date(clock()))
+            val encoding = try {
+                liveEncodingProvider()
+            } catch (e: Exception) {
+                val err = ForwardRecordingState.Error(ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                    "Failed to read recording format: ${e.message}", e)
+                stateValue = err
+                return err
+            }
+            val displayName = customDisplayName ?: generateDisplayName(Date(clock()), encoding.extension)
             val target = try {
-                sink.openStreaming(displayName, StreamingAdtsWriter.MIME_TYPE)
+                sink.openStreaming(displayName, encoding.mimeType)
             } catch (e: Exception) {
                 val err = ForwardRecordingState.Error(
                     ForwardRecordingFailureReason.SINK_OPEN_FAILED,
@@ -218,7 +229,7 @@ class ForwardRecordingEngine(
 
             val currentConfig = configProvider?.invoke() ?: config
             val writer = try {
-                writerFactory(target, currentConfig)
+                encoding.createWriter(target, currentConfig)
             } catch (e: Exception) {
                 target.close()
                 val err = ForwardRecordingState.Error(

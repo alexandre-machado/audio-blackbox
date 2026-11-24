@@ -5,9 +5,10 @@
 # booted AVD (scripts/run-instrumented-tests.sh). Never touches a physically connected device
 # (the S25) on purpose -- see the serial-selection guard below.
 #
-# Two things happen here, not one plain `./gradlew connectedDebugAndroidTest`:
-#   1. Every instrumented test EXCEPT InterruptionSpliceTest runs the normal way.
-#   2. InterruptionSpliceTest runs separately, launched directly via `adb shell am instrument`,
+# Three phases run here instead of one plain `./gradlew connectedDebugAndroidTest`:
+#   1. Normal instrumented tests, including Ogg prefix qualification, run first.
+#   2. OpusProcessKillTest runs with an external kill/restart handshake.
+#   3. InterruptionSpliceTest runs separately, launched directly via `adb shell am instrument`,
 #      because this script must inject two real GSM calls (`adb emu gsm call`/`gsm cancel`) at
 #      the right moments -- `adb emu` talks to the emulator's host-side console port and cannot
 #      be issued from on-device instrumentation, so Gradle's connectedAndroidTest task has no
@@ -43,6 +44,7 @@ APP_ID="cc.machado.audioblackbox.staging"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
+OPUS_KILL_TEST_CLASS="cc.machado.audioblackbox.export.OpusProcessKillTest"
 # Where ScreenshotCaptureTest (issue #78) writes its PNGs, relative to the app's data dir, and
 # where they land in the workspace for .github/workflows/ci.yml to upload as an artifact. The
 # device path is the app's *internal* files dir on purpose: `run-as` reads it on any API level
@@ -208,13 +210,13 @@ if [[ -n "$STALE_CAPTURES" ]]; then
   fail "Stale screen captures survive at the app's $SCREENSHOT_DEVICE_DIR ($(echo "$STALE_CAPTURES" | tr '\n' ' ')) -- refusing to run, since the pull would upload a previous run's PNGs as this run's."
 fi
 
-# --- Phase 1: everything except InterruptionSpliceTest --------------------
+# --- Phase 1: tests that do not require an external handshake -------------
 # Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
 # leftovers from some earlier install/boot activity that happened to log the same tag.
 "${ADB[@]}" logcat -c
 log "Running the non-interruption instrumented tests..."
 set +e
-"${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS" "$RUNNER" \
+"${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS,$OPUS_KILL_TEST_CLASS" "$RUNNER" \
   2>&1 | tee /tmp/instrumented-phase1.log
 PHASE1_STATUS=$?
 set -e
@@ -274,6 +276,37 @@ if [[ -z "$HEADROOM_OUTPUT" ]]; then
   fail "HeadroomBenchmark logcat tag produced no output -- AudioRecordHeadroomInstrumentedTest's results were lost (buffer rotated, process died, or the tag/filter drifted). Not treating an empty capture as success."
 fi
 printf '%s\n' "$HEADROOM_OUTPUT"
+
+# #433: Phase 1 includes the Ogg truncation qualification. A failure above is the owner's
+# stop gate; never proceed to a different muxer or hide a failed prefix behind a repaired copy.
+# The first instrumentation process is deliberately killed with its production Live writer open.
+log "Starting the Opus live process-kill qualification..."
+command -v timeout >/dev/null || fail "timeout is required for the process-kill qualification."
+"${ADB[@]}" logcat -c
+timeout -k 5 120 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
+  > /tmp/instrumented-opus-kill-start.log 2>&1 &
+OPUS_START_PID=$!
+opus_deadline=$((SECONDS + 90))
+opus_ready=""
+while [[ $SECONDS -lt $opus_deadline ]]; do
+  opus_ready="$(timeout -k 2 5 "${ADB[@]}" logcat -d -s OpusKillTest:I | grep -oE 'OPUS_KILL_READY pid=[0-9]+' | tail -1 || true)"
+  [[ -n "$opus_ready" ]] && break
+done
+if [[ -z "$opus_ready" ]]; then
+  timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
+  wait "$OPUS_START_PID" || true
+  fail "Opus live writer never reported READY; see /tmp/instrumented-opus-kill-start.log."
+fi
+opus_app_pid="${opus_ready##*=}"
+opus_actual_pid="$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" | tr -d '\r')"
+[[ "$opus_app_pid" == "$opus_actual_pid" ]] || fail "The READY app PID is no longer alive; no process-kill result can be claimed."
+timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
+wait "$OPUS_START_PID" || true # Process death is expected; verifier success is the oracle.
+[[ -z "$("${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
+timeout -k 5 180 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
+  2>&1 | tee /tmp/instrumented-opus-kill-verify.log
+grep -q 'OK (' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
+log "Opus process-kill and startup-recovery qualification OK."
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
 log "Launching InterruptionSpliceTest in the background..."

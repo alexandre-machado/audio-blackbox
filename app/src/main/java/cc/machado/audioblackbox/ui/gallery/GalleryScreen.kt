@@ -398,6 +398,8 @@ private fun RecordingCard(
     onDeleteClicked: () -> Unit,
 ) {
     val recording = item.recording
+    val waitingForOpus = item.isInProgress &&
+        cc.machado.audioblackbox.export.StreamingOpusWriter.accepts(recording.mimeType, recording.displayName)
     val durationSizeLabel = stringResource(
         R.string.gallery_item_duration_size,
         formatDurationClock(recording.durationMillis),
@@ -475,6 +477,7 @@ private fun RecordingCard(
                 ) {
                     FilledIconButton(
                         onClick = onPlayPauseClicked,
+                        enabled = !waitingForOpus,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -595,6 +598,8 @@ private fun RecordingCard(
 private fun RecordingSpecificationsCard(recording: RecordingItem) {
     val formatLabel = if (recording.mimeType.contains("wav", ignoreCase = true) || recording.displayName.endsWith(".wav", ignoreCase = true)) {
         "WAV (.wav)"
+    } else if (cc.machado.audioblackbox.export.StreamingOpusWriter.accepts(recording.mimeType, recording.displayName)) {
+        "Ogg (.ogg)"
     } else if (StreamingAdtsWriter.accepts(recording.mimeType, recording.displayName)) {
         "AAC (.aac)"
     } else {

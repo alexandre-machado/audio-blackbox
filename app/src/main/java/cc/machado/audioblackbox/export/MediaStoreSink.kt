@@ -126,8 +126,15 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
         }
         try { creatingPfd.close() } catch (_: Exception) {}
 
+        try {
+            InterruptedLiveRecovery.register(context, uri)
+        } catch (e: Exception) {
+            pfd.close()
+            throw IOException("Could not journal the live recording", e)
+        }
+
         return object : StreamingExportTarget {
-            private var isClosed = false
+            @Volatile private var isClosed = false
             override val uri: Uri = uri
             override val fileDescriptor: FileDescriptor = pfd.fileDescriptor
             override val outputStream: OutputStream by lazy {
@@ -177,7 +184,14 @@ class MediaStoreSink(private val context: Context) : ExportSink, StreamingExport
                         arrayOf(dataPath),
                         // The provider may normalize the requested MIME (notably .aac).
                         arrayOf(resolver.getType(uri) ?: mimeType),
-                    ) { _, _ -> latch.countDown() }
+                    ) { _, scanned ->
+                        // A closed session with refreshed metadata no longer needs startup repair.
+                        if (isClosed && scanned != null) {
+                            try { InterruptedLiveRecovery.forget(context, uri) }
+                            catch (e: Exception) { Log.w(TAG, "Could not clear live recovery entry", e) }
+                        }
+                        latch.countDown()
+                    }
                     if (!latch.await(REFINALIZE_SCAN_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                         // The scan may still land after this returns -- the timeout bounds how long
                         // the drain thread waits, not the scanner. Logged because if it routinely

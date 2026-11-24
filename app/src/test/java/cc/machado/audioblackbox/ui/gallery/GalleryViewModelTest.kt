@@ -67,6 +67,29 @@ class GalleryViewModelTest {
         dateAddedMillis = 0L,
     )
 
+    // Oracle: active Ogg playback cannot reach the real player seam; completion unlocks it,
+    // while an active AAC/ADTS row retains its existing play-while-recording behavior.
+    @Test fun `live Opus waits for completion but live AAC remains playable`() = runTest {
+        val ogg = row("blackbox_2026-01-01_00-00-00_forward.ogg").copy(mimeType = "audio/opus")
+        val aac = row("blackbox_2026-01-01_00-00-01_forward.aac").copy(mimeType = "audio/aac")
+        val player = FakeRecordingPlayer()
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording(ogg.displayName, 0))
+        val viewModel = GalleryViewModel(FakeRecordingsRepository(listOf(ogg, aac)), player,
+            ioDispatcher = Dispatchers.Unconfined, forwardRecordingState = forward)
+        subscribe(viewModel)
+        val items = viewModel.uiState.value.items.map { it.recording }
+        val opusItem = items.single { it.uri == ogg.uri }
+        val aacItem = items.single { it.uri == aac.uri }
+        viewModel.onPlayPauseClicked(opusItem)
+        assertTrue(player.playCalls.isEmpty())
+        forward.value = ForwardRecordingState.Success(ogg.displayName, 3200)
+        viewModel.onPlayPauseClicked(opusItem)
+        assertEquals(listOf(ogg.uri), player.playCalls)
+        forward.value = ForwardRecordingState.Recording(aac.displayName, 3200)
+        viewModel.onPlayPauseClicked(aacItem)
+        assertEquals(listOf(ogg.uri, aac.uri), player.playCalls)
+    }
+
     private fun TestScope.subscribe(viewModel: GalleryViewModel) {
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
