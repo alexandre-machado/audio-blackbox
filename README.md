@@ -39,8 +39,8 @@ Audio stays in RAM until you save or start Live, and your recordings are never u
 ## ✨ Key Features
 
 - 🎯 **Two Primary Capture Modes**:
-  - **Save Recent Past (Lookback)**: Write the buffered audio since your last save (the whole buffer the first time) from the memory ring buffer into an AAC (`.m4a`) file. One action, no window to pick -- the old fixed-window selector was retired in #121 because it promised windows the buffer might not hold. Since #410 a successful save advances the buffer's export floor, so the next save starts where the previous file ended and consecutive saves never overlap.
-  - **Continuous Live Recording**: Live saves the buffered audio from before the tap and continues in a single .aac (ADTS) file, playable while recording. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Installs before 2026-12-20 at 03:00 UTC get Pro at no cost.
+  - **Save Recent Past (Lookback)**: Write the buffered audio since your last save (the whole buffer the first time) from the memory ring buffer into an AAC (`.m4a`, default) or Opus (`.ogg`) file. One action, no window to pick -- the old fixed-window selector was retired in #121 because it promised windows the buffer might not hold. Since #410 a successful save advances the buffer's export floor, so the next save starts where the previous file ended and consecutive saves never overlap.
+  - **Continuous Live Recording**: Live saves the buffered audio from before the tap and continues in a single file: .aac (ADTS) with AAC (default), playable while recording, or .ogg with Opus, which you must wait until recording ends to play. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Installs before 2026-12-20 at 03:00 UTC get Pro at no cost.
 - 🎚️ **Selectable Audio Quality**: Three presets in Settings -- Voice (16 kHz mono), Balanced (32 kHz mono), and High Fidelity (44.1 kHz stereo) -- each trading sample rate/channels for its own app-memory retention ceiling.
 - 📊 **Real-time Live VU Meter**: 20-capsule reactive microphone input level indicator built on Material 3 components, styled with the app's avionics/cockpit brand theme (see `AGENTS.md` §5).
 - 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).
@@ -56,6 +56,10 @@ Audio stays in RAM until you save or start Live, and your recordings are never u
 
 ---
 
+## Save audio format
+
+Save audio format is free, with no Pro unlock required: AAC (default) saves .m4a files with Save, or choose Opus (.ogg) for both Save and Live. AAC (.m4a): wider compatibility. Opus (.ogg): smaller voice files. Some players and messaging apps may not open them. With AAC selected: Live stays AAC (.aac), playable while recording. Wait until recording ends to play Opus audio. If the app closes unexpectedly, saved audio may be recoverable, but the ending may be lost and some players may not open the file. On reopening after an unexpected close, Opus audio already written is recovered; the incomplete final Ogg page is discarded, so the ending may be lost. Opus may be unavailable on some devices; the option is disabled with the reason shown.
+
 ## 🔬 Audio Engine Specifications
 
 | Parameter | Specification | Details |
@@ -63,7 +67,7 @@ Audio stays in RAM until you save or start Live, and your recordings are never u
 | **Internal Buffer** | 16-bit Linear PCM | Pre-allocated circular ring buffer in RAM |
 | **Sample Rate** | 16,000 Hz (Voice) / 32,000 Hz (Balanced) / 44,100 Hz (High Fidelity) | Optimized for voice clarity and low memory footprint |
 | **Channel Config** | Mono (Voice / Balanced) or Stereo (High Fidelity) | Maximizes retention duration per megabyte |
-| **Export Formats** | AAC LC (`.m4a` for Save, `.aac` ADTS for Live) | Hardware-accelerated `MediaCodec` streaming encoder |
+| **Export Formats** | AAC LC (default: `.m4a` for Save, `.aac` ADTS for Live); Opus (`.ogg` for both) | Save audio format setting (free) |
 | **Storage Destination** | `Recordings/Blackbox/` (Android 12+) or `Music/Blackbox/` (Android 10-11) | Standard Android `MediaStore` collection |
 | **Thread Architecture** | Dedicated Single-Writer | Capture thread performs zero disk I/O and zero IPC |
 
