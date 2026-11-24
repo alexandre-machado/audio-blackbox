@@ -52,16 +52,32 @@ object DeviceMemoryBudget {
     @Volatile var currentBufferAllocationBytesProvider: () -> Long = { 0L }
     @Volatile var availableSystemBytesProvider: () -> Long? = { null }
 
-    /** Runtime adapter shared by service and preferences; the decision below remains pure. */
+    /** Shared offer entry point. Samples once when rendering/editing Settings, reading
+     * preferences, or admitting a service change. Allocation rechecks the guard at allocation time. */
     fun currentMaxRetentionMinutes(
         preset: QualityPreset,
-        availableSystemBytes: Long? = null,
+        availableSystemBytes: Long? = availableSystemBytesProvider(),
         memoryBudget: MemoryBudget = MemoryBudget.REAL,
         currentBufferAllocationBytes: Long = currentBufferAllocationBytesProvider(),
     ): Int {
         val heap = memoryBudget.sample()
         return maxRetentionMinutes(preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
             heap.maxHeapBytes, heap.usedHeapBytes, availableSystemBytes, currentBufferAllocationBytes)
+    }
+
+    /** Final allocation guard shared by idle selection, start and live resize (including the
+     * minimum step, which is a UI floor rather than a promise that allocation is affordable). */
+    internal fun allocationRefusal(
+        requestedBytes: Int,
+        existingBytes: Int,
+        memoryBudget: MemoryBudget,
+        chunkSizeBytes: Int = RingBuffer.DEFAULT_CHUNK_SIZE_BYTES,
+    ): ResizeOutcome.Refused? {
+        val sample = memoryBudget.sample()
+        val peak = sample.usedHeapBytes + maxOf(0L, requestedBytes.toLong() - existingBytes) + 2L * chunkSizeBytes
+        return if (peak > (sample.maxHeapBytes * SAFE_HEAP_UTILISATION).toLong()) {
+            ResizeOutcome.Refused(requestedBytes, peak, sample.maxHeapBytes)
+        } else null
     }
 
     /**

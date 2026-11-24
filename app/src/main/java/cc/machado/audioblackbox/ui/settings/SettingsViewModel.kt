@@ -168,10 +168,11 @@ class SettingsViewModel(
     )
 
     private fun maxRetentionForPreset(preset: QualityPreset): Int {
-        return DeviceMemoryBudget.maxRetentionMinutes(
-            config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-            maxHeapBytes = maxMemoryBytesProvider(),
-            usedHeapBytes = usedMemoryBytesProvider(),
+        return DeviceMemoryBudget.currentMaxRetentionMinutes(
+            preset = preset,
+            memoryBudget = cc.machado.audioblackbox.audio.MemoryBudget {
+                cc.machado.audioblackbox.audio.MemorySample(maxMemoryBytesProvider(), usedMemoryBytesProvider())
+            },
             currentBufferAllocationBytes = currentBufferAllocationBytesProvider(),
             availableSystemBytes = availableSystemBytesProvider(),
         )
@@ -486,10 +487,11 @@ class SettingsViewModel(
         ): SettingsUiState {
 
             val presetOptions = QualityPreset.entries.map { preset ->
-                val maxRetention = DeviceMemoryBudget.maxRetentionMinutes(
-                    config = preset.config(AudioConfig.RETENTION_WINDOW_MIN_MINUTES),
-                    maxHeapBytes = maxMemoryBytes,
-                    usedHeapBytes = usedMemoryBytes,
+                val maxRetention = DeviceMemoryBudget.currentMaxRetentionMinutes(
+                    preset = preset,
+                    memoryBudget = cc.machado.audioblackbox.audio.MemoryBudget {
+                        cc.machado.audioblackbox.audio.MemorySample(maxMemoryBytes, usedMemoryBytes)
+                    },
                     currentBufferAllocationBytes = currentBufferAllocationBytes,
                     availableSystemBytes = availableSystemBytes,
                 )
@@ -535,16 +537,17 @@ class SettingsViewModel(
                 retentionStepper = stepper,
                 qualityPresets = presetOptions,
                 selectedPreset = pendingPreset,
-                clampNotice = clampNotice,
+                // A queued preference notice may outlive the sample that created it.
+                // Its current-setting claim must still describe the committed engine config.
+                clampNotice = clampNotice?.copy(newMinutes = committedMinutes),
                 telemetry = telemetry,
                 resizeError = resizeError,
-                retentionLimit = clampNoticeForSettings(storedMinutes,
-                    presetOptions.first { it.preset == committedPreset }.maxRetentionMinutes),
+                retentionLimit = clampNoticeForSettings(storedMinutes, committedMinutes),
             )
         }
 
-        private fun clampNoticeForSettings(storedMinutes: Int, ceiling: Int): ClampNotice? =
-            if (storedMinutes > ceiling) ClampNotice(storedMinutes, ceiling) else null
+        private fun clampNoticeForSettings(storedMinutes: Int, committedMinutes: Int): ClampNotice? =
+            if (storedMinutes != committedMinutes) ClampNotice(storedMinutes, committedMinutes) else null
 
         /** Standard [ViewModelProvider.Factory] wiring, used from [cc.machado.audioblackbox.ui.MainActivity]'s
          * `viewModel(factory = ...)` call -- same shape as [cc.machado.audioblackbox.ui.dashboard.DashboardViewModel.Factory]

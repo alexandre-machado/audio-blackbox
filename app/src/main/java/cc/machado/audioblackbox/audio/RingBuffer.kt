@@ -556,17 +556,8 @@ class RingBuffer(
             val oldCapacity = _capacityBytes
             if (newCapacityBytes == oldCapacity) return ResizeOutcome.Applied
 
-            val sample = memoryBudget.sample()
-            val netGrowthBytes = maxOf(0L, newCapacityBytes.toLong() - oldCapacity.toLong())
-            val projectedPeakBytes = sample.usedHeapBytes + netGrowthBytes + 2L * chunkSizeBytes
-            val safeHeapBytes = (sample.maxHeapBytes * DeviceMemoryBudget.SAFE_HEAP_UTILISATION).toLong()
-            if (projectedPeakBytes > safeHeapBytes) {
-                return ResizeOutcome.Refused(
-                    requestedCapacityBytes = newCapacityBytes,
-                    projectedPeakBytes = projectedPeakBytes,
-                    maxHeapBytes = sample.maxHeapBytes,
-                )
-            }
+            DeviceMemoryBudget.allocationRefusal(newCapacityBytes, oldCapacity, memoryBudget, chunkSizeBytes)
+                ?.let { return it }
 
             val oldOldest = oldestAvailableLocked()
             val availableBytes = totalWritten - oldOldest

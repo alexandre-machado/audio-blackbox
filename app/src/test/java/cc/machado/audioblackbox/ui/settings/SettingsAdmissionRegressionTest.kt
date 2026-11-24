@@ -12,15 +12,30 @@ import org.junit.Test
 class SettingsAdmissionRegressionTest {
     /** Oracle: one service admission sample applies both config and engine, even if a second
      * sample would refuse. The old post-commit rebuild sampled again and could diverge. */
-    @Test fun serviceAppliesUsingOneAdmissionSample() {
+    @Test fun idleViewModelAppliesUsingOneAdmissionSample() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = androidx.lifecycle.ViewModelStore()
         val service = cc.machado.audioblackbox.service.RecorderService
         val previousProvider = service.maxRetentionMinutesProvider
         val previousConfig = service.captureConfig
         val previousPreset = service.qualityPresetFlow.value
         try {
+            service.maxRetentionMinutesProvider = { Int.MAX_VALUE }
+            service.switchSettings(5, QualityPreset.HIGH_FIDELITY)
+            val prefs = InMemoryRetentionWindowPreferences(initialMinutes = 5)
+            val vm = SettingsViewModel(
+                captureState = MutableStateFlow(CaptureState.Idle),
+                retentionWindowPreferences = prefs,
+                maxMemoryBytesProvider = { 256L * 1024 * 1024 },
+                usedMemoryBytesProvider = { 20L * 1024 * 1024 },
+            )
+            store.put("settings", vm)
             var samples = 0
             service.maxRetentionMinutesProvider = { if (++samples == 1) 15 else 5 }
-            assertTrue(service.switchSettings(10, QualityPreset.HIGH_FIDELITY))
+            vm.incrementPending()
+            advanceTimeBy(SettingsViewModel.DEBOUNCE_MILLIS)
+            runCurrent()
+            assertEquals(10, prefs.currentBufferDurationMinutes())
             assertEquals(1, samples)
             assertEquals(10, service.bufferDurationMinutesFlow.value)
             assertEquals(QualityPreset.HIGH_FIDELITY, service.qualityPresetFlow.value)
@@ -29,6 +44,9 @@ class SettingsAdmissionRegressionTest {
             service.maxRetentionMinutesProvider = { Int.MAX_VALUE }
             service.switchSettings(previousConfig.bufferDurationMinutes, previousPreset)
             service.maxRetentionMinutesProvider = previousProvider
+            store.clear()
+            runCurrent()
+            Dispatchers.resetMain()
         }
     }
 

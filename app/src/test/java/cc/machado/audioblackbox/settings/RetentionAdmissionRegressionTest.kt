@@ -35,6 +35,32 @@ class RetentionAdmissionRegressionTest {
         assertEquals(10, resolveStoredRetentionMinutes(10, preferencesCeiling))
     }
 
+    /** Oracle: recovery never hides the unapplied durable choice; a lower offer never claims
+     * that a still-running 30 minute buffer has shrunk. */
+    @Test fun noticeTracksCommittedCapacityAcrossMemoryChanges() {
+        val recovered = SettingsViewModel.mapUiState(10, 10, storedMinutes = 30,
+            maxMemoryBytes = 1024L * 1024 * 1024, usedMemoryBytes = 0)
+        assertEquals(ClampNotice(30, 10), recovered.retentionLimit)
+        val pressured = SettingsViewModel.mapUiState(30, 30, storedMinutes = 30,
+            maxMemoryBytes = 256L * 1024 * 1024, usedMemoryBytes = 250L * 1024 * 1024)
+        assertNull("an offer ceiling is not running capacity", pressured.retentionLimit)
+    }
+
+    /** Oracle: a queued modal's old ceiling must never be presented as running capacity. */
+    @Test fun queuedClampNoticeUsesCommittedCapacity() {
+        val state = SettingsViewModel.mapUiState(30, 30, storedMinutes = 30,
+            clampNotice = ClampNotice(30, 25))
+        assertEquals(30, state.clampNotice?.newMinutes)
+    }
+
+    /** Oracle: a configured but unallocated 30 minutes must not buy heap credit. */
+    @Test fun idleLargeConfigGetsNoAllocationCredit() {
+        val state = SettingsViewModel.mapUiState(30, 30, QualityPreset.HIGH_FIDELITY,
+            maxMemoryBytes = 256L * 1024 * 1024, usedMemoryBytes = 150L * 1024 * 1024,
+            currentBufferAllocationBytes = 0)
+        assertEquals("idle config cannot fund another buffer", 5, state.retentionStepper.maxSelectableMinutes)
+    }
+
     /** Oracle: a fresh DataStore reader retains the durable choice while resolving and exposing
      * a temporary cap. Acknowledging the modal must not hide the Settings explanation. */
     @Test fun savedChoiceSurvivesRestartAndTemporaryCap() = runTest {

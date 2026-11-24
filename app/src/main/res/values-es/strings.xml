@@ -246,7 +246,6 @@
     <string name="settings_privacy_title">Privacidad &amp; procesamiento local</string>
     <string name="settings_privacy_explanation">Audio Blackbox funciona de forma totalmente local en tu dispositivo. El audio del micrófono se mantiene en RAM temporal y se sobrescribe automáticamente. Nunca se envía telemetría, informes de fallos ni flujos de audio a servidores remotos.</string>
     <string name="settings_retention_title">Ventana de retención del búfer</string>
-    <string name="settings_retention_explanation">Cuánto audio conserva el búfer en la memoria del dispositivo. Un valor mayor usa más memoria. Los cambios se aplican automáticamente poco después de que dejes de ajustarlo.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: values are always multiples of 5, never 1 (see values/strings.xml). -->
     <string name="settings_retention_value_active_cd" tools:ignore="PluralsCandidate">%1$d minutos, unos %2$d megabytes, activo ahora</string>
@@ -290,7 +289,7 @@
     <!-- Clamp-down notice (issue #298) -->
     <string name="settings_retention_clamp_notice_title">Límite temporal de memoria</string>
     <!-- Not a plural, see values/strings.xml. -->
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu elección guardada es %1$d min. El límite efectivo es temporalmente %2$d min por la memoria disponible para la app. Tu elección se conserva.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Tu elección guardada es %1$d min; el ajuste actual es %2$d min. La elección guardada se comprobará según la memoria disponible al iniciar la app de nuevo.</string>
     <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Hasta %1$d min con esta calidad — limitado por la memoria que Android da a la app, no por toda la RAM del teléfono.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendido</string>
 

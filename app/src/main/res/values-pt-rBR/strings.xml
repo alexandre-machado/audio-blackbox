@@ -253,7 +253,6 @@
     <string name="settings_privacy_title">Privacidade e processamento local</string>
     <string name="settings_privacy_explanation">O Audio Blackbox opera puramente local no seu aparelho. O áudio do microfone é mantido em memória RAM temporária e sobrescrito automaticamente. Zero telemetria, relatórios de falha ou fluxos de áudio são enviados para servidores remotos.</string>
     <string name="settings_retention_title">Janela de retenção do buffer</string>
-    <string name="settings_retention_explanation">Quanto áudio o buffer mantém na memória do aparelho. Um valor maior usa mais memória. As mudanças são aplicadas automaticamente pouco depois de você parar de ajustar.</string>
     <string name="settings_retention_value">%1$d min (~%2$d MB)</string>
     <!-- Not a plural: AudioConfig.RETENTION_WINDOW_MIN_MINUTES/MAX_MINUTES/STEP_MINUTES limitam o
          controle a múltiplos de 5 no intervalo [5, 45] (clamp temporário da issue #72, antes era
@@ -307,7 +306,7 @@
          memória livre agora, ou um downgrade). Nunca mostrado a quem já está no limite atual ou
          abaixo dele. -->
     <string name="settings_retention_clamp_notice_title">Limite temporário de memória</string>
-    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Sua escolha salva é %1$d min. O limite efetivo é temporariamente %2$d min por falta de memória para o app. Sua escolha salva é mantida.</string>
+    <string name="settings_retention_clamp_notice_body" tools:ignore="PluralsCandidate">Sua escolha salva é %1$d min; a configuração atual é %2$d min. A escolha salva será verificada conforme a memória disponível na próxima inicialização do app.</string>
     <string name="settings_retention_ceiling" tools:ignore="PluralsCandidate">Até %1$d min nesta qualidade — limitado pela memória que o Android dá ao app, não pela RAM total do celular.</string>
     <string name="settings_retention_clamp_notice_dismiss">Entendi</string>
 

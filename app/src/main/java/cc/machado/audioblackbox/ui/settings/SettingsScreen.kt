@@ -227,13 +227,15 @@ private fun RetentionStepperSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (stepper.isDirty) {
-                Text(
-                    text = stringResource(R.string.settings_retention_pending, stepper.committedMinutes),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
+            // Keep the live-region node stable. Its text changes only when pending state or
+            // committed capacity changes, never for each new pending minute/preset tap.
+            Text(
+                text = if (stepper.isDirty) {
+                    stringResource(R.string.settings_retention_pending, stepper.committedMinutes)
+                } else "",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
 
             Surface(
                 shape = RoundedCornerShape(RADIUS_SM),
