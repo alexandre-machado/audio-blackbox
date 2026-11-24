@@ -117,8 +117,9 @@ shutdown_ci_emulator() {
 # Register before any test/build failure can exit. Local callers retain their running AVD.
 # The action supplies EMULATOR_PORT and ANDROID_SERIAL from its emulator-port input.
 if [[ "${CI_EMULATOR_SHUTDOWN:-}" == true ]]; then
-  [[ "${EMULATOR_PORT:-}" == 5580 && "${ANDROID_SERIAL:-}" == emulator-5580 && -n "${AVD_NAME:-}" ]] ||
-    fail "CI cleanup requires the dedicated emulator-5580 and an explicit AVD_NAME."
+  [[ "${EMULATOR_PORT:-}" =~ ^55[5-8][0-9]$ ]] && (( EMULATOR_PORT % 2 == 0 && EMULATOR_PORT >= 5554 && EMULATOR_PORT <= 5584 )) &&
+    [[ "${ANDROID_SERIAL:-}" == "emulator-$EMULATOR_PORT" && -n "${AVD_NAME:-}" ]] ||
+    fail "CI cleanup requires EMULATOR_PORT (even, 5554-5584), ANDROID_SERIAL=emulator-\$EMULATOR_PORT and AVD_NAME."
   command -v timeout >/dev/null || fail "timeout is required for bounded CI shutdown."
   trap shutdown_ci_emulator EXIT
 fi
