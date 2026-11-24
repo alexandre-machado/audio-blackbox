@@ -1,6 +1,6 @@
 Audio Blackbox è un registratore retroattivo: una dashcam audio che tiene gli ultimi minuti di suono nella memoria del telefono, così puoi registrare il passato dopo che è accaduto.
 
-L’audio resta in RAM finché non tocchi Salva o avvii Live, e le tue registrazioni non lasciano mai il telefono: l'app non carica mai il tuo audio da nessuna parte.
+L'audio resta in RAM finché non tocchi Salva o avvii Live. L'app non carica mai le tue registrazioni.
 
 Pensata per
 • Musicisti e autori: conserva il riff o la melodia appena improvvisata, senza aver prima premuto registra.
@@ -14,8 +14,9 @@ Come funziona
 • Attiva la registrazione continua. Una notifica rimane visibile per tutto il tempo in cui l'app registra.
 • L'audio va in un buffer circolare in RAM. Quando è pieno, l'audio più vecchio viene sostituito dal più recente.
 • Il buffer parte da 5 minuti, regolabili a intervalli di 5, fino al limite sicuro di memoria dell'app per la qualità scelta. Il prodotto non impone un tetto alla durata; le Impostazioni mostrano il limite attuale.
-• Salva scrive l'audio nel buffer dall'ultimo salvataggio (l'intero buffer la prima volta) in un file AAC (.m4a), così i file non si sovrappongono mai.
-• Live salva l'audio nel buffer precedente al tocco e continua in un unico file .aac (ADTS), riproducibile durante la registrazione. Il tempo di registrazione live è limitato a 2 ore nel piano gratuito; poi il file viene salvato automaticamente. Il file può superare le 2 ore perché include il passato nel buffer. Pro, con acquisto unico, rimuove il limite di tempo live.
+• Salva scrive l'audio dall'ultimo salvataggio (l'intero buffer la prima volta), senza sovrapporre i file.
+• Il formato audio è una scelta gratuita per Salva e Live: AAC (predefinito) oppure Opus (.ogg), per file vocali più piccoli. Alcuni lettori e app di messaggistica non aprono .ogg. Sui dispositivi non compatibili, Opus è disattivato con il motivo indicato.
+• Live salva il passato del buffer e continua in un file: con AAC, un .aac (ADTS) riproducibile durante la registrazione; con Opus, un .ogg riproducibile al termine. Riaprendo l'app si recupera l'audio Opus già scritto, scartando l'ultima pagina incompleta; la parte finale può andare persa. Il tempo live è limitato a 2 ore nel piano gratuito, poi il file viene salvato automaticamente. Il file può superare le 2 ore includendo il passato del buffer. Pro, con acquisto unico, rimuove il limite di tempo live.
 
 Funzionalità
 • Tre profili di qualità: Voce (16 kHz mono, il buffer più lungo), Bilanciato (32 kHz mono) e Alta fedeltà (44,1 kHz stereo, che può usare più di un microfono sui telefoni che ne dispongono). Una qualità superiore usa più memoria al minuto, quindi il buffer si accorcia.

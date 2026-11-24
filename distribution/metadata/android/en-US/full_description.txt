@@ -14,8 +14,9 @@ How it works
 • Turn on continuous recording. A visible notification stays up the whole time the app is recording.
 • Audio goes into a rolling buffer in RAM. When the buffer is full, the oldest audio is replaced by the newest.
 • The buffer starts at 5 minutes, in 5-minute steps, up to the app's safe memory limit for the selected quality. There is no product-imposed duration cap; Settings shows the current limit.
-• Save writes the buffered audio since your last save (the whole buffer the first time) to an AAC (.m4a) file, so your files never overlap.
-• Live saves the buffered audio from before the tap and continues in a single .aac (ADTS) file, playable while recording. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
+• Save writes the buffered audio since your last save (the whole buffer the first time) to a file, so your files never overlap.
+• Save audio format is a free choice for Save and Live: AAC (default) or Opus (.ogg) for smaller voice files. Some players and messaging apps may not open .ogg. On unsupported devices, Opus is disabled with a reason.
+• Live saves the buffered past and continues in one file: with AAC, a .aac (ADTS) playable while recording; with Opus, a .ogg playable after recording ends. Reopening the app recovers Opus audio already written, discarding an incomplete final page; the ending may be lost. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
 
 Features
 • Three quality presets: Voice (16 kHz mono, the longest buffer), Balanced (32 kHz mono) and High fidelity (44.1 kHz stereo, which can use more than one microphone on phones that have them). Higher quality uses more memory per minute, so the buffer gets shorter.

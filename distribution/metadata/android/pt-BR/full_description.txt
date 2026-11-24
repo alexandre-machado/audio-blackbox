@@ -14,8 +14,9 @@ Como funciona
 • Ligue a gravação contínua. Uma notificação fica visível durante todo o tempo em que o app está gravando.
 • O áudio vai para um buffer circular na memória RAM. Quando o buffer enche, o trecho mais antigo dá lugar ao mais recente.
 • O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual.
-• Salvar grava em um arquivo AAC (.m4a) o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez), então os arquivos nunca se repetem.
-• Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo .aac (ADTS), reproduzível durante a gravação. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo.
+• Salvar grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez), sem repetir trechos.
+• O formato de áudio é uma escolha gratuita para Salvar e Ao vivo: AAC (padrão) ou Opus (.ogg), com arquivos menores para voz. Alguns players e apps de mensagens podem não abrir .ogg. Em aparelhos sem suporte, Opus fica desativado com o motivo indicado.
+• Ao vivo salva o passado do buffer e continua em um único arquivo: com AAC, um .aac (ADTS) reproduzível durante a gravação; com Opus, um .ogg reproduzível após o término. Ao reabrir o app, a recuperação mantém o áudio Opus já escrito e descarta a última página incompleta; o final pode ser perdido. O tempo ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo.
 
 Recursos
 • Três presets de qualidade: Voz (16 kHz mono, o buffer mais longo), Equilibrado (32 kHz mono) e Alta fidelidade (44,1 kHz estéreo, que pode usar mais de um microfone nos aparelhos que têm). Qualidade maior usa mais memória por minuto, então o buffer fica mais curto.
