@@ -172,13 +172,9 @@ fun SettingsScreen(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,
         )
-        RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
-        uiState.retentionLimit?.let { limit ->
-            Text(
-                text = stringResource(R.string.settings_retention_clamp_notice_body, limit.previousMinutes, limit.newMinutes),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-            )
+        Column {
+            RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
+            RetentionLimitNotice(uiState.retentionLimit)
         }
         AudioSpecsSection(selectedPreset = uiState.selectedPreset)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
@@ -193,6 +189,21 @@ fun SettingsScreen(
     }
     uiState.resizeError?.let { errorInfo ->
         ResizeErrorDialog(errorInfo = errorInfo, onAcknowledge = onDismissResizeError)
+    }
+}
+
+/** Keep the announcement target alive, with no height or section gap when empty. */
+@Composable
+private fun RetentionLimitNotice(limit: ClampNotice?) {
+    Box(Modifier.fillMaxWidth().testTag("retention_limit_notice")
+        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+        limit?.let {
+            Text(
+                text = stringResource(R.string.settings_retention_clamp_notice_body, it.previousMinutes, it.newMinutes),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = SECTION_SPACING),
+            )
+        }
     }
 }
 

@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 
 /**
  * Foreground microphone service (issue #3). Owns the single [AudioCaptureEngine] instance for
@@ -81,6 +82,12 @@ class RecorderService : Service() {
     // launched child (there is normally only ever one at a time) cannot cancel the scope itself.
     // Cancelled in onDestroy.
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Main-thread-owned queue preserves start/forward/stop order across worker dispatch.
+    private val captureCommands = CaptureCommandQueue(serviceScope)
+
+    private fun enqueueCaptureCommand(command: suspend () -> Unit) {
+        captureCommands.enqueue(command)
+    }
 
     // See PeriodicNotificationRefresher's doc: supplies the "keep refreshing while Recording
     // doesn't transition" tick the collector below cannot, since captureState only emits on a
@@ -393,7 +400,9 @@ class RecorderService : Service() {
         // calling stopSelf(), so running engine.stop() asynchronously here is not only redundant
         // but would race a subsequent startIntent() by stopping the next session asynchronously.
         if (!isGracefullyStopping) {
+            val pendingCommand = captureCommands.lastCommand
             Thread({
+                runBlocking { pendingCommand?.join() }
                 forwardRecordingEngine.stop()
                 engine.stop()
             }, "RecorderService-onDestroy-stop").apply {
@@ -409,6 +418,7 @@ class RecorderService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun handleStart() {
+        if (isGracefullyStopping) return
         // Re-checked here too, in addition to MainActivity's own re-check right before it builds
         // this Intent: defense in depth against any other caller of startIntent() in the future,
         // and against the (tiny but real) window between the tap and this method running.
@@ -421,7 +431,7 @@ class RecorderService : Service() {
             Log.w(TAG, "handleStart(): RECORD_AUDIO not granted, refusing to start capture")
             return
         }
-        engine.start()
+        enqueueCaptureCommand { engine.start() }
         // No explicit refreshNotification() call here: the serviceScope collector registered in
         // onCreate() reacts to the engine.state emission engine.start() just produced. Relying on
         // that single reactive path (rather than this call site plus the collector) is the point
@@ -469,7 +479,10 @@ class RecorderService : Service() {
         }
         when {
             action == ACTION_STOP || action == null -> stopServiceCompletely()
-            captureWasLive -> stopServiceCompletely(reportRefusalAfterStop = refusalMessage)
+            // Admission can still be queued while state is Idle. Drain and stop it too;
+            // otherwise a refused foreground promotion could leave that start running later.
+            captureWasLive || captureCommands.lastCommand?.isCompleted == false ->
+                stopServiceCompletely(reportRefusalAfterStop = refusalMessage)
             else -> {
                 engine.reportForegroundPromotionRefused(
                     CaptureErrorReason.FOREGROUND_SERVICE_PROMOTION_REFUSED,
@@ -496,7 +509,7 @@ class RecorderService : Service() {
      */
     private fun stopServiceCompletely(reportRefusalAfterStop: String? = null) {
         isGracefullyStopping = true
-        serviceScope.launch(Dispatchers.Default) {
+        enqueueCaptureCommand {
             forwardRecordingEngine.stop()
             engine.stop()
             if (reportRefusalAfterStop != null) {
@@ -513,6 +526,7 @@ class RecorderService : Service() {
     }
 
     private fun handleStartForward() {
+        if (isGracefullyStopping) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -522,13 +536,13 @@ class RecorderService : Service() {
         if (engine.state.value is CaptureState.Idle) {
             handleStart()
         }
-        serviceScope.launch(Dispatchers.Default) {
+        enqueueCaptureCommand {
             forwardRecordingEngine.start()
         }
     }
 
     private fun handleStopForward() {
-        serviceScope.launch(Dispatchers.Default) {
+        enqueueCaptureCommand {
             forwardRecordingEngine.stop()
         }
     }

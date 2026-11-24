@@ -16,6 +16,7 @@ import cc.machado.audioblackbox.settings.ClampNotice
 import cc.machado.audioblackbox.settings.InMemoryRetentionWindowPreferences
 import cc.machado.audioblackbox.settings.RetentionWindowPreferences
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +27,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Owns the settings screen state: retention-window stepper (issue #73) and quality preset selector (issue #193).
@@ -81,6 +86,7 @@ class SettingsViewModel(
     // Idle apply seam retained for regression coverage. Production uses the same service switch;
     // it updates activeConfig even without a ring buffer, so no subsequent rebuild is needed.
     private val onRebuildEngine: (minutes: Int, preset: QualityPreset) -> Boolean = onSwitchSettings,
+    private val admissionDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val maxMemoryBytesProvider: () -> Long = { Runtime.getRuntime().maxMemory() },
     private val usedMemoryBytesProvider: () -> Long = { Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory() },
     private val currentBufferAllocationBytesProvider: () -> Long = RecorderService::currentBufferAllocationBytes,
@@ -123,6 +129,9 @@ class SettingsViewModel(
     // DEBOUNCE_MILLIS timer, so a preset tap immediately followed by a run of stepper taps
     // collapses into exactly one [commitPending] call, not one per tap. See [scheduleDebouncedCommit].
     private var commitJob: Job? = null
+    private val commitMutex = Mutex()
+    private var editGeneration = 0L
+    private var cleared = false
 
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(capacityMinutesFlow, qualityPresetFlow, ::Pair),
@@ -257,6 +266,7 @@ class SettingsViewModel(
      * `protected` (`@sec` finding) also closes off any caller other than the framework cancelling a
      * live debounce or forcing a premature commit out of sequence. */
     override fun onCleared() {
+        cleared = true
         commitJob?.cancel()
         val minutes = currentPendingMinutes()
         val preset = currentPendingPreset()
@@ -272,6 +282,7 @@ class SettingsViewModel(
      * fire, which is exactly what makes a preset tap followed by a run of stepper taps collapse
      * into the single [commitPending] call at the bottom of the burst, not one per tap. */
     private fun scheduleDebouncedCommit() {
+        editGeneration++
         pendingWasRefused = false
         commitJob?.cancel()
         commitJob = viewModelScope.launch {
@@ -296,7 +307,15 @@ class SettingsViewModel(
      * engine's actual capacity out of sync whenever a resize was refused, and would silently hide
      * the refusal from the user on top of that. On refusal, both requested values remain pending,
      * alongside [_resizeError] and the still-active committed duration. */
-    private suspend fun commitPending(afterClear: Boolean = false) {
+    private suspend fun commitPending(afterClear: Boolean = false) = commitMutex.withLock {
+        // Once admission begins, finish persistence even if navigation or another tap cancels
+        // the debounce job. A queued commit reads the latest edits after this one finishes.
+        withContext(NonCancellable) { applyPending(afterClear) }
+    }
+
+    private suspend fun applyPending(afterClear: Boolean) {
+        if (pendingWasRefused) return
+        val generation = editGeneration
         val minutes = currentPendingMinutes()
         val preset = currentPendingPreset()
         val isDirty = minutes != capacityMinutesFlow.value || preset != qualityPresetFlow.value
@@ -308,10 +327,9 @@ class SettingsViewModel(
         _retentionApplyTarget.value = minutes
         // Exactly one application attempt. An idle rebuild's refusal is just as binding as
         // a live resize's; never persist first or independently resample after applying.
-        val applied = if (captureState.value is CaptureState.Idle) {
-            onRebuildEngine(minutes, preset)
-        } else {
-            onSwitchSettings(minutes, preset)
+        val idle = captureState.value is CaptureState.Idle
+        val applied = withContext(admissionDispatcher) {
+            if (idle) onRebuildEngine(minutes, preset) else onSwitchSettings(minutes, preset)
         }
         if (applied) {
             try {
@@ -321,15 +339,15 @@ class SettingsViewModel(
                 _retentionApplyTarget.value = null
                 throw failure
             }
-            resetPending()
+            if (generation == editGeneration) resetPending()
         } else {
             _retentionApplyTarget.value = null
-            pendingWasRefused = true
+            pendingWasRefused = generation == editGeneration
             val refusal = RecorderService.resizeRefusalFlow.value
             RecorderService.acknowledgeResizeRefusal()
             val info = describeRefusal(refusal, minutes)
             _resizeError.value = info
-            if (afterClear) {
+            if ((afterClear || cleared) && generation == editGeneration) {
                 // `@rev` finding on PR #304 (round 2): nobody is mounted to read `_resizeError`
                 // above -- this instance is already dying/dead. Record it on the companion-owned
                 // marker instead, so the *next* `SettingsViewModel` (the user reopening Settings)

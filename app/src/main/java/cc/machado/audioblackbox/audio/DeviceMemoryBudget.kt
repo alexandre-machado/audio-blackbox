@@ -65,7 +65,8 @@ object DeviceMemoryBudget {
             heap.maxHeapBytes, heap.usedHeapBytes, availableSystemBytes, currentBufferAllocationBytes)
     }
 
-    /** Idle/start admission runs on the caller before any capture thread is launched. A high
+    /** Idle/start admission runs on a background caller before any capture thread is launched
+     * (SettingsViewModel's admission dispatcher / RecorderService's CaptureCommandQueue). A high
      * used-heap sample may include garbage: issue one GC hint and re-sample once before refusing.
      * No waiting or retries; live resize retains its existing allocation guard. */
     internal fun idleAllocationRefusal(
