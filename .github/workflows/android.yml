@@ -706,7 +706,11 @@ jobs:
     # which playstore.yml's separation never did and which this merge must not introduce either.
     concurrency:
       group: playstore-release
-      cancel-in-progress: true
+      # Owner rule (AB-2411-34): a Play deploy is never cancelled mid-flight. The group still
+      # serializes Play edits. A deploy that is only *pending* behind a running one can be
+      # superseded by a newer pending deploy (GitHub keeps one pending per group); that newer
+      # AAB has a higher versionCode and contains the superseded commit's code.
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
