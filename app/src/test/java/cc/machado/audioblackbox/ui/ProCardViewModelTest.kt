@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.billing.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,7 +17,7 @@ class ProCardViewModelTest {
     // Oracle: countdown and cap-save reason survive the real dashboard state mapper unchanged.
     @Test fun dashboardUsesEngineCapState() {
         val recording = cc.machado.audioblackbox.ui.dashboard.DashboardViewModel.mapForwardRecordingUiState(
-            cc.machado.audioblackbox.export.ForwardRecordingState.Recording("live.m4a", 0, 42_000), null, 32000,
+            cc.machado.audioblackbox.export.ForwardRecordingState.Recording("live.m4a", 0, 42_000, format = SaveAudioFormat.AAC), null, 32000,
         ) as cc.machado.audioblackbox.ui.dashboard.ForwardRecordingUiState.Recording
         assertEquals(42_000L, recording.freeRemainingMillis)
         val saved = cc.machado.audioblackbox.ui.dashboard.DashboardViewModel.mapForwardRecordingUiState(

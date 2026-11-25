@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.export
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.audio.AudioCaptureEngine
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.FormatSegment
@@ -28,8 +29,13 @@ const val FREE_LIVE_RECORDING_CAP = 2 * 60 * 60 * 1000L
 sealed interface ForwardRecordingState {
     data object Idle : ForwardRecordingState
 
-    /** [freeRemainingMillis] is null when the session is uncapped (Pro or Unknown, issue #443). */
-    data class Recording(val displayName: String, val bytesWritten: Long, val freeRemainingMillis: Long? = null) : ForwardRecordingState
+    /** [format] is the session encoding snapshot; [freeRemainingMillis] is null when uncapped. */
+    data class Recording(
+        val displayName: String,
+        val bytesWritten: Long,
+        val freeRemainingMillis: Long? = null,
+        val format: SaveAudioFormat,
+    ) : ForwardRecordingState
 
     /** [freeLimitReached] is true only when the free cap, not the user, ended the session. */
     data class Success(val displayName: String, val bytesWritten: Long, val freeLimitReached: Boolean = false) : ForwardRecordingState
@@ -134,7 +140,7 @@ class ForwardRecordingEngine(
     // both at once, since it runs strictly between them.
     private val onEnteringCleanStopDrain: () -> Unit = {},
     private val liveEncodingProvider: () -> LiveEncoding = {
-        LiveEncoding(StreamingAdtsWriter.MIME_TYPE, StreamingAdtsWriter.FILE_EXTENSION, writerFactory)
+        LiveEncoding(SaveAudioFormat.AAC, StreamingAdtsWriter.MIME_TYPE, StreamingAdtsWriter.FILE_EXTENSION, writerFactory)
     },
     private val monotonicClock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val entitlement: () -> Entitlement = { Entitlement.Unknown },
@@ -269,7 +275,7 @@ class ForwardRecordingEngine(
                 val sessionStartElapsed = monotonicClock()
                 val initialGaps = gapsProvider()
 
-                stateValue = ForwardRecordingState.Recording(displayName, 0L)
+                stateValue = ForwardRecordingState.Recording(displayName, 0L, format = encoding.format)
 
                 val drainThread = Thread({
                     val writer = try {
@@ -292,7 +298,7 @@ class ForwardRecordingEngine(
                     // `currentConfig` is the format the writer above was configured with, i.e. the
                     // format this file declares -- so it is also the format every drained chunk must
                     // be converted into (issue #322).
-                    drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer, sessionStartElapsed)
+                    drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer, sessionStartElapsed, encoding.format)
                 }, "ForwardRecordingDrain")
                 drainThread.isDaemon = true
                 activeDrainThread = drainThread
@@ -482,6 +488,7 @@ class ForwardRecordingEngine(
         sessionConfig: AudioConfig,
         floorAdvancer: ((Long) -> Unit)?,
         sessionStartElapsed: Long,
+        sessionFormat: SaveAudioFormat,
     ) {
         var cursor = initialCursor
         var totalBytesDrained = 0L
@@ -559,7 +566,7 @@ class ForwardRecordingEngine(
                 synchronized(lock) {
                     if (_state.value is ForwardRecordingState.Recording) {
                         stateValue = ForwardRecordingState.Recording(
-                            displayName, totalBytesDrained, publishedFreeRemaining(freeRemaining),
+                            displayName, totalBytesDrained, publishedFreeRemaining(freeRemaining), sessionFormat,
                         )
                     }
                 }
@@ -637,7 +644,7 @@ class ForwardRecordingEngine(
                             cursor = result.nextCursor
                             synchronized(lock) {
                                 if (_state.value is ForwardRecordingState.Recording) {
-                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained, remaining())
+                                    stateValue = ForwardRecordingState.Recording(displayName, totalBytesDrained, remaining(), sessionFormat)
                                 }
                             }
                         }

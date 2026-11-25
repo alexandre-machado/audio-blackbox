@@ -414,4 +414,6 @@
     <string name="audio_format_opus_extension">Opus (.ogg)</string>
     <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
     <string name="audio_format_ogg">Ogg</string>
+    <string name="settings_format_next_recording_aac">Vale para a próxima gravação. O Ao vivo atual continua em AAC (.aac).</string>
+    <string name="settings_format_next_recording_opus">Vale para a próxima gravação. O Ao vivo atual continua em Opus (.ogg).</string>
 </resources>

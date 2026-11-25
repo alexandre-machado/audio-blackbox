@@ -5,6 +5,7 @@ import cc.machado.audioblackbox.settings.SaveAudioFormat
 import java.io.File
 
 data class LiveEncoding(
+    val format: SaveAudioFormat,
     val mimeType: String,
     val extension: String,
     val createWriter: (StreamingExportTarget, AudioConfig) -> StreamingAudioWriter,
@@ -24,9 +25,9 @@ class RecordingFormatSelector(
     }
 
     fun liveEncoding(): LiveEncoding = when (format()) {
-        SaveAudioFormat.AAC -> LiveEncoding(StreamingAdtsWriter.MIME_TYPE, StreamingAdtsWriter.FILE_EXTENSION,
+        SaveAudioFormat.AAC -> LiveEncoding(SaveAudioFormat.AAC, StreamingAdtsWriter.MIME_TYPE, StreamingAdtsWriter.FILE_EXTENSION,
             ::StreamingAdtsWriter)
-        SaveAudioFormat.OPUS -> LiveEncoding(StreamingOpusWriter.MIME_TYPE, StreamingOpusWriter.FILE_EXTENSION,
+        SaveAudioFormat.OPUS -> LiveEncoding(SaveAudioFormat.OPUS, StreamingOpusWriter.MIME_TYPE, StreamingOpusWriter.FILE_EXTENSION,
             { target, config -> StreamingOpusWriter(target.fileDescriptor, config) })
     }
 }

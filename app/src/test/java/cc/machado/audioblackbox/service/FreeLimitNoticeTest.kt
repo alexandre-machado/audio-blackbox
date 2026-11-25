@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.service
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.billing.Entitlement
 import cc.machado.audioblackbox.billing.ProSource
 import cc.machado.audioblackbox.export.ForwardRecordingState
@@ -63,7 +64,7 @@ class FreeLimitNoticeTest {
         }
         runCurrent()
         assertEquals(0, engine.acknowledgements)
-        engine.state.value = ForwardRecordingState.Recording("next.m4a", 0, null); runCurrent()
+        engine.state.value = ForwardRecordingState.Recording("next.m4a", 0, null, format = SaveAudioFormat.AAC); runCurrent()
         assertEquals(0, engine.acknowledgements)
     }
 }

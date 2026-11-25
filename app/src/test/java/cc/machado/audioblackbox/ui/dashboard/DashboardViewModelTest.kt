@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.dashboard
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.audio.CaptureErrorReason
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
@@ -258,6 +259,7 @@ class DashboardViewModelTest {
         val forwardState = ForwardRecordingState.Recording(
             displayName = "blackbox_2026-08-25_14-30-00_forward.m4a",
             bytesWritten = 64_000L, // 2 seconds at 32000 bytes/sec
+            format = SaveAudioFormat.AAC,
         )
         val mapped = DashboardViewModel.mapForwardRecordingUiState(forwardState, dismissed = null, bytesPerSecond = 32_000)
         assertEquals(
