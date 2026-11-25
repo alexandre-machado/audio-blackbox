@@ -37,8 +37,8 @@ import org.junit.runner.RunWith
  * It measures the dominant term: allocating the ring buffer's backing array at a given capacity,
  * filling it, and draining a full export through it, all under this device's
  * `dalvik.vm.heapgrowthlimit`. The encoder and sink are deliberately lightweight, so the reported
- * peak is the *buffer + drain* cost, accurate to within the few MB a real AAC encoder adds -- not
- * a claim about the whole app's footprint with Compose resident.
+ * heap samples describe buffer + drain + uncollected garbage, not a true peak or the whole
+ * app's footprint with Compose resident. Only allocation requests are used as the #72 oracle.
  *
  * It says nothing about OEM memory management, the low-memory killer, or what survives hours in
  * the background. Those need a real device and real conditions.
@@ -92,28 +92,20 @@ class RetentionCeilingMeasurementTest {
         return runtime.totalMemory() - runtime.freeMemory()
     }
 
-    /**
-     * What one window's run cost: peak used heap, and the ring buffer's own backing array.
-     *
-     * [retainedBytes] and [gcsDuringExport] are diagnostics only (PR #411 investigation), never
-     * asserted on. [peakBytes] is sampled right after the export *without* a GC, so it counts the
-     * drain's short-lived chunk garbage that the collector has not reclaimed yet. [retainedBytes]
-     * is sampled after an explicit GC with the buffer still live, i.e. what is genuinely still
-     * reachable; [gcsDuringExport] is how many collections ART ran while the export drained. A
-     * high [peakBytes] with [retainedBytes] close to [backingBytes] and few GCs means uncollected
-     * garbage, not a retained second copy.
+    /** Heap samples are diagnostics only: uncollected drain chunks make them GC-dependent.
+     * [largestReadRequest] records the largest allocation requested through the PCM read seam.
      */
     private data class Measurement(
         val peakBytes: Long,
         val backingBytes: Long,
+        val largestReadRequest: Int,
         val retainedBytes: Long = -1L,
         val gcsDuringExport: Long = -1L,
         /** Used heap after the pre-measurement GC: what earlier tests left live in this process. */
         val baselineBytes: Long = -1L,
         val maxHeapBytes: Long = Runtime.getRuntime().maxMemory(),
     ) {
-        /** Peak relative to the buffer itself. ~1.15 for a bounded drain; ~2.0 if the export
-         * materialises the whole window again, which is issue #72's regression. */
+        /** Diagnostic only; includes garbage not yet collected. */
         val peakToBacking: Float get() = peakBytes.toFloat() / backingBytes.toFloat()
     }
 
@@ -148,12 +140,16 @@ class RetentionCeilingMeasurementTest {
 
             val sink = CountingSink()
             val gcsBefore = gcCount()
+            var largestReadRequest = 0
             val engine = ExportEngine(
                 config = config,
-                readSinceProvider = { cursor, maxBytes -> buffer!!.readSince(cursor, maxBytes) },
+                readSinceProvider = { cursor, maxBytes ->
+                    largestReadRequest = maxOf(largestReadRequest, maxBytes)
+                    buffer!!.readSince(cursor, maxBytes)
+                },
                 writeCursorProvider = { buffer!!.writeCursor() },
                 oldestCursorProvider = { buffer!!.oldestCursor() },
-                // issue #385: this measurement is about peak memory, not the saturated-buffer
+                // issue #385: this measurement is about allocation, not the saturated-buffer
                 // startup headroom -- `{ null }` keeps its pre-#385 behavior exactly.
                 capacityBytesProvider = { null },
                 exportFloorAdvancerProvider = { null },
@@ -169,17 +165,18 @@ class RetentionCeilingMeasurementTest {
             )
             val peak = usedHeapBytes() - before
             val gcsDuringExport = if (gcsBefore >= 0L) gcCount() - gcsBefore else -1L
-            // Diagnostic only: taken after `peak`, so it cannot change what is asserted.
+            // Heap samples are diagnostics, not the allocation oracle.
             Runtime.getRuntime().gc()
             val retained = usedHeapBytes() - before
             if (result !is ExportState.Success) {
                 Log.w(TAG, "$minutes min: export did not succeed: $result")
                 return null
             }
-            assertTrue("$minutes min: export wrote nothing", sink.committedBytes > 0)
+            assertEquals("$minutes min: export must drain the entire window", capacityBytes.toLong(), sink.committedBytes)
             Measurement(
                 peakBytes = peak,
                 backingBytes = capacityBytes.toLong(),
+                largestReadRequest = largestReadRequest,
                 retainedBytes = retained,
                 gcsDuringExport = gcsDuringExport,
                 baselineBytes = before,
@@ -196,14 +193,10 @@ class RetentionCeilingMeasurementTest {
     }
 
     /**
-     * The permanent regression assertion.
-     *
-     * Two claims, and only the second one guards issue #72. That the shipped maximum allocates and
-     * exports is worth checking but is not a regression test: @rev's review of this PR showed the
-     * pre-#114 cost at 45 minutes (~82 MB backing plus an ~82 MB snapshot copy) still fits under
-     * the CI emulator's 192 MB ceiling, so a success-only assertion stays green with the bug fully
-     * present. The peak-to-backing ratio is what actually distinguishes a bounded drain from a
-     * whole-window copy, on any device and at any heap size.
+     * Oracle: a full-window PCM read must fail even when the device can afford the copy.
+     * Count the allocation request at the real ring read seam; GC cannot change that request.
+     * JVM BoundedExportAllocationTest additionally accounts for all export-thread allocations,
+     * including copies made outside this seam. Device heap samples remain useful diagnostics.
      */
     @Test
     fun theShippedMaximumRetentionWindowCanBeAllocatedAndExported() {
@@ -223,26 +216,10 @@ class RetentionCeilingMeasurementTest {
         // Before the assertion, so passing runs record a baseline too.
         reportToTranscript("shipped max $minutes min", measurement)
 
-        // THE assertion that actually guards issue #72, and the reason "it exported without
-        // throwing" is not enough on its own.
-        //
-        // @rev's finding on this PR: at the shipped 45-minute window the pre-#114 export cost
-        // ~82 MB of backing plus an ~82 MB snapshot copy = ~164 MB, which still fits under the CI
-        // emulator's 192 MB heap ceiling. So a success-only assertion stays green with the
-        // regression fully present -- it was measuring the device, not the code. Only a window
-        // large enough to actually exhaust the heap would have caught it, and the shipped maximum
-        // deliberately is not that.
-        //
-        // The ratio is what distinguishes the two implementations regardless of heap size or
-        // device: a bounded drain adds a fixed chunk on top of the buffer, so peak tracks backing
-        // (measured 1.15-1.23 across 30-90 minute windows). Materialising the window again puts it
-        // at ~2.0. The threshold sits above every measured value and well below the regression.
-        assertTrue(
-            "peak heap was ${measurement.peakToBacking}x the ring buffer's backing array " +
-                "(${measurement.peakBytes / MB} MB peak vs ${measurement.backingBytes / MB} MB backing). " +
-                "The export must add a bounded drain chunk, not a second copy of the window -- " +
-                "anything approaching 2x means issue #72's snapshot allocation is back.",
-            measurement.peakToBacking < MAX_PEAK_TO_BACKING_RATIO,
+        assertEquals(
+            "export must request only a bounded PCM chunk, never a whole-window allocation (#72)",
+            4096,
+            measurement.largestReadRequest,
         )
     }
 
@@ -294,7 +271,7 @@ class RetentionCeilingMeasurementTest {
     private fun reportToTranscript(label: String, measurement: Measurement) {
         val line = String.format(
             java.util.Locale.US,
-            "\n[RetentionCeiling] %s: ratio=%.3f peak=%d MB retainedAfterGc=%d MB backing=%d MB gcsDuringExport=%d baselineBeforeRun=%d MB maxHeap=%d MB\n",
+            "\n[RetentionCeiling] %s: ratio=%.3f peak=%d MB retainedAfterGc=%d MB backing=%d MB gcsDuringExport=%d baselineBeforeRun=%d MB maxHeap=%d MB largestReadRequest=%d B\n",
             label,
             measurement.peakToBacking,
             measurement.peakBytes / MB,
@@ -303,6 +280,7 @@ class RetentionCeilingMeasurementTest {
             measurement.gcsDuringExport,
             measurement.baselineBytes / MB,
             measurement.maxHeapBytes / MB,
+            measurement.largestReadRequest,
         )
         Log.i(TAG, line.trim())
         InstrumentationRegistry.getInstrumentation().sendStatus(
@@ -318,14 +296,6 @@ class RetentionCeilingMeasurementTest {
         const val TAG = "RetentionCeiling"
         const val TRANSCRIPT_STATUS_CODE = 2
         const val MB = 1024L * 1024L
-
-        /**
-         * Ceiling on peak-heap-over-backing-array. Measured values ran 1.15-1.23 across
-         * 30-90 minute windows; issue #72's whole-window snapshot copy puts it at ~2.0. Set above
-         * every observed value and far below the regression, so it discriminates the two
-         * implementations rather than the device they run on.
-         */
-        const val MAX_PEAK_TO_BACKING_RATIO = 1.5f
 
         /**
          * The window this whole measurement is calibrated against -- historically

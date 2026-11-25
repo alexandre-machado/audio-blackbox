@@ -2,7 +2,6 @@ package cc.machado.audioblackbox.export
 
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.RingBuffer
-import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -43,9 +42,12 @@ class BoundedExportAllocationTest {
     private val config = AudioConfig(sampleRateHz = 16_000, channelCount = 1) // production default
 
     private class RecordingSink : ExportSink {
-        val buffer = ByteArrayOutputStream()
+        var bytesWritten = 0L
         override fun open(displayName: String, mimeType: String): ExportTarget = object : ExportTarget {
-            override val outputStream: OutputStream = buffer
+            override val outputStream = object : OutputStream() {
+                override fun write(b: Int) { bytesWritten++ }
+                override fun write(b: ByteArray, off: Int, len: Int) { bytesWritten += len }
+            }
             override fun commit() = Unit
             override fun abort() = Unit
         }
@@ -56,10 +58,15 @@ class BoundedExportAllocationTest {
      * size of the `ByteArray` `readSince` allocates for that call (see its own doc: "Allocation +
      * copy are both under the lock ... bounded by `length` (<= maxBytes)"). Returns the largest
      * recorded value, i.e. the single biggest destination array the export path asked for. */
-    private fun largestReadSinceRequestFor(bufferedBytes: Int, drainChunkSizeBytes: Int): Int {
+    private fun largestReadSinceRequestFor(
+        bufferedBytes: Int,
+        drainChunkSizeBytes: Int,
+        allocationSample: ((() -> ExportState) -> ExportState)? = null,
+    ): Int {
         val ring = RingBuffer(capacityBytes = bufferedBytes, bytesPerSecond = config.bytesPerSecond)
         ring.write(ByteArray(bufferedBytes) { 1 })
         var largestRequest = 0
+        val sink = RecordingSink()
         val engine = ExportEngine(
             config = config,
             readSinceProvider = { cursor, maxBytes ->
@@ -74,15 +81,42 @@ class BoundedExportAllocationTest {
             exportFloorAdvancerProvider = { null },
             estimateTimestampProvider = { offset -> ring.estimateTimestamp(offset) },
             gapsProvider = { emptyList() },
-            sink = RecordingSink(),
+            sink = sink,
             payloadEncoder = WavPayloadEncoder,
             drainChunkSizeBytes = drainChunkSizeBytes,
         )
 
         val durationMillis = (bufferedBytes.toLong() * 1000L) / config.bytesPerSecond
-        val result = engine.export(durationMillis = durationMillis, minutesLabel = 1)
+        val export = { engine.export(durationMillis = durationMillis, minutesLabel = 1) }
+        val result = allocationSample?.invoke(export) ?: export()
         assertTrue("export must succeed for this test's allocation assertion to mean anything", result is ExportState.Success)
+        assertEquals("WAV must contain the entire PCM window plus its header", bufferedBytes.toLong() + 44, sink.bytesWritten)
         return largestRequest
+    }
+
+    @Test
+    fun `45 minute export allocations exclude a second full window copy`() {
+        // Oracle: total export-thread allocations include one window of short-lived drain
+        // chunks. An additional full-window copy exceeds 1.5 windows regardless of GC timing.
+        // Unlike the read-request oracle, this also detects copies outside the ring read seam.
+        val bean = java.lang.management.ManagementFactory.getThreadMXBean()
+            as com.sun.management.ThreadMXBean
+        check(bean.isThreadAllocatedMemorySupported) { "JVM must support allocation accounting" }
+        bean.isThreadAllocatedMemoryEnabled = true
+        val windowBytes = config.bytesPerSecond * 45 * 60
+        var allocated = 0L
+        val largestRequest = largestReadSinceRequestFor(windowBytes, 4096) { export ->
+            val threadId = Thread.currentThread().id
+            val before = bean.getThreadAllocatedBytes(threadId)
+            check(before >= 0) { "Thread allocation counter unavailable" }
+            val result = export()
+            allocated = bean.getThreadAllocatedBytes(threadId) - before
+            result
+        }
+        println("Retention allocation: window=$windowBytes allocated=$allocated largestRequest=$largestRequest")
+        assertTrue("export allocated $allocated bytes for a $windowBytes byte window (#72)",
+            allocated > 0 && allocated < windowBytes.toLong() * 3 / 2)
+        assertEquals(4096, largestRequest)
     }
 
     @Test

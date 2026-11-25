@@ -609,10 +609,23 @@ class ForwardRecordingEngineTest {
             }
         }
 
+        val survivingWindowRead = CountDownLatch(1)
         var createdWriter: FakeStreamingAudioWriter? = null
         val engine = createEngine(
             config = config,
-            readSinceProvider = { cursor, maxBytes -> buffer.readSince(cursor, maxBytes) },
+            readSinceProvider = { cursor, maxBytes ->
+                // Real copy work widens the initial drain/writer race (#418).
+                if (cursor == 0L) {
+                    val scratch = ByteArray(16 * 1024 * 1024)
+                    repeat(64) { java.util.Arrays.fill(scratch, it.toByte()) }
+                    check(scratch.last() == 63.toByte())
+                }
+                buffer.readSince(cursor, maxBytes).also { result ->
+                    if (result is ReadSinceResult.Data && result.nextCursor == 11_280L) {
+                        survivingWindowRead.countDown()
+                    }
+                }
+            },
             writeCursorProvider = { buffer.writeCursor() },
             oldestCursorProvider = { buffer.oldestCursor() },
             sink = sink,
@@ -622,14 +635,25 @@ class ForwardRecordingEngineTest {
         val startResult = engine.start()
         assertTrue("start should transition to Recording despite leading edge lap, got $startResult", startResult is ForwardRecordingState.Recording)
 
-        // Write additional audio during live recording
-        buffer.write(ByteArray(1600) { 3 })
-
-        val stopResult = engine.stop()
+        // Oracle: recover the sink-open lap, consume the surviving 10,000 bytes, then
+        // append live audio without overwriting any unread bytes. start() alone does not
+        // establish that ordering: the drain runs asynchronously.
+        val stopResult = try {
+            assertTrue("drain must consume the surviving window after recovering the lap",
+                survivingWindowRead.await(5, TimeUnit.SECONDS))
+            buffer.write(ByteArray(1600) { 3 })
+            engine.stop()
+        } finally {
+            engine.stop()
+        }
         assertTrue("stop should transition to Success, got $stopResult", stopResult is ForwardRecordingState.Success)
         val success = stopResult as ForwardRecordingState.Success
         // 10_000 (surviving capacity) + 1600 (live written) = 11_600 bytes
         assertEquals(11_600L, success.bytesWritten)
+        org.junit.Assert.assertArrayEquals(
+            ByteArray(8720) { 1 } + ByteArray(1280) { 2 } + ByteArray(1600) { 3 },
+            createdWriter!!.out.toByteArray(),
+        )
         assertTrue("target must be finished", sink.target?.finished == true)
         assertTrue("writer must be finished", createdWriter?.isFinished == true)
     }
