@@ -69,9 +69,13 @@ class SaveAudioFormatSettingsTest {
         try {
             rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodesWithText(aacText).fetchSemanticsNodes().isNotEmpty() }
         } catch (timeout: ComposeTimeoutException) {
+            // logcat is not uploaded by CI; put the whole semantics tree (every root, including
+            // popups) into the failure message so the CI log shows whether the menu opened at all.
             val roots = rule.onAllNodes(isRoot(), useUnmergedTree = true)
-            repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("SaveAudioFormat") }
-            throw timeout
+            val tree = (0 until roots.fetchSemanticsNodes().size).joinToString("\n---\n") {
+                roots[it].printToString(maxDepth = Int.MAX_VALUE)
+            }
+            throw AssertionError("format menu never showed '$aacText'; semantics roots:\n$tree", timeout)
         }
         rule.onAllNodesWithText("Opus").onLast().assertIsNotEnabled()
         rule.onAllNodesWithText(aacText).onLast().assertIsEnabled()
