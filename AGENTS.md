@@ -164,11 +164,17 @@ The repository uses three distinct test tiers. Cheaper tiers serve as the primar
 
 - **Never hand-edit or hand-update the Play Store listing images or hotsite screenshots** ([#228](https://github.com/alexandre-machado/audio-blackbox/issues/228), [#231](https://github.com/alexandre-machado/audio-blackbox/issues/231)):
   - `distribution/metadata/android/{en-US,pt-BR}/images/phoneScreenshots/*.png` and `docs/assets/screenshot_*.png` are produced by `ScreenshotCaptureTest` on the CI emulator and copied onto their committed destinations by [`scripts/ci/refresh-store-captures.sh`](scripts/ci/refresh-store-captures.sh), not authored or retouched by hand.
-  - The `instrumented-tests` CI job runs that script every build, diffs the nine destinations byte-for-byte against this run's captures, and auto-commits any drift onto a pull request's own branch (failing instead on a direct push to `main`, where auto-committing has nowhere safe to land). Twice before ([#227](https://github.com/alexandre-machado/audio-blackbox/pull/227), [#228](https://github.com/alexandre-machado/audio-blackbox/issues/228)) these images silently fell out of sync with the UI they claim to show because nothing checked them; this gate is what closes that gap.
+  - The `Android / Instrumented tests and screenshots` CI job (id `instrumented-tests`) runs that script every build, diffs the nine destinations byte-for-byte against this run's captures, and auto-commits any drift onto a pull request's own branch (failing instead on a direct push to `main`, where auto-committing has nowhere safe to land). Twice before ([#227](https://github.com/alexandre-machado/audio-blackbox/pull/227), [#228](https://github.com/alexandre-machado/audio-blackbox/issues/228)) these images silently fell out of sync with the UI they claim to show because nothing checked them; this gate is what closes that gap.
+
+- **CI concurrency: only PR runs are cancellable** (owner decision 2026-11-24, AB-2411-34):
+  - `android.yml` and `infrastructure.yml` use `concurrency.group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}` with `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`. A newer push to a PR branch cancels that branch's older run, so the single self-hosted runner is not spent on obsolete SHAs.
+  - Push to `main`, `v*` tags and `workflow_dispatch` (every Play upload, listing sync and deploy) get a group keyed by their own `run_id`, so they are **never cancelled or superseded**. Do not "simplify" the group to workflow + ref: GitHub replaces a *pending* run in the same group even with `cancel-in-progress: false`, so a shared `main` group would silently drop a middle merge's deploy. Job-level deploy group: `playstore-release-internal` for branch pushes (main → internal), `playstore-release-<run_id>` for `v*` tags (alpha) and `workflow_dispatch` (track/sync_only), always `cancel-in-progress: false`. An in-flight Play deploy is never cancelled. Only a *pending* main deploy can be superseded, and only by a newer main deploy to the same internal track, whose AAB has a higher versionCode and includes the older commit. Tag/dispatch deploys can never be superseded; if one overlaps a main deploy, the Play API rejects the second edit loudly (re-run it), never silently. `pages` and `custom-listing-diff-<PR>` are unchanged.
+  - The bot's screenshot auto-commit on a PR is itself a push that does not trigger workflows (`action_required`); a human push on top (an empty commit is fine) re-runs CI for that SHA.
+- **Play deploy kill switch** (owner order 2026-11-24, AB-2411-37): the repository variable `PLAY_ENABLED` gates the `deploy-playstore` job in `android.yml` (`if: vars.PLAY_ENABLED != 'false' && ...`). The job is the only path that talks to Play (AAB upload, R8 mapping, listing sync, `sync_only`). With `PLAY_ENABLED=false`, merges to `main`, `v*` tags and `workflow_dispatch` still build and test, but the deploy job is **skipped**, so nothing reaches Play and no review restarts. Only the owner flips it (Settings → Secrets and variables → Actions → Variables). While it is `false`, do not re-run a skipped deploy, and verify on each `main` run that `deploy-playstore` shows **skipped**.
+  - **Accepted risk (owner, 2026-11-24, AB-2411-41):** a run that uses an older workflow file (a `workflow_dispatch` on an old ref, a `v*` tag on an old commit, or a rerun of an old `main` run) runs the older `deploy-playstore`, which has no `PLAY_ENABLED` guard. The only effect is a Play deploy (AAB, R8 mapping, listing sync); no other job uses the Play secrets. **Rule while `PLAY_ENABLED=false`:** no `workflow_dispatch` on an old ref, no `v*` tag, and no rerun of an old `main` run that contains `deploy-playstore`. **Permanent rule after the `ci.yml` → `android.yml` rename (#473):** never push a `v*` tag on, dispatch on, or rerun a commit/run that predates `android.yml`. It would run the old `ci.yml` with versionCode `100 + old run number` (about 78x), below the `2000 + run` codes, and break the never-decreasing versionCode rule regardless of `PLAY_ENABLED`.
+- **Outside contributors need approval for every run** (owner, 2026-11-24, AB-2411-39): the repository setting `fork-pr-contributor-approval` is `all_external_contributors`. Workflows from any outside contributor's fork PR wait for a maintainer to approve them, so they cannot reach the shared concurrency groups unreviewed (this mitigates the deploy-cancellation vector in #473's `@sec` SEC-1).
 
 ---
-
-- **Play deploy kill switch** (owner order 2026-11-24, AB-2411-37): the repository variable `PLAY_ENABLED` gates the `deploy-playstore` job (`if: vars.PLAY_ENABLED != 'false' && ...`). The job is the only path that talks to Play (AAB upload, R8 mapping, listing sync, `sync_only`). With `PLAY_ENABLED=false`, merges to `main`, `v*` tags and `workflow_dispatch` still build and test, but the deploy job is **skipped**, so nothing reaches Play and no review restarts. Only the owner flips it (Settings → Secrets and variables → Actions → Variables). While it is `false`, do not re-run a skipped deploy, and verify on each `main` run that `deploy-playstore` shows **skipped**.
 
 ## 10. Pre-Merge Gate: `@sec` and `@rev` Markers
 
@@ -195,11 +201,34 @@ signal to proceed — it means the gate has not run.**
 
 ### Every marker names the SHA it reviewed, and the CI conclusion for that SHA
 
+Use the current display/check names from `gh pr checks` in the CI conclusion, not job ids.
+For older PR markers, #471 renamed checks as follows (job ids remain unchanged):
+`build` (CI) → `Android / Build, unit tests and lint`;
+`instrumented-tests` → `Android / Instrumented tests and screenshots`;
+`custom-listing-diff` → `Play / Custom listing diff`;
+`deploy-playstore` → `Play / Publish bundle and sync listing`;
+`build` (Pages) → `Site / Build and validate Jekyll`;
+`deploy` → `Site / Deploy GitHub Pages`;
+`validate-cloudflare` → `Site / Test and dry-run Cloudflare`;
+`deploy-cloudflare` → `Site / Deploy Cloudflare`;
+`cloudflare-ci-token` → `Infrastructure / Validate Cloudflare token plan`.
+
+Workflow file migration (#471/#473): `ci.yml` → `android.yml`, `pages.yml` → `site.yml`,
+`terraform.yml` → `infrastructure.yml` (all under `.github/workflows/`). Use new filenames
+in dispatch commands, badges and filters; display names and job ids stay unchanged.
+Renaming resets `GITHUB_RUN_NUMBER`. Android CI must set integer `VERSION_CODE_OFFSET=2000`;
+versionCode = offset + run number (first run = 2001). Never lower the offset.
+Absent-only fallback 100 preserves legacy numbering; malformed offsets fail. Play internal
+already received 777, so CI release task graphs reject codes below `VERSION_CODE_FLOOR=778`.
+Debug/test-only CI is exempt (normal PR runs still use 2000 + N). Local codes remain the
+commit count. Names remain `v<UTC date>.<versionCode>-<sha7>` in CI and
+`v<UTC date>.0-<sha7>-dev` locally.
+
 - **Name the SHA.** A verdict is about one commit. When a PR is updated after a review, the
   existing markers no longer cover it and the gate must run again at the new HEAD.
 - **State the CI conclusion for that same SHA, checked directly (`gh pr checks`), not assumed.**
   On [#278](https://github.com/alexandre-machado/audio-blackbox/pull/278) (2026-09-02) both
-  specialists issued PASS at a SHA whose `instrumented-tests` job was failing; neither had
+  specialists issued PASS at a SHA whose `Android / Instrumented tests and screenshots` job (then named `instrumented-tests`) was failing; neither had
   looked. That failure turned out to be environmental, but nothing in the process would have
   distinguished it from a real regression, and two PASS verdicts stood in front of it. A green
   suite is not sufficient for a PASS, but a red one forbids issuing one silently.

@@ -17,7 +17,7 @@ Runs on the JVM, no device or emulator, via `app/src/test/`. Covers everything e
 plain Kotlin/Mockito against a seam (`audioRecordFactory`, `ExportSink`, fake clocks): ring
 buffer arithmetic, gap-fill/WAV byte layout with synthetic multi-gap fixtures, permission
 resolution, state machines. This is the fast, deterministic majority of the coverage and is
-required green on every PR (`.github/workflows/ci.yml`, job `build`).
+required green on every PR (`.github/workflows/android.yml`, check `Android / Build, unit tests and lint`, job id `build`).
 
 ## Tier 1 — instrumented tests on an emulator, in CI on every PR
 
@@ -32,7 +32,7 @@ lifecycle, and — the reason this tier exists — a **real telephony interrupti
 `AudioManager.AudioRecordingCallback.isClientSilenced` and the exact scenario PR #28's critical
 bug (audio mis-spliced after the *second* interruption) lived in.
 
-Runs in CI on every PR (`.github/workflows/ci.yml`, job `instrumented-tests`), with a fresh AVD
+Runs in CI on every PR (`.github/workflows/android.yml`, check `Android / Instrumented tests and screenshots`, job id `instrumented-tests`), with a fresh AVD
 created and booted from cold on every run — no boot-snapshot cache. An earlier version of this
 job cached the AVD boot snapshot across runs to bound the added wall-clock, but every run that
 restored that cached snapshot failed to boot (`adb: device offline`, then a boot timeout, before
@@ -58,6 +58,19 @@ itself). Without that, CI is the verification loop.
 PR #28 round 4). None of these tests use a retry wrapper, a bare `sleep` standing in for an
 assertion, or `@FlakyTest` — they poll real, bounded state (`CaptureState`, `PauseGap` count, a
 committed `MediaStore` row) with generous timeouts instead.
+
+### Ogg prefix qualification (#433)
+
+Owner decision AB-2411-44 (2026-11-24) requires `OggPrefixQualificationTest` to pass for
+100% of repaired cuts with at least one complete audio page (non-empty PCM matching the
+reference prefix and MediaPlayer prepare), and 100% of raw cuts with at least two complete
+audio pages under the existing checks. Raw cuts with exactly one complete audio page are
+logged individually and counted as `KNOWN_READER_LIMITATION`, with only their repaired
+copies required to pass. Android's Ogg extractor/decoder returns empty PCM for one complete
+audio page plus a torn next page, identically with MediaMuxer and our provider; startup
+recovery repairs before the gallery. RAW and REPAIRED failures remain separate.
+After Phase 1 and its capture/headroom checks pass, `run-instrumented-tier.sh` proceeds to
+the external kill/restart handshake in `OpusProcessKillTest`.
 
 ### What's covered here vs. deferred to Tier 2
 

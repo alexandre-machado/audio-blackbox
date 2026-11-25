@@ -30,8 +30,12 @@ from recording and standby.
 
 ## Main Action Buttons (`Save` & `Live`)
 Inside the main engine card (`#335`), two avionics panel buttons control exports:
-- **`Save` (Lookback):** writes the buffered audio since the last save (or the full buffer on the first save) to a local `.m4a` file and advances the export floor (`#121`, `#410`) so consecutive saves never overlap. Disabled with a clear "No audio yet" caption when nothing new is buffered.
-- **`Live` (Continuous forward recording):** opens a single `.aac` (AAC ADTS) file that preserves the buffered past, stays playable while it records, and keeps recording until the user taps `Save & end` (or `Stop`, which also saves it).
+- **`Save` (Lookback):** writes the buffered audio since the last save (or the full buffer on the first save) to a local `.m4a` (AAC, default) or `.ogg` (Opus) file and advances the export floor (`#121`, `#410`) so consecutive saves never overlap. Disabled with a clear "No audio yet" caption when nothing new is buffered.
+- **`Live` (Continuous forward recording):** opens a single file that preserves the buffered past (`.aac` ADTS with AAC, playable while recording, or `.ogg` with Opus, to be played after recording ends) and keeps recording until the user taps `Save & end` (or `Stop`, which also saves it).
+
+## Save audio format
+
+Save audio format is free, with no Pro unlock required: AAC (default) saves .m4a files with Save, or choose Opus (.ogg) for both Save and Live. AAC (.m4a): wider compatibility. Opus (.ogg): smaller voice files. Some players and messaging apps may not open them. With AAC selected: Live stays AAC (.aac), playable while recording. Wait until recording ends to play Opus audio. If the app closes unexpectedly, saved audio may be recoverable, but the ending may be lost and some players may not open the file. On reopening after an unexpected close, Opus audio already written is recovered; the incomplete final Ogg page is discarded, so the ending may be lost. Opus may be unavailable on some devices; the option is disabled with the reason shown.
 
 ## Local Gallery
 A list view of previously saved audio files (`blackbox_*`), sorted by date and time, sourced from

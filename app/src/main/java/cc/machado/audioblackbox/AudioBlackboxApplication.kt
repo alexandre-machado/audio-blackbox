@@ -67,6 +67,9 @@ class AudioBlackboxApplication : Application() {
         ErrorLogFileHolder.file = java.io.File(applicationContext.filesDir, "export_errors.log")
 
         installCrashLogHandler()
+        Thread({
+            runCatching { cc.machado.audioblackbox.export.InterruptedLiveRecovery.recover(this) }
+        }, "InterruptedLiveRecovery").start()
         // One process-owned repository, following the application initialization idiom above.
         // PackageManager, BillingClient construction and DataStore all stay off the main thread.
         billingScope.launch {

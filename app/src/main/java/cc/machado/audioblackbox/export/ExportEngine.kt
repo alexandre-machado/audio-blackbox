@@ -33,6 +33,7 @@ enum class ExportFailureReason {
 
     /** [ExportSink.open] threw, e.g. MediaStore insert rejected, no space, permission denied. */
     SINK_OPEN_FAILED,
+    OPUS_UNAVAILABLE,
 
     /** Writing the header or payload to the sink's `OutputStream` threw. */
     WRITE_FAILED,
@@ -149,6 +150,7 @@ class ExportEngine(
     // of falling back to Idle silently). `null` (the default, and every existing caller before this
     // issue) keeps the exact prior message, so this is purely additive.
     private val captureFailureDescriptionProvider: (() -> String?)? = null,
+    private val payloadEncoderProvider: () -> PayloadEncoder = { payloadEncoder },
 ) {
     constructor(
         engine: AudioCaptureEngine,
@@ -294,6 +296,8 @@ class ExportEngine(
 
     private fun runExport(durationMillis: Long, minutesLabel: Int, secondsLabel: Int?): ExportState {
         return try {
+            // One immutable choice controls suffix, MediaStore MIME, and payload for this Save.
+            val sessionEncoder = payloadEncoderProvider()
             // Fix the window purely from cursors, before touching a single PCM byte (issue #72):
             // [oldestCursor, writeCursor) is everything currently buffered, which is naturally at
             // least as much raw audio as `durationMillis` needs plus gap padding -- the same
@@ -408,16 +412,16 @@ class ExportEngine(
                 targetConfig = targetConfig,
                 targetDurationMillis = durationMillis,
             )
-            val displayName = filenameFor(adjustedWindowStart, minutesLabel, secondsLabel)
+            val displayName = filenameFor(adjustedWindowStart, minutesLabel, secondsLabel, sessionEncoder.fileExtension)
 
             val target = try {
-                sink.open(displayName, payloadEncoder.mimeType)
+                sink.open(displayName, sessionEncoder.mimeType)
             } catch (e: IOException) {
                 return ExportState.Error(ExportFailureReason.SINK_OPEN_FAILED, e.message ?: "sink open failed", e)
             }
 
             val reader = BoundedExportReader(plan, readSinceProvider, drainChunkSizeBytes)
-            val outcome = writeAndFinish(target, plan, reader, displayName)
+            val outcome = writeAndFinish(target, plan, reader, displayName, sessionEncoder)
             // Issue #410: only a committed file moves the floor, and it moves to the end of the
             // window that file actually contains (`writeCursor` as fixed above), not to wherever
             // the writer has got to by now -- audio captured while this save was encoding is still
@@ -443,6 +447,7 @@ class ExportEngine(
         plan: BoundedExportPlan,
         reader: BoundedExportReader,
         displayName: String,
+        sessionEncoder: PayloadEncoder,
     ): ExportState {
         var writeFailure: Throwable? = null
         var failureReason: ExportFailureReason? = null
@@ -455,7 +460,7 @@ class ExportEngine(
                 // encode). `reader` pulls chunks bounded by `drainChunkSizeBytes` from the ring
                 // buffer as the encoder asks for them -- the encoder never sees (and this class
                 // never allocates) a buffer proportional to the whole plan (issue #72).
-                payloadEncoder.encode(plan.targetConfig, plan.totalOutputBytes, reader, out) { cancelRequested }
+                sessionEncoder.encode(plan.targetConfig, plan.totalOutputBytes, reader, out) { cancelRequested }
             }
         } catch (e: CancellationException) {
             throw e
@@ -484,7 +489,8 @@ class ExportEngine(
             writeFailure != null -> {
                 target.abort()
                 ExportState.Error(
-                    failureReason ?: ExportFailureReason.WRITE_FAILED,
+                    if (writeFailure is OpusUnavailableException) ExportFailureReason.OPUS_UNAVAILABLE
+                    else failureReason ?: ExportFailureReason.WRITE_FAILED,
                     writeFailure.message ?: writeFailure.javaClass.simpleName,
                     writeFailure
                 )
@@ -554,11 +560,11 @@ class ExportEngine(
     private fun marginMillisFor(marginBytes: Long, targetConfig: AudioConfig): Long =
         if (targetConfig.bytesPerSecond > 0) (marginBytes * MILLIS_PER_SECOND) / targetConfig.bytesPerSecond else 0L
 
-    private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int, secondsLabel: Int?): String {
+    private fun filenameFor(startTimestampMillis: Long, minutesLabel: Int, secondsLabel: Int?, extension: String): String {
         val formatter = SimpleDateFormat(FILENAME_TIMESTAMP_PATTERN, Locale.US)
         val timestamp = formatter.format(Date(startTimestampMillis))
         val durationSuffix = if (secondsLabel != null) "${secondsLabel}s" else "${minutesLabel}min"
-        return "blackbox_${timestamp}_${durationSuffix}.${payloadEncoder.fileExtension}"
+        return "blackbox_${timestamp}_${durationSuffix}.${extension}"
     }
 
     private companion object {

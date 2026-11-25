@@ -210,6 +210,9 @@ class GalleryViewModel(
      * (see its doc), which is also what keeps [buildUiState] able to derive every item's playback
      * state from one shared value without any item-local bookkeeping. */
     fun onPlayPauseClicked(recording: RecordingItem) {
+        val live = forwardRecordingState.value as? ForwardRecordingState.Recording
+        if (live?.displayName == recording.displayName &&
+            cc.machado.audioblackbox.export.StreamingOpusWriter.accepts(recording.mimeType, recording.displayName)) return
         when (val current = player.playback.value) {
             is PlaybackState.Playing -> if (current.uri == recording.uri) player.pause() else player.play(recording.uri, recording.mimeType)
             is PlaybackState.Paused -> if (current.uri == recording.uri) player.resume() else player.play(recording.uri, recording.mimeType)
