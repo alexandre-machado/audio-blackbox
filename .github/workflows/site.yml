@@ -22,11 +22,8 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# `build` and `deploy` are self-hosted, like every other job in this repo (#171/#172); the two
-# Cloudflare jobs are the deliberate exception (GitHub-hosted, see validate-cloudflare). Safe here without the head-repo
-# fork guard the CI jobs carry, because this workflow has no `pull_request` trigger at all -- it
-# runs only on a push to main and on manual dispatch, neither of which a fork can cause. The
-# repository guard on each job still blocks it in a fork.
+# All site jobs use fresh GitHub-hosted runners (#480, AB-2411-47).
+# This workflow has no pull_request trigger; each repository guard blocks fork runs.
 #
 # Build isolation (#415 review): `build` runs the Ruby toolchain and ~90 third-party gems with a
 # read-only token and no Pages/OIDC credentials. `deploy` holds pages: write + id-token: write
@@ -36,7 +33,7 @@ concurrency:
 jobs:
   build:
     name: Site / Build and validate Jekyll
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.repository == 'alexandre-machado/audio-blackbox'
     permissions:
       contents: read
@@ -48,13 +45,14 @@ jobs:
 
       # docs/ is Jekyll source (front matter, layouts, Liquid analytics blocks), so it must be
       # rendered before upload (#414). Uploading raw docs/ once shipped `--- ---` and
-      # `{% if ... %}` as visible text on the live site. See the script header for why the
-      # toolchain is conda-forge Ruby via micromamba rather than jekyll-build-pages/setup-ruby,
-      # and how the cached env is verified before reuse.
+      # `{% if ... %}` as visible text on the live site.
+      # No ruby/setup-ruby SHA exists in repo history. Retain the checksum-verified Ruby
+      # 3.3.6 bootstrap in a fresh temporary directory until an approved action pin is available.
+      # docs/Gemfile.lock still pins Jekyll 3.10.0; no persistent host toolchain is required.
       - name: Set up Ruby (micromamba, conda-forge)
         run: |
           set -euo pipefail
-          bin_dir="$(bash scripts/ci/setup-jekyll-ruby.sh "${RUNNER_TOOL_CACHE}/jekyll-ruby" | tail -n 1)"
+          bin_dir="$(bash scripts/ci/setup-jekyll-ruby.sh "${RUNNER_TEMP}/jekyll-ruby" | tail -n 1)"
           echo "$bin_dir" >> "$GITHUB_PATH"
 
       - name: Build site with Jekyll
@@ -91,7 +89,7 @@ jobs:
   deploy:
     name: Site / Deploy GitHub Pages
     needs: build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.repository == 'alexandre-machado/audio-blackbox'
     permissions:
       contents: read
@@ -148,13 +146,10 @@ jobs:
           esac
           exit 0
 
-  # Both Cloudflare jobs run on a GitHub-hosted runner, not the self-hosted one (#461 @sec
-  # SEC-1). The self-hosted runner is persistent and the build job runs ~90 third-party gems
-  # as the same user, which could tamper with ~/.gitconfig (copied by actions/checkout), the
-  # runner's binaries, or read another job's environment. A fresh ephemeral VM per job removes
-  # that path to the Cloudflare token. The repo is public, so hosted minutes are free. This
-  # mirrors the vaelo.club hotsite deploy this setup is modelled on. The fresh-directory and
-  # locked-install steps below are kept as defence in depth.
+  # Cloudflare jobs remain isolated on fresh hosted VMs (#461 @sec SEC-1).
+  # The Jekyll build is now hosted too (#480); separate jobs keep its third-party
+  # gems away from deployment credentials. Fresh-directory and locked-install
+  # steps below remain defence in depth.
   validate-cloudflare:
     name: Site / Test and dry-run Cloudflare
     needs: build
@@ -204,7 +199,7 @@ jobs:
           cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
           mkdir -p "$WORK_DIR/.staged/audio-blackbox"
           tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
-          # #461 @sec SEC-8: the artifact comes from the self-hosted build. Accept only regular
+          # #461 @sec SEC-8: the artifact comes from a separate build job. Accept only regular
           # files and directories, never a symlink (e.g. to /proc/self/environ), device or FIFO
           # that wrangler would follow and upload.
           odd="$(find "$WORK_DIR/.staged" ! -type f ! -type d -print)"
@@ -283,7 +278,7 @@ jobs:
           cp -a "$SOURCE_DIR/cloudflare/." "$WORK_DIR/"
           mkdir -p "$WORK_DIR/.staged/audio-blackbox"
           tar -xf "$ARTIFACT_DIR/artifact.tar" -C "$WORK_DIR/.staged/audio-blackbox"
-          # #461 @sec SEC-8: the artifact comes from the self-hosted build. Accept only regular
+          # #461 @sec SEC-8: the artifact comes from a separate build job. Accept only regular
           # files and directories, never a symlink (e.g. to /proc/self/environ), device or FIFO
           # that wrangler would follow and upload.
           odd="$(find "$WORK_DIR/.staged" ! -type f ! -type d -print)"
