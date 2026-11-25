@@ -77,6 +77,30 @@ can complete until these land.
    audio recorder given one-party vs. all-party consent laws vary by country. This
    is the owner's call, not an engineering one.
 
+## Check pro_unlock
+
+Run **Play / Check pro_unlock** (`play-check.yml`) manually from Actions in
+`alexandre-machado/audio-blackbox`. It checks `cc.machado.audioblackbox` using the
+existing `PLAY_STORE_JSON_KEY` secret and the `androidpublisher` OAuth scope.
+The workflow writes the environment-injected JSON to a restricted runner temp
+file and deletes it in an `always()` step; unlike this checker, `android.yml`'s
+metadata sync consumes the JSON environment variable directly.
+
+The checker permits only GET on the single-product
+[oneTimeProducts endpoint](https://developers.google.com/android-publisher/api-ref/rest/v3/monetization.onetimeproducts/get),
+falling back to `inappproducts.get` only on 404. It never creates an edit or changes
+Play data. Logs and the job summary show existence, purchase-option states,
+regional prices and listing languages/titles. The modern API has no default-price
+field: new-region USD/EUR prices are shown separately; legacy responses show their
+default price. Exit codes: **0** found with an ACTIVE purchase option (or legacy
+active status), **2** found but not active, **3** both APIs returned 404, **1** other
+error. A 0 does not establish availability in every region; inspect each region's
+availability. Nonzero codes fail the job while preserving the summary.
+
+Local check: install `google-auth requests`, set `PLAY_STORE_JSON_KEY` to the path
+of a service-account JSON file, then run `python3 scripts/ci/play-inapp-status.py`.
+Offline tests: `python3 -m unittest discover -s scripts/ci -p test_play_inapp_status.py`.
+
 ## B. Signing
 
 **Recommendation: enroll in Play App Signing, do not self-manage the distribution
