@@ -12,7 +12,7 @@
   from WSL by scripts/ci/run-instrumented-tier.sh, which pulls the screenshots off the device.
 
   The AVD definition is read from scripts/ci/avd.env, the same single source of truth that
-  .github/workflows/ci.yml and scripts/run-instrumented-tests.sh use, so a locally captured
+  .github/workflows/android.yml and scripts/run-instrumented-tests.sh use, so a locally captured
   screenshot comes off the same API level, target, arch and device profile that CI renders.
   Do not hardcode those values here -- edit avd.env if they need to change.
 
@@ -113,7 +113,7 @@ foreach ($tool in @(@{P=$AvdManager; N='avdmanager'}, @{P=$Emulator; N='emulator
 
 # --- Read the AVD definition (shared with CI) ------------------------------------------------
 # avd.env is heavily commented for humans; take only the bare KEY=VALUE lines, the same way
-# .github/workflows/ci.yml does when feeding it into $GITHUB_ENV.
+# .github/workflows/android.yml does when feeding it into $GITHUB_ENV.
 $Avd = @{}
 Get-Content $AvdEnv | Where-Object { $_ -match '^[A-Z_]+=' } | ForEach-Object {
     $key, $value = $_ -split '=', 2

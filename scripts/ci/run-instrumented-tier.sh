@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the full emulator-based instrumented tier (issue #34) against whatever single device
 # `adb` currently sees -- meant to run as the `script:` step inside a booted
-# reactivecircus/android-emulator-runner job (.github/workflows/ci.yml) or against a locally
+# reactivecircus/android-emulator-runner job (.github/workflows/android.yml) or against a locally
 # booted AVD (scripts/run-instrumented-tests.sh). Never touches a physically connected device
 # (the S25) on purpose -- see the serial-selection guard below.
 #
@@ -44,7 +44,7 @@ TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
 # Where ScreenshotCaptureTest (issue #78) writes its PNGs, relative to the app's data dir, and
-# where they land in the workspace for .github/workflows/ci.yml to upload as an artifact. The
+# where they land in the workspace for .github/workflows/android.yml to upload as an artifact. The
 # device path is the app's *internal* files dir on purpose: `run-as` reads it on any API level
 # without a storage permission, unlike /sdcard/Android/data.
 SCREENSHOT_DEVICE_DIR="files/screenshots"

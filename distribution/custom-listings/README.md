@@ -26,7 +26,7 @@ For that reason:
 
 - `scripts/ci/sync-play-store-metadata.py` only reads `distribution/metadata/android/` and must
   never be pointed at this tree.
-- The `deploy-playstore` job in `.github/workflows/ci.yml` never reads this directory. Its listing
+- The `Play / Publish bundle and sync listing` job (id `deploy-playstore`) in `.github/workflows/android.yml` never reads this directory. Its listing
   sync is gated on changes under `distribution/metadata/` only.
 
 ## The process
@@ -34,7 +34,7 @@ For that reason:
 1. Edit the `.txt` files here and open a pull request.
 2. CI lints the text against Play's limits (title 30, short description 80, full description 4000
    characters, counted after trimming surrounding whitespace) in the `build` job.
-3. The `custom-listing-diff` job posts one comment on the pull request with the paste-ready text for
+3. The `Play / Custom listing diff` job (id `custom-listing-diff`) posts one comment on the pull request with the paste-ready text for
    every field that changed, grouped by listing and locale, with a collapsed diff of the old text.
    It updates that same comment on every push instead of adding new ones.
 4. After merge, the owner pastes each changed field into Play Console:

@@ -15,7 +15,7 @@
 # reuse, the env is rebuilt from scratch if any file changed, went missing or was added, if a
 # symlink changed, or if `ruby -v` fails. This catches corruption and partial deletion (e.g.
 # tool-cache cleanup). It is NOT a defense against a same-user attacker, who can rewrite the
-# manifest too. That risk is bounded by pages.yml's job split: this toolchain runs in a job
+# manifest too. That risk is bounded by site.yml's job split: this toolchain runs in a job
 # with contents: read only, never with pages: write or the OIDC token.
 set -euo pipefail
 

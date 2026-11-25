@@ -1,0 +1,44 @@
+name: Infrastructure Validation
+run-name: >-
+  Infrastructure · ${{ github.event_name }} · ${{ github.event.pull_request.title || github.ref_name }} · #${{ github.run_number }}.${{ github.run_attempt }}
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Owner decision 2026-11-24 (AB-2411-34): a newer push to the same PR branch cancels the older
+# PR run, so the single self-hosted runner is not spent on obsolete SHAs. Anything that is not a
+# pull_request (push to main, v* tags, workflow_dispatch, i.e. every deploy/Play/listing run)
+# gets a group keyed by its own run_id: it never shares a group, so it can be neither cancelled
+# nor superseded while pending. GitHub replaces a pending run in the same group even when
+# cancel-in-progress is false, so a shared main group would silently drop a middle merge's deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cloudflare-ci-token:
+    name: Infrastructure / Validate Cloudflare token plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+      - name: Initialize Terraform without backend
+        run: terraform -chdir=infra/terraform/cloudflare-ci-token init -backend=false -input=false -lockfile=readonly
+      - name: Validate Terraform configuration
+        run: terraform -chdir=infra/terraform/cloudflare-ci-token validate
+      - name: Test token plan and mutations
+        run: bash scripts/ops/test-cloudflare-ci-token-plan.sh --mutations
