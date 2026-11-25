@@ -24,6 +24,27 @@ cd "$REPO_ROOT"
 log()  { printf '[instrumented-tier] %s\n' "$*"; }
 fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# Report only phases started in this invocation, including partial logs on early exit.
+# Preserve the original status and all grep gates; the Opus start death is intentional.
+JUNIT_PHASES=()
+mkdir -p build/instrumented-junit
+rm -f build/instrumented-junit/{phase1,opus-kill-start,opus-kill-verify,splice}.xml
+finish_tier() {
+  local status=$? phase
+  trap - EXIT
+  set +e
+  for phase in "${JUNIT_PHASES[@]}"; do
+    python3 scripts/ci/am-instrument-to-junit.py "/tmp/instrumented-$phase.log" \
+      "build/instrumented-junit/$phase.xml" --phase "$phase" ||
+      printf '::warning::Could not generate JUnit for %s.\n' "$phase" >&2
+  done
+  if [[ "${CI_CLEANUP_REGISTERED:-}" == true ]]; then
+    shutdown_ci_emulator "$status"
+  fi
+  exit "$status"
+}
+trap finish_tier EXIT
+
 # The screen captures (issue #78) currently on the device, one filename per line, empty if there
 # are none. Two things about this AVD's toybox `ls` are load-bearing here, both learned the hard
 # way on this branch rather than assumed:
@@ -86,7 +107,7 @@ wait_for_emulator_exit() {
 }
 
 shutdown_ci_emulator() {
-  local status=$? proc pid
+  local status=${1:-$?} proc pid
   local -a matches=()
   trap - EXIT
   set +e
@@ -122,7 +143,7 @@ if [[ "${CI_EMULATOR_SHUTDOWN:-}" == true ]]; then
     [[ "${ANDROID_SERIAL:-}" == "emulator-$EMULATOR_PORT" && -n "${AVD_NAME:-}" ]] ||
     fail "CI cleanup requires EMULATOR_PORT (even, 5554-5584), ANDROID_SERIAL=emulator-\$EMULATOR_PORT and AVD_NAME."
   command -v timeout >/dev/null || fail "timeout is required for bounded CI shutdown."
-  trap shutdown_ci_emulator EXIT
+  CI_CLEANUP_REGISTERED=true
 fi
 
 # --- Resolve exactly one emulator serial --------------------------------
@@ -214,8 +235,9 @@ fi
 # leftovers from some earlier install/boot activity that happened to log the same tag.
 "${ADB[@]}" logcat -c
 log "Running the non-interruption instrumented tests..."
+JUNIT_PHASES+=(phase1)
 set +e
-"${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS,$OPUS_KILL_TEST_CLASS" "$RUNNER" \
+"${ADB[@]}" shell am instrument -r -w -e notClass "$SPLICE_TEST_CLASS,$OPUS_KILL_TEST_CLASS" "$RUNNER" \
   2>&1 | tee /tmp/instrumented-phase1.log
 PHASE1_STATUS=$?
 set -e
@@ -282,7 +304,8 @@ printf '%s\n' "$HEADROOM_OUTPUT"
 log "Starting the Opus live process-kill qualification..."
 command -v timeout >/dev/null || fail "timeout is required for the process-kill qualification."
 "${ADB[@]}" logcat -c
-timeout -k 5 120 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
+JUNIT_PHASES+=(opus-kill-start)
+timeout -k 5 120 "${ADB[@]}" shell am instrument -r -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
   > /tmp/instrumented-opus-kill-start.log 2>&1 &
 OPUS_START_PID=$!
 opus_ready="$(timeout -k 2 90 "${ADB[@]}" logcat -m 1 -e 'OPUS_KILL_READY pid=[0-9]+' -s OpusKillTest:I | grep -oE 'OPUS_KILL_READY pid=[0-9]+' || true)"
@@ -331,7 +354,8 @@ opus_app_size="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" stat -c %
   || fail "Could not stat the app-readable raw Opus snapshot."
 [[ "$opus_app_size" == "$opus_device_size" ]] \
   || fail "App raw Opus snapshot size mismatch: device=$opus_device_size app=$opus_app_size."
-timeout -k 5 180 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
+JUNIT_PHASES+=(opus-kill-verify)
+timeout -k 5 180 "${ADB[@]}" shell am instrument -r -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
   2>&1 | tee /tmp/instrumented-opus-kill-verify.log
 grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
 log "Opus process-kill and startup-recovery qualification OK."
@@ -352,7 +376,8 @@ log "Opus process-kill and startup-recovery qualification OK."
 SPLICE_PHASE_SECONDS=300
 log "Launching InterruptionSpliceTest in the background..."
 "${ADB[@]}" logcat -c
-timeout -k 5 "$SPLICE_PHASE_SECONDS" "${ADB[@]}" shell am instrument -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
+JUNIT_PHASES+=(splice)
+timeout -k 5 "$SPLICE_PHASE_SECONDS" "${ADB[@]}" shell am instrument -r -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
   >/tmp/instrumented-splice.log 2>&1 &
 SPLICE_PID=$!
 
