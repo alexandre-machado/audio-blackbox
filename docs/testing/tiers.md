@@ -13,7 +13,9 @@ export PATH="$JAVA_HOME/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
 ./gradlew testDebugUnitTest lintDebug
 ```
 
-Runs on the JVM, no device or emulator, via `app/src/test/`. Covers everything expressible as
+Runs on the JVM, no device or emulator, via `app/src/test/`. CI uses GitHub-hosted
+`ubuntu-latest` for job `build` (#480), with JDK 17, explicitly installed Android SDK
+packages and the Gradle Actions cache. The commands above show local SDK setup. Covers everything expressible as
 plain Kotlin/Mockito against a seam (`audioRecordFactory`, `ExportSink`, fake clocks): ring
 buffer arithmetic, gap-fill/WAV byte layout with synthetic multi-gap fixtures, permission
 resolution, state machines. This is the fast, deterministic majority of the coverage and is
@@ -32,7 +34,7 @@ lifecycle, and — the reason this tier exists — a **real telephony interrupti
 `AudioManager.AudioRecordingCallback.isClientSilenced` and the exact scenario PR #28's critical
 bug (audio mis-spliced after the *second* interruption) lived in.
 
-Runs in CI on every PR (`.github/workflows/android.yml`, check `Android / Instrumented tests and screenshots`, job id `instrumented-tests`), with a fresh AVD
+Runs on the self-hosted runner in CI on every PR (`.github/workflows/android.yml`, check `Android / Instrumented tests and screenshots`, job id `instrumented-tests`), with a fresh AVD
 created and booted from cold on every run — no boot-snapshot cache. An earlier version of this
 job cached the AVD boot snapshot across runs to bound the added wall-clock, but every run that
 restored that cached snapshot failed to boot (`adb: device offline`, then a boot timeout, before
@@ -48,7 +50,7 @@ the CI job:
   is the strictest fence available for every supported device above it, and boots faster than a
   34/36 image.
 - **google_apis / x86_64** — `google_apis` ships the telephony/radio stack `adb emu gsm call`
-  needs; `x86_64` gets KVM-accelerated boot on GitHub's `ubuntu-latest` runners.
+  needs; `x86_64` uses KVM acceleration on the self-hosted runner.
 
 Local runs need hardware acceleration (`/dev/kvm` readable/writable by your user — see the
 script's own comments for the one-time `usermod`/re-login step it deliberately does not attempt

@@ -384,9 +384,9 @@ published, consistent with the other development docs.
 
 ## Why the Cloudflare jobs run on GitHub-hosted runners (do not move them back)
 
-`Site / Test and dry-run Cloudflare` and `Site / Deploy Cloudflare` deliberately run on `ubuntu-latest`, as does `Infrastructure / Validate Cloudflare token plan`. The Android/Play jobs, `Site / Build and validate Jekyll`, and `Site / Deploy GitHub Pages` run on the self-hosted runner. The Cloudflare runner isolation was approved by the infrastructure owner on 2026-11-23 (PR #461, `@sec` SEC-1).
+`Site / Test and dry-run Cloudflare` and `Site / Deploy Cloudflare` deliberately run on `ubuntu-latest`, as does `Infrastructure / Validate Cloudflare token plan`. Under #480 (owner AB-2411-47), Android `build`/`custom-listing-diff`, `Site / Build and validate Jekyll`, and `Site / Deploy GitHub Pages` also run on `ubuntu-latest`. Only Android `instrumented-tests` and `deploy-playstore` stay self-hosted. The Cloudflare runner isolation was approved by the infrastructure owner on 2026-11-23 (PR #461, `@sec` SEC-1).
 
-The self-hosted runner is persistent, and `Site / Build and validate Jekyll` runs ~90 third-party gems as the same user. A compromised gem could tamper with `~/.gitconfig` (which `actions/checkout` copies), with runner binaries, or with another job's environment before the Cloudflare token is used. A fresh GitHub-hosted VM per job removes that path. The repo is public, so hosted minutes cost nothing. The vaelo.club hotsite deploy uses the same arrangement. The artifact handed over from the self-hosted build is additionally refused if it contains anything other than regular files and directories (SEC-8).
+Before #480, the persistent self-hosted runner ran `Site / Build and validate Jekyll` and its ~90 third-party gems as the same user. A compromised gem could tamper with `~/.gitconfig` (which `actions/checkout` copies), with runner binaries, or with another job's environment before the Cloudflare token is used. A fresh GitHub-hosted VM per job removes that path. The repo is public, so hosted minutes cost nothing. The vaelo.club hotsite deploy uses the same arrangement. The artifact handed over from the separate hosted build is additionally refused if it contains anything other than regular files and directories (SEC-8).
 
 ## Only one deploy path: GitHub Actions
 
