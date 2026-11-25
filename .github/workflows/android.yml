@@ -111,6 +111,9 @@ jobs:
       - name: Test custom listing diff
         run: python3 -m unittest discover -s scripts/ci -p 'test_custom_listing_diff.py' -v
 
+      - name: Test instrumented JUnit converter
+        run: python3 -m unittest discover -s scripts/ci -p 'test_am_instrument_to_junit.py' -v
+
       # Lints the default listing plus every custom store listing root
       # (distribution/custom-listings/<slug>/). nullglob: with zero slugs the glob expands to
       # nothing instead of a literal "*/" path the linter would report as missing.
@@ -350,11 +353,8 @@ jobs:
 
       # Issue #345: this tier drives `am instrument` directly (see run-instrumented-tier.sh's
       # header for why it can't just be `connectedDebugAndroidTest`), so there is no Gradle-
-      # generated JUnit XML/HTML for it -- the only record of a failing assertion's message is
-      # the raw `am instrument` transcript the script already tees to these two fixed paths.
-      # Uploaded on failure only, same reasoning as the unit test report above. Both files are
-      # small, plain-text, single-run transcripts (no build output), and the second one may
-      # legitimately not exist if phase 1 itself failed first.
+      # generated report. Keep the raw transcripts alongside the converted XML (#348).
+      # Later phases may legitimately not exist if an earlier phase failed.
       - name: Upload instrumented test logs
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -363,6 +363,17 @@ jobs:
           path: |
             /tmp/instrumented-phase1.log
             /tmp/instrumented-splice.log
+            /tmp/instrumented-opus-kill-start.log
+            /tmp/instrumented-opus-kill-verify.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload instrumented JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: instrumented-junit-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/instrumented-junit/*.xml
           if-no-files-found: ignore
           retention-days: 14
 
