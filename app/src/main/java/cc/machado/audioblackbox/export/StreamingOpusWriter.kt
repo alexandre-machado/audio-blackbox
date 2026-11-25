@@ -157,7 +157,7 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
         }
     }
 
-    override fun finish() = synchronized(lock) {
+    override fun finish(): Unit = synchronized(lock) {
         if (finished) return
         check(!closed)
         try {
@@ -180,7 +180,7 @@ class StreamingOpusWriter(descriptor: FileDescriptor, private val config: AudioC
         } finally { close() }
     }
 
-    override fun close() = synchronized(lock) {
+    override fun close(): Unit = synchronized(lock) {
         if (closed) return
         closed = true
         runCatching { codec.stop() }

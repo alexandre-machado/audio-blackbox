@@ -6,9 +6,10 @@ import java.util.TimeZone
 
 fun getGitCommitShortSha(): String {
     return try {
-        val process = ProcessBuilder("git", "rev-parse", "--short=7", "HEAD").start()
-        val sha = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
+        val sha = providers.exec {
+            commandLine("git", "rev-parse", "--short=7", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
         sha.ifBlank { "unknown" }
     } catch (_: Exception) {
         "unknown"
@@ -56,9 +57,10 @@ gradle.taskGraph.whenReady {
 
 fun getGitCommitCount(): Int {
     return try {
-        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD").start()
-        val countStr = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
+        val countStr = providers.exec {
+            commandLine("git", "rev-list", "--count", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
         countStr.toIntOrNull() ?: 1
     } catch (_: Exception) {
         1
@@ -102,8 +104,8 @@ plugins {
 }
 
 android {
-    sourceSets.getByName("test").kotlin.srcDir("src/testCommon/java")
-    sourceSets.getByName("androidTest").kotlin.srcDir("src/testCommon/java")
+    sourceSets.getByName("test").kotlin.directories += "src/testCommon/java"
+    sourceSets.getByName("androidTest").kotlin.directories += "src/testCommon/java"
     namespace = "cc.machado.audioblackbox"
     // compileSdk major must match the minor platform package installed in CI
     // (.github/workflows/android.yml, "Install SDK platform and build-tools" step). AGP resolves

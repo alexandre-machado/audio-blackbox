@@ -61,7 +61,7 @@ class StreamingAdtsWriter(target: StreamingExportTarget, private val config: Aud
         }
     }
 
-    override fun finish() = synchronized(lock) {
+    override fun finish(): Unit = synchronized(lock) {
         if (finished) return
         check(!closed)
         try {
@@ -74,7 +74,7 @@ class StreamingAdtsWriter(target: StreamingExportTarget, private val config: Aud
         }
     }
 
-    override fun close() = synchronized(lock) {
+    override fun close(): Unit = synchronized(lock) {
         if (closed) return
         closed = true
         encoder.close()
