@@ -19,13 +19,17 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Oracle: actual rendered field, popup and item pixels contain the cockpit colors, including
- * opaque disabled text and a separately legible reason. These tests inspect production rendering,
- * not a parallel palette fixture: reverting field/item colors to defaults must fail.
- * CI mutations: remove the field colors argument (CockpitSlate assertion fails); restore it,
- * change the popup containerColor to CockpitPanelRaised (CockpitPanel fails), then restore it
- * and remove item colors (TextDim fails). The default popup fill already equals CockpitPanel.
- * Run each mutation separately with connectedDebugAndroidTest and revert before the final run.
+ * Regression oracles and their targeted production mutations:
+ * - Remove field container colors: the CockpitSlate fill checks fail, before/after focus.
+ * - Remove disabledTextColor from itemColors: the disabled Opus TextDim check fails.
+ * - Remove the reason's explicit color: the reason TextMuted check fails (inherits disabled text).
+ * - Remove popup border: the straight-edge blended CockpitBorderStrong pixel check fails.
+ * - Remove popup shape (M3 defaults to 4dp): the outside-corner alpha check fails; CARD_SHAPE
+ *   has a 14dp radius, leaving the sampled pixel outside its fill and border.
+ * Other color assertions are smoke checks only: the theme already maps the M3 defaults to
+ * those tokens (including the popup fill). They do not detect removal of explicit overrides.
+ * Mutation verification requires CI connectedDebugAndroidTest: apply each mutation separately,
+ * verify the named failure, then restore production and run clean. Not verified by compilation.
  */
 class SaveAudioFormatColorsTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
@@ -33,15 +37,18 @@ class SaveAudioFormatColorsTest {
     @Test fun fieldUsesCockpitColorsBeforeAndAfterFocus() {
         render(opusAvailable = true)
         val field = rule.onNodeWithTag("saveFormatField")
+        // Regression oracle: M3's transparent container exposes the CockpitPanel card instead.
         field.assertFillColor(CockpitSlate, atBottom = true)
-        field.assertContainsColor(CockpitBorderStrong.compositeOver(CockpitSlate))
+        // Smoke checks: these colors also follow from the existing theme's M3 role mappings.
         field.assertContainsColor(TextStencil)
         rule.onNodeWithTag("saveFormatLabel", useUnmergedTree = true).assertContainsColor(TextMuted)
         rule.onNodeWithTag("saveFormatIcon", useUnmergedTree = true).assertContainsColor(TextMuted)
 
         field.performSemanticsAction(SemanticsActions.RequestFocus)
         rule.waitForIdle()
+        // Regression oracle for the focused container override, independently of unfocused.
         field.assertFillColor(CockpitSlate, atBottom = true)
+        // Smoke checks only (primary/onSurface/onSurfaceVariant already map to these tokens).
         field.assertContainsColor(FlightOrange)
         field.assertContainsColor(TextStencil)
         rule.onNodeWithTag("saveFormatLabel", useUnmergedTree = true).assertContainsColor(FlightOrange)
@@ -51,8 +58,12 @@ class SaveAudioFormatColorsTest {
     @Test fun popupUsesPanelAndEnabledAndDisabledTextTokens() {
         render(opusAvailable = false)
         openMenu()
+        // Smoke checks: default surfaceContainer/onSurface already match these colors.
         rule.onNodeWithTag("saveFormatPopup").assertFillColor(CockpitPanel)
         rule.onNodeWithTag("saveFormatAac").assertIsEnabled().assertContainsColor(TextStencil)
+        // Regression oracles: M3 has no border and uses a smaller popup corner radius.
+        rule.onNodeWithTag("saveFormatPopup").assertPopupBorderAndCorner()
+        // Regression oracles: default disabled text is onSurface at 38%, not these opaque tokens.
         rule.onNodeWithTag("saveFormatOpus").assertIsNotEnabled().assertContainsColor(TextDim)
         rule.onNodeWithTag("saveFormatReason", useUnmergedTree = true).assertContainsColor(TextMuted)
     }
@@ -60,6 +71,7 @@ class SaveAudioFormatColorsTest {
     @Test fun availableOpusUsesEnabledTextToken() {
         render(opusAvailable = true)
         openMenu()
+        // Color smoke check only; the enabled/reason semantics still guard availability behavior.
         rule.onNodeWithTag("saveFormatOpus").assertIsEnabled().assertContainsColor(TextStencil)
         rule.onNodeWithTag("saveFormatReason", useUnmergedTree = true).assertDoesNotExist()
     }
@@ -76,6 +88,40 @@ class SaveAudioFormatColorsTest {
         rule.onNodeWithText(rule.activity.getString(R.string.settings_save_audio_format)).performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("saveFormatPopup").assertIsDisplayed()
+    }
+
+    private fun SemanticsNodeInteraction.assertPopupBorderAndCorner() {
+        val pixels = captureToImage().toPixelMap()
+        // The tagged Column includes menu padding and shares the Surface's outer bounds.
+        // Sample the center of the 1dp stroke on a straight edge, clear of text and corners.
+        val edgeX = with(rule.density) { 0.5.dp.toPx().toInt() }
+        val expectedBorder = CockpitBorderStrong.compositeOver(CockpitPanel)
+        val actualBorder = pixels[edgeX, pixels.height / 2]
+        assertTrue(
+            "Popup border regression oracle: expected $expectedBorder, got $actualBorder",
+            colorsWithinTolerance(expectedBorder, actualBorder),
+        )
+
+        // (2dp, 2dp) is inside the M3 4dp corner (even with its 1dp border), but well
+        // outside CARD_SHAPE's 14dp arc. Capture is of the popup window, not the activity:
+        // outside pixels may contain its translucent shadow, so require low alpha, not zero.
+        val cornerInset = with(rule.density) { 2.dp.toPx().toInt() }
+        val corner = pixels[cornerInset, cornerInset]
+        assertTrue(
+            "Popup shape regression oracle: corner must be outside CARD_SHAPE, got $corner",
+            corner.alpha < 0.5f,
+        )
+    }
+
+    // Skia's 8-bit blending can round differently from Color.compositeOver; allow ±3 per
+    // channel for translucent composites, while keeping opaque glyph/fill checks exact.
+    private fun colorsWithinTolerance(expected: Color, actual: Color): Boolean {
+        val expectedArgb = expected.toArgb()
+        val actualArgb = actual.toArgb()
+        return listOf(24, 16, 8, 0).all { shift ->
+            kotlin.math.abs(((expectedArgb ushr shift) and 0xff) -
+                ((actualArgb ushr shift) and 0xff)) <= 3
+        }
     }
 
     // Sample the middle of empty padding, away from text, borders and rounded corners.
