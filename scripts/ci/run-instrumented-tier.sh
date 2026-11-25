@@ -13,7 +13,7 @@
 #      the right moments -- `adb emu` talks to the emulator's host-side console port and cannot
 #      be issued from on-device instrumentation, so Gradle's connectedAndroidTest task has no
 #      hook for it. See InterruptionSpliceTest's class doc for the synchronization contract (one
-#      logcat marker, then a bounded poll on real engine state -- no fixed sleep stands in for an
+#      marker per observed event, with bounded waits -- no fixed sleep stands in for an
 #      assertion on either side of this handshake).
 
 set -euo pipefail
@@ -52,7 +52,6 @@ OPUS_KILL_TEST_CLASS="cc.machado.audioblackbox.export.OpusProcessKillTest"
 SCREENSHOT_DEVICE_DIR="files/screenshots"
 SCREENSHOT_OUT_DIR="build/screen-captures"
 MARKER_TAG="SpliceTest"
-MARKER_READY="READY_FOR_CALLS"
 FAKE_CALLER_NUMBER="5551234567"
 
 command -v adb >/dev/null 2>&1 || fail "adb not found on PATH."
@@ -340,64 +339,32 @@ log "Opus process-kill and startup-recovery qualification OK."
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
 log "Launching InterruptionSpliceTest in the background..."
 "${ADB[@]}" logcat -c
-"${ADB[@]}" shell am instrument -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
+timeout -k 5 240 "${ADB[@]}" shell am instrument -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
   >/tmp/instrumented-splice.log 2>&1 &
 SPLICE_PID=$!
 
 wait_for_marker() {
-  local deadline=$((SECONDS + 60))
-  while [[ $SECONDS -lt $deadline ]]; do
-    if "${ADB[@]}" logcat -d -s "${MARKER_TAG}:I" 2>/dev/null | grep -q "$MARKER_READY"; then
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
+  local marker="$1"
+  # logcat includes retained messages, so a fast callback before this reader starts is safe.
+  if ! timeout -k 2 40 "${ADB[@]}" logcat -m 1 -e "^${marker}$" -s "${MARKER_TAG}:I"; then
+    kill "$SPLICE_PID" 2>/dev/null || true
+    wait "$SPLICE_PID" 2>/dev/null || true
+    cat /tmp/instrumented-splice.log >&2 || true
+    fail "InterruptionSpliceTest timed out waiting for $marker."
+  fi
 }
 
-log "Waiting for the test to confirm recording has actually started..."
-if ! wait_for_marker; then
-  kill "$SPLICE_PID" 2>/dev/null || true
-  wait "$SPLICE_PID" 2>/dev/null || true
-  cat /tmp/instrumented-splice.log >&2 || true
-  fail "InterruptionSpliceTest never logged '$MARKER_READY' -- recording did not start (see log above)."
-fi
-log "Recording confirmed. Driving two simulated GSM calls..."
-
-# `adb emu gsm call` alone only rings the simulated call -- it never becomes ACTIVE, and the
-# framework only silences other apps' microphone clients once a call actually goes off-hook
-# (confirmed empirically against a booted AVD: `dumpsys audio`'s RecordActivityMonitor line for
-# our session stays `silenced:false` through ringing, flips to `silenced:true` only after the
-# call is answered, and back to `false` on hangup). The emulator's console has no "answer an
-# inbound call" subcommand (`adb emu gsm accept` is documented as outbound-call-only), but the
-# stock google_apis image does ship a real Telecom/Dialer stack, and `KEYCODE_CALL` answers a
-# ringing call through it the same way a hardware call button would on a real phone.
-#
-# Generous fixed margins: real telephony state changes (ringing -> answered/active -> ended)
-# take a couple of seconds to propagate through the emulator's radio stack to
-# AudioManager.AudioRecordingCallback. The test itself does not depend on this exact timing --
-# it polls engine.gaps.value for a bounded 120s -- so these numbers only need to be "comfortably
-# long enough", not exact.
-sleep 3
-log "Call 1: ringing..."
-"${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-sleep 2
-log "Call 1: answering..."
-"${ADB[@]}" shell input keyevent KEYCODE_CALL
-sleep 4
-log "Call 1: ending..."
-"${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
-sleep 5
-
-log "Call 2: ringing..."
-"${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-sleep 2
-log "Call 2: answering..."
-"${ADB[@]}" shell input keyevent KEYCODE_CALL
-sleep 4
-log "Call 2: ending..."
-"${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
-sleep 5
+for call in 1 2; do
+  wait_for_marker "READY_$call"
+  log "Call $call: ringing..."
+  timeout -k 2 10 "${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
+  wait_for_marker "RINGING_$call"
+  # A real framework ringing callback acknowledges that KEYCODE_CALL can answer it.
+  timeout -k 2 10 "${ADB[@]}" shell input keyevent KEYCODE_CALL
+  wait_for_marker "PAUSED_$call"
+  timeout -k 2 10 "${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
+  wait_for_marker "PCM_$call"
+done
 
 log "Both calls issued. Waiting for the instrumentation run to finish (export + assertions)..."
 set +e
