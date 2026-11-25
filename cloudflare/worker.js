@@ -1,5 +1,5 @@
 const base = '/audio-blackbox';
-const privacy = `${base}/release/privacy-policy`;
+const legalPages = ['privacy-policy', 'terms'].map(slug => `${base}/release/${slug}`);
 
 async function route(request, env) {
   const url = new URL(request.url);
@@ -16,7 +16,9 @@ async function route(request, env) {
   let path = url.pathname;
   if (path === base) path += '/';
   if (path.endsWith('/index.html')) path = path.slice(0, -10);
-  if (path === `${privacy}/` || path === `${privacy}.html`) path = privacy;
+  for (const legalPage of legalPages) {
+    if (path === `${legalPage}/` || path === `${legalPage}.html`) path = legalPage;
+  }
   if (url.protocol === 'http:' || path !== url.pathname) return redirect(path);
 
   const asset = async (pathname) => {
@@ -24,7 +26,7 @@ async function route(request, env) {
     target.pathname = pathname;
     return env.ASSETS.fetch(new Request(target, request));
   };
-  let response = await asset(path === privacy ? `${privacy}.html` :
+  let response = await asset(legalPages.includes(path) ? `${path}.html` :
     path.endsWith('/') ? `${path}index.html` : path);
   if (response.status === 404) {
     const stem = path.replace(/\/$/, '');

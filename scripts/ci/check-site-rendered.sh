@@ -26,7 +26,7 @@
 set -euo pipefail
 
 LANDING_PAGES=(index.html pt-br/index.html es/index.html fr/index.html de/index.html it/index.html)
-ANALYTICS_PAGES=("${LANDING_PAGES[@]}" design/index.html release/privacy-policy.html)
+ANALYTICS_PAGES=("${LANDING_PAGES[@]}" design/index.html release/privacy-policy.html release/terms.html)
 # `{{`, then a variable path (page.title, site.x[0]) or a quoted string, then a filter pipe or
 # the closing `}}`. JS like `{{b:1}}` does not match: Liquid never has `:` right after the
 # leading expression.
