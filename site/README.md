@@ -32,7 +32,7 @@ Optional non-vacuity check: `node site/scripts/check-mutations.mjs`. It mutates 
 - The existing broken feature-document link to `app/src/.../Color.kt` now points to GitHub source. Store-listing asset links written relative to the repository root now resolve under the hosted site. Markdown document links use emitted `.html` destinations.
 - Markdown is rendered with Marked instead of Kramdown; generated markup/typographic processing can differ. Metadata and source prose remain unchanged. Landing prose outside the disclosed simulator additions, legal main content, sitemap URL set, canonical/hreflang sets, full JSON-LD and OG/Twitter values have no intentional parity exceptions.
 - The existing RAM calculator additionally estimates saved AAC/Opus sizes, with approximate-size, Opus-availability and binary-unit notes. These simulator strings remain the previously disclosed copy additions.
-- New key in all six locales: `nav_pro`: EN “Pro unlock”; PT-BR “Desbloqueio Pro”; DE “Pro-Freischaltung”; ES “Desbloqueo Pro”; FR “Déblocage Pro”; IT “Sblocco Pro”. There was no existing Pro/pricing heading key to reuse.
+- New key in all six locales: `nav_pro`, whose value is “Pro” everywhere. It is the label the owner approved in the review captures; there was no existing Pro/pricing heading key to reuse.
 - Static copying now omits Jekyll special/backup files, README.md and configured exclusions; `_config.yml` currently has no explicit exclude list.
 - Browser visual review is deferred to the requested later impeccable pass; current validation covers generated content and routing, not rendered geometry.
 

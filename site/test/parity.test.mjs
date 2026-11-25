@@ -55,7 +55,7 @@ test('every emitted HTML page has one unified header/footer with all languages',
       assert.deepEqual([...shell.matchAll(/hreflang="([^"]+)"/g)].map(m=>m[1]).sort(),['de','en','es','fr','it','pt-BR']);
     }
     for(const anchor of ['features','pricing','faq','download']) assert.ok(header.includes(`#${anchor}"`),`${file}: ${anchor}`);
-    for(const href of ['/release/privacy-policy','/release/terms','https://github.com/alexandre-machado/audio-blackbox','mailto:alexandre@machado.cc']) assert.ok(footer.includes(href),`${file}: ${href}`);
+    for(const href of ['/release/privacy-policy','/release/terms','https://github.com/alexandre-machado/audio-blackbox']) assert.ok(footer.includes(href),`${file}: ${href}`);
     const lang=html.match(/<html lang="([^"]+)"/)[1];
     if(shells.has(lang)) assert.deepEqual([header,footer],shells.get(lang),file);
     else shells.set(lang,[header,footer]);
@@ -140,7 +140,8 @@ for(const language of parse(readFileSync(join(root,'../docs/_data/languages.yml'
     assert.ok(visible(header).includes(t.nav_pro));
     assert.ok(header.includes('>GitHub</a>'));
     assert.ok(footer.includes('/blob/main/LICENSE'));
-    assert.ok(footer.includes('mailto:alexandre@machado.cc'));
+    // The live footer carries no contact e-mail; it lives on the Terms page (approved copy).
+    assert.ok(!footer.includes('mailto:'));
     // Replace every translated value with a sentinel: no English label may
     // survive in the shell (brand, GitHub, email and language names are proper names).
     const {header:renderHeader,footer:renderFooter}=await import('../templates/layout.mjs');

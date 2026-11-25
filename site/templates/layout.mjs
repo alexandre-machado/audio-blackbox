@@ -40,7 +40,6 @@ export function footer({t, page, languages}) {
   <div class="site-footer-links">
     <a href="https://github.com/alexandre-machado/audio-blackbox">${escape(t.repo_link)}</a>
     <a href="https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE">${escape(t.license_link)}</a>
-    <a href="mailto:alexandre@machado.cc">alexandre@machado.cc</a>
   </div>
   <div class="site-languages" role="navigation" aria-label="${escape(t.language_label)}">${languageLinks(languages)}</div>
   <p>${t.copyright}</p><p>${t.consent}</p>
