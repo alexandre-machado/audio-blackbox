@@ -49,7 +49,7 @@ internal object InterruptedLiveRecovery {
     private val rowsKey = stringSetPreferencesKey("unfinished_rows")
     private var recovered = false
 
-    fun recover(context: Context) = synchronized(recoveryLock) {
+    fun recover(context: Context): Unit = synchronized(recoveryLock) {
         if (recovered) return
         val app = context.applicationContext
         try {
