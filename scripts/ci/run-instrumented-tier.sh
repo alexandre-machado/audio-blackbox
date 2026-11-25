@@ -21,6 +21,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+CI_CLEANUP_REGISTERED=false
+
+# The self-hosted runner retains artifacts between runs; clear them before any writes.
+rm -f /tmp/instrumented-*.log
+rm -rf build/instrumented-junit
+
 log()  { printf '[instrumented-tier] %s\n' "$*"; }
 fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -28,7 +34,6 @@ fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
 # Preserve the original status and all grep gates; the Opus start death is intentional.
 JUNIT_PHASES=()
 mkdir -p build/instrumented-junit
-rm -f build/instrumented-junit/{phase1,opus-kill-start,opus-kill-verify,splice}.xml
 finish_tier() {
   local status=$? phase
   trap - EXIT
@@ -304,7 +309,8 @@ printf '%s\n' "$HEADROOM_OUTPUT"
 log "Starting the Opus live process-kill qualification..."
 command -v timeout >/dev/null || fail "timeout is required for the process-kill qualification."
 "${ADB[@]}" logcat -c
-JUNIT_PHASES+=(opus-kill-start)
+# Keep the raw log only: intentional process death is not a JUnit failure.
+# The opus-kill-verify phase below reports the qualification result.
 timeout -k 5 120 "${ADB[@]}" shell am instrument -r -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
   > /tmp/instrumented-opus-kill-start.log 2>&1 &
 OPUS_START_PID=$!
