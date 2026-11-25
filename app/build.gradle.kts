@@ -111,7 +111,12 @@ android {
     // (.github/workflows/android.yml, "Install SDK platform and build-tools" step). AGP resolves
     // the bare major here to whichever minor is installed on the runner; there is no bare
     // "android-37" SDK package. Bump both together. (see PR #8 review comment)
-    compileSdk = 37
+    // #496: pinned explicitly to the 37.1 minor (already the package CI installs) because the
+    // Compose BOM 2026.11.x AARs declare minCompileSdk 37.1; a bare 37 resolves to 37.0 on
+    // machines that also have android-37.0 installed.
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "cc.machado.audioblackbox"
