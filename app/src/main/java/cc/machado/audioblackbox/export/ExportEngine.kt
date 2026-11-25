@@ -18,8 +18,35 @@ import kotlinx.coroutines.flow.asStateFlow
 sealed interface ExportState {
     data object Idle : ExportState
     data object Exporting : ExportState
-    data class Success(val displayName: String, val bytesWritten: Int) : ExportState
+    data class Success(
+        val displayName: String,
+        val bytesWritten: Int,
+        val input: ExportInput? = null,
+    ) : ExportState
     data class Error(val reason: ExportFailureReason, val message: String, val exception: Throwable? = null) : ExportState
+}
+
+/** Immutable planning inputs and diagnostic output for the file named by Success.
+ * Input cursors precede any requested-duration trimming; this is not a file-duration oracle.
+ * Lists are defensive, unmodifiable copies, independent of subsequent capture/provider changes.
+ */
+class ExportInput internal constructor(
+    val startCursor: Long,
+    val endCursor: Long,
+    val anchorTimestampMillis: Long,
+    val targetConfig: AudioConfig,
+    val requestedDurationMillis: Long,
+    gaps: List<PauseGap>,
+    formats: List<FormatSegment>,
+    segments: List<PlanSegment>,
+) {
+    val gaps: List<PauseGap> = java.util.Collections.unmodifiableList(ArrayList(gaps))
+    val formats: List<FormatSegment> = java.util.Collections.unmodifiableList(ArrayList(formats))
+    val segments: List<PlanSegment> = java.util.Collections.unmodifiableList(ArrayList(segments))
+    override fun toString(): String =
+        "cursors=[$startCursor,$endCursor) anchor=$anchorTimestampMillis " +
+            "target=$targetConfig requested=$requestedDurationMillis formats=$formats " +
+            "gaps=$gaps Raw/Silence=$segments"
 }
 
 /** Why an export failed, so a caller can decide what to show/whether retrying makes sense. */
@@ -321,7 +348,7 @@ class ExportEngine(
             val windowStart = estimateTimestampProvider(oldestCursor)
                 ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
 
-            val gaps = gapsProvider()
+            val gaps = gapsProvider().toList()
             // Two levels of "no segments" here, and they must not collapse to the same thing
             // (issue #332, `@rev`/`@sec` finding 2 on PR #323's last commit): no *provider* at all
             // is the legacy single-format constructor, which never had a segment record to begin
@@ -338,7 +365,7 @@ class ExportEngine(
             val activeSegs = if (segmentsProvider == null) {
                 emptyList()
             } else {
-                segmentsProvider.invoke()
+                segmentsProvider.invoke()?.toList()
                     ?: return ExportState.Error(ExportFailureReason.NO_AUDIO_BUFFERED, captureNotRunningMessage())
             }
             // The last segment wins: the file declares the format the newest buffered audio was
@@ -412,6 +439,10 @@ class ExportEngine(
                 targetConfig = targetConfig,
                 targetDurationMillis = durationMillis,
             )
+            val input = ExportInput(
+                startCursor, writeCursor, adjustedWindowStart, targetConfig, durationMillis,
+                gaps, activeSegs, plan.segments,
+            )
             val displayName = filenameFor(adjustedWindowStart, minutesLabel, secondsLabel, sessionEncoder.fileExtension)
 
             val target = try {
@@ -431,7 +462,7 @@ class ExportEngine(
             if (outcome is ExportState.Success) {
                 floorAdvancer?.invoke(writeCursor)
             }
-            outcome
+            if (outcome is ExportState.Success) outcome.copy(input = input) else outcome
         } catch (e: CancellationException) {
             throw e // preserve normal coroutine cancellation semantics, don't swallow it as a failure
         } catch (e: Throwable) {
