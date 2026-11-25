@@ -1,0 +1,3562 @@
+{
+  "capturedAt": "2026-11-25T14:04:17.817Z",
+  "method": "GET",
+  "base": "https://alexandre.machado.cc/audio-blackbox",
+  "sitemap": [
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/",
+      "alternates": [
+        {
+          "rel": "alternate",
+          "hreflang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/de/",
+      "alternates": [
+        {
+          "rel": "alternate",
+          "hreflang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/design/",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/es/",
+      "alternates": [
+        {
+          "rel": "alternate",
+          "hreflang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/01-capture-and-memory-core.html",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/02-android-integration.html",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/03-export-engine.html",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/04-user-interface.html",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/fr/",
+      "alternates": [
+        {
+          "rel": "alternate",
+          "hreflang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/it/",
+      "alternates": [
+        {
+          "rel": "alternate",
+          "hreflang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/llms-full.txt",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/llms.txt",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/pt-br/",
+      "alternates": [
+        {
+          "rel": "alternate",
+          "hreflang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "rel": "alternate",
+          "hreflang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+      "alternates": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/terms",
+      "alternates": []
+    }
+  ],
+  "urls": [
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/sitemap.xml",
+      "status": 200,
+      "location": null,
+      "bodySha256": "62111847e8e559961c4cac5064d218b39ca4294ce11f72da48791e0a73b5b82a",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "16b03cfd0ed0a1527d8a06f29cecfe2aeb7fafec3d08b3f18cb5236e7724f721",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/",
+      "hreflang": [
+        {
+          "lang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "lang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "lang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "lang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "lang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "lang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "lang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ],
+      "title": "Audio Blackbox: Past Recorder for Android",
+      "description": "Audio Blackbox is an open-source retroactive audio recorder for Android: an audio dashcam that keeps the last minutes of sound in RAM, so you can save the riff, quote or instructions you just heard. Audio stays in RAM until you tap Save or start Live, and your recordings never leave your phone.",
+      "jsonLdTypes": [
+        "Answer",
+        "FAQPage",
+        "MobileApplication",
+        "Offer",
+        "Person",
+        "Question"
+      ],
+      "jsonLd": [
+        {
+          "@context": "https://schema.org",
+          "@type": "MobileApplication",
+          "name": "Audio Blackbox",
+          "alternateName": "Audio Blackbox: Past Recorder for Android",
+          "url": "https://alexandre.machado.cc/audio-blackbox/",
+          "description": "Audio Blackbox is an open-source Android app that continuously keeps the last minutes of sound in RAM and writes them to local storage when you explicitly tap Save or start Live. The buffer starts at 5 minutes, in 5-minute steps, up to the app's safe memory limit for the selected quality. There is no product-imposed duration cap; Settings shows the current limit.",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Android 10+",
+          "isAccessibleForFree": true,
+          "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, com.android.vending.BILLING",
+          "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+          "screenshot": [
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+          ],
+          "inLanguage": [
+            "en",
+            "pt-BR",
+            "es",
+            "fr",
+            "de",
+            "it"
+          ],
+          "featureList": [
+            "Just played a riff worth keeping, or said an idea out loud? Tap Save and Audio Blackbox writes the buffered audio since your last save (the whole buffer the first time) to a local file. Live saves the buffered audio from before the tap and continues in a single file: .aac (ADTS) with AAC (default), playable while recording, or .ogg with Opus, which you must wait until recording ends to play. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Save audio format is free, with no Pro unlock required: AAC (default) saves .m4a files with Save, or choose Opus (.ogg) for both Save and Live. AAC (.m4a): wider compatibility. Opus (.ogg): smaller voice files. Some players and messaging apps may not open them. With AAC selected: Live stays AAC (.aac), playable while recording. Wait until recording ends to play Opus audio. If the app closes unexpectedly, saved audio may be recoverable, but the ending may be lost and some players may not open the file. On reopening after an unexpected close, Opus audio already written is recovered; the incomplete final Ogg page is discarded, so the ending may be lost. Opus may be unavailable on some devices; the option is disabled with the reason shown.",
+            "The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage.",
+            "Zero disk I/O and zero IPC allocations on the audio capture thread. Guaranteed single-writer synchronization eliminates dropouts and GC pauses.",
+            "When another foreground app takes the microphone, Android silences our stream rather than failing it. The service detects that directly and pauses, then resumes the moment the mic is free. The gap is preserved as true silence, so exported timestamps never drift.",
+            "Foreground service with active notification and guided manufacturer battery-optimization bypass keeps recording uninterrupted even with the screen off.",
+            "Listen, seek, delete, and share your saved .m4a / .aac (AAC) or .ogg (Opus) recordings through the Android share sheet. A home-screen widget starts or stops recording with one tap."
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Alexandre Machado",
+            "url": "https://github.com/alexandre-machado"
+          },
+          "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/alexandre-machado/audio-blackbox",
+            "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "inLanguage": "en",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Is there an Android app that records the last 5 minutes of audio?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. The buffer starts at 5 minutes, in 5-minute steps, up to the app's safe memory limit for the selected quality. There is no product-imposed duration cap; Settings shows the current limit."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How can I save audio from before I pressed record?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "A normal recorder cannot do this, because it only starts capturing when you press record. With Audio Blackbox, you turn on continuous recording once and it keeps the most recent minutes in a rolling RAM buffer, replacing the oldest audio with the newest. When something worth keeping just happened, tap Save to write those minutes to a file. Audio is written to storage when you tap Save or start Live."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What is a retroactive or always-on buffer recorder?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "It is a recorder that keeps capturing into a fixed-size memory buffer, so you can save what was already said instead of only what comes after you press record. Live saves the buffered audio from before the tap and continues in a single file: .aac (ADTS) with AAC (default), playable while recording, or .ogg with Opus, which you must wait until recording ends to play. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How long is the audio buffer, and how much RAM does it use?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The buffer starts at 5 minutes, in 5-minute steps, up to the app's safe memory limit for the selected quality. There is no product-imposed duration cap; Settings shows the current limit. At the default Voice preset (16,000 Hz mono) each minute takes about 1.8 MB of RAM, so 30 minutes is about 55 MB. Balanced (32,000 Hz mono) uses twice that per minute and High fidelity (44,100 Hz stereo) about 5.5 times, so the same phone holds a shorter buffer at higher quality. The calculator in the Memory Architecture section of this page shows the RAM for any window and preset."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does Audio Blackbox upload anything, or does it need an internet connection?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Recording and saving work offline. The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does it keep recording when the screen is off?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Audio Blackbox runs as a foreground service with a persistent notification, and it includes a guided flow to bypass manufacturer battery optimization, so capture continues uninterrupted with the screen locked."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does an always-on recorder drain the battery?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox was measured on a Samsung Galaxy S25 recording continuously at the Voice preset: with the screen off it used about 1.0% to 1.5% of the battery per hour and under 1% CPU, with no disk writes while buffering. Other phones and settings will give different numbers."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is Audio Blackbox free and open source?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Free to install and use, and open source under GPL-3.0. Everything except the optional one-time Pro unlock stays free. Live saves the buffered audio from before the tap and continues in a single file: .aac (ADTS) with AAC (default), playable while recording, or .ogg with Opus, which you must wait until recording ends to play. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Early-bird Pro, free: install Audio Blackbox by December 19, 2026 (before December 20, 00:00 Brasília time, UTC−3) and Pro stays unlocked on that device at no cost, for good. The benefit belongs to that installation: uninstalling and reinstalling, or switching devices, does not keep it."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is there an open-source alternative to retroactive recorder apps on Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Free to install and use, and open source under GPL-3.0. Everything except the optional one-time Pro unlock stays free. The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What Android versions are supported?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Android 10 (API level 29) and newer."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I get Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox is free to install on Google Play. Open its Play Store listing on your Android device and tap Install; the link is in the Download section of this page."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How is Audio Blackbox different from Google Recorder or a normal voice recorder app?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "A normal recorder only captures audio after you press record, so anything said before that moment is lost. Audio Blackbox keeps recording continuously into a rolling RAM buffer and writes audio to storage when you tap Save or start Live, so you can save the last minutes of something that already happened. Audio stays in RAM until you save or start Live, and your recordings are never uploaded."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is there an audio dashcam app for Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Audio Blackbox works like a dashcam for sound: it keeps the last minutes in a rolling RAM buffer and writes them to a file when you tap Save or start Live, so you can keep what happened just before. Unlike a hidden recorder, it always shows a notification while it is recording. Recording other people may require their consent, so check your local laws."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I recover a quote or a lecture explanation I forgot to record?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "If Audio Blackbox was running, yes. Tap Save and the buffered minutes (at least 5, up to the app's safe memory limit for the selected quality) are written to an .m4a (AAC) or .ogg (Opus) file, even though you never pressed record. Journalists can use it as a backup to their main recorder, and students can keep an explanation they just missed in classes where recording is allowed."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can Audio Blackbox help me remember spoken instructions?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "It can work as a memory aid. If you just heard directions, instructions or details and lost track of them, save the last minutes and replay them in the built-in player. This can help anyone who often loses track of spoken information, for example people with ADHD. Audio Blackbox is not a medical device."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is it legal to record with Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "It depends on where you are. Use Audio Blackbox for your own conversations and ideas. Recording other people may require their consent, and the rules differ between countries and states. Check your local recording laws before you record; you are responsible for how you use the app."
+              }
+            }
+          ]
+        }
+      ],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Save the last minutes you just heard. A rolling RAM buffer within the app's safe memory limit, audio that stays on the device, open source."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox: Past Recorder for Android"
+        },
+        {
+          "property": "og:description",
+          "content": "Save the last minutes you just heard. A rolling RAM buffer within the app's safe memory limit, audio that stays on the device, open source."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Audio Blackbox feature graphic: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "de_DE"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "es_ES"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "fr_FR"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "it_IT"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "pt_BR"
+        },
+        {
+          "property": "og:locale",
+          "content": "en_US"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox: Past Recorder for Android"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/de/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "1a12c5b411a1b849b6cda929e18b816cd1ad995ca131d8701476fb8c610d0e1d",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/de/",
+      "hreflang": [
+        {
+          "lang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "lang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "lang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "lang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "lang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "lang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "lang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ],
+      "title": "Audio Blackbox: Vergangenes auf Android aufnehmen",
+      "description": "Audio Blackbox ist ein quelloffener Rückwirkend-Rekorder für Android: eine Audio-Dashcam, die die letzten Minuten Ton im RAM hält, damit du das Riff, das Zitat oder die Anweisungen speichern kannst, die du gerade gehört hast. Audio bleibt bis zum Speichern oder Start von Live im RAM, und deine Aufnahmen verlassen nie dein Handy.",
+      "jsonLdTypes": [
+        "Answer",
+        "FAQPage",
+        "MobileApplication",
+        "Offer",
+        "Person",
+        "Question"
+      ],
+      "jsonLd": [
+        {
+          "@context": "https://schema.org",
+          "@type": "MobileApplication",
+          "name": "Audio Blackbox",
+          "alternateName": "Audio Blackbox: Vergangenes auf Android aufnehmen",
+          "url": "https://alexandre.machado.cc/audio-blackbox/de/",
+          "description": "Audio Blackbox ist eine quelloffene Android-App, die kontinuierlich die letzten Minuten Ton im RAM hält und beim Tippen auf Speichern oder beim Start von Live in den lokalen Gerätespeicher schreibt. Der Puffer beginnt bei 5 Minuten, in 5-Minuten-Schritten, bis zur sicheren Speichergrenze der App für die gewählte Qualität. Es gibt keine produktseitige Dauerbegrenzung; die Einstellungen zeigen die aktuelle Grenze.",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Android 10+",
+          "isAccessibleForFree": true,
+          "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, com.android.vending.BILLING",
+          "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+          "screenshot": [
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+          ],
+          "inLanguage": [
+            "en",
+            "pt-BR",
+            "es",
+            "fr",
+            "de",
+            "it"
+          ],
+          "featureList": [
+            "Gerade ein Riff gespielt, das du behalten möchtest, oder eine Idee laut ausgesprochen? Tippe auf Speichern und Audio Blackbox schreibt das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) in eine lokale Datei. Live speichert das gepufferte Audio von vor dem Tippen und nimmt in einer einzigen Datei weiter auf: .aac (ADTS) mit AAC (Standard), schon während der Aufnahme abspielbar, oder .ogg mit Opus, erst nach Ende der Aufnahme abspielen. Die Live-Aufnahmezeit ist kostenlos auf 2 Stunden begrenzt; danach wird die Datei automatisch gespeichert. Mit der gepufferten Vergangenheit kann die Datei länger als 2 Stunden sein. Pro hebt per Einmalkauf die Live-Zeitgrenze auf. Das Speicherformat ist kostenlos, ohne Pro: AAC (Standard) erstellt beim Speichern .m4a-Dateien, oder du wählst Opus (.ogg) für Speichern und Live. AAC bietet breitere Kompatibilität. Opus erzeugt kleinere Sprachdateien. Manche Player und Messenger können .ogg-Dateien möglicherweise nicht öffnen. Warte bei Opus bis zum Ende der Aufnahme, bevor du sie abspielst. Wenn die App unerwartet geschlossen wird, wird das bereits geschriebene Opus-Audio beim erneuten Öffnen wiederhergestellt. Die unvollständige letzte Ogg-Seite wird verworfen; das Ende kann verloren gehen. Auf manchen Geräten ist Opus nicht verfügbar; die Option ist dann mit einer Begründung deaktiviert.",
+            "Die App selbst sendet weder Audio noch Nutzungsanalysen. Google Play Billing (Google Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln und die Pro-Berechtigung zu prüfen; die Bibliothek sendet auch eigene Nutzungs- und Fehlerdiagnosen. Keine Werbung, kein Konto und kein Cloud-Audiospeicher.",
+            "Keine Datenträger-E/A und keine IPC-Allokationen im Audio-Aufnahmethread. Garantierte Synchronisierung mit genau einem Schreiber verhindert Aussetzer und Pausen durch die Speicherbereinigung.",
+            "Belegt eine andere App im Vordergrund das Mikrofon, schaltet Android unseren Audiostream stumm, statt ihn mit einem Fehler zu beenden. Der Dienst erkennt dies direkt und pausiert. Sobald das Mikrofon frei ist, setzt er die Aufnahme fort. Die Lücke bleibt als echte Stille erhalten, damit exportierte Zeitstempel nicht abweichen.",
+            "Ein Vordergrunddienst mit aktiver Benachrichtigung und einer Anleitung zum Ausnehmen der App von der Akkuoptimierung des Herstellers hält die Aufnahme auch bei ausgeschaltetem Bildschirm ohne Unterbrechung am Laufen.",
+            "Höre deine gespeicherten .m4a- und .aac-Aufnahmen (AAC) sowie .ogg-Aufnahmen (Opus) an, spule, lösche und teile sie über das Android-Teilen-Menü. Ein Startbildschirm-Widget startet oder stoppt die Aufnahme mit einem Tippen."
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Alexandre Machado",
+            "url": "https://github.com/alexandre-machado"
+          },
+          "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/alexandre-machado/audio-blackbox",
+            "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "inLanguage": "de",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Gibt es eine Android-App, die die letzten 5 Minuten Audio aufnimmt?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ja. Der Puffer beginnt bei 5 Minuten, in 5-Minuten-Schritten, bis zur sicheren Speichergrenze der App für die gewählte Qualität. Es gibt keine produktseitige Dauerbegrenzung; die Einstellungen zeigen die aktuelle Grenze."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Wie kann ich Audio von vor dem Drücken der Aufnahmetaste speichern?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ein normaler Rekorder kann das nicht, weil er erst beim Drücken der Aufnahmetaste beginnt. Bei Audio Blackbox schaltest du die kontinuierliche Aufnahme einmal ein. Die letzten Minuten bleiben in einem Ringpuffer im RAM, wobei das neueste Audio das älteste ersetzt. Ist gerade etwas passiert, das du behalten möchtest, tippe auf Speichern, um diese Minuten in eine Datei zu schreiben. Audio bleibt bis zum Speichern oder Start von Live im RAM."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Was ist ein rückwirkender Rekorder oder ein Rekorder mit ständig aktivem Puffer?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Er nimmt fortlaufend in einen Speicherpuffer fester Größe auf. Live speichert das gepufferte Audio von vor dem Tippen und nimmt in einer einzigen Datei weiter auf: .aac (ADTS) mit AAC (Standard), schon während der Aufnahme abspielbar, oder .ogg mit Opus, erst nach Ende der Aufnahme abspielen. Die Live-Aufnahmezeit ist kostenlos auf 2 Stunden begrenzt; danach wird die Datei automatisch gespeichert. Mit der gepufferten Vergangenheit kann die Datei länger als 2 Stunden sein. Pro hebt per Einmalkauf die Live-Zeitgrenze auf."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Wie lang ist der Audiopuffer und wie viel RAM benötigt er?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Der Puffer beginnt bei 5 Minuten, in 5-Minuten-Schritten, bis zur sicheren Speichergrenze der App für die gewählte Qualität. Es gibt keine produktseitige Dauerbegrenzung; die Einstellungen zeigen die aktuelle Grenze. Beim Standardprofil Sprache (16.000 Hz mono) benötigt jede Minute etwa 1,8 MB RAM, also etwa 55 MB für 30 Minuten. Ausgewogen (32.000 Hz mono) benötigt pro Minute doppelt so viel, Hohe Klangtreue (44.100 Hz stereo) etwa das 5,5-Fache. Dasselbe Handy hält bei höherer Qualität daher einen kürzeren Puffer. Der Rechner im Abschnitt Speicherarchitektur zeigt den RAM-Bedarf für jede Dauer und jedes Profil."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Lädt Audio Blackbox etwas hoch oder braucht es eine Internetverbindung?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Aufnehmen und Speichern funktionieren offline. Die App selbst sendet weder Audio noch Nutzungsanalysen. Google Play Billing (Google Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln und die Pro-Berechtigung zu prüfen; die Bibliothek sendet auch eigene Nutzungs- und Fehlerdiagnosen. Keine Werbung, kein Konto und kein Cloud-Audiospeicher."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Läuft die Aufnahme bei ausgeschaltetem Bildschirm weiter?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ja. Audio Blackbox läuft als Vordergrunddienst mit dauerhafter Benachrichtigung. Eine Anleitung hilft dabei, die App von der Akkuoptimierung des Herstellers auszunehmen, damit die Aufnahme auch bei gesperrtem Bildschirm ohne Unterbrechung weiterläuft."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Leert ein ständig aktiver Rekorder den Akku?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox wurde auf einem Samsung Galaxy S25 bei kontinuierlicher Aufnahme mit dem Profil Sprache gemessen. Bei ausgeschaltetem Bildschirm benötigte es etwa 1,0 % bis 1,5 % Akku pro Stunde und weniger als 1 % CPU, ohne Schreibzugriffe auf den Datenträger während der Pufferung. Andere Handys und Einstellungen liefern andere Werte."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Ist Audio Blackbox kostenlos und quelloffen?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Installation und Nutzung sind kostenlos, der Quellcode steht unter GPL-3.0. Nur das optionale Pro-Upgrade per Einmalkauf ist kostenpflichtig. Live speichert das gepufferte Audio von vor dem Tippen und nimmt in einer einzigen Datei weiter auf: .aac (ADTS) mit AAC (Standard), schon während der Aufnahme abspielbar, oder .ogg mit Opus, erst nach Ende der Aufnahme abspielen. Die Live-Aufnahmezeit ist kostenlos auf 2 Stunden begrenzt; danach wird die Datei automatisch gespeichert. Mit der gepufferten Vergangenheit kann die Datei länger als 2 Stunden sein. Pro hebt per Einmalkauf die Live-Zeitgrenze auf. Pro kostenlos für Frühentschlossene: Installiere Audio Blackbox bis zum 19. Dezember 2026 (vor dem 20. Dezember, 00:00 Uhr Brasília-Zeit, UTC−3), und Pro bleibt auf diesem Gerät dauerhaft kostenlos freigeschaltet. Der Vorteil gilt für diese Installation: Wenn du die App deinstallierst und neu installierst oder das Gerät wechselst, bleibt er nicht erhalten."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Gibt es eine quelloffene Alternative zu rückwirkenden Aufnahme-Apps auf Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Installation und Nutzung sind kostenlos, der Quellcode steht unter GPL-3.0. Nur das optionale Pro-Upgrade per Einmalkauf ist kostenpflichtig. Die App selbst sendet weder Audio noch Nutzungsanalysen. Google Play Billing (Google Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln und die Pro-Berechtigung zu prüfen; die Bibliothek sendet auch eigene Nutzungs- und Fehlerdiagnosen. Keine Werbung, kein Konto und kein Cloud-Audiospeicher."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Welche Android-Versionen werden unterstützt?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Android 10 (API-Level 29) und neuer."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Wie bekomme ich Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox lässt sich kostenlos bei Google Play installieren. Öffne den Play-Store-Eintrag auf deinem Android-Gerät und tippe auf Installieren; der Link steht im Download-Bereich dieser Seite."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Wie unterscheidet sich Audio Blackbox von Google Recorder oder einem normalen Sprachrekorder?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ein normaler Rekorder nimmt erst nach dem Drücken der Aufnahmetaste auf. Alles zuvor Gesagte geht verloren. Audio Blackbox nimmt kontinuierlich in einen Ringpuffer im RAM auf und schreibt beim Tippen auf Speichern oder beim Start von Live in den Gerätespeicher. So kannst du die letzten Minuten von etwas speichern, das bereits passiert ist. Audio bleibt bis zum Speichern oder Start von Live im RAM, und deine Aufnahmen werden nie hochgeladen."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Gibt es eine Audio-Dashcam-App für Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ja. Audio Blackbox funktioniert wie eine Dashcam für Ton: Die App hält die letzten Minuten in einem Ringpuffer im RAM und schreibt sie in eine Datei, wenn du auf Speichern tippst oder Live startest, damit du behältst, was gerade passiert ist. Anders als ein versteckter Rekorder zeigt sie während der Aufnahme immer eine Benachrichtigung an. Die Aufnahme anderer Personen kann deren Einwilligung erfordern, prüfe daher die Gesetze vor Ort."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Kann ich ein Zitat oder eine Erklärung aus der Vorlesung retten, die ich nicht aufgenommen habe?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Wenn Audio Blackbox lief, ja. Tippe auf Speichern und die gepufferten Minuten (mindestens 5, bis zur sicheren Speichergrenze der App für die gewählte Qualität) werden in eine .m4a-Datei (AAC) oder .ogg-Datei (Opus) geschrieben, auch wenn du nie die Aufnahme gestartet hast. Journalisten können die App als Backup zu ihrem Hauptaufnahmegerät nutzen, und Studierende können eine gerade verpasste Erklärung behalten, wenn Aufnehmen in der Veranstaltung erlaubt ist."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Kann mir Audio Blackbox helfen, mir gesprochene Anweisungen zu merken?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Die App kann als Gedächtnisstütze dienen. Wenn du gerade Wegbeschreibungen, Anweisungen oder Details gehört und den Faden verloren hast, speichere die letzten Minuten und hör sie im integrierten Player noch einmal an. Das kann allen helfen, die gesprochene Informationen oft verlieren, zum Beispiel Menschen mit ADHS. Audio Blackbox ist kein Medizinprodukt."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Was ist beim Aufnehmen mit Audio Blackbox rechtlich zu beachten?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Das hängt davon ab, wo du bist. Nutze Audio Blackbox für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern. Die Regeln unterscheiden sich je nach Land und Bundesstaat. Prüfe vor der Aufnahme die örtlichen Gesetze zu Tonaufnahmen. Du bist für deine Nutzung der App verantwortlich."
+              }
+            }
+          ]
+        }
+      ],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Speichere die letzten Minuten, die du gerade gehört hast. Ein RAM-Ringpuffer innerhalb der sicheren Speichergrenze der App, Audio, das auf dem Gerät bleibt, quelloffen."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox: Vergangenes auf Android aufnehmen"
+        },
+        {
+          "property": "og:description",
+          "content": "Speichere die letzten Minuten, die du gerade gehört hast. Ein RAM-Ringpuffer innerhalb der sicheren Speichergrenze der App, Audio, das auf dem Gerät bleibt, quelloffen."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Audio-Blackbox-Grafik: ein kontinuierlicher Puffer für Umgebungsgeräusche auf Android im Stil eines Cockpit-Instrumentenbretts."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "en_US"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "es_ES"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "fr_FR"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "it_IT"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "pt_BR"
+        },
+        {
+          "property": "og:locale",
+          "content": "de_DE"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox: Vergangenes auf Android aufnehmen"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/de/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/design/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "ba4a855ff44f2161e4e7890ef26adadcd5cfaca00278261cc61a0ec94abeceba",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/design/",
+      "hreflang": [],
+      "title": "Audio Blackbox — Avionics Design System & Living UI Model",
+      "description": "Interactive living design prototype and Material 3 design system for Audio Blackbox based on US Aviation and Cockpit Avionics standards.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Interactive living design prototype and Material 3 design system for Audio Blackbox based on US Aviation and Cockpit Avionics standards."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox — Avionics Design System & Living UI Model"
+        },
+        {
+          "property": "og:description",
+          "content": "Interactive living design prototype and Material 3 design system for Audio Blackbox based on US Aviation and Cockpit Avionics standards."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Audio Blackbox — Avionics Design System & Living UI Model"
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale",
+          "content": "en_US"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox — Avionics Design System & Living UI Model"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/design/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/es/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "b8d73a0f21f5176a732d98755dcf93994d097c010251388f607a582635318248",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/es/",
+      "hreflang": [
+        {
+          "lang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "lang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "lang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "lang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "lang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "lang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "lang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ],
+      "title": "Audio Blackbox: graba el pasado en Android",
+      "description": "Audio Blackbox es un grabador retroactivo de código abierto para Android: una dashcam de audio que conserva los últimos minutos de sonido en RAM para que guardes el riff, la cita o las instrucciones que acabas de oír. El audio permanece en RAM hasta que tocas Guardar o inicias Directo, y tus grabaciones nunca salen del móvil.",
+      "jsonLdTypes": [
+        "Answer",
+        "FAQPage",
+        "MobileApplication",
+        "Offer",
+        "Person",
+        "Question"
+      ],
+      "jsonLd": [
+        {
+          "@context": "https://schema.org",
+          "@type": "MobileApplication",
+          "name": "Audio Blackbox",
+          "alternateName": "Audio Blackbox: graba el pasado en Android",
+          "url": "https://alexandre.machado.cc/audio-blackbox/es/",
+          "description": "Audio Blackbox es una app Android de código abierto que conserva continuamente los últimos minutos de sonido en RAM y solo los escribe en el almacenamiento local cuando tocas Guardar. El búfer parte de 5 minutos, ajustables en pasos de 5, hasta el límite seguro de memoria de la app para la calidad elegida. No hay un tope de duración impuesto por el producto; Ajustes muestra el límite actual.",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Android 10+",
+          "isAccessibleForFree": true,
+          "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, com.android.vending.BILLING",
+          "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+          "screenshot": [
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+          ],
+          "inLanguage": [
+            "en",
+            "pt-BR",
+            "es",
+            "fr",
+            "de",
+            "it"
+          ],
+          "featureList": [
+            "¿Acabas de tocar un riff que merece la pena guardar o de decir una idea en voz alta? Toca Guardar y Audio Blackbox escribe el audio del búfer desde el último guardado (todo el búfer la primera vez) en un archivo local. Directo guarda el audio del búfer anterior al toque y continúa en un único archivo: .aac (ADTS) con AAC (predeterminado), reproducible mientras se graba, o .ogg con Opus, que debes reproducir una vez terminada la grabación. El tiempo de grabación en directo está limitado a 2 horas en el plan gratuito; después, el archivo se guarda automáticamente. El archivo puede superar las 2 horas porque incluye el pasado del búfer. Pro, de pago único, elimina el límite de tiempo en directo. El formato de audio al guardar es gratuito, sin Pro: AAC (predeterminado) crea archivos .m4a con Guardar, o puedes elegir Opus (.ogg) para Guardar y Directo. AAC ofrece mayor compatibilidad. Opus genera archivos de voz más pequeños. Algunos reproductores y apps de mensajería pueden no abrir archivos .ogg. Con Opus, espera a que termine la grabación para reproducirla. Si la app se cierra inesperadamente, el audio Opus ya escrito se recupera al volver a abrirla. Se descarta la última página Ogg incompleta, por lo que puede perderse el final. Opus puede no estar disponible en algunos dispositivos; la opción se desactiva y se muestra el motivo.",
+            "La propia app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) se comunica con Google para procesar la compra opcional y comprobar el derecho a Pro; su biblioteca también envía sus propios diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube.",
+            "Sin E/S de disco ni asignaciones de IPC en el hilo de captura de audio. La sincronización garantizada con un único escritor elimina cortes y pausas de recolección de basura.",
+            "Cuando otra app en primer plano ocupa el micrófono, Android silencia nuestro flujo en vez de hacer que falle. El servicio lo detecta directamente y se pausa; se reanuda en cuanto el micrófono queda libre. El intervalo se conserva como silencio real para que las marcas de tiempo exportadas no se desplacen.",
+            "Un servicio en primer plano con notificación activa y una guía para excluirlo de la optimización de batería del fabricante mantienen la grabación sin interrupciones incluso con la pantalla apagada.",
+            "Escucha, recorre, elimina y comparte tus grabaciones .m4a / .aac (AAC) o .ogg (Opus) mediante el panel de compartir de Android. Un widget en la pantalla de inicio permite iniciar o detener la grabación con un toque."
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Alexandre Machado",
+            "url": "https://github.com/alexandre-machado"
+          },
+          "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/alexandre-machado/audio-blackbox",
+            "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "inLanguage": "es",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "¿Hay una app Android que grabe los últimos 5 minutos de audio?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. El búfer parte de 5 minutos, ajustables en pasos de 5, hasta el límite seguro de memoria de la app para la calidad elegida. No hay un tope de duración impuesto por el producto; Ajustes muestra el límite actual."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cómo puedo guardar audio anterior a pulsar grabar?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Un grabador normal no puede hacerlo, porque solo empieza a capturar al pulsar grabar. Con Audio Blackbox, activas la grabación continua una vez y conserva los minutos más recientes en un búfer circular en RAM, sustituyendo el audio más antiguo por el más nuevo. Cuando algo que merece conservarse acaba de ocurrir, toca Guardar para escribir esos minutos en un archivo. El audio permanece en RAM hasta que tocas Guardar o inicias Directo."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué es un grabador retroactivo o con búfer siempre activo?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Es un grabador que captura continuamente en un búfer de memoria de tamaño fijo, para guardar lo que ya se ha dicho en vez de solo lo que viene después de pulsar grabar. Directo guarda el audio del búfer anterior al toque y continúa en un único archivo: .aac (ADTS) con AAC (predeterminado), reproducible mientras se graba, o .ogg con Opus, que debes reproducir una vez terminada la grabación. El tiempo de grabación en directo está limitado a 2 horas en el plan gratuito; después, el archivo se guarda automáticamente. El archivo puede superar las 2 horas porque incluye el pasado del búfer. Pro, de pago único, elimina el límite de tiempo en directo."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cuánto dura el búfer y cuánta RAM utiliza?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "El búfer parte de 5 minutos, ajustables en pasos de 5, hasta el límite seguro de memoria de la app para la calidad elegida. No hay un tope de duración impuesto por el producto; Ajustes muestra el límite actual. Con Voz, el perfil predeterminado (16.000 Hz mono), cada minuto usa unos 1,8 MB de RAM, por lo que 30 minutos son unos 55 MB. Equilibrado (32.000 Hz mono) usa el doble por minuto y Alta fidelidad (44.100 Hz estéreo) unas 5,5 veces más. El mismo móvil conserva un búfer más corto con mayor calidad. La calculadora de la sección Arquitectura de memoria muestra la RAM para cualquier intervalo y perfil."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Audio Blackbox sube algo o necesita conexión a internet?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Grabar y guardar funcionan sin conexión. La propia app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) se comunica con Google para procesar la compra opcional y comprobar el derecho a Pro; su biblioteca también envía sus propios diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Sigue grabando con la pantalla apagada?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. Audio Blackbox funciona como servicio en primer plano con notificación persistente e incluye una guía para excluirlo de la optimización de batería del fabricante, de modo que la captura continúa sin interrupciones con la pantalla bloqueada."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Un grabador siempre activo agota la batería?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Se midió Audio Blackbox en un Samsung Galaxy S25 grabando continuamente con el perfil Voz. Con la pantalla apagada usó aproximadamente entre el 1,0% y el 1,5% de batería por hora y menos del 1% de CPU, sin escrituras en disco durante el almacenamiento en el búfer. Otros móviles y ajustes darán resultados distintos."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Audio Blackbox es gratuita y de código abierto?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Gratis para instalar y usar, y de código abierto bajo GPL-3.0. Todo sigue siendo gratis salvo el desbloqueo Pro opcional de pago único. Directo guarda el audio del búfer anterior al toque y continúa en un único archivo: .aac (ADTS) con AAC (predeterminado), reproducible mientras se graba, o .ogg con Opus, que debes reproducir una vez terminada la grabación. El tiempo de grabación en directo está limitado a 2 horas en el plan gratuito; después, el archivo se guarda automáticamente. El archivo puede superar las 2 horas porque incluye el pasado del búfer. Pro, de pago único, elimina el límite de tiempo en directo. Pro gratis para quienes llegan pronto: instala Audio Blackbox hasta el 19 de diciembre de 2026 (antes del 20 de diciembre, a las 00:00, hora de Brasilia, UTC−3) y Pro queda desbloqueado en ese dispositivo, sin coste, para siempre. El beneficio corresponde a esa instalación: si desinstalas y vuelves a instalar, o cambias de dispositivo, no se conserva."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Hay una alternativa de código abierto a las apps de grabación retroactiva en Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Gratis para instalar y usar, y de código abierto bajo GPL-3.0. Todo sigue siendo gratis salvo el desbloqueo Pro opcional de pago único. La propia app no envía audio ni analítica de uso. Google Play Billing (servicios de Google Play) se comunica con Google para procesar la compra opcional y comprobar el derecho a Pro; su biblioteca también envía sus propios diagnósticos de uso y errores. Sin anuncios, cuenta ni almacenamiento de audio en la nube."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué versiones de Android son compatibles?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Android 10 (nivel de API 29) y posteriores."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cómo consigo Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox es gratuita para instalar en Google Play. Abre su ficha en Play Store desde tu Android y toca Instalar; el enlace está en la sección Descarga de esta página."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿En qué se diferencia Audio Blackbox de Google Recorder o de un grabador de voz normal?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Un grabador normal solo captura después de pulsar grabar, por lo que todo lo dicho antes se pierde. Audio Blackbox graba continuamente en un búfer circular en RAM y solo escribe en el almacenamiento al tocar Guardar. Así puedes guardar los últimos minutos de algo que ya ocurrió. El audio permanece en RAM hasta que guardas o inicias Directolo y tus grabaciones nunca se suben."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Existe una app de dashcam de audio para Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sí. Audio Blackbox funciona como una dashcam para el sonido: conserva los últimos minutos en un búfer circular en la RAM y solo los escribe en un archivo cuando tocas Guardar, para que conserves lo que acaba de pasar. A diferencia de una grabadora oculta, siempre muestra una notificación mientras graba. Grabar a otras personas puede requerir su consentimiento, así que consulta las leyes de tu zona."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Puedo recuperar una cita o una explicación de clase que olvidé grabar?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Si Audio Blackbox estaba activo, sí. Toca Guardar y los minutos del búfer (al menos 5, hasta el límite seguro de memoria de la app para la calidad elegida) se escriben en un archivo .m4a (AAC) o .ogg (Opus), aunque nunca hayas pulsado grabar. Los periodistas pueden usarlo como respaldo de su grabadora principal, y los estudiantes pueden conservar una explicación que se les acaba de escapar en las clases donde se permite grabar."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Puede Audio Blackbox ayudarme a recordar instrucciones habladas?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Puede servir de apoyo a la memoria. Si acabas de oír indicaciones, instrucciones o detalles y has perdido el hilo, guarda los últimos minutos y vuelve a escucharlos en el reproductor integrado. Puede ayudar a quien suele perder información hablada, por ejemplo personas con TDAH. Audio Blackbox no es un dispositivo médico."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Se puede grabar con Audio Blackbox según la ley?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Depende de dónde estés. Usa Audio Blackbox para tus propias conversaciones e ideas. Grabar a otras personas puede requerir su consentimiento, y las normas varían entre países y estados. Consulta la legislación local sobre grabaciones antes de grabar. Eres responsable del uso que hagas de la app."
+              }
+            }
+          ]
+        }
+      ],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Guarda los últimos minutos que acabas de oír. Búfer circular en RAM dentro del límite seguro de memoria de la app, audio que no sale del dispositivo, código abierto."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox: graba el pasado en Android"
+        },
+        {
+          "property": "og:description",
+          "content": "Guarda los últimos minutos que acabas de oír. Búfer circular en RAM dentro del límite seguro de memoria de la app, audio que no sale del dispositivo, código abierto."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Gráfico de Audio Blackbox: un búfer continuo de audio ambiental para Android con estilo de panel de instrumentos de aviación."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "de_DE"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "en_US"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "fr_FR"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "it_IT"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "pt_BR"
+        },
+        {
+          "property": "og:locale",
+          "content": "es_ES"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox: graba el pasado en Android"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/es/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/01-capture-and-memory-core.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "1615ec72241ff96e3a96b85f6d568629dd501e962458409521a7a2be6076785f",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/features/01-capture-and-memory-core.html",
+      "hreflang": [],
+      "title": "Module 1 — Capture & Memory Core - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Module 1 — Capture & Memory Core"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Module 1 — Capture & Memory Core"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/features/01-capture-and-memory-core.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/02-android-integration.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "169d5b6f9255e6aac1d19c39daecd68eeb3fc0a86980d7c2974232c7263fb093",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/features/02-android-integration.html",
+      "hreflang": [],
+      "title": "Module 2 — Android Integration & Background Survival - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Module 2 — Android Integration & Background Survival"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Module 2 — Android Integration & Background Survival"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/features/02-android-integration.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/03-export-engine.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "78b4af2a39b75d6408d3ed2478fc78481d935cd7a9dd5f210baeb0984f923f9f",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/features/03-export-engine.html",
+      "hreflang": [],
+      "title": "Module 3 — Export Engine (RAM to Disk) - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Module 3 — Export Engine (RAM to Disk)"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Module 3 — Export Engine (RAM to Disk)"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/features/03-export-engine.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/features/04-user-interface.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "7e75a6716f786dbae2ede6976744a78372b7568c6174376e44ef4bfa50dad949",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/features/04-user-interface.html",
+      "hreflang": [],
+      "title": "Module 4 — User Interface - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Module 4 — User Interface"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Module 4 — User Interface"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/features/04-user-interface.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/fr/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "443d25fc19f4e5a6019b1696457a59215e9fc6810835fde2102ecb1c086f19fa",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/fr/",
+      "hreflang": [
+        {
+          "lang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "lang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "lang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "lang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "lang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "lang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "lang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ],
+      "title": "Audio Blackbox : enregistrez le passé sur Android",
+      "description": "Audio Blackbox est un enregistreur rétroactif open source pour Android : une dashcam audio qui conserve les dernières minutes de son en RAM, pour sauvegarder le riff, la citation ou les consignes que vous venez d'entendre. L’audio reste en RAM jusqu’à la sauvegarde ou au démarrage de Direct, et vos enregistrements ne quittent jamais le téléphone.",
+      "jsonLdTypes": [
+        "Answer",
+        "FAQPage",
+        "MobileApplication",
+        "Offer",
+        "Person",
+        "Question"
+      ],
+      "jsonLd": [
+        {
+          "@context": "https://schema.org",
+          "@type": "MobileApplication",
+          "name": "Audio Blackbox",
+          "alternateName": "Audio Blackbox : enregistrez le passé sur Android",
+          "url": "https://alexandre.machado.cc/audio-blackbox/fr/",
+          "description": "Audio Blackbox est une app Android open source qui conserve en continu les dernières minutes de son en RAM et ne les écrit dans le stockage local que lorsque vous touchez Sauvegarder ou lancez Direct. Le tampon commence à 5 minutes, par paliers de 5, jusqu'à la limite de mémoire sûre de l'app pour la qualité choisie. Le produit n'impose pas de plafond de durée ; les Paramètres affichent la limite actuelle.",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Android 10+",
+          "isAccessibleForFree": true,
+          "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, com.android.vending.BILLING",
+          "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+          "screenshot": [
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+          ],
+          "inLanguage": [
+            "en",
+            "pt-BR",
+            "es",
+            "fr",
+            "de",
+            "it"
+          ],
+          "featureList": [
+            "Vous venez de jouer un riff à garder ou d'exprimer une idée à voix haute ? Touchez Sauvegarder et Audio Blackbox écrit l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier local. Direct sauvegarde l’audio du tampon précédant le toucher et continue dans un seul fichier : .aac (ADTS) avec AAC (par défaut), lisible pendant l’enregistrement, ou .ogg avec Opus, à écouter une fois l’enregistrement terminé. Le temps d'enregistrement en direct est limité à 2 heures en version gratuite ; le fichier est ensuite sauvegardé automatiquement. Il peut dépasser 2 heures car il inclut le passé du tampon. Pro, en achat unique, supprime cette limite de temps. Le format audio de sauvegarde est gratuit, sans Pro : AAC (par défaut) crée des fichiers .m4a avec Sauvegarder, ou choisissez Opus (.ogg) pour Sauvegarder et Direct. AAC offre une compatibilité plus large. Opus produit des fichiers vocaux plus petits. Certains lecteurs et applications de messagerie peuvent ne pas ouvrir les fichiers .ogg. Avec Opus, attendez la fin de l’enregistrement pour l’écouter. Si l’app se ferme de manière inattendue, l’audio Opus déjà écrit est récupéré à la réouverture. La dernière page Ogg incomplète est supprimée ; la fin peut donc être perdue. Opus peut être indisponible sur certains appareils ; l’option est alors désactivée avec le motif indiqué.",
+            "L'app elle-même n'envoie ni audio ni statistiques d'utilisation. Google Play Billing (services Google Play) communique avec Google pour traiter l'achat facultatif et vérifier le droit à Pro ; sa bibliothèque envoie aussi ses propres diagnostics d'utilisation et d'erreurs. Sans publicité, compte ni stockage audio dans le cloud.",
+            "Aucune E/S disque ni allocation IPC sur le thread de capture audio. La synchronisation garantie avec un seul écrivain élimine les coupures et les pauses du ramasse-miettes.",
+            "Quand une autre app au premier plan utilise le microphone, Android rend notre flux silencieux au lieu de le faire échouer. Le service le détecte directement et se met en pause, puis reprend dès que le micro est libre. L'intervalle est conservé comme un vrai silence pour éviter tout décalage des horodatages exportés.",
+            "Le service au premier plan, avec notification active et guide d'exclusion des optimisations de batterie du fabricant, maintient l'enregistrement sans interruption même lorsque l'écran est éteint.",
+            "Écoutez, parcourez, supprimez et partagez vos enregistrements .m4a / .aac (AAC) ou .ogg (Opus) via le panneau de partage Android. Un widget sur l'écran d'accueil démarre ou arrête l'enregistrement d'un geste."
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Alexandre Machado",
+            "url": "https://github.com/alexandre-machado"
+          },
+          "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/alexandre-machado/audio-blackbox",
+            "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "inLanguage": "fr",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Existe-t-il une app Android qui enregistre les 5 dernières minutes d'audio ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Oui. Le tampon commence à 5 minutes, par paliers de 5, jusqu'à la limite de mémoire sûre de l'app pour la qualité choisie. Le produit n'impose pas de plafond de durée ; les Paramètres affichent la limite actuelle."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment sauvegarder l'audio d'avant le début de l'enregistrement ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Un enregistreur ordinaire ne le peut pas, car il ne capture qu'une fois l'enregistrement lancé. Avec Audio Blackbox, vous activez une fois l'enregistrement continu, qui conserve les dernières minutes dans un tampon circulaire en RAM, remplaçant l'audio ancien par le nouveau. Quand quelque chose à garder vient de se produire, touchez Sauvegarder pour écrire ces minutes dans un fichier. L’audio reste en RAM jusqu’à la sauvegarde ou au démarrage de Direct."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Qu'est-ce qu'un enregistreur rétroactif ou à tampon toujours actif ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "C'est un enregistreur qui capture en continu dans un tampon mémoire de taille fixe, pour sauvegarder ce qui a déjà été dit, pas seulement ce qui suit le lancement de l'enregistrement. Direct sauvegarde l’audio du tampon précédant le toucher et continue dans un seul fichier : .aac (ADTS) avec AAC (par défaut), lisible pendant l’enregistrement, ou .ogg avec Opus, à écouter une fois l’enregistrement terminé. Le temps d'enregistrement en direct est limité à 2 heures en version gratuite ; le fichier est ensuite sauvegardé automatiquement. Il peut dépasser 2 heures car il inclut le passé du tampon. Pro, en achat unique, supprime cette limite de temps."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quelle est la durée du tampon et combien de RAM utilise-t-il ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Le tampon commence à 5 minutes, par paliers de 5, jusqu'à la limite de mémoire sûre de l'app pour la qualité choisie. Le produit n'impose pas de plafond de durée ; les Paramètres affichent la limite actuelle. Avec Voix, le préréglage par défaut (16 000 Hz mono), chaque minute utilise environ 1,8 Mo de RAM, soit environ 55 Mo pour 30 minutes. Équilibré (32 000 Hz mono) en utilise deux fois plus par minute et Haute fidélité (44 100 Hz stéréo) environ 5,5 fois plus. Le même téléphone conserve donc un tampon plus court à qualité supérieure. Le calculateur de la section Architecture mémoire montre la RAM pour chaque durée et préréglage."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Audio Blackbox envoie-t-il des données ou nécessite-t-il internet ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "L'enregistrement et la sauvegarde fonctionnent hors connexion. L'app elle-même n'envoie ni audio ni statistiques d'utilisation. Google Play Billing (services Google Play) communique avec Google pour traiter l'achat facultatif et vérifier le droit à Pro ; sa bibliothèque envoie aussi ses propres diagnostics d'utilisation et d'erreurs. Sans publicité, compte ni stockage audio dans le cloud."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "L'enregistrement continue-t-il quand l'écran est éteint ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Oui. Audio Blackbox fonctionne comme un service au premier plan avec notification persistante et propose un guide d'exclusion des optimisations de batterie du fabricant, pour poursuivre la capture sans interruption lorsque l'écran est verrouillé."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Un enregistreur toujours actif épuise-t-il la batterie ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox a été mesuré sur un Samsung Galaxy S25 enregistrant en continu avec le préréglage Voix. Écran éteint, il utilisait environ 1,0 % à 1,5 % de batterie par heure et moins de 1 % du processeur, sans écriture disque pendant la mise en tampon. Les résultats varient selon les téléphones et les réglages."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Audio Blackbox est-il gratuit et open source ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Installation et utilisation gratuites, code open source sous GPL-3.0. Tout reste gratuit sauf le déblocage Pro facultatif en achat unique. Direct sauvegarde l’audio du tampon précédant le toucher et continue dans un seul fichier : .aac (ADTS) avec AAC (par défaut), lisible pendant l’enregistrement, ou .ogg avec Opus, à écouter une fois l’enregistrement terminé. Le temps d'enregistrement en direct est limité à 2 heures en version gratuite ; le fichier est ensuite sauvegardé automatiquement. Il peut dépasser 2 heures car il inclut le passé du tampon. Pro, en achat unique, supprime cette limite de temps. Pro gratuit pour les premiers arrivés : installez Audio Blackbox au plus tard le 19 décembre 2026 (avant le 20 décembre à 00:00, heure de Brasília, UTC−3) et Pro reste débloqué sur cet appareil, gratuitement, pour toujours. Cet avantage est lié à cette installation : si vous désinstallez puis réinstallez l'app, ou changez d'appareil, il n'est pas conservé."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Existe-t-il une alternative open source aux apps d'enregistrement rétroactif sur Android ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Installation et utilisation gratuites, code open source sous GPL-3.0. Tout reste gratuit sauf le déblocage Pro facultatif en achat unique. L'app elle-même n'envoie ni audio ni statistiques d'utilisation. Google Play Billing (services Google Play) communique avec Google pour traiter l'achat facultatif et vérifier le droit à Pro ; sa bibliothèque envoie aussi ses propres diagnostics d'utilisation et d'erreurs. Sans publicité, compte ni stockage audio dans le cloud."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quelles versions d'Android sont prises en charge ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Android 10 (niveau d'API 29) et versions ultérieures."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Comment obtenir Audio Blackbox ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox est gratuit à installer sur Google Play. Ouvrez sa fiche Play Store sur votre Android et touchez Installer ; le lien se trouve dans la section Téléchargement de cette page."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "En quoi Audio Blackbox diffère-t-il de Google Recorder ou d'un enregistreur vocal ordinaire ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Un enregistreur ordinaire ne capture qu'après le lancement de l'enregistrement ; tout ce qui a été dit avant est perdu. Audio Blackbox enregistre en continu dans un tampon circulaire en RAM et n'écrit dans le stockage que lorsque vous touchez Sauvegarder ou lancez Direct. Vous pouvez ainsi garder les dernières minutes de quelque chose qui s'est déjà produit. L’audio reste en RAM jusqu’à la sauvegarde ou au démarrage de Direct et vos enregistrements ne sont jamais envoyés."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Existe-t-il une application de dashcam audio pour Android ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Oui. Audio Blackbox fonctionne comme une dashcam pour le son : il conserve les dernières minutes dans un tampon circulaire en RAM et ne les écrit dans un fichier que lorsque vous touchez Sauvegarder ou lancez Direct, pour garder ce qui vient de se passer. Contrairement à un enregistreur caché, il affiche toujours une notification pendant l'enregistrement. Enregistrer d'autres personnes peut nécessiter leur consentement : vérifiez les lois locales."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Puis-je récupérer une citation ou une explication de cours que j'ai oublié d'enregistrer ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Si Audio Blackbox était actif, oui. Touchez Sauvegarder et les minutes du tampon (au moins 5, jusqu'à la limite de mémoire sûre de l'app pour la qualité choisie) sont écrites dans un fichier .m4a (AAC) ou .ogg (Opus), même sans avoir lancé l'enregistrement. Les journalistes peuvent l'utiliser en secours de leur enregistreur principal, et les étudiants peuvent garder une explication qu'ils viennent de manquer dans les cours où l'enregistrement est autorisé."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Audio Blackbox peut-il m'aider à retenir des consignes orales ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Il peut servir d'aide-mémoire. Si vous venez d'entendre des indications, des consignes ou des détails et en avez perdu le fil, sauvegardez les dernières minutes et réécoutez-les dans le lecteur intégré. Cela peut aider toute personne qui perd souvent les informations orales, par exemple avec un TDAH. Audio Blackbox n'est pas un dispositif médical."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Que dit la loi sur l'enregistrement avec Audio Blackbox ?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Cela dépend de l'endroit où vous êtes. Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays et les États. Consultez les lois locales sur l'enregistrement avant d'enregistrer. Vous êtes responsable de votre utilisation de l'app."
+              }
+            }
+          ]
+        }
+      ],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Sauvegardez les dernières minutes que vous venez d'entendre. Tampon circulaire en RAM dans la limite de mémoire sûre de l’app, audio qui reste sur l'appareil, open source."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox : enregistrez le passé sur Android"
+        },
+        {
+          "property": "og:description",
+          "content": "Sauvegardez les dernières minutes que vous venez d'entendre. Tampon circulaire en RAM dans la limite de mémoire sûre de l’app, audio qui reste sur l'appareil, open source."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Visuel Audio Blackbox : un tampon continu de son ambiant pour Android, au style de tableau de bord d’aviation."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "de_DE"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "en_US"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "es_ES"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "it_IT"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "pt_BR"
+        },
+        {
+          "property": "og:locale",
+          "content": "fr_FR"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox : enregistrez le passé sur Android"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/it/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "11b3bf6132aa554149eb3758db77c7fe39ed199dd933d3fd56343b17e32a7ef2",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/it/",
+      "hreflang": [
+        {
+          "lang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "lang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "lang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "lang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "lang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "lang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "lang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ],
+      "title": "Audio Blackbox: registra il passato su Android",
+      "description": "Audio Blackbox è un registratore retroattivo open source per Android: una dashcam audio che tiene gli ultimi minuti di suono in RAM, così puoi salvare il riff, la citazione o le istruzioni che hai appena ascoltato. Non viene scritto nulla finché non tocchi Salva, e le tue registrazioni non lasciano mai il telefono.",
+      "jsonLdTypes": [
+        "Answer",
+        "FAQPage",
+        "MobileApplication",
+        "Offer",
+        "Person",
+        "Question"
+      ],
+      "jsonLd": [
+        {
+          "@context": "https://schema.org",
+          "@type": "MobileApplication",
+          "name": "Audio Blackbox",
+          "alternateName": "Audio Blackbox: registra il passato su Android",
+          "url": "https://alexandre.machado.cc/audio-blackbox/it/",
+          "description": "Audio Blackbox è un'app Android open source che conserva continuamente gli ultimi minuti di suono in RAM e li scrive nella memoria di archiviazione locale quando tocchi Salva o avvii Live. Il buffer parte da 5 minuti, regolabili a intervalli di 5, fino al limite sicuro di memoria dell'app per la qualità scelta. Il prodotto non impone un tetto alla durata; le Impostazioni mostrano il limite attuale.",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Android 10+",
+          "isAccessibleForFree": true,
+          "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, com.android.vending.BILLING",
+          "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+          "screenshot": [
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+          ],
+          "inLanguage": [
+            "en",
+            "pt-BR",
+            "es",
+            "fr",
+            "de",
+            "it"
+          ],
+          "featureList": [
+            "Hai appena suonato un riff da conservare o espresso un'idea ad alta voce? Tocca Salva e Audio Blackbox scrive l'audio nel buffer dall'ultimo salvataggio (l'intero buffer la prima volta) in un file locale. Live salva l’audio nel buffer precedente al tocco e continua in un unico file: .aac (ADTS) con AAC (predefinito), riproducibile durante la registrazione, oppure .ogg con Opus, da ascoltare al termine della registrazione. Il tempo di registrazione live è limitato a 2 ore nel piano gratuito; poi il file viene salvato automaticamente. Il file può superare le 2 ore perché include il passato nel buffer. Pro, con acquisto unico, rimuove il limite di tempo live. Il formato audio di salvataggio è gratuito, senza Pro: AAC (predefinito) crea file .m4a con Salva, oppure scegli Opus (.ogg) per Salva e Live. AAC offre maggiore compatibilità. Opus crea file vocali più piccoli. Alcuni lettori e app di messaggistica potrebbero non aprire i file .ogg. Con Opus, attendi la fine della registrazione prima di ascoltarla. Se l’app si chiude inaspettatamente, l’audio Opus già scritto viene recuperato alla riapertura. L’ultima pagina Ogg incompleta viene scartata, quindi la parte finale può andare persa. Opus potrebbe non essere disponibile su alcuni dispositivi; in quel caso l’opzione è disabilitata con il motivo indicato.",
+            "L'app stessa non invia audio né analisi di utilizzo. Google Play Billing (servizi Google Play) comunica con Google per elaborare l'acquisto facoltativo e verificare il diritto a Pro; la libreria invia anche la propria diagnostica di utilizzo ed errori. Nessuna pubblicità, account o archiviazione audio nel cloud.",
+            "Nessun I/O su disco e nessuna allocazione IPC sul thread di cattura audio. La sincronizzazione garantita con un solo scrittore elimina interruzioni e pause della garbage collection.",
+            "Quando un'altra app in primo piano occupa il microfono, Android silenzia il nostro flusso invece di farlo fallire. Il servizio lo rileva direttamente e va in pausa, poi riprende appena il microfono è libero. L'intervallo viene conservato come silenzio reale, così i riferimenti temporali esportati non si spostano.",
+            "Un servizio in primo piano con notifica attiva e una guida per escludere l'app dall'ottimizzazione della batteria del produttore mantengono la registrazione senza interruzioni anche a schermo spento.",
+            "Ascolta, scorri, elimina e condividi le registrazioni .m4a / .aac (AAC) o .ogg (Opus) tramite il pannello di condivisione Android. Un widget sulla schermata iniziale avvia o ferma la registrazione con un tocco."
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Alexandre Machado",
+            "url": "https://github.com/alexandre-machado"
+          },
+          "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/alexandre-machado/audio-blackbox",
+            "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "inLanguage": "it",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Esiste un'app Android che registra gli ultimi 5 minuti di audio?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sì. Il buffer parte da 5 minuti, regolabili a intervalli di 5, fino al limite sicuro di memoria dell'app per la qualità scelta. Il prodotto non impone un tetto alla durata; le Impostazioni mostrano il limite attuale."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Come posso salvare l'audio precedente alla pressione di registra?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Un registratore normale non può farlo perché inizia a catturare solo quando premi registra. Con Audio Blackbox attivi una volta la registrazione continua, che mantiene gli ultimi minuti in un buffer circolare in RAM, sostituendo l'audio vecchio con quello nuovo. Quando è appena accaduto qualcosa da conservare, tocca Salva per scrivere quei minuti in un file. L’audio resta in RAM finché non tocchi Salva o avvii Live."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Cos'è un registratore retroattivo o con buffer sempre attivo?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "È un registratore che cattura continuamente in un buffer di memoria di dimensioni fisse, per salvare ciò che è già stato detto invece di solo quello che viene dopo aver premuto registra. Live salva l’audio nel buffer precedente al tocco e continua in un unico file: .aac (ADTS) con AAC (predefinito), riproducibile durante la registrazione, oppure .ogg con Opus, da ascoltare al termine della registrazione. Il tempo di registrazione live è limitato a 2 ore nel piano gratuito; poi il file viene salvato automaticamente. Il file può superare le 2 ore perché include il passato nel buffer. Pro, con acquisto unico, rimuove il limite di tempo live."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quanto dura il buffer audio e quanta RAM usa?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Il buffer parte da 5 minuti, regolabili a intervalli di 5, fino al limite sicuro di memoria dell'app per la qualità scelta. Il prodotto non impone un tetto alla durata; le Impostazioni mostrano il limite attuale. Con il profilo predefinito Voce (16.000 Hz mono), ogni minuto usa circa 1,8 MB di RAM, quindi 30 minuti sono circa 55 MB. Bilanciato (32.000 Hz mono) usa il doppio al minuto e Alta fedeltà (44.100 Hz stereo) circa 5,5 volte tanto. Lo stesso telefono mantiene quindi un buffer più corto a qualità superiore. Il calcolatore nella sezione Architettura della memoria mostra la RAM per qualsiasi intervallo e profilo."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Audio Blackbox carica qualcosa o richiede una connessione internet?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Registrazione e salvataggio funzionano offline. L'app stessa non invia audio né analisi di utilizzo. Google Play Billing (servizi Google Play) comunica con Google per elaborare l'acquisto facoltativo e verificare il diritto a Pro; la libreria invia anche la propria diagnostica di utilizzo ed errori. Nessuna pubblicità, account o archiviazione audio nel cloud."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Continua a registrare a schermo spento?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sì. Audio Blackbox funziona come servizio in primo piano con notifica persistente e include una guida per escludere l'app dall'ottimizzazione della batteria del produttore, così la cattura continua senza interruzioni a schermo bloccato."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Un registratore sempre attivo scarica la batteria?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox è stato misurato su un Samsung Galaxy S25 mentre registrava continuamente con il profilo Voce. A schermo spento usava circa l'1,0%–1,5% di batteria all'ora e meno dell'1% di CPU, senza scritture su disco durante il riempimento del buffer. Altri telefoni e impostazioni daranno risultati diversi."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Audio Blackbox è gratuita e open source?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Installazione e uso gratuiti, codice open source sotto GPL-3.0. Tutto resta gratuito salvo lo sblocco Pro facoltativo con acquisto unico. Live salva l’audio nel buffer precedente al tocco e continua in un unico file: .aac (ADTS) con AAC (predefinito), riproducibile durante la registrazione, oppure .ogg con Opus, da ascoltare al termine della registrazione. Il tempo di registrazione live è limitato a 2 ore nel piano gratuito; poi il file viene salvato automaticamente. Il file può superare le 2 ore perché include il passato nel buffer. Pro, con acquisto unico, rimuove il limite di tempo live. Pro gratis per chi arriva prima: installa Audio Blackbox entro il 19 dicembre 2026 (prima del 20 dicembre alle 00:00, ora di Brasília, UTC−3) e Pro resta sbloccato su quel dispositivo, senza costi, per sempre. Il beneficio vale per quella installazione: se disinstalli e reinstalli l'app, o cambi dispositivo, non viene mantenuto."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Esiste un'alternativa open source alle app di registrazione retroattiva su Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Installazione e uso gratuiti, codice open source sotto GPL-3.0. Tutto resta gratuito salvo lo sblocco Pro facoltativo con acquisto unico. L'app stessa non invia audio né analisi di utilizzo. Google Play Billing (servizi Google Play) comunica con Google per elaborare l'acquisto facoltativo e verificare il diritto a Pro; la libreria invia anche la propria diagnostica di utilizzo ed errori. Nessuna pubblicità, account o archiviazione audio nel cloud."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quali versioni di Android sono supportate?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Android 10 (livello API 29) e versioni successive."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Come posso ottenere Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Audio Blackbox è gratuita da installare su Google Play. Apri la sua scheda Play Store sul tuo Android e tocca Installa; il link si trova nella sezione Download di questa pagina."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "In cosa Audio Blackbox è diversa da Google Recorder o da un normale registratore vocale?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Un registratore normale cattura solo dopo aver premuto registra, quindi tutto ciò che è stato detto prima va perso. Audio Blackbox registra continuamente in un buffer circolare in RAM e scrive nell'archiviazione quando tocchi Salva o avvii Live. Puoi così conservare gli ultimi minuti di qualcosa che è già accaduto. L’audio resta in RAM finché non salvi o avvii Live e le tue registrazioni non vengono mai caricate."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Esiste un'app dashcam audio per Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sì. Audio Blackbox funziona come una dashcam per il suono: tiene gli ultimi minuti in un buffer circolare in RAM e li scrive su file quando tocchi Salva o avvii Live, così conservi quello che è appena successo. A differenza di un registratore nascosto, mostra sempre una notifica mentre registra. Registrare altre persone può richiedere il loro consenso, quindi verifica le leggi locali."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Posso recuperare una citazione o una spiegazione a lezione che ho dimenticato di registrare?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Se Audio Blackbox era attivo, sì. Tocca Salva e i minuti nel buffer (almeno 5, fino al limite sicuro di memoria dell'app per la qualità scelta) vengono scritti in un file .m4a (AAC) o .ogg (Opus), anche se non hai mai premuto registra. I giornalisti possono usarlo come backup del registratore principale, e gli studenti possono conservare una spiegazione appena persa nelle lezioni in cui registrare è consentito."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Audio Blackbox può aiutarmi a ricordare istruzioni dette a voce?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Può fare da supporto alla memoria. Se hai appena sentito indicazioni, istruzioni o dettagli e hai perso il filo, salva gli ultimi minuti e riascoltali nel player integrato. Può aiutare chi perde spesso le informazioni a voce, ad esempio le persone con ADHD. Audio Blackbox non è un dispositivo medico."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Cosa prevede la legge sulle registrazioni con Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Dipende da dove ti trovi. Usa Audio Blackbox per le tue conversazioni e idee. Registrare altre persone può richiedere il loro consenso e le regole variano tra paesi e stati. Consulta le leggi locali sulle registrazioni prima di registrare. Sei responsabile dell'uso che fai dell'app."
+              }
+            }
+          ]
+        }
+      ],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Salva gli ultimi minuti che hai appena ascoltato. Un buffer circolare in RAM entro il limite sicuro di memoria dell’app, audio che resta sul dispositivo, open source."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox: registra il passato su Android"
+        },
+        {
+          "property": "og:description",
+          "content": "Salva gli ultimi minuti che hai appena ascoltato. Un buffer circolare in RAM entro il limite sicuro di memoria dell’app, audio che resta sul dispositivo, open source."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Grafica di Audio Blackbox: un buffer continuo di audio ambientale per Android con lo stile di un pannello di strumenti di aviazione."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "de_DE"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "en_US"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "es_ES"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "fr_FR"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "pt_BR"
+        },
+        {
+          "property": "og:locale",
+          "content": "it_IT"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox: registra il passato su Android"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/it/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/llms-full.txt",
+      "status": 200,
+      "location": null,
+      "bodySha256": "88a7f32e037041e0074e8a380850f13b6c0276f571741d3055303328d1092946",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/llms.txt",
+      "status": 200,
+      "location": null,
+      "bodySha256": "f8ea71a3e8b9f404c08918221c2c63972645d64492fbabe93a9a47edf39ab6e6",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/pt-br/",
+      "status": 200,
+      "location": null,
+      "bodySha256": "964324b0d818e5ab02bf734f191d351079c7add1c2a4763afa9f1ee51c4e4118",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/pt-br/",
+      "hreflang": [
+        {
+          "lang": "de",
+          "href": "https://alexandre.machado.cc/audio-blackbox/de/"
+        },
+        {
+          "lang": "en",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        },
+        {
+          "lang": "es",
+          "href": "https://alexandre.machado.cc/audio-blackbox/es/"
+        },
+        {
+          "lang": "fr",
+          "href": "https://alexandre.machado.cc/audio-blackbox/fr/"
+        },
+        {
+          "lang": "it",
+          "href": "https://alexandre.machado.cc/audio-blackbox/it/"
+        },
+        {
+          "lang": "pt-BR",
+          "href": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        },
+        {
+          "lang": "x-default",
+          "href": "https://alexandre.machado.cc/audio-blackbox/"
+        }
+      ],
+      "title": "Audio Blackbox: gravador do passado para Android",
+      "description": "O Audio Blackbox é um gravador retroativo de código aberto para Android: uma dashcam de áudio que guarda os últimos minutos de som na RAM, para você salvar o riff, a citação ou as instruções que acabou de ouvir. Nada é gravado até você tocar em Salvar, e as suas gravações nunca saem do celular.",
+      "jsonLdTypes": [
+        "Answer",
+        "FAQPage",
+        "MobileApplication",
+        "Offer",
+        "Person",
+        "Question"
+      ],
+      "jsonLd": [
+        {
+          "@context": "https://schema.org",
+          "@type": "MobileApplication",
+          "name": "Audio Blackbox",
+          "alternateName": "Audio Blackbox: gravador do passado para Android",
+          "url": "https://alexandre.machado.cc/audio-blackbox/pt-br/",
+          "description": "O Audio Blackbox é um app Android de código aberto que mantém continuamente os últimos minutos de som na RAM e os grava no armazenamento local quando você toca em Salvar ou inicia Ao vivo. O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual.",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Android 10+",
+          "isAccessibleForFree": true,
+          "permissions": "RECORD_AUDIO, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_MICROPHONE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, RECEIVE_BOOT_COMPLETED, INTERNET, ACCESS_NETWORK_STATE, com.android.vending.BILLING",
+          "installUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "downloadUrl": "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox",
+          "image": "https://alexandre.machado.cc/audio-blackbox/assets/icon.png",
+          "screenshot": [
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_dashboard.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_gallery.png",
+            "https://alexandre.machado.cc/audio-blackbox/assets/screenshot_settings.png"
+          ],
+          "inLanguage": [
+            "en",
+            "pt-BR",
+            "es",
+            "fr",
+            "de",
+            "it"
+          ],
+          "featureList": [
+            "Acabou de tocar um riff que vale guardar ou falar uma ideia em voz alta? Toque em Salvar e o Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo local. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo: .aac (ADTS) com AAC (padrão), reproduzível durante a gravação, ou .ogg com Opus, que exige aguardar o término para ouvir. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Formato ao salvar é gratuito, sem precisar do Pro: AAC (padrão) salva arquivos .m4a ao tocar em Salvar, ou escolha Opus (.ogg) para Salvar e Ao vivo. AAC (.m4a): maior compatibilidade. Opus (.ogg): voz em arquivos menores. Alguns players e apps de mensagem podem não abrir. Com AAC selecionado: Ao vivo continua em AAC (.aac), reproduzível durante a gravação. Para ouvir a gravação em Opus, aguarde o término. Se o app fechar inesperadamente, o trecho já salvo pode ser recuperado, mas o final pode se perder e alguns players podem não abrir o arquivo. Ao reabrir após um fechamento inesperado, o áudio Opus já gravado é recuperado; a última página Ogg incompleta é descartada, então o final pode se perder. Opus pode estar indisponível em alguns aparelhos; a opção fica desativada com o motivo indicado.",
+            "O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem.",
+            "Zero E/S de disco e zero alocações de IPC na thread de captura de áudio. A sincronização garantida com um único escritor elimina falhas e pausas de coleta de lixo.",
+            "Quando outro app em primeiro plano assume o microfone, o Android silencia nosso fluxo em vez de encerrá-lo com erro. O serviço detecta isso diretamente e pausa, retomando assim que o microfone fica livre. A lacuna é mantida como silêncio real, para que os tempos exportados não se desloquem.",
+            "O serviço em primeiro plano, com notificação ativa e orientação para dispensar a otimização de bateria do fabricante, mantém a gravação sem interrupções mesmo com a tela apagada.",
+            "Ouça, avance, apague e compartilhe as gravações .m4a / .aac (AAC) ou .ogg (Opus) pela folha de compartilhamento do Android. Um widget na tela inicial liga ou desliga a gravação com um toque."
+          ],
+          "author": {
+            "@type": "Person",
+            "name": "Alexandre Machado",
+            "url": "https://github.com/alexandre-machado"
+          },
+          "license": "https://github.com/alexandre-machado/audio-blackbox/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/alexandre-machado/audio-blackbox",
+            "https://play.google.com/store/apps/details?id=cc.machado.audioblackbox"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "inLanguage": "pt-BR",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Existe um app Android que grava os últimos 5 minutos de áudio?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sim. O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Como salvar áudio de antes de eu apertar gravar?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Um gravador comum não faz isso, porque só começa a capturar quando você aperta gravar. Com o Audio Blackbox, você liga a gravação contínua uma vez e ele mantém os minutos mais recentes em um buffer circular na RAM, substituindo o áudio mais antigo pelo mais novo. Quando algo que vale guardar acabou de acontecer, toque em Salvar para gravar esses minutos em um arquivo. O áudio fica na RAM até você tocar em Salvar ou iniciar Ao vivo."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "O que é um gravador retroativo ou de buffer sempre ativo?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "É um gravador que captura continuamente em um buffer de memória de tamanho fixo, para salvar o que já foi dito, além do que vem depois de apertar gravar. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo: .aac (ADTS) com AAC (padrão), reproduzível durante a gravação, ou .ogg com Opus, que exige aguardar o término para ouvir. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Qual é a duração do buffer e quanta RAM ele usa?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual. No preset padrão Voz (16.000 Hz mono), cada minuto usa cerca de 1,8 MB de RAM, então 30 minutos usam cerca de 55 MB. Equilibrado (32.000 Hz mono) usa o dobro por minuto e Alta fidelidade (44.100 Hz estéreo) cerca de 5,5 vezes mais. Assim, o mesmo celular comporta um buffer menor com qualidade maior. A calculadora na seção Arquitetura de memória mostra a RAM para qualquer janela e preset."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "O Audio Blackbox envia algo ou precisa de internet?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Gravar e salvar funcionam sem conexão. O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Ele continua gravando com a tela apagada?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sim. O Audio Blackbox roda como serviço em primeiro plano com notificação persistente e inclui orientação para dispensar a otimização de bateria do fabricante, mantendo a captura sem interrupções com a tela bloqueada."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Um gravador sempre ativo esgota a bateria?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "O Audio Blackbox foi medido em um Samsung Galaxy S25 gravando continuamente no preset Voz. Com a tela apagada, usou cerca de 1,0% a 1,5% da bateria por hora e menos de 1% de CPU, sem escritas em disco durante o preenchimento do buffer. Outros celulares e ajustes terão resultados diferentes."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "O Audio Blackbox é gratuito e de código aberto?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo: .aac (ADTS) com AAC (padrão), reproduzível durante a gravação, ou .ogg com Opus, que exige aguardar o término para ouvir. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Pro grátis para quem chega cedo: instale o Audio Blackbox até 19 de dezembro de 2026 (antes de 20/12, 00h no horário de Brasília) e o Pro fica liberado neste aparelho, sem custo, para sempre. O benefício vale para essa instalação: se desinstalar e instalar de novo, ou trocar de aparelho, ele não é mantido."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Existe uma alternativa de código aberto a gravadores retroativos no Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quais versões do Android são compatíveis?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Android 10 (API 29) ou mais recente."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Como baixar o Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "O Audio Blackbox é gratuito para instalar no Google Play. Abra a página na Play Store pelo seu Android e toque em Instalar; o link está na seção Download desta página."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Qual é a diferença entre o Audio Blackbox e o Google Recorder ou um gravador de voz comum?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Um gravador comum só captura depois de apertar gravar, então tudo que foi dito antes se perde. O Audio Blackbox grava continuamente em um buffer circular na RAM e escreve áudio no armazenamento quando você toca em Salvar ou inicia Ao vivo. Assim, você pode guardar os últimos minutos de algo que já aconteceu. O áudio fica na RAM até você salvar ou iniciar Ao vivo, e as suas gravações nunca são enviadas."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Existe um app de dashcam de áudio para Android?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sim. O Audio Blackbox funciona como uma dashcam para o som: guarda os últimos minutos em um buffer circular na RAM e grava áudio em arquivo quando você toca em Salvar ou inicia Ao vivo, para você guardar o que aconteceu logo antes. Diferente de um gravador escondido, ele sempre mostra uma notificação enquanto grava. Gravar outras pessoas pode exigir o consentimento delas, então consulte as leis do seu local."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Consigo recuperar uma citação ou explicação de aula que esqueci de gravar?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Se o Audio Blackbox estava ligado, sim. Toque em Salvar e os minutos do buffer (pelo menos 5, até o limite seguro de memória do app para a qualidade escolhida) são gravados em um arquivo .m4a (AAC) ou .ogg (Opus), mesmo sem você ter apertado gravar. Jornalistas podem usá-lo como backup do gravador principal, e estudantes podem guardar uma explicação que acabaram de perder nas aulas em que gravar é permitido."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "O Audio Blackbox pode me ajudar a lembrar instruções faladas?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ele pode servir de apoio à memória. Se você acabou de ouvir orientações, instruções ou detalhes e perdeu o fio, salve os últimos minutos e ouça de novo no player integrado. Isso pode ajudar quem costuma perder informações faladas, como pessoas com TDAH. O Audio Blackbox não é um dispositivo médico."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "É permitido gravar com o Audio Blackbox?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Depende de onde você está. Use o Audio Blackbox para as suas próprias conversas e ideias. Gravar outras pessoas pode exigir o consentimento delas, e as regras variam entre países e estados. Consulte as leis de gravação do seu local antes de gravar. O uso do app é de sua responsabilidade."
+              }
+            }
+          ]
+        }
+      ],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Salve os últimos minutos que você acabou de ouvir. Buffer circular na RAM dentro do limite seguro de memória do app, áudio que fica no aparelho, código aberto."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox: gravador do passado para Android"
+        },
+        {
+          "property": "og:description",
+          "content": "Salve os últimos minutos que você acabou de ouvir. Buffer circular na RAM dentro do limite seguro de memória do app, áudio que fica no aparelho, código aberto."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Arte do Audio Blackbox: um buffer contínuo de áudio ambiente para Android com visual de painel de instrumentos de aviação."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "de_DE"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "en_US"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "es_ES"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "fr_FR"
+        },
+        {
+          "property": "og:locale:alternate",
+          "content": "it_IT"
+        },
+        {
+          "property": "og:locale",
+          "content": "pt_BR"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox: gravador do passado para Android"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/pt-br/"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+      "status": 200,
+      "location": null,
+      "bodySha256": "64a029da4467427b5884e0f5bcfe68df881644ebb576ee23765611779d8410ff",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+      "hreflang": [],
+      "title": "Privacy Policy — Audio Blackbox",
+      "description": "Audio Blackbox privacy policy: recorded audio never leaves the device, no account or ads. Google Play Billing handles purchases and entitlement checks. English and Portuguese (Brazil).",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Recorded audio never leaves the device. No account or ads. Google Play Billing handles purchases and entitlement checks."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Privacy Policy — Audio Blackbox"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox privacy policy: recorded audio never leaves the device, no account or ads. Google Play Billing handles purchases and entitlement checks. English and Portuguese (Brazil)."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Audio Blackbox: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale",
+          "content": "en_US"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Privacy Policy — Audio Blackbox"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/terms",
+      "status": 200,
+      "location": null,
+      "bodySha256": "bc798a85b8281a5e6b0d006da6aa0a2ba25fbba226b5e3ee69ee9a6fe229e8e2",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/release/terms",
+      "hreflang": [],
+      "title": "Terms of Service — Audio Blackbox",
+      "description": "Audio Blackbox terms of service: local recording, optional Pro purchase, responsible use and consumer rights. English and Portuguese (Brazil).",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox terms of service: local recording, optional Pro purchase, responsible use and consumer rights. English and Portuguese (Brazil)."
+        },
+        {
+          "name": "twitter:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "name": "twitter:title",
+          "content": "Terms of Service — Audio Blackbox"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox terms of service: local recording, optional Pro purchase, responsible use and consumer rights. English and Portuguese (Brazil)."
+        },
+        {
+          "property": "og:image:alt",
+          "content": "Audio Blackbox: a continuous ambient audio buffer for Android, styled as an aviation cockpit instrument panel."
+        },
+        {
+          "property": "og:image:height",
+          "content": "500"
+        },
+        {
+          "property": "og:image:width",
+          "content": "1024"
+        },
+        {
+          "property": "og:image",
+          "content": "https://alexandre.machado.cc/audio-blackbox/assets/feature_graphic.png"
+        },
+        {
+          "property": "og:locale",
+          "content": "en_US"
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox"
+        },
+        {
+          "property": "og:title",
+          "content": "Terms of Service — Audio Blackbox"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/release/terms"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/404",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/404.html",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/404/",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/404.html",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/404.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/inventory-missing-page",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/6e548543f5dfe595b4046686467f6f97.txt",
+      "status": 200,
+      "location": null,
+      "bodySha256": "a2ca550129b9c1e33a66eff5887a91f41487696745a04611ba682664497698b0",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/design",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/design/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/design/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/design/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/design/model.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "93a21bd3d40f240fb380afd9cce19e0b706d693cd482c67e74c283a4a1d3053e",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/design/",
+      "hreflang": [],
+      "title": "Audio Blackbox — Avionics Design System & Living UI Model",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/README.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/design/icon/README.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/development/cloudflare-hotsite.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "3772df7bb55a902c69fabd6ef8b5976d0de19aa51189f9e994b062222c3a28ce",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/development/cloudflare-hotsite.html",
+      "hreflang": [],
+      "title": "Cloudflare hotsite operator runbook - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Cloudflare hotsite operator runbook"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Cloudflare hotsite operator runbook"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/development/cloudflare-hotsite.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/development/running-on-device.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "f45a745b326fe98f729b19204c10ff3a9cdd6214f553f537de55b00082645744",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/development/running-on-device.html",
+      "hreflang": [],
+      "title": "Running on a physical device from WSL - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Running on a physical device from WSL"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Running on a physical device from WSL"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/development/running-on-device.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/indexa%C3%A7%C3%A3o.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "ac19824cb12449c846521d90ed5bf18f2dc7aff2af0cc6e63b03fc218e0770ee",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/indexa%C3%A7%C3%A3o.html",
+      "hreflang": [],
+      "title": "Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/indexa%C3%A7%C3%A3o.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/play-store.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "4b9ef9cd8ce8ea26bc9165bc8bfbac68140673c927ca4565d01e3b4eeab509ad",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/release/play-store.html",
+      "hreflang": [],
+      "title": "Play Store launch prep (issue #48) - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Play Store launch prep (issue #48)"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Play Store launch prep (issue #48)"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/release/play-store.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/store-listing.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "4841063ea4ea80cde78a9923395f26c5a35438d07d01e7c298679b9408dbb01a",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/release/store-listing.html",
+      "hreflang": [],
+      "title": "Google Play Store Listing & Launch Metadata - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Google Play Store Listing & Launch Metadata"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Google Play Store Listing & Launch Metadata"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/release/store-listing.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/testing/tiers.html",
+      "status": 200,
+      "location": null,
+      "bodySha256": "7e1ff1ba3bc4b2d55ff47e02ede6e2e11eb0b78117fa9ca1a5dc9d82772f4219",
+      "canonical": "https://alexandre.machado.cc/audio-blackbox/testing/tiers.html",
+      "hreflang": [],
+      "title": "Test tiers: what runs where, and why - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "Test tiers: what runs where, and why"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "Test tiers: what runs where, and why"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        },
+        {
+          "property": "og:url",
+          "content": "https://alexandre.machado.cc/audio-blackbox/testing/tiers.html"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/pt-br/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/pt-br/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/pt-br",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/pt-br/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/pt-br.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/de/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/de/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/de",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/de/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/de.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/es/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/es/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/es",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/es/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/es.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/fr/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/fr/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/fr",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/fr/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/fr.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/it/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/it/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/it",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/it/",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/it.html",
+      "status": 404,
+      "location": null,
+      "bodySha256": "63122318e3727ebc9f836d70566c5d041ce2004d4edb04770e83dca1db8a5560",
+      "canonical": null,
+      "hreflang": [],
+      "title": "404 - Audio Blackbox Documentation",
+      "description": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save.",
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": [
+        {
+          "name": "twitter:card",
+          "content": "summary_large_image"
+        },
+        {
+          "name": "twitter:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "name": "twitter:title",
+          "content": "404"
+        },
+        {
+          "property": "og:description",
+          "content": "Audio Blackbox is a free, open-source Android audio dashcam that keeps the last minutes of sound in RAM and saves to storage only when you tap Save."
+        },
+        {
+          "property": "og:site_name",
+          "content": "Audio Blackbox Documentation"
+        },
+        {
+          "property": "og:title",
+          "content": "404"
+        },
+        {
+          "property": "og:type",
+          "content": "website"
+        }
+      ]
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy/",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/release/privacy-policy",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/terms/",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/release/terms",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/terms.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/release/terms",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    },
+    {
+      "url": "https://alexandre.machado.cc/audio-blackbox/release/terms/index.html",
+      "status": 301,
+      "location": "https://alexandre.machado.cc/audio-blackbox/release/terms",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical": null,
+      "hreflang": [],
+      "title": "",
+      "description": null,
+      "jsonLdTypes": [],
+      "jsonLd": [],
+      "social": []
+    }
+  ]
+}

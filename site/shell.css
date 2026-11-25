@@ -1,0 +1,16 @@
+/* Scoped shell rules; content and avionics tokens remain owned by docs. */
+.site-header { position: sticky; top: 0; z-index: 100; background: var(--color-cockpit-bg); border-bottom: 1px solid var(--color-cockpit-border-strong); }
+.site-shell { max-width: 1200px; margin: auto; padding: 16px 24px; color: var(--color-text-stencil); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.site-header .site-shell { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 28px; }
+.site-brand { display: inline-flex; align-items: center; gap: 12px; color: var(--color-text-stencil); text-decoration: none; font-size: 1.15rem; font-weight: 700; }
+.site-brand img { border-radius: var(--radius-sm); }
+.site-header .site-nav { position: static; display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 0; background: transparent; border: 0; backdrop-filter: none; }
+.site-nav a, .site-languages a, .site-footer-links a { color: var(--color-text-muted); text-decoration: none; }
+.site-nav a:hover, .site-languages a:hover, .site-footer-links a:hover { color: var(--color-flight-orange-light); }
+.site-languages { display: flex; flex-wrap: wrap; gap: 8px 20px; width: 100%; font-size: .9rem; }
+.site-footer { background: var(--color-cockpit-panel); border-top: 1px solid var(--color-cockpit-border-strong); margin-top: 48px; padding: 24px 0; }
+.site-footer-links { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 20px 0; }
+.site-footer p { color: var(--color-text-muted); margin-top: 16px; }
+.site-header a:focus-visible, .site-footer a:focus-visible { outline: 2px solid var(--color-flight-orange-light); outline-offset: 4px; }
+html { scroll-padding-top: 160px; }
+@media (max-width: 600px) { .site-header { position: relative; } html { scroll-padding-top: 16px; } }
