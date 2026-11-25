@@ -163,3 +163,10 @@ faq:
     a: "Il peut servir d'aide-mémoire. Si vous venez d'entendre des indications, des consignes ou des détails et en avez perdu le fil, sauvegardez les dernières minutes et réécoutez-les dans le lecteur intégré. Cela peut aider toute personne qui perd souvent les informations orales, par exemple avec un TDAH. Audio Blackbox n'est pas un dispositif médical."
   - q: Que dit la loi sur l'enregistrement avec Audio Blackbox ?
     a: Cela dépend de l'endroit où vous êtes. Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays et les États. Consultez les lois locales sur l'enregistrement avant d'enregistrer. Vous êtes responsable de votre utilisation de l'app.
+
+# Saved-file estimate (#497); binary units match the existing RAM calculator.
+saved_file_label: "Fichier enregistré (estimation)"
+opus_availability_note: "Opus est indisponible sur les appareils sans encodeur Opus."
+saved_file_sizes: "AAC ≈ {aac} MB · Opus (.ogg) ≈ {opus} MB"
+
+nav_pro: "Pro"

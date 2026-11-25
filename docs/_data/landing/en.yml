@@ -162,3 +162,10 @@ faq:
   a: "It can work as a memory aid. If you just heard directions, instructions or details and lost track of them, save the last minutes and replay them in the built-in player. This can help anyone who often loses track of spoken information, for example people with ADHD. Audio Blackbox is not a medical device."
 - q: Is it legal to record with Audio Blackbox?
   a: It depends on where you are. Use Audio Blackbox for your own conversations and ideas. Recording other people may require their consent, and the rules differ between countries and states. Check your local recording laws before you record; you are responsible for how you use the app.
+
+# Saved-file estimate (#497); binary units match the existing RAM calculator.
+saved_file_label: "Saved file (approximate)"
+opus_availability_note: "Opus is unavailable on devices without an Opus encoder."
+saved_file_sizes: "AAC ≈ {aac} MB · Opus (.ogg) ≈ {opus} MB"
+
+nav_pro: "Pro"

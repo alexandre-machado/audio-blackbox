@@ -163,3 +163,10 @@ faq:
     a: "Puede servir de apoyo a la memoria. Si acabas de oír indicaciones, instrucciones o detalles y has perdido el hilo, guarda los últimos minutos y vuelve a escucharlos en el reproductor integrado. Puede ayudar a quien suele perder información hablada, por ejemplo personas con TDAH. Audio Blackbox no es un dispositivo médico."
   - q: ¿Se puede grabar con Audio Blackbox según la ley?
     a: Depende de dónde estés. Usa Audio Blackbox para tus propias conversaciones e ideas. Grabar a otras personas puede requerir su consentimiento, y las normas varían entre países y estados. Consulta la legislación local sobre grabaciones antes de grabar. Eres responsable del uso que hagas de la app.
+
+# Saved-file estimate (#497); binary units match the existing RAM calculator.
+saved_file_label: "Archivo guardado (aproximado)"
+opus_availability_note: "Opus no está disponible en dispositivos sin codificador Opus."
+saved_file_sizes: "AAC ≈ {aac} MB · Opus (.ogg) ≈ {opus} MB"
+
+nav_pro: "Pro"

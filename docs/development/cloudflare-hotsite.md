@@ -209,12 +209,14 @@ Run **Actions > Site Build and Deploy > Run workflow**, selecting **main**, or p
 a change under `docs/**` to main. Cloudflare configuration and staging-script
 changes also trigger this workflow. Do not dispatch an older branch after cutover.
 
-The build renders Jekyll in production mode, validates SEO/analytics and Liquid,
-and uploads the `github-pages` artifact. The job-id graph is `build → deploy` (Pages)
-and `build → validate-cloudflare → deploy-cloudflare`. Cloudflare/npm failures
+The Pages build still renders Jekyll in production mode, validates SEO/analytics and Liquid,
+and uploads the `github-pages` artifact. Cloudflare uses the standalone Node generator:
+`build-cloudflare` runs `npm ci && npm test` in `site/` (which builds `site/dist` first)
+and uploads `cloudflare-site`. The job-id graphs are `build → deploy` (Pages)
+and `build-cloudflare → validate-cloudflare → deploy-cloudflare`. Cloudflare/npm failures
 cannot block Pages. Validation downloads the artifact, stages it, runs Worker
 tests and a credential-free dry-run. Deployment consumes the same artifact;
-its trust is identical to Pages, so it does not rerun Ruby or the Liquid guard.
+build-time dependencies are not executed in the credential-bearing deployment job.
 Both Cloudflare jobs use fresh checkouts, pinned setup-node with a fresh tool
 cache, fresh npm caches and temporary copies of `cloudflare/`. `npm ci
 --ignore-scripts` installs Wrangler 4.160.0 and its full locked dependency tree;
@@ -224,10 +226,10 @@ IndexNow submission, in Pages.
 
 ### Pre-cutover local check (no credentials)
 
-Build Jekyll and run `bash scripts/ci/check-site-rendered.sh _site` first, then:
+Run `npm --prefix site ci && npm --prefix site test` first, then:
 
 ```bash
-bash scripts/ci/stage-cloudflare-site.sh _site
+bash scripts/ci/stage-cloudflare-site.sh site/dist
 cf_work="$(mktemp -d)"
 cp -a cloudflare/. "$cf_work/"
 export HOME="$(mktemp -d)" XDG_CONFIG_HOME="$(mktemp -d)"
@@ -257,6 +259,14 @@ Deployment creates/updates Worker **audio-blackbox-site**, its static assets, an
 zone route **alexandre.machado.cc/audio-blackbox*** in **machado.cc**.
 There is no custom domain, workers.dev endpoint or preview URL. With the existing
 DNS-only CNAME, traffic still goes directly to GitHub Pages until step 4.
+
+The generated asset tree is staged under `.staged/audio-blackbox/`, with a copy
+of its `404.html` at `.staged/404.html` for the root asset fallback. The Worker
+continues to resolve extensionless legal routes to `release/*.html`;
+`html_handling: none` and `not_found_handling: 404-page` are unchanged.
+Pushes changing `site/**` or `scripts/ci/stage-cloudflare-site.sh` trigger the workflow.
+Pull requests run only the read-only Node build/test, Worker/staging tests and
+credential-free Wrangler dry-run job; deployment jobs explicitly exclude PRs.
 
 ## 4. Switch traffic: the owner's second step, a DNS change on the whole host
 
@@ -390,4 +400,4 @@ Before #480, the persistent self-hosted runner ran `Site / Build and validate Je
 
 ## Only one deploy path: GitHub Actions
 
-Deploys must go only through the `Site / Deploy Cloudflare` job (id `deploy-cloudflare`), which is gated by the `cloudflare-hotsite` environment and limited to `main`. **Do not connect Cloudflare Workers Builds (the Git integration) to this repository.** It would add a second deploy path outside that gate, with per-branch preview builds, and its build image cannot run this repo's Jekyll toolchain. If it is connected, disconnect it under Workers & Pages > the Worker > Settings > Builds.
+Deploys must go only through the `Site / Deploy Cloudflare` job (id `deploy-cloudflare`), which is gated by the `cloudflare-hotsite` environment and limited to `main`. **Do not connect Cloudflare Workers Builds (the Git integration) to this repository.** It would add a second deploy path outside that gate, with per-branch preview builds, and bypass the tested Node artifact handoff. If it is connected, disconnect it under Workers & Pages > the Worker > Settings > Builds.
