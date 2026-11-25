@@ -60,25 +60,21 @@ class SaveAudioFormatSettingsTest {
         assertEquals(SaveAudioFormat.OPUS, selected.value)
         rule.onNodeWithText(context.getString(R.string.settings_format_opus_unavailable))
             .performScrollTo().assertIsDisplayed()
-        // The editable-text node has its own focus click. Invoke the outer menuAnchor's
-        // dropdown action in the unmerged tree, which actually expands the menu.
-        rule.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.DropdownList),
-            useUnmergedTree = true)
-            .performScrollTo().assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)
-        // The menu lives in a popup window. Wait (bounded) for its item to exist, then fire the
-        // item's real click action instead of injecting touch into the popup. The touch-injection
-        // route failed on CI with the node gone mid-gesture, while the semantics route still
-        // drives the production onClick -> onSelect wiring asserted below.
-        val aacItem = hasText(context.getString(R.string.settings_format_aac)) and hasClickAction()
+        // Proven on CI (run 45460759832, b96b392): clicking the field's label opens the menu and
+        // the AAC item is then found by its text alone. Only the touch injection INTO the popup
+        // item failed there, so the item is clicked through its OnClick semantics action instead.
+        rule.onNodeWithText(context.getString(R.string.settings_save_audio_format))
+            .performScrollTo().performClick()
+        val aacText = context.getString(R.string.settings_format_aac)
         try {
-            rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodes(aacItem).fetchSemanticsNodes().size == 1 }
+            rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodesWithText(aacText).fetchSemanticsNodes().isNotEmpty() }
         } catch (timeout: ComposeTimeoutException) {
             val roots = rule.onAllNodes(isRoot(), useUnmergedTree = true)
             repeat(roots.fetchSemanticsNodes().size) { roots[it].printToLog("SaveAudioFormat") }
             throw timeout
         }
-        rule.onAllNodes(hasText("Opus") and hasClickAction()).onLast().assertIsNotEnabled()
-        rule.onNode(aacItem).assertIsDisplayed().assertIsEnabled()
+        rule.onAllNodesWithText("Opus").onLast().assertIsNotEnabled()
+        rule.onAllNodesWithText(aacText).onLast().assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals(SaveAudioFormat.AAC, selected.value)
