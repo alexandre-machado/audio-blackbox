@@ -31,7 +31,7 @@ from recording and standby.
 ## Main Action Buttons (`Save` & `Live`)
 Inside the main engine card (`#335`), two avionics panel buttons control exports:
 - **`Save` (Lookback):** writes the buffered audio since the last save (or the full buffer on the first save) to a local `.m4a` (AAC, default) or `.ogg` (Opus) file and advances the export floor (`#121`, `#410`) so consecutive saves never overlap. Disabled with a clear "No audio yet" caption when nothing new is buffered.
-- **`Live` (Continuous forward recording):** opens a single file that preserves the buffered past (`.aac` ADTS with AAC, playable while recording, or `.ogg` with Opus, to be played after recording ends) and keeps recording until the user taps `Save & end` (or `Stop`, which also saves it).
+- **`Live` (Continuous forward recording):** opens a single file that preserves the buffered past (`.aac` ADTS with AAC, playable while recording, or `.ogg` with Opus, to be played after recording ends) and keeps recording until the user taps `Save & end` (or `Stop`, which also saves it). Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
 
 ## Save audio format
 
