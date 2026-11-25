@@ -1,33 +1,34 @@
-Audio Blackbox ist ein rückwirkender Audiorekorder: eine Audio-Dashcam, die die letzten Minuten Ton im Arbeitsspeicher deines Handys hält, damit du Vergangenes im Nachhinein aufnehmen kannst.
+Audio Blackbox ist ein rückwirkender Audiorekorder: eine Audio-Dashcam, die die letzten Tonminuten im RAM deines Handys hält, um Vergangenes aufzunehmen.
 
-Audio wird beim Tippen auf Speichern oder beim Start von Live in den Gerätespeicher geschrieben, und deine Aufnahmen verlassen nie dein Handy: Die App lädt dein Audio niemals irgendwo hoch.
+Audio wird erst mit Speichern oder Live auf dem Gerät gespeichert. Die App lädt deine Aufnahmen nie hoch.
 
 Gedacht für
-• Musiker und Songwriter: Behalte das gerade improvisierte Riff oder die Melodie, ohne vorher die Aufnahme gestartet zu haben.
-• Journalisten und Interviews: ein Backup für das Zitat, das fiel, bevor du dein Hauptaufnahmegerät gestartet hast.
+• Musiker und Songwriter: Behalte improvisierte Riffs und Melodien, ohne vorher die Aufnahme zu starten.
+• Journalisten und Interviews: ein Backup für Zitate vor dem Start des Hauptrekorders.
 • Studierende: Behalte die Erklärung, die dir gerade entgangen ist, in Veranstaltungen, in denen Aufnehmen erlaubt ist.
-• Gedächtnisstütze: Hör dir Anweisungen oder Details noch einmal an, die man dir gerade gesagt hat. Hilfreich für alle, die bei gesprochenen Informationen den Faden verlieren, zum Beispiel Menschen mit ADHS. Kein Medizinprodukt.
-• Audio-Dashcam für unterwegs: Wenn im Verkehr oder auf der Straße etwas Unerwartetes passiert, speichere die Minuten davor.
+• Gedächtnisstütze: Höre Anweisungen erneut. Hilfreich, wenn du bei gesprochenen Informationen den Faden verlierst, etwa bei ADHS. Kein Medizinprodukt.
+• Audio-Dashcam: Speichere die Minuten vor unerwarteten Ereignissen im Verkehr oder auf der Straße.
 • Ideen, Meetings, an denen du teilnimmst, und Familienmomente: der laut ausgesprochene Gedanke, das gerade Vereinbarte, das erste Wort.
 
 So funktioniert es
-• Schalte die kontinuierliche Aufnahme ein. Eine Benachrichtigung bleibt während der gesamten Aufnahme sichtbar.
+• Schalte die kontinuierliche Aufnahme ein. Eine Benachrichtigung bleibt beim Aufnehmen sichtbar.
 • Audio gelangt in einen Ringpuffer im RAM. Ist er voll, ersetzt das neueste Audio das älteste.
-• Der Puffer beginnt bei 5 Minuten, in 5-Minuten-Schritten, bis zur sicheren Speichergrenze der App für die gewählte Qualität. Es gibt keine produktseitige Dauerbegrenzung; die Einstellungen zeigen die aktuelle Grenze.
-• Speichern schreibt das Audio im Puffer seit dem letzten Speichern (beim ersten Mal den ganzen Puffer) in eine AAC-Datei (.m4a). So überschneiden sich deine Dateien nie.
-• Live speichert das gepufferte Audio von vor dem Tippen und nimmt in einer einzigen .aac-Datei (ADTS) weiter auf, die schon während der Aufnahme abspielbar ist. Die Live-Aufnahmezeit ist kostenlos auf 2 Stunden begrenzt; danach wird die Datei automatisch gespeichert. Mit der gepufferten Vergangenheit kann die Datei länger als 2 Stunden sein. Pro hebt per Einmalkauf die Live-Zeitgrenze auf.
+• Der Puffer startet mit 5 Minuten, in 5-Minuten-Schritten bis zur sicheren App-Speichergrenze der gewählten Qualität. Kein produktseitiges Zeitlimit; die Einstellungen zeigen die aktuelle Grenze.
+• Speichern sichert das Audio seit dem letzten Speichern (zuerst den ganzen Puffer) ohne Überschneidungen.
+• Kostenloses Audioformat für Speichern und Live: AAC (Standard) oder Opus (.ogg) für kleinere Sprachdateien. Manche Player und Messenger öffnen .ogg nicht. Ohne Opus-Encoder ist Opus deaktiviert: „Opus ist auf diesem Gerät nicht verfügbar.“
+• Live sichert den Puffer und nimmt in derselben Datei weiter auf: bei AAC als .aac (ADTS), schon während der Aufnahme abspielbar; bei Opus als .ogg, erst nach Aufnahmeende abspielbar. Nach unerwartetem App-Ende ist geschriebenes Opus-Audio möglicherweise wiederherstellbar; das Ende kann fehlen. Gratis: 2 Stunden Live-Aufnahme, dann automatische Speicherung. Mit dem gepufferten Anfang kann die Datei länger als 2 Stunden sein. Pro hebt per Einmalkauf die Live-Zeitgrenze auf. Pro kostenlos für Frühentschlossene: Installiere Audio Blackbox bis zum 19. Dezember 2026 (vor dem 20. Dezember, 00:00 Uhr Brasília-Zeit, UTC−3), und Pro bleibt auf diesem Gerät dauerhaft kostenlos freigeschaltet. Der Vorteil gilt für diese Installation: Bei Deinstallation und Neuinstallation oder einem Gerätewechsel bleibt er nicht erhalten.
 
 Funktionen
-• Drei Qualitätsprofile: Sprache (16 kHz mono, der längste Puffer), Ausgewogen (32 kHz mono) und Hohe Klangtreue (44,1 kHz stereo, kann auf entsprechend ausgestatteten Handys mehrere Mikrofone nutzen). Höhere Qualität benötigt mehr Speicher pro Minute, der Puffer wird also kürzer.
+• Drei Qualitätsprofile: Sprache (16 kHz mono, der längste Puffer), Ausgewogen (32 kHz mono) und Hohe Klangtreue (44,1 kHz stereo, nutzt ggf. mehrere vorhandene Mikrofone). Höhere Qualität braucht mehr Speicher pro Minute und verkürzt den Puffer.
 • Startbildschirm-Widget zum Starten oder Stoppen der Aufnahme mit einem Tippen.
 • Speichern, Live und Stopp direkt in der Benachrichtigung.
-• Pausiert, wenn eine andere App das Mikrofon belegt, etwa bei einem Anruf, und setzt die Aufnahme automatisch fort, sobald es frei ist.
+• Pausiert, wenn eine andere App das Mikrofon belegt (etwa bei Anrufen), und nimmt automatisch weiter auf, sobald es frei ist.
 • Integrierter Player zum Anhören, Spulen, Teilen und Löschen gespeicherter Aufnahmen.
 
 Datenschutz
-• Die App selbst sendet weder Audio noch Nutzungsanalysen. Google Play Billing (Google Play-Dienste) kommuniziert mit Google, um den optionalen Kauf abzuwickeln und die Pro-Berechtigung zu prüfen; die Bibliothek sendet auch eigene Nutzungs- und Fehlerdiagnosen. Keine Werbung, kein Konto und kein Cloud-Audiospeicher.
-• Gepuffertes Audio bleibt bis zum Speichern oder Start von Live im RAM. Deine Aufnahmen werden nie hochgeladen: Dateien landen im Ordner Recordings/Blackbox auf deinem Handy (Music/Blackbox unter Android 10 und 11), unter deiner Kontrolle.
-• Quelloffen unter GPL-3.0, aktiv gepflegt, mit dem vollständigen Quellcode auf GitHub.
+• Die App sendet weder Audio noch Nutzungsanalysen. Google Play Billing (Google Play-Dienste) kontaktiert Google für den optionalen Kauf und die Pro-Berechtigungsprüfung; die Bibliothek sendet eigene Nutzungs- und Fehlerdiagnosen. Keine Werbung, kein Konto und kein Cloud-Audiospeicher.
+• Pufferaudio bleibt bis Speichern oder Live im RAM. Dateien landen in Recordings/Blackbox auf deinem Handy (Music/Blackbox unter Android 10 und 11), unter deiner Kontrolle.
+• Quelloffen unter GPL-3.0, aktiv gepflegt, mit dem gesamten Code auf GitHub.
 
 Verantwortungsvoll aufnehmen
-Nutze Audio Blackbox für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern. Die Regeln unterscheiden sich je nach Land und Bundesstaat. Prüfe vor der Aufnahme die örtlichen Gesetze zu Tonaufnahmen. Du bist für deine Nutzung der App verantwortlich.
+Audio Blackbox: für deine eigenen Gespräche und Ideen. Aufnahmen anderer können deren Einwilligung erfordern; Regeln variieren nach Land und Bundesstaat. Prüfe vorher die örtlichen Aufnahmegesetze. Du verantwortest deine App-Nutzung.

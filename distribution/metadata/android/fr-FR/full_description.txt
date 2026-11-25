@@ -1,33 +1,34 @@
-Audio Blackbox est un enregistreur rétroactif : une dashcam audio qui conserve les dernières minutes de son dans la mémoire de votre téléphone, pour enregistrer le passé après coup.
+Audio Blackbox, enregistreur rétroactif et dashcam audio, garde les dernières minutes de son en mémoire du téléphone pour enregistrer le passé.
 
-L’audio reste en RAM jusqu’à la sauvegarde ou au démarrage de Direct, et vos enregistrements ne quittent jamais le téléphone : l'app n'envoie jamais votre audio où que ce soit.
+L'audio reste en RAM jusqu'à la sauvegarde ou au démarrage de Direct. L'app n'envoie jamais vos enregistrements.
 
 Pour qui ?
-• Musiciens et auteurs-compositeurs : gardez le riff ou la mélodie que vous venez d'improviser, sans avoir lancé l'enregistrement au préalable.
-• Journalistes et interviews : une sauvegarde pour la citation arrivée avant que vous ne lanciez votre enregistreur principal.
+• Musiciens et auteurs-compositeurs : gardez vos improvisations sans avoir lancé l'enregistrement.
+• Journalistes et interviews : gardez la citation précédant le démarrage de l'enregistreur principal.
 • Étudiants : gardez l'explication que vous venez de manquer, dans les cours où l'enregistrement est autorisé.
-• Aide-mémoire : réécoutez des consignes ou des détails que l'on vient de vous donner. Utile à toute personne qui perd le fil des informations orales, par exemple avec un TDAH. Ce n'est pas un dispositif médical.
-• Dashcam audio de poche : si quelque chose d'inattendu se produit dans la circulation ou dans la rue, sauvegardez les minutes qui ont précédé.
-• Idées, réunions auxquelles vous participez et moments en famille : la pensée exprimée à voix haute, ce qui vient d'être convenu, le premier mot.
+• Aide-mémoire : réécoutez les consignes reçues. Utile si vous perdez le fil à l'oral, par exemple avec un TDAH. Ce n'est pas un dispositif médical.
+• Dashcam audio : gardez les minutes précédant un imprévu dans la circulation ou dans la rue.
+• Idées, réunions où vous participez, moments en famille : l'idée dite à voix haute, l'accord trouvé, le premier mot.
 
 Fonctionnement
-• Activez l'enregistrement continu. Une notification reste visible pendant toute la durée de l'enregistrement.
-• L'audio va dans un tampon circulaire en RAM. Une fois plein, l'audio le plus ancien est remplacé par le plus récent.
-• Le tampon commence à 5 minutes, par paliers de 5, jusqu'à la limite de mémoire sûre de l'app pour la qualité choisie. Le produit n'impose pas de plafond de durée ; les Paramètres affichent la limite actuelle.
-• Sauvegarder écrit l'audio du tampon depuis la dernière sauvegarde (tout le tampon la première fois) dans un fichier AAC (.m4a). Les fichiers ne se chevauchent donc jamais.
-• Direct sauvegarde l'audio du tampon précédant le toucher et continue dans un seul fichier .aac (ADTS), lisible pendant l'enregistrement. Le temps d'enregistrement en direct est limité à 2 heures en version gratuite ; le fichier est ensuite sauvegardé automatiquement. Il peut dépasser 2 heures car il inclut le passé du tampon. Pro, en achat unique, supprime cette limite de temps.
+• Activez l'enregistrement continu. Une notification reste visible durant l'enregistrement.
+• L'audio va dans un tampon circulaire en RAM ; une fois plein, le son récent remplace l'ancien.
+• Le tampon débute à 5 minutes, par paliers de 5, jusqu'à la limite mémoire sûre de l'app selon la qualité. Aucun plafond de durée du produit ; limite actuelle dans les Paramètres.
+• Sauvegarder écrit l'audio depuis la dernière sauvegarde (tout le tampon la première fois), sans chevauchement.
+• Format gratuit pour Sauvegarder et Direct : AAC (par défaut) ou Opus (.ogg), pour des fichiers vocaux plus petits. Certains lecteurs et apps de messagerie n'ouvrent pas .ogg. Sans encodeur Opus, l’option est désactivée : « Opus indisponible sur cet appareil. »
+• Direct garde le passé du tampon et continue dans un seul fichier : en AAC, un .aac (ADTS) lisible pendant l'enregistrement ; en Opus, un .ogg lisible après la fin. Si l’app se ferme inopinément, l’audio Opus écrit peut être récupérable ; la fin peut être perdue. En version gratuite, Direct est limité à 2 heures, puis sauvegardé automatiquement. Le fichier peut dépasser 2 heures avec le passé du tampon. Pro, en achat unique, supprime cette limite de temps. Pro gratuit pour les premiers arrivés : installez Audio Blackbox au plus tard le 19 décembre 2026 (avant le 20 décembre à 00 h 00, heure de Brasília, UTC−3) et Pro reste débloqué sur cet appareil, gratuitement, pour toujours. L'avantage est lié à cette installation : il n'est pas conservé si vous désinstallez puis réinstallez l'app ou changez d'appareil.
 
 Fonctionnalités
-• Trois préréglages de qualité : Voix (16 kHz mono, le tampon le plus long), Équilibré (32 kHz mono) et Haute fidélité (44,1 kHz stéréo, qui peut utiliser plusieurs microphones sur les téléphones qui en disposent). Une qualité supérieure utilise plus de mémoire par minute et raccourcit le tampon.
+• Trois préréglages : Voix (16 kHz mono, le tampon le plus long), Équilibré (32 kHz mono) et Haute fidélité (44,1 kHz stéréo, plusieurs microphones possibles si disponibles). Plus de qualité utilise plus de mémoire par minute et réduit le tampon.
 • Widget sur l'écran d'accueil pour démarrer ou arrêter l'enregistrement d'un geste.
 • Sauvegarder, Direct et Arrêter depuis la notification.
-• Pause quand une autre app utilise le microphone, par exemple lors d'un appel, puis reprise automatique quand il est libre.
-• Lecteur intégré pour écouter, parcourir, partager et supprimer les enregistrements sauvegardés.
+• Pause si une autre app utilise le micro (ex. : appel), puis reprise automatique dès qu'il est libre.
+• Lecteur intégré pour écouter, parcourir, partager et supprimer vos enregistrements.
 
 Confidentialité
-• L'app elle-même n'envoie ni audio ni statistiques d'utilisation. Google Play Billing (services Google Play) communique avec Google pour traiter l'achat facultatif et vérifier le droit à Pro ; sa bibliothèque envoie aussi ses propres diagnostics d'utilisation et d'erreurs. Sans publicité, compte ni stockage audio dans le cloud.
-• L'audio du tampon reste en RAM jusqu'à la sauvegarde ou au lancement de Direct. Vos enregistrements ne sont jamais envoyés : les fichiers vont dans le dossier Recordings/Blackbox du téléphone (Music/Blackbox sur Android 10 et 11), sous votre contrôle.
+• L'app n'envoie ni audio ni statistiques d'utilisation. Google Play Billing (services Google Play) contacte Google pour l'achat facultatif et vérifier le droit à Pro ; sa bibliothèque envoie ses diagnostics d'utilisation et d'erreurs. Sans publicité, compte ni stockage audio dans le cloud.
+• L'audio du tampon reste en RAM jusqu'à la sauvegarde ou au lancement de Direct. Les fichiers vont dans Recordings/Blackbox du téléphone (Music/Blackbox sur Android 10 et 11), sous votre contrôle.
 • Open source sous GPL-3.0, activement maintenue, avec tout le code sur GitHub.
 
 Enregistrez de manière responsable
-Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer d'autres personnes peut nécessiter leur consentement, et les règles varient selon les pays et les États. Consultez les lois locales sur l'enregistrement avant d'enregistrer. Vous êtes responsable de votre utilisation de l'app.
+Utilisez Audio Blackbox pour vos propres conversations et idées. Enregistrer autrui peut exiger son consentement ; les règles varient par pays et État. Consultez les lois locales avant d'enregistrer. Vous êtes responsable de votre usage de l'app.

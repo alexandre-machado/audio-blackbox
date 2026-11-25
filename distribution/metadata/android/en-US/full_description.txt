@@ -1,6 +1,6 @@
 Audio Blackbox is a retroactive audio recorder: an audio dashcam that keeps the last minutes of sound in your phone's memory, so you can record past audio after it happened.
 
-Audio is written to storage when you tap Save or start Live, and your recordings never leave your phone: the app never uploads your audio anywhere.
+Audio is written to storage when you tap Save or start Live. The app never uploads your recordings; they stay on your phone.
 
 Made for
 • Musicians and songwriters: keep the riff or melody you just improvised, without having pressed record first.
@@ -11,11 +11,12 @@ Made for
 • Ideas, meetings you are part of and family moments: the thought you said out loud, what was just agreed, the first word.
 
 How it works
-• Turn on continuous recording. A visible notification stays up the whole time the app is recording.
+• Turn on continuous recording. A notification stays visible throughout recording.
 • Audio goes into a rolling buffer in RAM. When the buffer is full, the oldest audio is replaced by the newest.
 • The buffer starts at 5 minutes, in 5-minute steps, up to the app's safe memory limit for the selected quality. There is no product-imposed duration cap; Settings shows the current limit.
-• Save writes the buffered audio since your last save (the whole buffer the first time) to an AAC (.m4a) file, so your files never overlap.
-• Live saves the buffered audio from before the tap and continues in a single .aac (ADTS) file, playable while recording. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
+• Save writes the buffered audio since your last save (the whole buffer the first time) to a file, so your files never overlap.
+• Save audio format is a free choice for Save and Live: AAC (default) or Opus (.ogg) for smaller voice files. Some players and messaging apps may not open .ogg. Without an Opus encoder, Opus is disabled: “Opus unavailable on this device.”
+• Live saves the buffered past and continues in one file: with AAC, a .aac (ADTS) playable while recording; with Opus, a .ogg playable after recording ends. After an unexpected app closure, Opus audio already written may be recoverable; the ending may be lost. Live recording time is limited to 2 hours on the free plan, then the file is saved automatically. The file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit. Early-bird Pro, free: install Audio Blackbox by December 19, 2026 (before December 20, 00:00 Brasília time, UTC−3) and Pro stays unlocked on that device at no cost, for good. The benefit belongs to that installation: uninstalling and reinstalling, or switching devices, does not keep it.
 
 Features
 • Three quality presets: Voice (16 kHz mono, the longest buffer), Balanced (32 kHz mono) and High fidelity (44.1 kHz stereo, which can use more than one microphone on phones that have them). Higher quality uses more memory per minute, so the buffer gets shorter.
