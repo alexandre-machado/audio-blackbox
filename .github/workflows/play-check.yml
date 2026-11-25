@@ -1,0 +1,38 @@
+name: Play / Check pro_unlock
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.repository == 'alexandre-machado/audio-blackbox'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies and test
+        run: |
+          python3 -m pip install --require-hashes --no-deps -r scripts/ci/play-check-requirements.txt
+          python3 -m unittest discover -s scripts/ci -p test_play_inapp_status.py
+      - name: Write service account file
+        env:
+          # Same secret/env injection as android.yml's metadata sync.
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$PLAY_STORE_JSON_KEY" > "$RUNNER_TEMP/play-check-service-account.json"
+      - name: Check product and write summary
+        # The script reads the key file path from PLAY_STORE_JSON_KEY. The runner context is not
+        # available in job-level env, so the path is set here.
+        run: PLAY_STORE_JSON_KEY="$RUNNER_TEMP/play-check-service-account.json" python3 scripts/ci/play-inapp-status.py
+      - name: Delete service account file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/play-check-service-account.json"
