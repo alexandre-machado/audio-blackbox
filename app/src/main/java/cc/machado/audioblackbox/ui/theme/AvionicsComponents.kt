@@ -320,6 +320,12 @@ fun AvionicsLabelValueRow(
  * control is hand-rolled.
  */
 val PANEL_BUTTON_MIN_HEIGHT = 48.dp
+private val PANEL_BUTTON_HORIZONTAL_PADDING = 14.dp
+private val PANEL_BUTTON_VERTICAL_PADDING = 10.dp
+private val PANEL_BUTTON_LED_SIZE = 9.dp
+private val PANEL_BUTTON_SPINNER_SIZE = 14.dp
+private val PANEL_BUTTON_LED_GAP = 10.dp
+private val PANEL_PAIR_GAP = 8.dp
 const val PANEL_ROW_STACKED_TAG = "panel-row-stacked"
 const val PANEL_ROW_SIDE_BY_SIDE_TAG = "panel-row-side-by-side"
 
@@ -384,49 +390,54 @@ fun AvionicsPanelButton(
         color = if (interactable) CockpitPanelRaised else CockpitPanel,
         border = BorderStroke(1.dp, borderColor),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = PANEL_BUTTON_HORIZONTAL_PADDING, vertical = PANEL_BUTTON_VERTICAL_PADDING),
         ) {
-            if (inProgress) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
-                    color = ledColor,
-                    strokeWidth = 2.dp,
-                )
-            } else if (pulsing && interactable) {
-                // The owner's addition to #335: the LED pulses while the action it represents is
-                // live (forward recording in progress), the same way the annunciator's own LED
-                // pulses while the buffer is capturing -- see [PulsingDot], shared by both rather
-                // than reimplemented here.
-                PulsingDot(color = displayLedColor, size = 9.dp)
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .background(displayLedColor, CircleShape)
-                        .then(
-                            if (interactable) {
-                                Modifier.background(
-                                    Brush.radialGradient(
-                                        colors = listOf(displayLedColor.copy(alpha = 0.55f), Color.Transparent),
-                                    ),
-                                    CircleShape,
-                                )
-                            } else {
-                                Modifier
-                            },
-                        ),
-                )
-            }
-            // Shrink first; at extreme font scales preserve the complete title by wrapping.
-            // Equal-height pairs may have different caption line counts. Anchor titles to
-            // the top padding rather than centering each differently sized text column.
-            Column(modifier = Modifier.weight(1f).align(Alignment.Top)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("panel-title-row"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(PANEL_BUTTON_LED_GAP),
+            ) {
+                Box(Modifier.testTag("panel-title-indicator")) {
+                    if (inProgress) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(PANEL_BUTTON_SPINNER_SIZE),
+                            color = ledColor,
+                            strokeWidth = 2.dp,
+                        )
+                    } else if (pulsing && interactable) {
+                        // The owner's addition to #335: the LED pulses while the action it represents is
+                        // live (forward recording in progress), the same way the annunciator's own LED
+                        // pulses while the buffer is capturing -- see [PulsingDot], shared by both rather
+                        // than reimplemented here.
+                        PulsingDot(color = displayLedColor, size = PANEL_BUTTON_LED_SIZE)
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(PANEL_BUTTON_LED_SIZE)
+                                .background(displayLedColor, CircleShape)
+                                .then(
+                                    if (interactable) {
+                                        Modifier.background(
+                                            Brush.radialGradient(
+                                                colors = listOf(displayLedColor.copy(alpha = 0.55f), Color.Transparent),
+                                            ),
+                                            CircleShape,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                        )
+                    }
+                }
+                // Shrink first; at extreme font scales preserve the complete title by wrapping.
+                // Equal-height pairs may have different caption line counts. Keep the title
+                // and its indicator together above the independently wrapping caption.
                 Text(
+                    modifier = Modifier.weight(1f),
                     text = label.uppercase(),
                     style = panelTitleStyle(),
                     autoSize = PanelTitleAutoSize,
@@ -434,16 +445,18 @@ fun AvionicsPanelButton(
                     maxLines = Int.MAX_VALUE,
                     color = labelColor,
                 )
-                if (caption != null) {
-                    Text(
-                        text = caption,
-                        onTextLayout = onCaptionTextLayout,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        color = captionColor,
-                        modifier = Modifier.padding(top = 1.dp),
-                    )
-                }
+            }
+            if (caption != null) {
+                Text(
+                    text = caption,
+                    onTextLayout = onCaptionTextLayout,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = captionColor,
+                    modifier = Modifier
+                        .padding(start = if (inProgress) PANEL_BUTTON_SPINNER_SIZE else PANEL_BUTTON_LED_SIZE)
+                        .padding(start = PANEL_BUTTON_LED_GAP, top = 1.dp),
+                )
             }
         }
     }
@@ -497,23 +510,44 @@ fun PulsingDot(
  */
 val PANEL_ROW_STACK_BELOW = 400.dp
 
+/** The row owns the measured label and indicator; the slot supplies only action/caption styling. */
+class PanelButtonScope internal constructor(private val label: String, private val inProgress: Boolean) {
+    @Composable
+    fun AvionicsPanelButton(
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+        enabled: Boolean = true,
+        pulsing: Boolean = false,
+        caption: String? = null,
+        ledColor: Color = FlightOrange,
+        contentDescription: String? = null,
+        onCaptionTextLayout: ((TextLayoutResult) -> Unit)? = null,
+    ) = AvionicsPanelButton(label, onClick, modifier, enabled, inProgress, pulsing,
+        caption, ledColor, contentDescription, onCaptionTextLayout)
+}
+
 @Composable
 fun AvionicsPanelButtonRow(
     saveLabel: String,
     liveLabel: String,
     saveInProgress: Boolean = false,
     modifier: Modifier = Modifier,
-    save: @Composable () -> Unit,
-    live: @Composable () -> Unit,
+    save: @Composable PanelButtonScope.() -> Unit,
+    live: @Composable PanelButtonScope.() -> Unit,
 ) {
+    val saveScope = PanelButtonScope(saveLabel, saveInProgress)
+    val liveScope = PanelButtonScope(liveLabel, false)
     val measurer = rememberTextMeasurer()
     val style = panelTitleStyle().copy(fontSize = 11.sp)
     val density = LocalDensity.current
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // Each half loses 28dp padding, 9dp LED (14dp spinner) and 10dp gap.
-        val halfWidth = (constraints.maxWidth - with(density) { 8.dp.roundToPx() }) / 2
+        val halfWidth = (constraints.maxWidth - with(density) { PANEL_PAIR_GAP.roundToPx() }) / 2
         val titlesFit = listOf(saveLabel to saveInProgress, liveLabel to false).all { (label, progress) ->
-            val chromeWidth = with(density) { (28.dp + 10.dp + if (progress) 14.dp else 9.dp).roundToPx() }
+            val chromeWidth = with(density) {
+                2 * PANEL_BUTTON_HORIZONTAL_PADDING.roundToPx() + PANEL_BUTTON_LED_GAP.roundToPx() +
+                    (if (progress) PANEL_BUTTON_SPINNER_SIZE else PANEL_BUTTON_LED_SIZE).roundToPx()
+            }
             val contentWidth = (halfWidth - chromeWidth).coerceAtLeast(0)
             !measurer.measure(
                 label.uppercase(), style = style, softWrap = false,
@@ -523,10 +557,10 @@ fun AvionicsPanelButtonRow(
         if (maxWidth < PANEL_ROW_STACK_BELOW || !titlesFit) {
             Column(
                 modifier = Modifier.testTag(PANEL_ROW_STACKED_TAG),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(PANEL_PAIR_GAP),
             ) {
-                save()
-                live()
+                saveScope.save()
+                liveScope.live()
             }
         } else {
             // Equal heights (PR #454 `@rev` REV-8): the taller button sets the row height and
@@ -534,10 +568,10 @@ fun AvionicsPanelButtonRow(
             // one side never leaves the pair visibly uneven.
             Row(
                 modifier = Modifier.testTag(PANEL_ROW_SIDE_BY_SIDE_TAG).height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(PANEL_PAIR_GAP),
             ) {
-                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { save() }
-                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { live() }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { saveScope.save() }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight(), propagateMinConstraints = true) { liveScope.live() }
             }
         }
     }

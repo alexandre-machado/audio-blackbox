@@ -102,6 +102,8 @@ plugins {
 }
 
 android {
+    sourceSets.getByName("test").kotlin.srcDir("src/testCommon/java")
+    sourceSets.getByName("androidTest").kotlin.srcDir("src/testCommon/java")
     namespace = "cc.machado.audioblackbox"
     // compileSdk major must match the minor platform package installed in CI
     // (.github/workflows/android.yml, "Install SDK platform and build-tools" step). AGP resolves

@@ -172,11 +172,14 @@ class ForwardRecordingEngine(
             if (value is ForwardRecordingState.Error) {
                 logExportError(errorLogFile, clock, "ForwardRecordingEngine", value.reason.name, value.message, value.exception)
             }
-            _state.value = value
+            synchronized(lock) { _state.value = value }
         }
 
     private val preparation = BoundedLivePrepare()
     private val lock = Any()
+    // Worker commands stay ordered across prepare; Main acknowledgement only takes lock.
+    // Drain workers never take commandLock, including while stop/cancel join them.
+    private val commandLock = Any()
     private var activeDrainThread: Thread? = null
     private var activeTarget: StreamingExportTarget? = null
     private var activeWriter: StreamingAudioWriter? = null
@@ -207,7 +210,7 @@ class ForwardRecordingEngine(
      * @param customDisplayName Optional explicit filename.
      */
     fun start(customDisplayName: String? = null): ForwardRecordingState {
-        synchronized(lock) {
+        synchronized(commandLock) {
             if (_state.value is ForwardRecordingState.Recording) {
                 return ForwardRecordingState.Error(
                     ForwardRecordingFailureReason.FORWARD_RECORDING_ALREADY_IN_PROGRESS,
@@ -250,51 +253,53 @@ class ForwardRecordingEngine(
                 return err
             }
 
-            val currentConfig = configProvider?.invoke() ?: config
+            synchronized(lock) {
+                val currentConfig = configProvider?.invoke() ?: config
 
-            // Preparation has journaled and published the row before Recording is emitted.
-            // A timed-out provider retains its target on the preparation worker for cleanup;
-            // it can never start a drain or block the next queued stop.
+                // Preparation has journaled and published the row before Recording is emitted.
+                // A timed-out provider retains its target on the preparation worker for cleanup;
+                // it can never start a drain or block the next queued stop.
 
-            stopRequested.set(false)
-            cancelRequested.set(false)
-            wakeUpLatch = CountDownLatch(1)
-            activeTarget = target
+                stopRequested.set(false)
+                cancelRequested.set(false)
+                wakeUpLatch = CountDownLatch(1)
+                activeTarget = target
 
-            val sessionStartMillis = clock()
-            val sessionStartElapsed = monotonicClock()
-            val initialGaps = gapsProvider()
+                val sessionStartMillis = clock()
+                val sessionStartElapsed = monotonicClock()
+                val initialGaps = gapsProvider()
 
-            stateValue = ForwardRecordingState.Recording(displayName, 0L)
+                stateValue = ForwardRecordingState.Recording(displayName, 0L)
 
-            val drainThread = Thread({
-                val writer = try {
-                    encoding.createWriter(target, currentConfig)
-                } catch (e: Exception) {
-                    try { target.abortUnstarted() } catch (_: Exception) {}
-                    synchronized(lock) {
-                        activeDrainThread = null
-                        activeTarget = null
-                        activeWriter = null
-                        stateValue = ForwardRecordingState.Error(
-                            if (e is OpusUnavailableException) ForwardRecordingFailureReason.OPUS_UNAVAILABLE
-                            else ForwardRecordingFailureReason.SINK_OPEN_FAILED,
-                            "Failed to prepare streaming writer: ${e.message}", e,
-                        )
+                val drainThread = Thread({
+                    val writer = try {
+                        encoding.createWriter(target, currentConfig)
+                    } catch (e: Exception) {
+                        try { target.abortUnstarted() } catch (_: Exception) {}
+                        synchronized(lock) {
+                            activeDrainThread = null
+                            activeTarget = null
+                            activeWriter = null
+                            stateValue = ForwardRecordingState.Error(
+                                if (e is OpusUnavailableException) ForwardRecordingFailureReason.OPUS_UNAVAILABLE
+                                else ForwardRecordingFailureReason.SINK_OPEN_FAILED,
+                                "Failed to prepare streaming writer: ${e.message}", e,
+                            )
+                        }
+                        return@Thread
                     }
-                    return@Thread
-                }
-                activeWriter = writer
-                // `currentConfig` is the format the writer above was configured with, i.e. the
-                // format this file declares -- so it is also the format every drained chunk must
-                // be converted into (issue #322).
-                drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer, sessionStartElapsed)
-            }, "ForwardRecordingDrain")
-            drainThread.isDaemon = true
-            activeDrainThread = drainThread
-            drainThread.start()
+                    activeWriter = writer
+                    // `currentConfig` is the format the writer above was configured with, i.e. the
+                    // format this file declares -- so it is also the format every drained chunk must
+                    // be converted into (issue #322).
+                    drainLoop(displayName, startCursor, target, writer, sessionStartMillis, initialGaps, currentConfig, floorAdvancer, sessionStartElapsed)
+                }, "ForwardRecordingDrain")
+                drainThread.isDaemon = true
+                activeDrainThread = drainThread
+                drainThread.start()
 
-            return _state.value
+                return _state.value
+            }
         }
     }
 
@@ -302,7 +307,7 @@ class ForwardRecordingEngine(
      * Stops the active forward recording session cleanly, flushing and finalizing the .aac file.
      * Blocks until the drain thread finishes finalization.
      */
-    fun stop(): ForwardRecordingState {
+    fun stop(): ForwardRecordingState = synchronized(commandLock) {
         var threadToJoin: Thread? = null
         synchronized(lock) {
             if (_state.value !is ForwardRecordingState.Recording) {
@@ -319,7 +324,7 @@ class ForwardRecordingEngine(
     /**
      * Cancels the active forward recording session, releasing resources without finalizing.
      */
-    fun cancel(): ForwardRecordingState {
+    fun cancel(): ForwardRecordingState = synchronized(commandLock) {
         var threadToJoin: Thread? = null
         synchronized(lock) {
             if (_state.value !is ForwardRecordingState.Recording) {

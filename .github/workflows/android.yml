@@ -75,8 +75,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 # Owner decision 2026-11-24 (AB-2411-34): a newer push to the same PR branch cancels the older
-# PR run, so the single self-hosted runner is not spent on obsolete SHAs. Anything that is not a
-# pull_request (push to main, v* tags, workflow_dispatch, i.e. every deploy/Play/listing run)
+# PR run, so hosted builds and self-hosted instrumented tests do not spend time on obsolete SHAs.
+# Anything that is not a pull_request (push to main, v* tags, workflow_dispatch, every deploy/Play/listing run)
 # gets a group keyed by its own run_id: it never shares a group, so it can be neither cancelled
 # nor superseded while pending. GitHub replaces a pending run in the same group even when
 # cancel-in-progress is false, so a shared main group would silently drop a middle merge's deploy.
@@ -96,6 +96,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -738,6 +740,9 @@ jobs:
       - name: Set up Gradle
         if: ${{ !inputs.sync_only }}
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          # Release credentials must not share a cache with PR/hosted builds.
+          cache-disabled: true
 
       - name: Grant execute permission for gradlew
         if: ${{ !inputs.sync_only }}

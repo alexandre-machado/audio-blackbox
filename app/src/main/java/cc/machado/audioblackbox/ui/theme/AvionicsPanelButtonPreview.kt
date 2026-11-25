@@ -201,10 +201,8 @@ private fun PanelPairDemo(
                     saveLabel = saveLabel, liveLabel = liveLabel, saveInProgress = saveInProgress,
                     save = {
                         AvionicsPanelButton(
-                            label = saveLabel.uppercase(),
                             onClick = {},
                             enabled = saveEnabled,
-                            inProgress = saveInProgress,
                             caption = saveCaption.uppercase(),
                             ledColor = FlightOrange,
                             contentDescription = "Save the audio recorded so far",
@@ -212,7 +210,6 @@ private fun PanelPairDemo(
                     },
                     live = {
                         AvionicsPanelButton(
-                            label = liveLabel.uppercase(),
                             onClick = {},
                             enabled = true,
                             pulsing = livePulsing,
@@ -240,14 +237,12 @@ private fun PreviewLiveTwoUpRow() {
             liveLabel = stringResource(R.string.dashboard_panel_live_stop_label),
             save = {
                 AvionicsPanelButton(
-                    label = stringResource(R.string.dashboard_panel_save_label),
                     caption = stringResource(R.string.dashboard_panel_save_caption_buffered, "12:03"),
                     onClick = {},
                 )
             },
             live = {
                 AvionicsPanelButton(
-                    label = stringResource(R.string.dashboard_panel_live_stop_label),
                     caption = stringResource(R.string.dashboard_panel_live_caption_recording, "00:42"),
                     pulsing = true,
                     onClick = {},
