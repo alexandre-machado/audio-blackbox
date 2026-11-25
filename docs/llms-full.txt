@@ -16,6 +16,7 @@ This file is a self-contained factual description of Audio Blackbox for language
 - Project site: https://alexandre.machado.cc/audio-blackbox/
 - Source code: https://github.com/alexandre-machado/audio-blackbox
 - Privacy policy: https://alexandre.machado.cc/audio-blackbox/release/privacy-policy
+- [Terms of Service](https://alexandre.machado.cc/audio-blackbox/release/terms): use, optional Pro purchase and consumer rights; English and Brazilian Portuguese; effective November 25, 2026.
 - App languages: English, Brazilian Portuguese, Spanish, French, German and Italian.
 
 ## What it does

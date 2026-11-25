@@ -11,6 +11,7 @@ on:
       - '.github/workflows/site.yml'
       - 'scripts/ci/check-site-rendered.sh'
       - 'scripts/ci/setup-jekyll-ruby.sh'
+      - 'scripts/ci/jekyll-ruby-linux-64.lock'
       - 'scripts/ci/stage-cloudflare-site.sh'
       - 'cloudflare/**'
   workflow_dispatch:

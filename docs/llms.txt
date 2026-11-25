@@ -38,6 +38,7 @@ The app itself sends no audio or usage analytics. Google Play Billing (Play serv
 - [Google Play listing](https://play.google.com/store/apps/details?id=cc.machado.audioblackbox): install the app (free, with an optional one-time Pro unlock)
 - [Full description for LLMs](https://alexandre.machado.cc/audio-blackbox/llms-full.txt): self-contained factual description, including how the buffer works and the FAQ
 - [Privacy policy](https://alexandre.machado.cc/audio-blackbox/release/privacy-policy): privacy policy for the app
+- [Terms of Service](https://alexandre.machado.cc/audio-blackbox/release/terms): use, optional Pro purchase and consumer rights; English and Brazilian Portuguese; effective November 25, 2026.
 
 ## Language versions
 

@@ -46,6 +46,7 @@ Audio stays in RAM until you save or start Live, and your recordings are never u
 - 💾 **Circular Buffer RAM Visualizer**: Live retention progress bar showing exact buffer saturation, duration, and memory utilization (at standard 16 kHz 16-bit PCM, 30 minutes uses just ~55 MB of RAM).
 - 🏠 **Home-Screen Widget**: Start or stop capture straight from the launcher, no need to open the app first.
 - 🛡️ **Local-First Privacy**:
+  - [Privacy Policy](https://alexandre.machado.cc/audio-blackbox/release/privacy-policy) · [Terms of Service](https://alexandre.machado.cc/audio-blackbox/release/terms) (English and PT-BR).
   - **Recorded Audio Never Leaves the Device**: no account, no cloud, no upload path for audio anywhere in the app.
   - **Network Use Is Google Play Billing Only**: since the optional Pro unlock, the merged manifest declares `INTERNET`, `ACCESS_NETWORK_STATE` and `com.android.vending.BILLING`. They come from Google Play Billing, whose library sends its own usage telemetry from the app process (#441). The app itself sends no audio or usage analytics. Google Play Billing (Play services) communicates with Google to process the optional purchase and check entitlement; its library also sends its own usage and error diagnostics. No ads, account or cloud audio storage.
   - **No Ads or App Usage Analytics**: no ad SDK or `AD_ID`. Billing library diagnostics are described above.

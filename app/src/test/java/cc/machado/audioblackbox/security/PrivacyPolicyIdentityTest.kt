@@ -15,14 +15,23 @@ import java.io.File
  * Issue #395 replaced the plain-markdown `docs/release/privacy-policy.md` with a hand-authored
  * `docs/release/privacy-policy.html` carrying the site's avionics identity (the public URL itself
  * did not change). This test was repointed at the new file with the same read-and-scan approach;
- * none of the assertions below were weakened.
+ * none of the assertions below were weakened. The terms page shares the same identifiers,
+ * checked within each actual language section independently.
  */
 class PrivacyPolicyIdentityTest {
 
     @Test
     fun privacyPolicy_declaresRequiredIdentifiers_inBothLanguageVersions() {
-        val policyFile = resolvePrivacyPolicyFile()
-        val text = policyFile.readText()
+        assertIdentifiers("privacy-policy")
+    }
+
+    @Test
+    fun terms_declaresRequiredIdentifiers_inBothLanguageVersions() {
+        assertIdentifiers("terms")
+    }
+
+    private fun assertIdentifiers(page: String) {
+        val text = resolveLegalPageFile(page).readText()
 
         // All four identifiers Play's reviewer cross-checks against the Play Console listing must
         // appear in *each* language section independently, not merely somewhere in the whole file
@@ -36,17 +45,17 @@ class PrivacyPolicyIdentityTest {
             "Audio Blackbox",
         )
 
-        val ptBrSectionStart = text.indexOf("Política de Privacidade do Audio Blackbox")
-        assertTrue("pt-BR section header not found in privacy policy", ptBrSectionStart >= 0)
-
-        val enSection = text.substring(0, ptBrSectionStart)
-        val ptBrSection = text.substring(ptBrSectionStart)
-
-        for (section in listOf("EN" to enSection, "pt-BR" to ptBrSection)) {
-            val (label, body) = section
+        // Oracle: removing any identifier from either actual published language section
+        // must fail, even when the other section, metadata or footer still contains it.
+        for (language in listOf("en", "pt-BR")) {
+            val section = Regex(
+                """<section\b[^>]*lang="$language"[^>]*>([\s\S]*?)</section>""",
+            ).find(text)
+            assertTrue("$language section not found in $page", section != null)
+            val body = section!!.groupValues[1]
             for (identifier in requiredIdentifiers) {
                 assertTrue(
-                    "$label section of docs/release/privacy-policy.html must contain \"$identifier\" " +
+                    "$language section of docs/release/$page.html must contain \"$identifier\" " +
                         "(Play's rejection was exactly this: developer/app identity missing from " +
                         "the published policy)",
                     body.contains(identifier),
@@ -55,14 +64,14 @@ class PrivacyPolicyIdentityTest {
         }
     }
 
-    private fun resolvePrivacyPolicyFile(): File {
+    private fun resolveLegalPageFile(page: String): File {
         val candidates = listOf(
-            File("../docs/release/privacy-policy.html"),
-            File("docs/release/privacy-policy.html"),
+            File("../docs/release/$page.html"),
+            File("docs/release/$page.html"),
         )
         return candidates.firstOrNull { it.exists() }
             ?: throw AssertionError(
-                "docs/release/privacy-policy.html not found! Checked: ${candidates.map { it.absolutePath }}",
+                "docs/release/$page.html not found! Checked: ${candidates.map { it.absolutePath }}",
             )
     }
 }

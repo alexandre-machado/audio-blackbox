@@ -23,8 +23,9 @@ import org.junit.runner.RunWith
  * AB-2411-44 (2026-11-24, "Gate do Ogg aprovado"): 100% of REPAIRED cuts with >=1 complete
  * audio page must decode non-empty PCM matching the reference prefix and prepare in MediaPlayer;
  * 100% of RAW cuts with >=2 complete audio pages must pass the unchanged decode/prepare checks.
- * RAW cuts with exactly one complete audio page are counted/logged as KNOWN_READER_LIMITATION;
- * their REPAIRED copies must still pass. Android's Ogg extractor/decoder returns empty PCM for
+ * Only successful empty RAW decodes with exactly one complete audio page are counted/logged
+ * as KNOWN_READER_LIMITATION (nine torn cuts). MediaPlayer and their REPAIRED copies must still
+ * pass. Android's Ogg extractor/decoder returns empty PCM for
  * one complete audio page plus a torn next page, identically with MediaMuxer and our provider.
  * Startup recovery repairs these files before the gallery. Header-only cuts have no recoverable
  * audio. Encoding uses the production provider; decoding/preparation use unmodified Android readers.
@@ -36,7 +37,7 @@ class OggPrefixQualificationTest {
             "opus-prefix-qualification").apply { mkdirs() }
         val failures = mutableListOf<String>()
         val repairedFailures = mutableListOf<String>()
-        var knownReaderLimitations = 0
+        val knownReaderLimitations = mutableListOf<String>()
         try {
             for ((rate, channels, bitrate) in listOf(
                 Triple(16_000, 1, 24_000), Triple(32_000, 1, 32_000), Triple(44_100, 2, 96_000),
@@ -66,29 +67,21 @@ class OggPrefixQualificationTest {
                     val decoded = runCatching { decode(prefix) }
                     val player = runCatching { prepare(prefix) }
                     Log.i(TAG, "$id decoded=${decoded.getOrNull()?.size} player=${player.isSuccess}")
-                    if (completeAudioPages == 1) {
-                        knownReaderLimitations++
+                    val knownEmpty = RawOggPrefixCheck.isKnownEmpty(completeAudioPages, decoded)
+                    if (knownEmpty) {
+                        knownReaderLimitations += id
                         Log.i(TAG, "KNOWN_READER_LIMITATION rate=$rate channels=$channels label=$label cut=$cut")
                     }
-                    if (completeAudioPages >= 2) {
-                        val pcm = decoded.getOrNull()
-                        if (pcm == null || pcm.isEmpty()) failures += "$id decode: ${decoded.exceptionOrNull()}"
-                        else {
-                            val boundary = pages.last { it.end <= cut }.end
-                            val completePcm = boundaryPcm.getOrPut(boundary) {
-                                val complete = File(directory, "complete-prefix.ogg")
-                                complete.writeBytes(bytes.copyOf(boundary))
-                                runCatching { decode(complete) }
-                            }.getOrNull()
-                            if (completePcm != null && pcm.size < completePcm.size) {
-                                failures += "$id lost PCM from a complete page: ${pcm.size} < ${completePcm.size}"
-                            }
-                            val compared = minOf(pcm.size, reference.size)
-                            if (!(0 until compared).all { pcm[it] == reference[it] }) {
-                                failures += "$id decoded PCM differs from full reference prefix"
-                            }
-                        }
-                        if (player.isFailure) failures += "$id MediaPlayer: ${player.exceptionOrNull()}"
+                    if (completeAudioPages >= 1) {
+                        val boundary = pages.last { it.end <= cut }.end
+                        val completePcm = boundaryPcm.getOrPut(boundary) {
+                            val complete = File(directory, "complete-prefix.ogg")
+                            complete.writeBytes(bytes.copyOf(boundary))
+                            runCatching { decode(complete) }
+                        }.getOrNull()
+                        failures += RawOggPrefixCheck.failures(
+                            completeAudioPages, decoded, player, reference, completePcm,
+                        ).map { "$id $it" }
                     }
                     val repaired = runCatching {
                         java.io.RandomAccessFile(prefix, "rw").use { OggTailRepair.repair(it.channel) }
@@ -122,10 +115,16 @@ class OggPrefixQualificationTest {
             directory.deleteRecursively()
         }
         failures.forEach { Log.e(TAG, it) }
-        Log.i(TAG, "KNOWN_READER_LIMITATION count=$knownReaderLimitations")
-        assertTrue("OWNER STOP GATE: provider Ogg prefix qualification failed:\n" +
-            "RAW:\n" + failures.joinToString("\n") + "\nREPAIRED:\n" +
-            repairedFailures.joinToString("\n"), failures.isEmpty() && repairedFailures.isEmpty())
+        Log.i(TAG, "KNOWN_READER_LIMITATION count=${knownReaderLimitations.size}")
+        val diagnostics = "RAW:\n" + failures.joinToString("\n") + "\nREPAIRED:\n" +
+            repairedFailures.joinToString("\n") + "\nKNOWN_READER_LIMITATION exempted cuts:\n" +
+            knownReaderLimitations.joinToString("\n")
+        org.junit.Assert.assertEquals(
+            "Only the 3 presets × torn header/lacing/body cuts are exempt\n$diagnostics",
+            9, knownReaderLimitations.size,
+        )
+        assertTrue("OWNER STOP GATE: provider Ogg prefix qualification failed:\n$diagnostics",
+            failures.isEmpty() && repairedFailures.isEmpty())
     }
 
     private data class Page(val start: Int, val laces: Int, val body: Int, val end: Int)

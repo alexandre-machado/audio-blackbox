@@ -16,7 +16,7 @@ test('HTTP upgrades to HTTPS with 301', async () => {
   assert.equal(result.headers.get('Location'), `${origin}${base}/?a=1`);
 });
 
-// Oracle: sitemap directory URLs keep their slash; privacy keeps no slash or extension.
+// Oracle: sitemap directory URLs keep their slash; legal pages keep no slash or extension.
 test('canonical slash normalization preserves the exact sitemap URL forms', async () => {
   for (const [input, expected] of [
     [base, `${base}/`],
@@ -25,6 +25,8 @@ test('canonical slash normalization preserves the exact sitemap URL forms', asyn
     [`${base}/pt-br/index.html`, `${base}/pt-br/`],
     [`${base}/release/privacy-policy/`, `${base}/release/privacy-policy`],
     [`${base}/release/privacy-policy.html`, `${base}/release/privacy-policy`],
+    [`${base}/release/terms/`, `${base}/release/terms`],
+    [`${base}/release/terms.html`, `${base}/release/terms`],
   ]) {
     const result = await invoke(`${input}?a=1`, assets({ [`${base}/pt-br/index.html`]: new Response('locale') }));
     assert.equal(result.status, 301, input);
@@ -51,15 +53,19 @@ test('document aliases retain the existing .html canonical suffix', async () => 
   }
 });
 
-// Oracle: internal rewrites serve real index/privacy HTML at the public URL with no redirect.
-test('directory and privacy canonical URLs resolve to their rendered files', async () => {
+// Oracle: internal rewrites serve real index/legal HTML at the public URL with no redirect.
+test('directory and legal canonical URLs resolve to their rendered files', async () => {
   for (const [path, file] of [
     [`${base}/`, `${base}/index.html`],
     [`${base}/pt-br/`, `${base}/pt-br/index.html`],
     [`${base}/release/privacy-policy`, `${base}/release/privacy-policy.html`],
+    [`${base}/release/terms`, `${base}/release/terms.html`],
   ]) {
     const response = new Response(file);
-    assert.equal(await (await invoke(path, assets({ [file]: response }))).text(), file);
+    const result = await invoke(path, assets({ [file]: response }));
+    assert.equal(result.status, 200);
+    assert.equal(result.headers.get('Location'), null);
+    assert.equal(await result.text(), file);
   }
 });
 
