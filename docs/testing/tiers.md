@@ -144,12 +144,17 @@ against in the first place.
 
 Checks what only real hardware and a real OS/app ecosystem can reveal: `appops` for genuine mic
 access, `dumpsys` for the live foreground-service state, a MediaStore `content query` for
-path/`IS_PENDING`/duration, and pulling the actual export to verify the WAV header numerically.
+path/`IS_PENDING`/duration. **Current script limitation:** its messages still name
+`.wav`, although the query selects the newest `blackbox_` row regardless of extension.
+Its pulled-file check interprets bytes as a WAV header; that is not valid verification
+of current production exports: Save defaults to AAC `.m4a`, Live to a single ADTS
+`.aac`, and optional Opus uses `.ogg` for both. Treat that header check as legacy-only
+until the script is updated separately; it does not validate today's export duration.
 Does not drive the app itself (start/stop recording, tap Save) — see the script's own header
 comment for why, and for the wireless-debugging port-rediscovery step it needs because mDNS does
 not traverse WSL.
 
 Two things stay human-only even after this script exists, because they need a real app ecosystem
 or a person's judgment, not just `adb`:
-- the exported WAV actually opening in the apps a person uses day to day;
+- the exported `.m4a` / `.aac` / `.ogg` actually opening in the apps a person uses day to day (wait for Opus Live to end before playback);
 - Samsung-specific OS behavior around notifications, mic arbitration, and storage layout.

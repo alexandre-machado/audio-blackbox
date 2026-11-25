@@ -120,26 +120,27 @@ Mechanism (describing where secrets live, not generating anything):
 
 ## C. Release build config
 
-Historical initial configuration (versioning superseded below):
+Current version configuration (`app/build.gradle.kts`; computed on each build):
 
 ```kotlin
 defaultConfig {
     applicationId = "cc.machado.audioblackbox"
     minSdk = 29
     targetSdk = 36
-    versionCode = 1
-    versionName = "0.1"
+    versionCode = computeDynamicVersionCode()
+    versionName = computeDynamicVersionName()
     ...
 }
 buildTypes {
     release {
-        isMinifyEnabled = false
+        isMinifyEnabled = true
+        isShrinkResources = true
         proguardFiles(...)
     }
 }
 ```
 
-**Verified on this branch:**
+**Historical build verification (not re-run for this documentation update):**
 - `./gradlew testDebugUnitTest lintDebug` — passes.
 - `./gradlew bundleRelease` — **succeeds**, producing an unsigned
   `app/build/outputs/bundle/release/app-release.aab`. An AAB (unlike an installable
@@ -147,10 +148,9 @@ buildTypes {
   unsigned upload for the *first* upload if you're enrolling in Play App Signing at
   creation time, or you sign it with the upload key before uploading. No signing
   failure to report — this is good news, not a gap.
-- `release.isMinifyEnabled` is currently `false`. **I did not turn this on.**
-  Reasoning below.
+- Release minification and resource shrinking are now enabled in `app/build.gradle.kts` (#416).
 
-**Judgment calls left to the owner (not guessed at):**
+**Current release configuration and validation notes:**
 
 1. **Current versioning (#473).** `.github/workflows/android.yml` sets
    `VERSION_CODE_OFFSET=2000`; versionCode = offset + `GITHUB_RUN_NUMBER` (first run: 2001).
@@ -158,23 +158,9 @@ buildTypes {
    offsets fail. CI release tasks reject codes below 778 because Play internal received 777.
    Local codes remain the git commit count. CI names are `v<UTC yy.MM.dd>.<versionCode>-<sha7>`;
    local names are `v<UTC yy.MM.dd>.0-<sha7>-dev`. Dispatch with `gh workflow run android.yml`.
-2. **R8/minification.** Left `isMinifyEnabled = false`. The app uses
-   `MediaCodec`/`MediaMuxer` (via the export path introduced in #37/#40) plus
-   DataStore and Compose. None of these are unusually reflection-heavy from the
-   app's own code (DataStore's own consumer ProGuard rules ship with the AAR;
-   Compose's compiler-generated code is not reflection-based), so R8 is *probably*
-   safe to enable with the default `proguard-android-optimize.txt`. But "probably"
-   is exactly what issue #48 says not to guess on: turning on R8 changes what
-   ships, and the repo's own instrumented tier (issue #35) — which is the tool that
-   would actually prove it's safe against `MediaCodec`/`MediaMuxer` at runtime, not
-   just at compile time — has not yet been run against a minified build. Per issue
-   #48's own sequencing (device pass #29 first, R8 verification after signing is in
-   place), I left this off and documented it rather than flip the flag and hope the
-   unit tests catch a runtime-only ProGuard problem (they won't; `testDebugUnitTest`
-   doesn't run against a minified artifact). Recommended sequence: enable
-   `isMinifyEnabled = true` in a follow-up change, then run the instrumented tier
-   (`connectedAndroidTest` equivalent from #35's CI job) against that release
-   variant specifically, before shipping it to any testing track.
+2. **R8/minification (#416).** Release builds now enable `isMinifyEnabled` and
+   `isShrinkResources`, using `proguard-android-optimize.txt` and the app's
+   `proguard-rules.pro`. Debug unit tests do not validate a minified release artifact.
 3. **`debuggable`** is already `false` for the `release` build type — this is
    AGP's default when a build type doesn't set `isDebuggable`, and `release` here
    doesn't touch it, so no change needed. Confirmed no `isDebuggable = true`
@@ -185,12 +171,9 @@ buildTypes {
    or leftover test hooks. Nothing to change here, but worth re-checking after any
    future PR that touches the export path, since that's exactly where a stray
    `Log.d(path)` would land.
-5. **`resourceShrinking`** — not enabled, tied to the same R8 decision above
-   (`isShrinkResources` requires `isMinifyEnabled`); revisit together.
+5. **Resource shrinking** is enabled alongside R8 (#416).
 
-No `app/build.gradle.kts` edits were made in this PR — every candidate change
-was a judgment call the owner should make with the instrumented-tier safety net
-in place first, per issue #48's own stated sequencing.
+The configuration above is maintained in `app/build.gradle.kts`; this documentation update does not change it.
 
 ## D. Data safety + permissions declarations
 
@@ -269,12 +252,14 @@ foreground-service type:
 Draft functionality description for that form:
 
 > Audio Blackbox continuously buffers a rolling window of ambient audio in device
-> RAM (user-configurable in 5-minute steps, at least 5 minutes, up to a ceiling the
-> app computes from the device's available memory and the chosen quality preset,
-> per `DeviceMemoryBudget`), similar to a dashcam. Nothing
-> is written to disk automatically. The user starts and stops capture explicitly
-> via an in-app toggle, sees a persistent notification the entire time capture is
-> active, and can export the recent buffer to a file on demand. If the foreground
+> RAM (from 5 minutes, in 5-minute steps, up to the app's safe memory limit for
+> the chosen quality), similar to a dashcam. Settings shows the current limit,
+> derived from device memory by `DeviceMemoryBudget`, with no fixed duration cap.
+> Audio is written to storage when the user taps Save or starts Live. The user
+> arms capture with the REMOVE BEFORE FLIGHT tag or the recording switch, sees a
+> persistent notification while capture is active, and can stop capture explicitly.
+> Save exports buffered audio since the last save (the whole buffer the first time).
+> Live saves the buffered past and continues writing newly captured audio to one file. If the foreground
 > service were killed or the task deferred, the rolling buffer would be lost and
 > the user would be unable to recover audio from the preceding minutes — the
 > entire value of the app depends on the buffer surviving in the background
