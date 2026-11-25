@@ -264,8 +264,9 @@ The generated asset tree is staged under `.staged/audio-blackbox/`, with a copy
 of its `404.html` at `.staged/404.html` for the root asset fallback. The Worker
 continues to resolve extensionless legal routes to `release/*.html`;
 `html_handling: none` and `not_found_handling: 404-page` are unchanged.
-Workflow triggers are unchanged: a change only under `site/` needs a manual
-workflow dispatch unless another existing path filter also matches.
+Pushes changing `site/**` or `scripts/ci/stage-cloudflare-site.sh` trigger the workflow.
+Pull requests run only the read-only Node build/test, Worker/staging tests and
+credential-free Wrangler dry-run job; deployment jobs explicitly exclude PRs.
 
 ## 4. Switch traffic: the owner's second step, a DNS change on the whole host
 

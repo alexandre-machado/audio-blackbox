@@ -11,7 +11,7 @@ for (const [locale, path] of Object.entries(locales)) {
     // Oracle: a missing/empty translation or omitted calculator note fails.
     const t = parse(readFileSync(new URL('../docs/_data/landing/' + locale + '.yml', root), 'utf8'));
     const html = readFileSync(new URL('dist/' + path + 'index.html', root), 'utf8');
-    for (const key of ['saved_file_label','saved_file_sizes','opus_availability_note','size_unit_note']) {
+    for (const key of ['saved_file_label','saved_file_sizes','opus_availability_note']) {
       assert.equal(typeof t[key], 'string', key);
       assert.ok(t[key].length > 0, key);
       assert.ok(html.includes(t[key]), key);
@@ -35,13 +35,18 @@ for (const [preset, aac, opus, ram] of [
       documentElement: {lang:'en-US'},
       getElementById(id) {
         if (id.startsWith('nav-')) return null;
-        if (!nodes.has(id)) nodes.set(id, {value:id === 'calc-slider' ? '10' : preset, appendChild(){}});
+        if (!nodes.has(id)) nodes.set(id, {value:id === 'calc-slider' ? '10' : preset, appendChild(){},
+          replaceChildren(...kids) { this.innerText = kids.map(k => k.textContent).join(''); this.kids = kids; }});
         return nodes.get(id);
       },
       createElement() {return {};},
+      createTextNode(text) {return {textContent:text};},
     };
     runInNewContext(script, {document, Intl, setInterval(){}});
     assert.equal(nodes.get('calc-saved-file').innerText, 'AAC ≈ ' + aac + ' MB · Opus (.ogg) ≈ ' + opus + ' MB');
     assert.equal(nodes.get('calc-ram-mb').innerText, ram + ' MB');
+    // Each codec estimate is its own non-breaking span; the line may only wrap at the separator.
+    assert.deepEqual(nodes.get('calc-saved-file').kids.filter(k => k.className === 'calc-saved-part').map(k => k.textContent),
+      ['AAC ≈ ' + aac + ' MB', 'Opus (.ogg) ≈ ' + opus + ' MB']);
   });
 }

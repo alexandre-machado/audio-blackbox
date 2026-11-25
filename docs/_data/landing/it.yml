@@ -167,5 +167,6 @@ faq:
 # Saved-file estimate (#497); binary units match the existing RAM calculator.
 saved_file_label: "File salvato (stima)"
 opus_availability_note: "Opus non è disponibile sui dispositivi senza encoder Opus."
-size_unit_note: "Qui MB = 1.048.576 byte (MiB)."
 saved_file_sizes: "AAC ≈ {aac} MB · Opus (.ogg) ≈ {opus} MB"
+
+nav_pro: "Pro"

@@ -1,9 +1,10 @@
 import { readFile, writeFile, mkdir, rm, cp, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative as pathRelative } from 'node:path';
 import { parse } from 'yaml';
 import { marked } from 'marked';
 import { relative, stripFrontMatter } from './lib.mjs';
+import { publishable } from './publishable.mjs';
 import { layout } from './templates/layout.mjs';
 import { documentHead } from './templates/document.mjs';
 import { landingHead } from './templates/landingHead.mjs';
@@ -15,6 +16,7 @@ const docs = join(root,'../docs');
 const dist = join(root,'dist');
 const read = path => readFile(join(docs,path),'utf8');
 const config = parse(await read('_config.yml'));
+const copyOptions = {recursive:true, filter: source => publishable(pathRelative(docs,source), config.exclude ?? [])};
 const languages = parse(await read('_data/languages.yml'));
 const translations = Object.fromEntries(await Promise.all(languages.map(async l => [l.lang,parse(await read(`_data/landing/${l.lang.toLowerCase()}.yml`))])));
 const english = {t:translations.en,page:{...languages[0],url:'/'},languages};
@@ -29,7 +31,7 @@ const landing = await read('_layouts/landing.html');
 const defaultAnalytics = analytics(await read('_layouts/default.html'));
 await rm(dist,{recursive:true,force:true});
 await mkdir(dist,{recursive:true});
-await cp(join(docs,'assets'),join(dist,'assets'),{recursive:true});
+await cp(join(docs,'assets'),join(dist,'assets'),copyOptions);
 await emit('assets/css/style.css',stripFrontMatter(await read('assets/css/style.css')));
 await emit('assets/css/landing.css',landing.match(/<style>([\s\S]*?)<\/style>/)[1]);
 await emit('assets/css/tokens.css',(await read('design/index.html')).match(/:root\s*\{[^}]+\}/)[0]);
@@ -47,7 +49,7 @@ for(const name of ['privacy-policy','terms']) {
 }
 async function markdownFiles(dir='') {
   const entries=await readdir(join(docs,dir),{withFileTypes:true});
-  const results=await Promise.all(entries.map(e=>e.isDirectory()&&!e.name.startsWith('_') ? markdownFiles(join(dir,e.name)) : e.isFile()&&e.name.endsWith('.md') ? [join(dir,e.name)] : []));
+  const results=await Promise.all(entries.filter(e=>publishable(join(dir,e.name),config.exclude ?? [])).map(e=>e.isDirectory()&&!e.name.startsWith('_') ? markdownFiles(join(dir,e.name)) : e.isFile()&&e.name.endsWith('.md') ? [join(dir,e.name)] : []));
   return results.flat();
 }
 for(const file of await markdownFiles()) {
@@ -64,7 +66,7 @@ for(const file of await markdownFiles()) {
 }
 const notFound=stripFrontMatter(await read('404.html')).replace("{{ '/' | relative_url }}",relative('/'));
 await emit('404.html',layout({context:english,head:documentHead({title:'404',path:'/404.html',config,noindex:true})+defaultAnalytics,body:`<main class="container markdown-body">${notFound}</main>`}));
-await cp(join(docs,'design'),join(dist,'design'),{recursive:true});
+await cp(join(docs,'design'),join(dist,'design'),copyOptions);
 for(const name of ['index.html','model.html']) {
   const source=await read(`design/${name}`);
   const body=source.match(/<body>([\s\S]*?)<\/body>/)[1].replace(/<nav>[\s\S]*?<\/nav>/,'');

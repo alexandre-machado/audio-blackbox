@@ -232,8 +232,11 @@ return `  <header class="hero">
           <div class="calc-result-sub" style="text-transform:uppercase; letter-spacing:0.05em; font-weight:700; margin-bottom:8px;">${t.ram_label}</div>
           <div class="calc-result-num" id="calc-ram-mb">54.9 ${t.mb}</div>
           <div class="calc-result-sub" id="calc-stats-detail">${t.throughput_initial}</div>
-          <p class="calc-result-sub">${escape(t.saved_file_label)}<br><span id="calc-saved-file" aria-live="polite"></span></p>
-          <p class="calc-result-sub">${escape(t.opus_availability_note)}<br>${escape(t.size_unit_note)}</p>
+          <div class="calc-saved">
+            <p class="calc-saved-label">${escape(t.saved_file_label)}</p>
+            <p class="calc-saved-sizes" id="calc-saved-file" aria-live="polite"></p>
+            <p class="calc-saved-note">${escape(t.opus_availability_note)}</p>
+          </div>
         </div>
       </div>
     </div>

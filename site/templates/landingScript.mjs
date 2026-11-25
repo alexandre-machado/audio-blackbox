@@ -69,8 +69,16 @@ return `  <script>
       document.getElementById('calc-ram-mb').innerText = \`\${totalMB} \${labels.mb}\`;
       const aacSize = 64000 * channels * minutes * 60 / 8 / (1024 * 1024);
       const opusSize = opusBitrates[document.getElementById('calc-rate-select').value] * minutes * 60 / 8 / (1024 * 1024);
-      document.getElementById('calc-saved-file').innerText = savedFileSizes
+      const savedText = savedFileSizes
         .replace('{aac}', decimal.format(aacSize)).replace('{opus}', decimal.format(opusSize));
+      // Each codec's estimate stays on one line; a narrow screen breaks only at the separator.
+      const savedEl = document.getElementById('calc-saved-file');
+      savedEl.replaceChildren(...savedText.split(' · ').flatMap((part, i) => {
+        const span = document.createElement('span');
+        span.className = 'calc-saved-part';
+        span.textContent = part;
+        return i === 0 ? [span] : [document.createTextNode(' · '), span];
+      }));
       document.getElementById('calc-stats-detail').innerText = \`\${kbSec} \${labels.throughput}\`;
     }
 

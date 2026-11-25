@@ -14,6 +14,7 @@ export function metadata(html) {
   return { canonical: links.find(l => l.rel === 'canonical')?.href ?? null,
     hreflang: links.filter(l => l.hreflang).map(l => ({lang:l.hreflang,href:l.href})).sort((a,b)=>a.lang.localeCompare(b.lang)),
     title: decode(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? ''),
+    robots: metas.find(m => m.name === 'robots')?.content ?? null,
     description: metas.find(m => m.name === 'description')?.content ?? null,
     jsonLdTypes: [...types].sort(), jsonLd,
     social: metas.filter(m => /^(og:|twitter:)/.test(m.property ?? m.name ?? '')).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))) };

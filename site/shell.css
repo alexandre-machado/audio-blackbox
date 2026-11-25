@@ -14,3 +14,38 @@
 .site-header a:focus-visible, .site-footer a:focus-visible { outline: 2px solid var(--color-flight-orange-light); outline-offset: 4px; }
 html { scroll-padding-top: 160px; }
 @media (max-width: 600px) { .site-header { position: relative; } html { scroll-padding-top: 16px; } }
+
+/* Memory simulator: the saved-file estimate is a second reading, set apart from the RAM figure
+   (owner request AB-2511-25). A hairline rule and its own label scale, not a nested card. */
+.calc-saved {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-cockpit-border-strong);
+}
+.calc-saved p { margin: 0; }
+.calc-saved-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.calc-saved-sizes {
+  margin-top: 8px !important;
+  color: var(--color-text-stencil, #F8FAFC);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.calc-saved-note {
+  margin-top: 10px !important;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.calc-saved-part { white-space: nowrap; }
+
+/* Footer rhythm: more space above each group heading than below it, tight links under it. */
+.site-footer h4 { margin: 32px 0 0; color: var(--color-text-stencil, #F8FAFC); font-size: 0.95rem; }
+.site-footer h4 + .site-footer-links { margin-top: 12px; }
+.site-footer .site-languages { margin-top: 28px; }

@@ -165,6 +165,15 @@ test('generated asset staging preserves prefix, legal routes and root 404', asyn
     }
     execFileSync('bash', [join(temporary, 'scripts/ci/stage-cloudflare-site.sh')]);
     const staged = join(temporary, 'cloudflare/.staged');
+    // Oracle: the relocated script used by both CI jobs stages beside Wrangler,
+    // never relative to an unrelated ancestor of the temporary work directory.
+    const isolated = join(temporary, 'isolated');
+    await mkdir(isolated);
+    await writeFile(join(isolated, 'wrangler.jsonc'), '{}');
+    await writeFile(join(isolated, 'stage-cloudflare-site.sh'), source);
+    execFileSync('bash', [join(isolated, 'stage-cloudflare-site.sh'), join(temporary, 'site/dist')]);
+    assert.equal(await readFile(join(isolated, '.staged/404.html'), 'utf8'), 'custom missing');
+    assert.equal(await readFile(join(isolated, '.staged/audio-blackbox/index.html'), 'utf8'), 'home');
     assert.equal(await readFile(join(staged, '404.html'), 'utf8'), 'custom missing');
     const env = {ASSETS:{fetch:async request => {
       try {return new Response(await readFile(join(staged, new URL(request.url).pathname)));}

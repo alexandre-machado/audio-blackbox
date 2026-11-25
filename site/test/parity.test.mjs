@@ -1,3 +1,4 @@
+import { publishable } from '../publishable.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -32,7 +33,7 @@ for(const expected of inventory.urls) test(`live status, redirect and SEO: ${exp
   assert.equal(response.status,expected.status);
   assert.equal(response.headers.get('location'),expected.location);
   const actual=metadata(await response.text());
-  for(const key of ['canonical','hreflang','title','description','jsonLdTypes','jsonLd','social']) assert.deepEqual(actual[key],expected[key],key);
+  for(const key of ['robots','canonical','hreflang','title','description','jsonLdTypes','jsonLd','social']) assert.deepEqual(actual[key],expected[key],key);
 });
 test('sitemap URLs and all language alternates match live',()=>{
   // Oracle: removing a URL or alternate (including x-default) fails.
@@ -119,4 +120,40 @@ test('production analytics loaders are preserved exactly once',()=>{
     const html=readFileSync(file,'utf8');
     for(const loader of ['googletagmanager.com/gtag/js','clarity.ms/tag']) assert.equal(html.split(loader).length-1,1,`${file}: ${loader}`);
   }
+});
+
+const sourceLayout=readFileSync(join(root,'../docs/_layouts/landing.html'),'utf8');
+const sourceHeader=sourceLayout.slice(sourceLayout.indexOf('<li><a href="#what-is">'),sourceLayout.indexOf('<!-- Hero'));
+const sourceFooter=sourceLayout.match(/<footer>[\s\S]*?<\/footer>/)[0];
+const keys=source=>[...new Set([...source.matchAll(/t\.(\w+)/g)].map(m=>m[1]))];
+const visible=s=>decode(s.replace(/<[^>]*>/g,'')).replace(/\s+/g,' ').trim();
+for(const language of parse(readFileSync(join(root,'../docs/_data/languages.yml'),'utf8'))) {
+  test('approved navigation/footer labels: '+language.lang,async()=>{
+    // Oracle: dropping or translating any approved shell label incorrectly fails.
+    const t=parse(readFileSync(join(root,'../docs/_data/landing/'+language.lang.toLowerCase()+'.yml'),'utf8'));
+    const html=readFileSync(join(dist,language.path.slice(1),'index.html'),'utf8');
+    const header=html.match(/<header[^>]*data-site-header[\s\S]*?<\/header>/)[0];
+    const footer=html.match(/<footer[^>]*data-site-footer[\s\S]*?<\/footer>/)[0];
+    for(const [source,output] of [[sourceHeader,header],[sourceFooter,footer]]) {
+      for(const key of keys(source).filter(k=>k!=='language_label')) assert.ok(visible(output).includes(visible(t[key])),language.lang+': '+key);
+    }
+    assert.ok(visible(header).includes(t.nav_pro));
+    assert.ok(header.includes('>GitHub</a>'));
+    assert.ok(footer.includes('/blob/main/LICENSE'));
+    assert.ok(footer.includes('mailto:alexandre@machado.cc'));
+    // Replace every translated value with a sentinel: no English label may
+    // survive in the shell (brand, GitHub, email and language names are proper names).
+    const {header:renderHeader,footer:renderFooter}=await import('../templates/layout.mjs');
+    const languages=[{...language,name:'LANGUAGE'}];
+    const context={t:Object.fromEntries(Object.keys(t).map(k=>[k,'TRANSLATED'])),page:language,languages};
+    for(const output of [renderHeader(context),renderFooter(context)]) {
+      assert.equal(visible(output).replaceAll('Audio Blackbox','').replaceAll('GitHub','').replaceAll('alexandre@machado.cc','').replaceAll('LANGUAGE','').replaceAll('TRANSLATED','').trim(),'');
+    }
+  });
+}
+test('dist contains no Jekyll-excluded paths or dotfiles',()=>{
+  // Oracle: publishing any hidden/source/backup file fails, including directories.
+  const config=parse(readFileSync(join(root,'../docs/_config.yml'),'utf8'));
+  const walk=dir=>readdirSync(dir,{withFileTypes:true}).flatMap(e=>[join(dir,e.name),...(e.isDirectory()?walk(join(dir,e.name)):[])]);
+  for(const path of walk(dist)) assert.ok(publishable(path.slice(dist.length+1),config.exclude??[]),path);
 });
