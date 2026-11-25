@@ -710,6 +710,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The job never pushes; the listing-change fetch is anonymous (public repo).
+          persist-credentials: false
 
       - name: Set up JDK 17
         if: ${{ !inputs.sync_only }}
