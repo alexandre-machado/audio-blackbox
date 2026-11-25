@@ -21,7 +21,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import org.junit.After
@@ -75,8 +76,10 @@ class InterruptionSpliceTest {
     private fun ensureServiceStopped() {
         if (RecorderService.isServiceRunning.value || RecorderService.engine.state.value !is CaptureState.Idle) {
             context.startService(RecorderService.stopIntent(context))
-            awaitCondition("service did not stop") {
-                RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+            awaitEvent("service did not stop") {
+                combine(RecorderService.engine.state, RecorderService.isServiceRunning) { state, running ->
+                    state is CaptureState.Idle && !running
+                }.first { it }
             }
         }
     }
@@ -271,22 +274,27 @@ class InterruptionSpliceTest {
 
     private fun <T> awaitEvent(message: String, block: suspend () -> T): T = runBlocking {
         try {
-            withTimeout(30_000) { block() }
+            withTimeout(EVENT_TIMEOUT_MILLIS) { block() }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             throw AssertionError("$message; state=${RecorderService.engine.state.value} " +
                 "cursor=${RecorderService.engine.writeCursor()} gaps=${RecorderService.engine.gaps.value}", e)
         }
     }
 
-    // RingBuffer cursors have no flow. Bounded cooperative polling observes actual writes;
-    // no delay stands in for capture progress and the capture hot path needs no test hook.
+    // RingBuffer cursors have no flow (inputLevel can stay constant on a silent emulator).
+    // The coroutine timer bounds checks to 10/s without adding capture-thread instrumentation.
+    // Only the actual cursor predicate releases the wait; the timer never implies progress.
     private fun awaitCondition(message: String, condition: () -> Boolean) = awaitEvent(message) {
-        while (!condition()) yield()
+        while (!condition()) delay(CURSOR_CHECK_INTERVAL_MILLIS)
     }
 
     private fun marker(value: String) { android.util.Log.i(MARKER_TAG, value) }
 
     companion object {
+        // Keep in sync with the cumulative budget table in scripts/ci/run-instrumented-tier.sh.
+        // 18 waits including @Before/@After: at most 180s of timed waits for the whole test.
+        private const val EVENT_TIMEOUT_MILLIS = 10_000L
+        private const val CURSOR_CHECK_INTERVAL_MILLIS = 100L
         const val MARKER_TAG = "SpliceTest"
     }
 }

@@ -337,42 +337,68 @@ grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail 
 log "Opus process-kill and startup-recovery qualification OK."
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
+# Budget contract with InterruptionSpliceTest.EVENT_TIMEOUT_MILLIS = 10s:
+# Segment                    Test waits   Host limit (seconds)
+# launch -> READY_1          3 * 10 = 30   50
+# PCM_1 -> READY_2           0              20
+# READY_n -> RINGING_n       1 * 10 = 10   30
+# RINGING_n -> PAUSED_n      1 * 10 = 10   30
+# PAUSED_n -> PCM_n          4 * 10 = 40   60
+# PCM_2 -> completion        3 * 10 = 30   (outer limit)
+# Whole test (setup + 2 initial + 12 call + 2 export + teardown): 180s.
+# Marker limits include 10s teardown after a failed assertion + 10s reporting margin.
+# Outer 300s allows all 180s of test waits + 60s for six host commands + 60s
+# for instrumentation startup, framework work, metadata reads and result reporting.
+SPLICE_PHASE_SECONDS=300
 log "Launching InterruptionSpliceTest in the background..."
 "${ADB[@]}" logcat -c
-timeout -k 5 240 "${ADB[@]}" shell am instrument -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
+timeout -k 5 "$SPLICE_PHASE_SECONDS" "${ADB[@]}" shell am instrument -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
   >/tmp/instrumented-splice.log 2>&1 &
 SPLICE_PID=$!
 
+# ERR cleanup leaves the existing EXIT emulator-shutdown trap intact. Inherit into
+# functions so marker-reader failures and all emu/keyevent failures take this path.
+splice_failed() {
+  local status=$?
+  trap - ERR
+  kill "$SPLICE_PID" 2>/dev/null || true
+  wait "$SPLICE_PID" 2>/dev/null || true
+  cat /tmp/instrumented-splice.log >&2 || true
+  printf '[instrumented-tier] ERROR: splice phase failed (status %s).\n' "$status" >&2
+  exit "$status"
+}
+set -E
+trap splice_failed ERR
+
 wait_for_marker() {
   local marker="$1"
+  local budget="$2"
   # logcat includes retained messages, so a fast callback before this reader starts is safe.
-  if ! timeout -k 2 40 "${ADB[@]}" logcat -m 1 -e "^${marker}$" -s "${MARKER_TAG}:I"; then
-    kill "$SPLICE_PID" 2>/dev/null || true
-    wait "$SPLICE_PID" 2>/dev/null || true
-    cat /tmp/instrumented-splice.log >&2 || true
-    fail "InterruptionSpliceTest timed out waiting for $marker."
-  fi
+  log "Waiting up to ${budget}s for $marker..."
+  timeout -k 2 "$budget" "${ADB[@]}" logcat -m 1 -e "^${marker}$" -s "${MARKER_TAG}:I"
 }
 
 for call in 1 2; do
-  wait_for_marker "READY_$call"
+  if [[ "$call" == 1 ]]; then
+    wait_for_marker "READY_$call" 50
+  else
+    wait_for_marker "READY_$call" 20
+  fi
   log "Call $call: ringing..."
   timeout -k 2 10 "${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-  wait_for_marker "RINGING_$call"
+  wait_for_marker "RINGING_$call" 30
   # A real framework ringing callback acknowledges that KEYCODE_CALL can answer it.
   timeout -k 2 10 "${ADB[@]}" shell input keyevent KEYCODE_CALL
-  wait_for_marker "PAUSED_$call"
+  wait_for_marker "PAUSED_$call" 30
   timeout -k 2 10 "${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
-  wait_for_marker "PCM_$call"
+  wait_for_marker "PCM_$call" 60
 done
 
 log "Both calls issued. Waiting for the instrumentation run to finish (export + assertions)..."
-set +e
 wait "$SPLICE_PID"
-SPLICE_STATUS=$?
-set -e
+trap - ERR
 cat /tmp/instrumented-splice.log
-if [[ $SPLICE_STATUS -ne 0 ]] || ! grep -q "OK (" /tmp/instrumented-splice.log; then
+if ! grep -q "OK (" /tmp/instrumented-splice.log; then
   fail "InterruptionSpliceTest did not report OK -- see the log above."
 fi
 log "Phase 2 (InterruptionSpliceTest) OK."
