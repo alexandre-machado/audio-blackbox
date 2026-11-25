@@ -1,5 +1,7 @@
 {
   "private": true,
   "type": "module",
-  "devDependencies": { "wrangler": "4.160.0" }
+  "devDependencies": {
+    "wrangler": "4.168.0"
+  }
 }

@@ -40,7 +40,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -83,9 +83,10 @@ jobs:
         run: bash scripts/ci/check-site-rendered.sh _site
 
       - name: Upload rendered site artifact
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: '_site'
+          include-hidden-files: true
 
   deploy:
     name: Site / Deploy GitHub Pages
@@ -101,16 +102,16 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Setup Pages
-        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
       # IndexNow reads docs/sitemap.xml and the key file from the source tree.
       - name: Checkout
         if: success() && github.event_name == 'push'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Post-deploy, best-effort ping to IndexNow (Bing/Yandex share the index) so a
       # docs/** push is actively submitted instead of waiting to be crawled. Only runs
@@ -169,21 +170,22 @@ jobs:
           echo "work=$(mktemp -d "${RUNNER_TEMP}/cf-work.XXXXXX")" >> "$GITHUB_OUTPUT"
 
       - name: Fresh checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           path: ${{ steps.dirs.outputs.checkout }}
 
       - name: Set up fresh Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         env:
           # Do not execute a Node binary cached by the gem-running build job.
           RUNNER_TOOL_CACHE: ${{ steps.dirs.outputs.tools }}
         with:
           node-version: '24'
+          package-manager-cache: false
 
       - name: Download Pages artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: github-pages
           path: ${{ steps.dirs.outputs.artifact }}
@@ -248,21 +250,22 @@ jobs:
           echo "work=$(mktemp -d "${RUNNER_TEMP}/cf-work.XXXXXX")" >> "$GITHUB_OUTPUT"
 
       - name: Fresh checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           path: ${{ steps.dirs.outputs.checkout }}
 
       - name: Set up fresh Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         env:
           # Do not execute a Node binary cached by the gem-running build job.
           RUNNER_TOOL_CACHE: ${{ steps.dirs.outputs.tools }}
         with:
           node-version: '24'
+          package-manager-cache: false
 
       - name: Download Pages artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: github-pages
           path: ${{ steps.dirs.outputs.artifact }}
