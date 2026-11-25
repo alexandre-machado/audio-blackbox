@@ -37,7 +37,7 @@ class OggPrefixQualificationTest {
             "opus-prefix-qualification").apply { mkdirs() }
         val failures = mutableListOf<String>()
         val repairedFailures = mutableListOf<String>()
-        var knownReaderLimitations = 0
+        val knownReaderLimitations = mutableListOf<String>()
         try {
             for ((rate, channels, bitrate) in listOf(
                 Triple(16_000, 1, 24_000), Triple(32_000, 1, 32_000), Triple(44_100, 2, 96_000),
@@ -69,7 +69,7 @@ class OggPrefixQualificationTest {
                     Log.i(TAG, "$id decoded=${decoded.getOrNull()?.size} player=${player.isSuccess}")
                     val knownEmpty = RawOggPrefixCheck.isKnownEmpty(completeAudioPages, decoded)
                     if (knownEmpty) {
-                        knownReaderLimitations++
+                        knownReaderLimitations += id
                         Log.i(TAG, "KNOWN_READER_LIMITATION rate=$rate channels=$channels label=$label cut=$cut")
                     }
                     if (completeAudioPages >= 1) {
@@ -115,11 +115,16 @@ class OggPrefixQualificationTest {
             directory.deleteRecursively()
         }
         failures.forEach { Log.e(TAG, it) }
-        Log.i(TAG, "KNOWN_READER_LIMITATION count=$knownReaderLimitations")
-        org.junit.Assert.assertEquals("Only the 3 presets × torn header/lacing/body cuts are exempt", 9, knownReaderLimitations)
-        assertTrue("OWNER STOP GATE: provider Ogg prefix qualification failed:\n" +
-            "RAW:\n" + failures.joinToString("\n") + "\nREPAIRED:\n" +
-            repairedFailures.joinToString("\n"), failures.isEmpty() && repairedFailures.isEmpty())
+        Log.i(TAG, "KNOWN_READER_LIMITATION count=${knownReaderLimitations.size}")
+        val diagnostics = "RAW:\n" + failures.joinToString("\n") + "\nREPAIRED:\n" +
+            repairedFailures.joinToString("\n") + "\nKNOWN_READER_LIMITATION exempted cuts:\n" +
+            knownReaderLimitations.joinToString("\n")
+        org.junit.Assert.assertEquals(
+            "Only the 3 presets × torn header/lacing/body cuts are exempt\n$diagnostics",
+            9, knownReaderLimitations.size,
+        )
+        assertTrue("OWNER STOP GATE: provider Ogg prefix qualification failed:\n$diagnostics",
+            failures.isEmpty() && repairedFailures.isEmpty())
     }
 
     private data class Page(val start: Int, val laces: Int, val body: Int, val end: Int)

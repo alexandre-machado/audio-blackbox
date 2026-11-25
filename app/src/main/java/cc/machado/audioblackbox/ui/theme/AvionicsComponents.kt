@@ -352,7 +352,7 @@ private fun panelTitleStyle() = LocalTextStyle.current.copy(
 )
 
 @Composable
-fun AvionicsPanelButton(
+internal fun AvionicsPanelButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,

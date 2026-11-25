@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 # Owner decision 2026-11-24 (AB-2411-34): a newer push to the same PR branch cancels the older
-# PR run, so the single self-hosted runner is not spent on obsolete SHAs. Anything that is not a
+# PR run, so GitHub-hosted runner time is not spent on obsolete SHAs. Anything that is not a
 # pull_request (push to main, v* tags, workflow_dispatch, i.e. every deploy/Play/listing run)
 # gets a group keyed by its own run_id: it never shares a group, so it can be neither cancelled
 # nor superseded while pending. GitHub replaces a pending run in the same group even when
