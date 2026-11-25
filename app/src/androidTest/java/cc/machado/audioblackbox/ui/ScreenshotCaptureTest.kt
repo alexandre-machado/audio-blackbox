@@ -242,12 +242,12 @@ class ScreenshotCaptureTest {
         // Screenshot-only prices: each locale is a one-line edit once currencies are confirmed.
         // Free + Available renders the real ProCard with an enabled CTA, without billing timing.
         val PRO_PRICES = mapOf(
-            "en-US" to "R$ 14,90",
-            "pt-BR" to "R$ 14,90",
-            "es-ES" to "R$ 14,90",
-            "fr-FR" to "R$ 14,90",
-            "de-DE" to "R$ 14,90",
-            "it-IT" to "R$ 14,90",
+            "en-US" to "R$ 14,99",
+            "pt-BR" to "R$ 14,99",
+            "es-ES" to "R$ 14,99",
+            "fr-FR" to "R$ 14,99",
+            "de-DE" to "R$ 14,99",
+            "it-IT" to "R$ 14,99",
         )
 
         /** Long enough to be well past any entry transition, so the frame is a settled one. */
