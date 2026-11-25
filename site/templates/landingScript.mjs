@@ -44,6 +44,11 @@ return `  <script>
       minimumFractionDigits: 1, maximumFractionDigits: 1
     });
 
+    const savedFileSizes = ${json(t.saved_file_sizes)};
+    // App: AacPayloadEncoder.BIT_RATE_PER_CHANNEL_BPS; StreamingOpusWriter.OpusFormat.
+    // Voice encoder input is 16 kHz, others 48 kHz; Ogg granule timing is 48 kHz.
+    const opusBitrates = { "16000:1": 24000, "32000:1": 32000, "44100:2": 96000 };
+
     // Memory Calculator
     function updateMemoryCalc() {
       const minutes = parseInt(document.getElementById('calc-slider').value, 10);
@@ -62,6 +67,10 @@ return `  <script>
       const kbSec = decimal.format(bytesPerSec / 1024);
 
       document.getElementById('calc-ram-mb').innerText = \`\${totalMB} \${labels.mb}\`;
+      const aacSize = 64000 * channels * minutes * 60 / 8 / (1024 * 1024);
+      const opusSize = opusBitrates[document.getElementById('calc-rate-select').value] * minutes * 60 / 8 / (1024 * 1024);
+      document.getElementById('calc-saved-file').innerText = savedFileSizes
+        .replace('{aac}', decimal.format(aacSize)).replace('{opus}', decimal.format(opusSize));
       document.getElementById('calc-stats-detail').innerText = \`\${kbSec} \${labels.throughput}\`;
     }
 

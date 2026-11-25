@@ -163,3 +163,9 @@ faq:
     a: "Die App kann als Gedächtnisstütze dienen. Wenn du gerade Wegbeschreibungen, Anweisungen oder Details gehört und den Faden verloren hast, speichere die letzten Minuten und hör sie im integrierten Player noch einmal an. Das kann allen helfen, die gesprochene Informationen oft verlieren, zum Beispiel Menschen mit ADHS. Audio Blackbox ist kein Medizinprodukt."
   - q: Was ist beim Aufnehmen mit Audio Blackbox rechtlich zu beachten?
     a: Das hängt davon ab, wo du bist. Nutze Audio Blackbox für deine eigenen Gespräche und Ideen. Die Aufnahme anderer Personen kann deren Einwilligung erfordern. Die Regeln unterscheiden sich je nach Land und Bundesstaat. Prüfe vor der Aufnahme die örtlichen Gesetze zu Tonaufnahmen. Du bist für deine Nutzung der App verantwortlich.
+
+# Saved-file estimate (#497); binary units match the existing RAM calculator.
+saved_file_label: "Gespeicherte Datei (geschätzt)"
+opus_availability_note: "Opus ist auf Geräten ohne Opus-Encoder nicht verfügbar."
+size_unit_note: "MB hier = 1.048.576 Bytes (MiB)."
+saved_file_sizes: "AAC ≈ {aac} MB · Opus (.ogg) ≈ {opus} MB"

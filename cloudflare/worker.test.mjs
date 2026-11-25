@@ -139,3 +139,44 @@ test('worker applies cache and text content-type rules', async () => {
     assert.equal((await invoke(path, assets({ [path]: new Response('text') }))).headers.get('Content-Type'), 'text/plain; charset=utf-8');
   }
 });
+
+// Oracle: the production staging script must retain the prefix and root 404;
+// the real Worker must serve legal URLs and return that fallback on a miss.
+test('generated asset staging preserves prefix, legal routes and root 404', async () => {
+  const {mkdtemp, mkdir, writeFile, readFile, rm} = await import('node:fs/promises');
+  const {tmpdir} = await import('node:os');
+  const {join} = await import('node:path');
+  const {execFileSync} = await import('node:child_process');
+  const temporary = await mkdtemp(join(tmpdir(), 'absite-stage-'));
+  try {
+    await mkdir(join(temporary, 'scripts/ci'), {recursive:true});
+    await mkdir(join(temporary, 'site/dist/release'), {recursive:true});
+    // In isolated workflow copies only cloudflare/ is available; carry the actual
+    // staging script into those copies via the workflow before running tests.
+    const script = new URL('./stage-cloudflare-site.sh', import.meta.url);
+    let source;
+    try {source = await readFile(script);} catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      source = await readFile(new URL('../scripts/ci/stage-cloudflare-site.sh', import.meta.url));
+    }
+    await writeFile(join(temporary, 'scripts/ci/stage-cloudflare-site.sh'), source);
+    for (const [file, body] of [['index.html','home'],['404.html','custom missing'],['release/privacy-policy.html','privacy'],['release/terms.html','terms']]) {
+      await writeFile(join(temporary, 'site/dist', file), body);
+    }
+    execFileSync('bash', [join(temporary, 'scripts/ci/stage-cloudflare-site.sh')]);
+    const staged = join(temporary, 'cloudflare/.staged');
+    assert.equal(await readFile(join(staged, '404.html'), 'utf8'), 'custom missing');
+    const env = {ASSETS:{fetch:async request => {
+      try {return new Response(await readFile(join(staged, new URL(request.url).pathname)));}
+      catch (error) {
+        if (error.code !== 'ENOENT' && error.code !== 'EISDIR') throw error;
+        return new Response(await readFile(join(staged, '404.html')), {status:404});
+      }
+    }}};
+    for (const [path, body, status] of [['/','home',200],['/release/privacy-policy','privacy',200],['/release/terms','terms',200],['/missing','custom missing',404]]) {
+      const response = await invoke(base + path, env);
+      assert.equal(response.status, status);
+      assert.equal(await response.text(), body);
+    }
+  } finally {await rm(temporary, {recursive:true, force:true});}
+});

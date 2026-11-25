@@ -1,4 +1,4 @@
-# Standalone hotsite generator — Phase 1
+# Standalone hotsite generator
 
 Requires Node 20+ and npm. No Ruby/Jekyll or network access is needed during build/test after installation.
 
@@ -8,7 +8,7 @@ npm --prefix site run build
 npm --prefix site test
 ```
 
-`dist/` is a disposable, ignored asset tree, with the same unprefixed structure as Jekyll's `_site`. It is **not deployed by this change**. Runtime dependencies: none. Pinned build-only dependencies: `yaml@2.9.1` (approved YAML data), `marked@15.0.12` (existing Markdown documentation). Both are locked in `package-lock.json`.
+`dist/` is a disposable, ignored asset tree, with the same unprefixed structure as Jekyll's `_site`. The Cloudflare workflow builds and deploys this tree; GitHub Pages retains its separate Jekyll build. Runtime dependencies: none. Pinned build-only dependencies: `yaml@2.9.1` (approved YAML data), `marked@15.0.12` (existing Markdown documentation). Playwright is a pinned development-only dependency for captures. All are locked in `package-lock.json`.
 
 ## Sources and templates
 
@@ -33,11 +33,23 @@ Optional non-vacuity check: `node site/scripts/check-mutations.mjs`. It mutates 
 - Markdown is rendered with Marked instead of Kramdown; generated markup/typographic processing can differ. Metadata and source prose remain unchanged. Landing main content, legal main content, sitemap URL set, canonical/hreflang sets, full JSON-LD and OG/Twitter values have no intentional parity exceptions.
 - Browser visual review is deferred to the requested later impeccable pass; current validation covers generated content and routing, not rendered geometry.
 
-## Phase 2
+## Cloudflare build and captures
 
-1. Change the site workflow to install Node/build dependencies with `npm ci`, build/test `site/`, and upload its `dist/` artifact. Preserve workflow permissions, runner choices and deployment guards.
-2. Adapt/replace the old Jekyll validation script: it currently requires exactly six language anchors, whereas the unified header **and** footer now produce twelve. Carry its checks into the Node gate, without a Ruby runtime.
-3. Point Worker asset staging at the new artifact. Preserve the `/audio-blackbox/` prefix in the staged tree and the root 404 fallback; changing Wrangler directly to unprefixed `site/dist` would break the current Worker. Keep `html_handling: none`, the ASSETS binding and routing semantics.
-4. Run Wrangler dry-run/preview verification with the real assets binding, then repeat status/redirect/metadata checks after cutover. Keep a rollback artifact and retain IndexNow submission. Decide the GitHub Pages fallback alongside the workflow switch.
+The workflow runs a separate Node build/test job and uploads `site/dist` as
+`cloudflare-site`. Both Cloudflare jobs stage it under `.staged/audio-blackbox/`
+with a root 404 fallback. The Jekyll/Pages jobs, triggers and credentials remain unchanged.
+See [the runbook](../docs/development/cloudflare-hotsite.md) for validation and rollback.
 
-Phase 1 leaves `docs/`, `.github/workflows/`, `cloudflare/worker.js`, and all deployment configuration unchanged.
+Capture five representative pages at both requested viewports:
+
+```sh
+npm run build
+npx playwright install chromium
+node scripts/capture.mjs
+```
+
+Set `PLAYWRIGHT_BROWSERS_PATH` for a custom writable browser cache.
+Captures go to ignored `site/captures/`; the local server closes after capture.
+The saved-file calculator keeps the existing binary MB convention (1,048,576 bytes,
+MiB), with a visible unit note. Rates follow the app's AAC and Opus encoders;
+estimates exclude container overhead and codec variability.
