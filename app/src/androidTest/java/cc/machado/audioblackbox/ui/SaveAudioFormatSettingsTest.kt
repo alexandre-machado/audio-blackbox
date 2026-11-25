@@ -65,7 +65,10 @@ class SaveAudioFormatSettingsTest {
         // item failed there, so the item is clicked through its OnClick semantics action instead.
         rule.onNodeWithText(context.getString(R.string.settings_save_audio_format))
             .performScrollTo().performClick()
-        val aacText = context.getString(R.string.settings_format_aac)
+        // The menu is a separate popup window: the test's LocalContext/LocalConfiguration override
+        // (pt-BR) does not reach it, so its items render in the activity's own locale. CI run
+        // 45521665809 printed the open popup with "AAC (default)". Match what the popup shows.
+        val aacText = rule.activity.getString(R.string.settings_format_aac)
         try {
             rule.waitUntil(timeoutMillis = 5_000) { rule.onAllNodesWithText(aacText).fetchSemanticsNodes().isNotEmpty() }
         } catch (timeout: ComposeTimeoutException) {
