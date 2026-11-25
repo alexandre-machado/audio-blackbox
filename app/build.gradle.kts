@@ -226,7 +226,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.billing.ktx)
     // Issue #495: Play SDK Index flags Fragment 1.1.0 pulled in through Billing's
-    // play-services-basement dependency; select a current stable 1.8.x release.
+    // play-services-basement dependency; select a current stable 1.9.x (latest stable) release.
     implementation(libs.androidx.fragment)
 
     testImplementation(libs.junit)
