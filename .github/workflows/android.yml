@@ -787,8 +787,7 @@ jobs:
           # Issue #416: the release build is obfuscated by R8. AGP already embeds this file in the
           # AAB (BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map); uploading it
           # explicitly as well makes deobfuscation of Play crash reports not depend on that.
-          # AGP 9.5 publishes mapping.prt under outputs; Play needs the text mapping.
-          mappingFile: app/build/intermediates/mapping/release/minifyReleaseWithR8/mapping.txt
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: ${{ github.event.inputs.track || (startsWith(github.ref, 'refs/tags/v') && 'alpha' || 'internal') }}
           status: ${{ github.event.inputs.status || 'completed' }}
           whatsNewDirectory: distribution/whatsnew
@@ -801,7 +800,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: r8-mapping-${{ github.run_number }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: app/build/intermediates/mapping/release/minifyReleaseWithR8/mapping.txt
+          path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: error
           retention-days: 90
 
