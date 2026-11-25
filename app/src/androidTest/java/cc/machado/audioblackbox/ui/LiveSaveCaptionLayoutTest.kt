@@ -34,6 +34,7 @@ class LiveSaveCaptionLayoutTest {
                 Box(Modifier.requiredSize(windowWidth.value, COMPACT_WINDOW_HEIGHT).padding(SCREEN_GUTTER)) {
                     AvionicsCard {
                         AvionicsPanelButtonRow(
+                            saveLabel = "SAVE", liveLabel = "LIVE",
                             save = {
                                 AvionicsPanelButton(
                                     label = "SAVE", onClick = {}, enabled = false,
