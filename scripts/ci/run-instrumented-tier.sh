@@ -299,9 +299,39 @@ timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
 wait "$OPUS_START_PID" || true # Process death is expected; verifier success is the oracle.
 [[ -z "$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
 # Snapshot after death and before Application.onCreate can repair the MediaStore row.
-timeout -k 2 15 "${ADB[@]}" shell run-as "$APP_ID" sh -c \
-  "' { IFS= read -r pid; IFS= read -r uri; IFS= read -r path; } < files/opus-kill-row.txt; cp -- \"\$path\" files/opus-killed-raw.ogg'" \
-  || fail "Could not preserve the raw killed Opus file."
+# API 30 scoped storage denies direct access to this pending MediaStore row even
+# through run-as. Read as root without restarting adbd; never skip raw evidence.
+opus_root_uid="$(timeout -k 2 15 "${ADB[@]}" exec-out su 0 id -u)" \
+  || fail "Raw Opus snapshot requires working su 0 on the CI emulator (unavailable or timed out)."
+[[ "$opus_root_uid" == 0 ]] || fail "Raw Opus snapshot requires su 0 to return root UID 0."
+opus_marker="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" cat files/opus-kill-row.txt)" \
+  || fail "Could not read the killed Opus row marker."
+mapfile -t opus_marker_lines <<< "$opus_marker"
+opus_path="${opus_marker_lines[2]:-}"
+# adb joins remote arguments into shell text; accept only the fixture's known path.
+[[ "$opus_path" =~ ^/storage/emulated/0/Music/Blackbox/blackbox_[0-9]+_kill_forward\.ogg$ ]] \
+  || fail "Killed Opus row marker contains an unexpected file path."
+opus_device_size="$(timeout -k 2 15 "${ADB[@]}" exec-out su 0 stat -c %s "$opus_path")" \
+  || fail "Could not stat the raw killed Opus file as root."
+[[ "$opus_device_size" =~ ^[1-9][0-9]*$ ]] || fail "Raw killed Opus file has an empty or invalid size."
+opus_host_snapshot="build/opus-killed-raw.ogg"
+timeout -k 2 15 "${ADB[@]}" exec-out su 0 cat "$opus_path" > "$opus_host_snapshot" \
+  || fail "Could not read the raw killed Opus file as root."
+opus_host_size="$(timeout -k 2 15 stat -c %s "$opus_host_snapshot")" \
+  || fail "Could not stat the host raw Opus snapshot."
+[[ -s "$opus_host_snapshot" && "$opus_host_size" == "$opus_device_size" ]] \
+  || fail "Raw Opus snapshot size mismatch: device=$opus_device_size host=$opus_host_size."
+# Create through run-as to retain app ownership and SELinux context. The verifier
+# reads this exact internal path before inspecting the separately repaired row.
+# `shell -T` (shell protocol, no PTY) forwards stdin byte-for-byte; exec-out does not
+# reliably forward stdin, and a PTY would mangle binary data.
+timeout -k 2 15 "${ADB[@]}" shell -T run-as "$APP_ID" sh -c \
+  "'cat > files/opus-killed-raw.ogg'" < "$opus_host_snapshot" \
+  || fail "Could not install the raw Opus snapshot in the app files directory."
+opus_app_size="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" stat -c %s files/opus-killed-raw.ogg)" \
+  || fail "Could not stat the app-readable raw Opus snapshot."
+[[ "$opus_app_size" == "$opus_device_size" ]] \
+  || fail "App raw Opus snapshot size mismatch: device=$opus_device_size app=$opus_app_size."
 timeout -k 5 180 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
   2>&1 | tee /tmp/instrumented-opus-kill-verify.log
 grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
