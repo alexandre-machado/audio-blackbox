@@ -42,16 +42,18 @@ fun formatFullDateTime(timestampMillis: Long): String {
 }
 
 /** Infers audio quality specifications (codec, bitrate) from recording metadata. */
-fun inferAudioQuality(recording: RecordingItem): String {
+fun inferAudioQuality(recording: RecordingItem, oggLabel: String): String {
     return if (recording.mimeType.contains("wav", ignoreCase = true) || recording.displayName.endsWith(".wav", ignoreCase = true)) {
         "16-bit PCM Linear"
     } else {
+        val isOgg = cc.machado.audioblackbox.export.StreamingOpusWriter.accepts(recording.mimeType, recording.displayName)
+        val codec = if (isOgg) oggLabel else "AAC"
         val durationSec = recording.durationMillis / 1000L
         if (durationSec > 0L) {
             val kbps = (recording.sizeBytes * 8L) / (durationSec * 1000L)
-            "AAC (~${kbps} kbps)"
+            "$codec (~${kbps} kbps)"
         } else {
-            "AAC (MPEG-4)"
+            if (isOgg) oggLabel else "AAC (MPEG-4)"
         }
     }
 }

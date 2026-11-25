@@ -19,14 +19,14 @@
 # It also validates every landing page's language/SEO links and JSON-LD, including verbatim
 # FAQ equality (#421/#425). Requires `ruby` on PATH, provided by the Pages build.
 #
-# Why: pages.yml used to upload raw docs/ with no Jekyll build, and it raced the legacy
+# Why: site.yml used to upload raw docs/ with no Jekyll build, and it raced the legacy
 # Pages builder. Whenever it won, the live hotsite showed `--- ---` and `{% if ... %}` as
 # visible text and GA4/Clarity never loaded. Nothing failed. This guard runs on the built
 # artifact before upload, so that shape of bug fails the deploy instead of shipping.
 set -euo pipefail
 
 LANDING_PAGES=(index.html pt-br/index.html es/index.html fr/index.html de/index.html it/index.html)
-ANALYTICS_PAGES=("${LANDING_PAGES[@]}" design/index.html release/privacy-policy.html)
+ANALYTICS_PAGES=("${LANDING_PAGES[@]}" design/index.html release/privacy-policy.html release/terms.html)
 # `{{`, then a variable path (page.title, site.x[0]) or a quoted string, then a filter pipe or
 # the closing `}}`. JS like `{{b:1}}` does not match: Liquid never has `:` right after the
 # leading expression.

@@ -60,7 +60,7 @@ interface StreamingExportSink {
  * An active destination for long-running streaming recordings (issue #53).
  *
  * Unlike [ExportTarget] (which stays `IS_PENDING = 1` until committed at the very end of a bounded
- * snapshot export), a [StreamingExportTarget] commits the row early to MediaStore upon creation so
+ * snapshot export), a [StreamingExportTarget] commits the row early to MediaStore during [prepare] so
  * the file is immediately visible in MediaStore and the Gallery while audio continues to be appended.
  *
  * ## Lifecycle & Failure Discipline (issue #53)
@@ -71,6 +71,13 @@ interface StreamingExportSink {
  *   partial recorded audio is preserved on disk for the black box recording.
  */
 interface StreamingExportTarget : Closeable, AutoCloseable {
+    /** Journal then publish on the start worker, before reporting Recording, constructing the
+     * writer or accessing descriptors. The caller of start() must run off the main thread. */
+    fun prepare() {}
+
+    /** Only before the first audio write: delete the unusable published row. */
+    fun abortUnstarted() { close() }
+
     /** The content URI of the MediaStore row. */
     val uri: Uri
 

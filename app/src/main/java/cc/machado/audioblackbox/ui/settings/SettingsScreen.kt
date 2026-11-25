@@ -77,6 +77,9 @@ import cc.machado.audioblackbox.ui.theme.WarningRed
 import androidx.compose.foundation.clickable
 import cc.machado.audioblackbox.audio.QualityPreset
 import kotlinx.coroutines.launch
+import cc.machado.audioblackbox.settings.SaveAudioFormat
+import cc.machado.audioblackbox.settings.SaveAudioFormatPreferences
+import kotlinx.coroutines.flow.catch
 
 /** Test tag on the "Support the project" row (issue #444). */
 const val SETTINGS_SUPPORT_ROW_TEST_TAG = "settings_support_row"
@@ -104,6 +107,23 @@ fun SettingsRoute(
     val (proState, onPurchase) = cc.machado.audioblackbox.ui.rememberProPurchase()
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val formatPreferences = androidx.compose.runtime.remember(context) { SaveAudioFormatPreferences(context) }
+    var formatError by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val formatFlow = androidx.compose.runtime.remember(formatPreferences) {
+        formatPreferences.format.catch { formatError = true }
+    }
+    val saveFormat by formatFlow.collectAsStateWithLifecycle(initialValue = null)
+    val opusAvailable by androidx.compose.runtime.produceState<Boolean?>(null, uiState.selectedPreset) {
+        value = null
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            cc.machado.audioblackbox.export.OpusEncoding.available(
+                cc.machado.audioblackbox.audio.AudioConfig(
+                    sampleRateHz = uiState.selectedPreset.sampleRateHz,
+                    channelCount = uiState.selectedPreset.channelCount,
+                ),
+            )
+        }
+    }
     // Issue #388 / PR #390 `@rev` finding 1: guards against a double-tap launching two concurrent
     // exports (each doing its own ~12 MB-worst-case read+redact+write) while one is already
     // in flight -- the button itself is disabled via this same flag (see DiagnosticsSection).
@@ -112,6 +132,17 @@ fun SettingsRoute(
     }
     SettingsScreen(
         uiState = uiState,
+        saveAudioFormat = saveFormat,
+        opusAvailable = opusAvailable,
+        formatError = formatError,
+        onSelectSaveAudioFormat = { selected ->
+            coroutineScope.launch {
+                try {
+                    formatPreferences.set(selected)
+                    formatError = false
+                } catch (e: java.io.IOException) { formatError = true }
+            }
+        },
         proState = proState,
         onPurchase = onPurchase,
         onSelectQualityPreset = viewModel::selectQualityPreset,
@@ -154,6 +185,10 @@ fun SettingsScreen(
     isExportingDiagnosticLog: Boolean = false,
     modifier: Modifier = Modifier,
     versionName: String = BuildConfig.VERSION_NAME,
+    saveAudioFormat: SaveAudioFormat? = SaveAudioFormat.AAC,
+    opusAvailable: Boolean? = null,
+    formatError: Boolean = false,
+    onSelectSaveAudioFormat: (SaveAudioFormat) -> Unit = {},
     proState: cc.machado.audioblackbox.ui.ProCardState = cc.machado.audioblackbox.ui.ProCardState(),
     onPurchase: () -> Unit = {},
     onSupportClick: () -> Unit = {},
@@ -172,15 +207,9 @@ fun SettingsScreen(
             presets = uiState.qualityPresets,
             onSelectQualityPreset = onSelectQualityPreset,
         )
-        RetentionStepperSection(uiState.retentionStepper, onDecrement, onIncrement)
-        uiState.retentionLimit?.let { limit ->
-            Text(
-                text = stringResource(R.string.settings_retention_clamp_notice_body, limit.previousMinutes, limit.newMinutes),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
-        AudioSpecsSection(selectedPreset = uiState.selectedPreset)
+        RetentionStepperSection(uiState.retentionStepper, uiState.retentionLimit, onDecrement, onIncrement)
+        SaveAudioFormatSection(saveAudioFormat, opusAvailable, formatError, onSelectSaveAudioFormat)
+        AudioSpecsSection(selectedPreset = uiState.selectedPreset, saveAudioFormat = saveAudioFormat)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
         DiagnosticsSection(
             onExportDiagnosticLog = onExportDiagnosticLog,
@@ -193,6 +222,17 @@ fun SettingsScreen(
     }
     uiState.resizeError?.let { errorInfo ->
         ResizeErrorDialog(errorInfo = errorInfo, onAcknowledge = onDismissResizeError)
+    }
+}
+
+/** Limit notice text, rendered inside the ceiling's live-region node; absent text adds no space. */
+@Composable
+private fun RetentionLimitNotice(limit: ClampNotice?) {
+    limit?.let {
+        Text(
+            text = stringResource(R.string.settings_retention_clamp_notice_body, it.previousMinutes, it.newMinutes),
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -213,6 +253,7 @@ private fun SettingsHeader() {
 @Composable
 private fun RetentionStepperSection(
     stepper: RetentionStepperUiState,
+    limit: ClampNotice?,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
 ) {
@@ -235,11 +276,21 @@ private fun RetentionStepperSection(
                     AvionicsTag(text = "~${stepper.approxPendingRamMb} MB")
                 },
             )
-            Text(
-                text = stringResource(R.string.settings_retention_ceiling, stepper.maxSelectableMinutes),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Small, always-present live region (REV-12/14/19): the ceiling line is never empty, so
+            // the node keeps non-zero bounds in the accessibility tree, and it holds only the
+            // ceiling and the limit notice. A +/- tap does not re-announce the whole card.
+            Column(
+                modifier = Modifier.testTag("retention_limit_notice")
+                    .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_retention_ceiling, stepper.maxSelectableMinutes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                RetentionLimitNotice(limit)
+            }
             // No empty line or spacedBy gap when there is nothing to announce.
             if (stepper.isDirty) {
                 Text(
@@ -440,7 +491,7 @@ private fun QualityPresetSection(
 }
 
 @Composable
-private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFAULT) {
+private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFAULT, saveAudioFormat: SaveAudioFormat? = SaveAudioFormat.AAC) {
     AvionicsCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -453,7 +504,11 @@ private fun AudioSpecsSection(selectedPreset: QualityPreset = QualityPreset.DEFA
 
             SpecRow(label = stringResource(R.string.settings_specs_format_label), value = stringResource(R.string.settings_specs_format_value), isMonospace = true)
             HorizontalDivider(color = CockpitBorder)
-            SpecRow(label = stringResource(R.string.settings_specs_export_label), value = stringResource(R.string.settings_specs_export_value), isMonospace = true)
+            SpecRow(label = stringResource(R.string.settings_specs_export_label), value = when (saveAudioFormat) {
+                SaveAudioFormat.AAC -> stringResource(R.string.settings_specs_export_value)
+                SaveAudioFormat.OPUS -> stringResource(R.string.audio_format_opus_extension)
+                null -> ""
+            }, isMonospace = true)
             HorizontalDivider(color = CockpitBorder)
             SpecRow(
                 label = stringResource(R.string.settings_specs_sample_rate_label),

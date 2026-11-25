@@ -748,7 +748,7 @@ private fun statusColor(status: CaptureStatus): Color = when (status) {
  * name does not.
  */
 @Composable
-private fun ActionPanelRow(
+internal fun ActionPanelRow(
     uiState: DashboardUiState,
     onSaveRecent: () -> Unit,
     onStartForwardRecording: () -> Unit,
@@ -831,9 +831,9 @@ private fun ActionPanelRow(
     }
 
     AvionicsPanelButtonRow(
+        saveLabel = saveLabel, liveLabel = liveLabel, saveInProgress = isExporting,
         save = {
             AvionicsPanelButton(
-                label = saveLabel,
                 onClick = {
                     val now = System.currentTimeMillis()
                     if (now - lastSaveClickTime >= 500L) {
@@ -842,7 +842,6 @@ private fun ActionPanelRow(
                     }
                 },
                 enabled = canSave,
-                inProgress = isExporting,
                 caption = saveCaption,
                 ledColor = FlightOrange,
                 contentDescription = saveCd,
@@ -851,8 +850,6 @@ private fun ActionPanelRow(
         },
         live = {
             AvionicsPanelButton(
-                label = liveLabel,
-                iconRes = liveAction.icon,
                 onClick = if (isForwardRecording) onStopForwardRecording else onStartForwardRecording,
                 caption = liveCaption,
                 ledColor = FlightOrange,
@@ -891,7 +888,8 @@ private fun SaveOutcomeNotice(
         }
         is SaveUiState.Error -> {
             titleRes = R.string.dashboard_save_error_title
-            body = saveState.message
+            body = if (saveState.reason == ExportFailureReason.OPUS_UNAVAILABLE)
+                stringResource(R.string.settings_format_opus_unavailable) else saveState.message
             dismissible = true
         }
     }
@@ -1042,7 +1040,8 @@ private fun ForwardOutcomeNotice(
         }
         is ForwardRecordingUiState.Error -> {
             titleRes = R.string.dashboard_forward_error_title
-            body = forwardState.message
+            body = if (forwardState.reason == cc.machado.audioblackbox.export.ForwardRecordingFailureReason.OPUS_UNAVAILABLE)
+                stringResource(R.string.settings_format_opus_unavailable) else forwardState.message
         }
         else -> return
     }

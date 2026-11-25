@@ -13,9 +13,20 @@ import androidx.test.rule.GrantPermissionRule
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.service.RecorderService
+import cc.machado.audioblackbox.export.ExportState
+import cc.machado.audioblackbox.export.PlanSegment
+import android.telephony.PhoneStateListener
+import android.telephony.TelephonyManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -23,29 +34,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Emulator-only regression test for the exact scenario PR #28's critical bug lived in: audio
- * mis-spliced after the *second* interruption, with the exported file's total length staying
- * correct so a duration-only assertion is blind to it. Fixed and covered by a multi-gap JVM unit
- * test (GapFillerTest), but that fix has never run against a real interruption -- until this
- * test.
- *
- * A real incoming call is raised via `adb emu gsm call` / `adb emu gsm cancel`, driven by
- * `scripts/ci/run-instrumented-tier.sh` on the CI *host* -- that command talks to the
- * emulator's console port and is unreachable from on-device instrumentation, so this test cannot
- * issue the calls itself. It synchronizes with the host script via exactly one logcat marker
- * (see [MARKER_READY]) once recording is confirmed to have actually started, then only *observes*
- * what the OS/engine did in response -- polling real state with bounded timeouts, never a fixed
- * sleep standing in for an assertion, and no retry/`@FlakyTest` wrapper (this repo's flake
- * policy, established on issue #26 / PR #28 round 4).
- *
- * What this proves that the JVM suite structurally cannot: that a real telephony interruption is
- * detected at all, twice, through `AudioManager.AudioRecordingCallback.isClientSilenced`
- * (API 30+ -- see `AudioConfig`/`RecorderService` docs), and that the export produced afterward
- * is a real, MediaStore-committed file with a sane declared duration. The byte-level splice
- * arithmetic for >1 gaps is GapFillerTest's job, with a synthetic fixture that can assert on
- * distinguishable segment content; a headless CI emulator has no host audio device behind its
- * virtual microphone, so this test cannot make that same content-level claim about real captured
- * audio -- see the PR description for that limitation stated plainly.
+ * Real telephony/AAC integration; BoundedExportGapWindowTest covers multi-gap arithmetic.
+ * The host waits for READY_n, RINGING_n, PAUSED_n and PCM_n markers. Each marker follows
+ * an observed framework/engine event, and every wait is bounded. The file oracle uses the
+ * export's frozen input cursors plus the two independently detected gaps, never write times
+ * extrapolated across a pause or the planner's own calculated duration.
  */
 @RunWith(AndroidJUnit4::class)
 class InterruptionSpliceTest {
@@ -83,36 +76,74 @@ class InterruptionSpliceTest {
     private fun ensureServiceStopped() {
         if (RecorderService.isServiceRunning.value || RecorderService.engine.state.value !is CaptureState.Idle) {
             context.startService(RecorderService.stopIntent(context))
-            pollUntil(timeoutMillis = 15_000) {
-                RecorderService.engine.state.value is CaptureState.Idle && !RecorderService.isServiceRunning.value
+            awaitEvent("service did not stop") {
+                combine(RecorderService.engine.state, RecorderService.isServiceRunning) { state, running ->
+                    state is CaptureState.Idle && !running
+                }.first { it }
             }
         }
     }
 
     @Test
     fun twoRealInterruptions_areBothDetectedAndExportedCorrectly() {
-        val testStartMillis = System.currentTimeMillis()
-
         context.startForegroundService(RecorderService.startIntent(context))
-        assertTrue(
-            "capture never reached Recording",
-            pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Recording },
-        )
+        awaitEvent("capture never reached Recording") {
+            RecorderService.captureState.first { it is CaptureState.Recording }
+        }
+        val engine = RecorderService.engine
+        awaitCondition("capture never delivered initial PCM") { (engine.writeCursor() ?: 0) >= 32_000 }
 
-        // Sync point for scripts/ci/run-interruption-scenario.sh: it waits for this exact line
-        // before starting its adb-emu gsm-call schedule. Everything from here on is driven
-        // externally.
-        android.util.Log.i(MARKER_TAG, MARKER_READY)
-
-        assertTrue(
-            "expected exactly 2 PauseGaps from 2 real incoming calls, timed out waiting " +
-                "(see scripts/ci/run-instrumented-tier.sh for the call schedule)",
-            pollUntil(timeoutMillis = 120_000) { RecorderService.engine.gaps.value.size == 2 },
-        )
-        assertTrue(
-            "capture did not resume to Recording after the second call ended",
-            pollUntil(timeoutMillis = 15_000) { RecorderService.engine.state.value is CaptureState.Recording },
-        )
+        val phone = context.getSystemService(TelephonyManager::class.java)
+        val callState = MutableStateFlow(TelephonyManager.CALL_STATE_IDLE)
+        // Test-only privilege for the ringing acknowledgement; no app manifest permission.
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity(Manifest.permission.READ_PHONE_STATE)
+        var listener: PhoneStateListener? = null
+        try {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                @Suppress("DEPRECATION")
+                val callback = object : PhoneStateListener() {
+                    override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                        callState.value = state
+                    }
+                }
+                listener = callback
+                @Suppress("DEPRECATION")
+                phone.listen(callback, PhoneStateListener.LISTEN_CALL_STATE)
+            }
+            for (call in 1..2) {
+                marker("READY_$call")
+                awaitEvent("call $call never rang") {
+                    callState.first { it == TelephonyManager.CALL_STATE_RINGING }
+                }
+                marker("RINGING_$call")
+                awaitEvent("call $call never paused capture") {
+                    engine.state.first { it is CaptureState.Paused }
+                }
+                val pausedCursor = checkNotNull(engine.writeCursor())
+                marker("PAUSED_$call")
+                awaitEvent("call $call never closed its gap") { engine.gaps.first { it.size == call } }
+                awaitEvent("call $call never resumed Recording") {
+                    engine.state.first { it is CaptureState.Recording }
+                }
+                val resumedCursor = checkNotNull(engine.writeCursor())
+                awaitCondition("call $call resumed without PCM after cursor $resumedCursor " +
+                    "(paused at $pausedCursor)") {
+                    (engine.writeCursor() ?: resumedCursor) > resumedCursor
+                }
+                awaitEvent("call $call never returned to idle") {
+                    callState.first { it == TelephonyManager.CALL_STATE_IDLE }
+                }
+                marker("PCM_$call")
+            }
+        } finally {
+            try {
+                @Suppress("DEPRECATION")
+                listener?.let { phone.listen(it, PhoneStateListener.LISTEN_NONE) }
+            } finally {
+                automation.dropShellPermissionIdentity()
+            }
+        }
 
         val gaps = RecorderService.engine.gaps.value
         assertEquals(2, gaps.size)
@@ -128,7 +159,6 @@ class InterruptionSpliceTest {
         // capture rate for the encoder-priming tolerance computed below (2048 samples / 16 kHz =
         // 128ms). Assert the config this session is actually running under matches, so a future
         // preset change cannot silently invalidate that constant.
-        val engine = RecorderService.engine
         assertEquals(
             "encoderPrimingToleranceMillis below assumes AudioConfig.DEFAULT_SAMPLE_RATE_HZ's " +
                 "16 kHz rate; this session's actual capture config must match it",
@@ -136,50 +166,46 @@ class InterruptionSpliceTest {
             engine.activeConfig.sampleRateHz,
         )
 
-        // The recording window's start/end are taken from the engine's own timeline, not from
-        // this test's own System.currentTimeMillis() calls (issue #328, corrected on PR #376
-        // round 2). RingBuffer.estimateTimestamp interpolates from real wall-clock markers the
-        // capture thread stamps at the moment each chunk is actually written into the buffer --
-        // the same mechanism BoundedExportPlan/ExportEngine already use to compute a bounded
-        // export's windowStart (estimateTimestamp(oldestCursor())). Anchoring both ends of this
-        // comparison to that timeline instead of the test thread's own clock cancels AudioRecord
-        // init latency and test-side polling/scheduling jitter from both sides of the subtraction
-        // below: those are exactly what the old 7500ms tolerance existed to cover (documented
-        // there as a 4-6s discrepancy on busy CI runners), and they act on any comparison whose
-        // right-hand side is externally-measured elapsed wall clock -- which is why that budget
-        // could not simply be cut down to the encoder-priming component alone (round 1 of this
-        // restructure tried exactly that, and CI failed on unmutated content at 545a9d4:
-        // "declared duration 24704ms must equal ... 24564ms ... within 128ms"). What remains after
-        // anchoring to the engine's own timeline is real AAC encoder-priming quantization, not
-        // scheduling noise.
-        val sessionStartCursor = checkNotNull(engine.oldestCursor()) {
-            "engine has no live ring buffer to derive a session-start cursor from"
+        awaitEvent("previous export never returned to Idle") {
+            RecorderService.exportState.first { it is ExportState.Idle }
         }
-        val sessionStartMillis = checkNotNull(engine.estimateTimestamp(sessionStartCursor)) {
-            "engine has no live ring buffer to derive a session-start timestamp from"
+        // Subscribe before Save. Unconfined collection observes Success synchronously before
+        // RecorderService acknowledges it back to Idle; no transient terminal event is lost.
+        val success = awaitEvent("save produced no terminal export result") {
+            val terminal = kotlinx.coroutines.coroutineScope {
+                val result = async(Dispatchers.Unconfined) {
+                    RecorderService.exportState.first { it is ExportState.Success || it is ExportState.Error }
+                }
+                context.startService(RecorderService.saveIntent(context))
+                result.await()
+            }
+            check(terminal is ExportState.Success) { "export failed: $terminal" }
+            terminal
         }
-
-        context.startService(RecorderService.saveIntent(context))
-
-        val sessionEndCursor = checkNotNull(engine.writeCursor()) {
-            "engine has no live ring buffer to derive a session-end cursor from"
+        val input = checkNotNull(success.input) { "export omitted its input snapshot" }
+        val diagnostics = "file=${success.displayName} detected=$gaps input=$input"
+        android.util.Log.i(MARKER_TAG, diagnostics)
+        assertEquals(diagnostics, 16_000, input.targetConfig.sampleRateHz)
+        assertTrue("unexpected mixed format: $diagnostics",
+            input.formats.all { it.config == input.targetConfig })
+        assertEquals("export input lost a detected gap: $diagnostics", gaps, input.gaps)
+        val silence = input.segments.filterIsInstance<PlanSegment.Silence>()
+        assertEquals("planner omitted a gap: $diagnostics", 2, silence.size)
+        gaps.zip(silence).forEachIndexed { index, (gap, segment) ->
+            assertEquals("planner shortened gap $index: $diagnostics",
+                gap.durationMillis * input.targetConfig.bytesPerSecond / 1000,
+                segment.length)
         }
-        val sessionEndMillis = checkNotNull(engine.estimateTimestamp(sessionEndCursor)) {
-            "engine has no live ring buffer to derive a session-end timestamp from"
-        }
-
-        val row = pollForExportedRow(sinceMillis = testStartMillis, timeoutMillis = 30_000)
-        assertNotNull("export never landed a committed MediaStore row", row)
-        checkNotNull(row)
-        assertEquals("IS_PENDING must be cleared once export commits", 0, row.isPending)
-
-        // expectedDurationMillis == audioOnlyMillis + totalGapMillis by construction: every gap
-        // this test detected and asserted above (ordered, positive, non-overlapping) happens
-        // strictly inside [sessionStartMillis, sessionEndMillis], and that window's own span --
-        // engine timeline, not test wall clock, see above -- is exactly the audio time it contains
-        // plus the gap time it contains.
+        assertEquals("planner PCM shortfall: $diagnostics",
+            input.endCursor - input.startCursor,
+            input.segments.filterIsInstance<PlanSegment.Raw>().sumOf { it.length })
         val totalGapMillis = gaps.sumOf { it.durationMillis }
-        val expectedDurationMillis = sessionEndMillis - sessionStartMillis
+        val expectedDurationMillis = (input.endCursor - input.startCursor) * 1000 /
+            input.targetConfig.bytesPerSecond + totalGapMillis
+        assertTrue("fixture exceeded requested export window: $diagnostics",
+            expectedDurationMillis <= input.requestedDurationMillis)
+        val row = exportedRow(success.displayName)
+        assertEquals("IS_PENDING must be cleared: $diagnostics", 0, row.isPending)
         // The one tolerance kept, and not a scheduling fudge factor by another name: AAC-LC's
         // MDCT look-ahead gives the encoder a *measured* (not assumed) priming delay of exactly
         // 2048 samples -- see AacPayloadEncoder's kdoc and AacRoundTripTest.
@@ -191,7 +217,7 @@ class InterruptionSpliceTest {
         // which this assertion no longer needs a budget for at all.
         val encoderPrimingToleranceMillis = 2048L * 1000L / AudioConfig.DEFAULT_SAMPLE_RATE_HZ
         assertTrue(
-            "declared duration ${row.durationMillis}ms must equal the engine-timeline recording " +
+            "$diagnostics declared duration ${row.durationMillis}ms must equal the input " +
                 "window of ${expectedDurationMillis}ms (of which ${totalGapMillis}ms across " +
                 "${gaps.size} detected gap(s) must be filled with silence) within the AAC " +
                 "encoder's documented ${encoderPrimingToleranceMillis}ms priming-delay quantization",
@@ -211,40 +237,25 @@ class InterruptionSpliceTest {
 
     private data class ExportedRow(val isPending: Int, val durationMillis: Long, val relativePath: String?)
 
-    private fun pollForExportedRow(sinceMillis: Long, timeoutMillis: Long): ExportedRow? {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        val resolver = context.contentResolver
+    private fun exportedRow(displayName: String): ExportedRow {
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.IS_PENDING,
-            MediaStore.Audio.Media.DATE_ADDED,
-            MediaStore.Audio.Media.RELATIVE_PATH,
-        )
-        while (System.currentTimeMillis() < deadline) {
-            resolver.query(collection, projection, null, null, "${MediaStore.Audio.Media.DATE_ADDED} DESC")?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-                val pendingCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_PENDING)
-                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
-                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
-                while (cursor.moveToNext()) {
-                    val name = cursor.getString(nameCol)
-                    val pending = cursor.getInt(pendingCol)
-                    val dateAddedSeconds = cursor.getLong(dateCol)
-                    if (name.startsWith("blackbox_") && dateAddedSeconds * 1000 >= sinceMillis - 5_000 && pending == 0) {
-                        val id = cursor.getLong(idCol)
-                        val uri = ContentUris.withAppendedId(collection, id)
-                        val duration = readDurationMillis(uri)
-                        val relativePath = cursor.getString(pathCol)
-                        return ExportedRow(pending, duration, relativePath)
-                    }
-                }
+        return checkNotNull(context.contentResolver.query(
+            collection,
+            arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.IS_PENDING,
+                MediaStore.Audio.Media.RELATIVE_PATH),
+            "${MediaStore.Audio.Media.DISPLAY_NAME} = ?", arrayOf(displayName), null,
+        )).use { cursor ->
+            check(cursor.count == 1 && cursor.moveToFirst()) {
+                "Success file $displayName must identify exactly one row, found ${cursor.count}"
             }
-            Thread.sleep(500)
+            val uri = ContentUris.withAppendedId(collection,
+                cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)))
+            ExportedRow(
+                cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_PENDING)),
+                readDurationMillis(uri),
+                cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)),
+            )
         }
-        return null
     }
 
     /** Reads the container's own declared duration via `MediaMetadataRetriever`, independent of
@@ -261,17 +272,29 @@ class InterruptionSpliceTest {
         }
     }
 
-    private fun pollUntil(timeoutMillis: Long, intervalMillis: Long = 250, condition: () -> Boolean): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (System.currentTimeMillis() < deadline) {
-            if (condition()) return true
-            Thread.sleep(intervalMillis)
+    private fun <T> awaitEvent(message: String, block: suspend () -> T): T = runBlocking {
+        try {
+            withTimeout(EVENT_TIMEOUT_MILLIS) { block() }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            throw AssertionError("$message; state=${RecorderService.engine.state.value} " +
+                "cursor=${RecorderService.engine.writeCursor()} gaps=${RecorderService.engine.gaps.value}", e)
         }
-        return condition()
     }
 
+    // RingBuffer cursors have no flow (inputLevel can stay constant on a silent emulator).
+    // The coroutine timer bounds checks to 10/s without adding capture-thread instrumentation.
+    // Only the actual cursor predicate releases the wait; the timer never implies progress.
+    private fun awaitCondition(message: String, condition: () -> Boolean) = awaitEvent(message) {
+        while (!condition()) delay(CURSOR_CHECK_INTERVAL_MILLIS)
+    }
+
+    private fun marker(value: String) { android.util.Log.i(MARKER_TAG, value) }
+
     companion object {
+        // Keep in sync with the cumulative budget table in scripts/ci/run-instrumented-tier.sh.
+        // 18 waits including @Before/@After: at most 180s of timed waits for the whole test.
+        private const val EVENT_TIMEOUT_MILLIS = 10_000L
+        private const val CURSOR_CHECK_INTERVAL_MILLIS = 100L
         const val MARKER_TAG = "SpliceTest"
-        const val MARKER_READY = "READY_FOR_CALLS"
     }
 }

@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # Runs the full emulator-based instrumented tier (issue #34) against whatever single device
 # `adb` currently sees -- meant to run as the `script:` step inside a booted
-# reactivecircus/android-emulator-runner job (.github/workflows/ci.yml) or against a locally
+# reactivecircus/android-emulator-runner job (.github/workflows/android.yml) or against a locally
 # booted AVD (scripts/run-instrumented-tests.sh). Never touches a physically connected device
 # (the S25) on purpose -- see the serial-selection guard below.
 #
-# Two things happen here, not one plain `./gradlew connectedDebugAndroidTest`:
-#   1. Every instrumented test EXCEPT InterruptionSpliceTest runs the normal way.
-#   2. InterruptionSpliceTest runs separately, launched directly via `adb shell am instrument`,
+# Three phases run here instead of one plain `./gradlew connectedDebugAndroidTest`:
+#   1. Normal instrumented tests, including Ogg prefix qualification, run first.
+#   2. OpusProcessKillTest runs with an external kill/restart handshake.
+#   3. InterruptionSpliceTest runs separately, launched directly via `adb shell am instrument`,
 #      because this script must inject two real GSM calls (`adb emu gsm call`/`gsm cancel`) at
 #      the right moments -- `adb emu` talks to the emulator's host-side console port and cannot
 #      be issued from on-device instrumentation, so Gradle's connectedAndroidTest task has no
 #      hook for it. See InterruptionSpliceTest's class doc for the synchronization contract (one
-#      logcat marker, then a bounded poll on real engine state -- no fixed sleep stands in for an
+#      marker per observed event, with bounded waits -- no fixed sleep stands in for an
 #      assertion on either side of this handshake).
 
 set -euo pipefail
@@ -20,8 +21,34 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+CI_CLEANUP_REGISTERED=false
+
+# The self-hosted runner retains artifacts between runs; clear them before any writes.
+rm -f /tmp/instrumented-*.log
+rm -rf build/instrumented-junit
+
 log()  { printf '[instrumented-tier] %s\n' "$*"; }
 fail() { printf '[instrumented-tier] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# Report only phases started in this invocation, including partial logs on early exit.
+# Preserve the original status and all grep gates; the Opus start death is intentional.
+JUNIT_PHASES=()
+mkdir -p build/instrumented-junit
+finish_tier() {
+  local status=$? phase
+  trap - EXIT
+  set +e
+  for phase in "${JUNIT_PHASES[@]}"; do
+    python3 scripts/ci/am-instrument-to-junit.py "/tmp/instrumented-$phase.log" \
+      "build/instrumented-junit/$phase.xml" --phase "$phase" ||
+      printf '::warning::Could not generate JUnit for %s.\n' "$phase" >&2
+  done
+  if [[ "${CI_CLEANUP_REGISTERED:-}" == true ]]; then
+    shutdown_ci_emulator "$status"
+  fi
+  exit "$status"
+}
+trap finish_tier EXIT
 
 # The screen captures (issue #78) currently on the device, one filename per line, empty if there
 # are none. Two things about this AVD's toybox `ls` are load-bearing here, both learned the hard
@@ -43,14 +70,14 @@ APP_ID="cc.machado.audioblackbox.staging"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
+OPUS_KILL_TEST_CLASS="cc.machado.audioblackbox.export.OpusProcessKillTest"
 # Where ScreenshotCaptureTest (issue #78) writes its PNGs, relative to the app's data dir, and
-# where they land in the workspace for .github/workflows/ci.yml to upload as an artifact. The
+# where they land in the workspace for .github/workflows/android.yml to upload as an artifact. The
 # device path is the app's *internal* files dir on purpose: `run-as` reads it on any API level
 # without a storage permission, unlike /sdcard/Android/data.
 SCREENSHOT_DEVICE_DIR="files/screenshots"
 SCREENSHOT_OUT_DIR="build/screen-captures"
 MARKER_TAG="SpliceTest"
-MARKER_READY="READY_FOR_CALLS"
 FAKE_CALLER_NUMBER="5551234567"
 
 command -v adb >/dev/null 2>&1 || fail "adb not found on PATH."
@@ -85,7 +112,7 @@ wait_for_emulator_exit() {
 }
 
 shutdown_ci_emulator() {
-  local status=$? proc pid
+  local status=${1:-$?} proc pid
   local -a matches=()
   trap - EXIT
   set +e
@@ -121,7 +148,7 @@ if [[ "${CI_EMULATOR_SHUTDOWN:-}" == true ]]; then
     [[ "${ANDROID_SERIAL:-}" == "emulator-$EMULATOR_PORT" && -n "${AVD_NAME:-}" ]] ||
     fail "CI cleanup requires EMULATOR_PORT (even, 5554-5584), ANDROID_SERIAL=emulator-\$EMULATOR_PORT and AVD_NAME."
   command -v timeout >/dev/null || fail "timeout is required for bounded CI shutdown."
-  trap shutdown_ci_emulator EXIT
+  CI_CLEANUP_REGISTERED=true
 fi
 
 # --- Resolve exactly one emulator serial --------------------------------
@@ -208,13 +235,14 @@ if [[ -n "$STALE_CAPTURES" ]]; then
   fail "Stale screen captures survive at the app's $SCREENSHOT_DEVICE_DIR ($(echo "$STALE_CAPTURES" | tr '\n' ' ')) -- refusing to run, since the pull would upload a previous run's PNGs as this run's."
 fi
 
-# --- Phase 1: everything except InterruptionSpliceTest --------------------
+# --- Phase 1: tests that do not require an external handshake -------------
 # Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
 # leftovers from some earlier install/boot activity that happened to log the same tag.
 "${ADB[@]}" logcat -c
 log "Running the non-interruption instrumented tests..."
+JUNIT_PHASES+=(phase1)
 set +e
-"${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS" "$RUNNER" \
+"${ADB[@]}" shell am instrument -r -w -e notClass "$SPLICE_TEST_CLASS,$OPUS_KILL_TEST_CLASS" "$RUNNER" \
   2>&1 | tee /tmp/instrumented-phase1.log
 PHASE1_STATUS=$?
 set -e
@@ -275,75 +303,133 @@ if [[ -z "$HEADROOM_OUTPUT" ]]; then
 fi
 printf '%s\n' "$HEADROOM_OUTPUT"
 
+# #433: Phase 1 includes the Ogg truncation qualification. A failure above is the owner's
+# stop gate under AB-2411-44: RAW one-page reader limitations are logged, but repair must pass.
+# The first instrumentation process is deliberately killed with its production Live writer open.
+log "Starting the Opus live process-kill qualification..."
+command -v timeout >/dev/null || fail "timeout is required for the process-kill qualification."
+"${ADB[@]}" logcat -c
+# Keep the raw log only: intentional process death is not a JUnit failure.
+# The opus-kill-verify phase below reports the qualification result.
+timeout -k 5 120 "${ADB[@]}" shell am instrument -r -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
+  > /tmp/instrumented-opus-kill-start.log 2>&1 &
+OPUS_START_PID=$!
+opus_ready="$(timeout -k 2 90 "${ADB[@]}" logcat -m 1 -e 'OPUS_KILL_READY pid=[0-9]+' -s OpusKillTest:I | grep -oE 'OPUS_KILL_READY pid=[0-9]+' || true)"
+if [[ -z "$opus_ready" ]]; then
+  timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
+  wait "$OPUS_START_PID" || true
+  fail "Opus live writer never reported READY; see /tmp/instrumented-opus-kill-start.log."
+fi
+opus_app_pid="${opus_ready##*=}"
+opus_actual_pid="$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" | tr -d '\r' || true)"
+[[ "$opus_app_pid" == "$opus_actual_pid" ]] || fail "The READY app PID is no longer alive; no process-kill result can be claimed."
+timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
+wait "$OPUS_START_PID" || true # Process death is expected; verifier success is the oracle.
+[[ -z "$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
+# Snapshot after death and before Application.onCreate can repair the MediaStore row.
+# API 30 scoped storage denies direct access to this pending MediaStore row even
+# through run-as. Read as root without restarting adbd; never skip raw evidence.
+opus_root_uid="$(timeout -k 2 15 "${ADB[@]}" exec-out su 0 id -u)" \
+  || fail "Raw Opus snapshot requires working su 0 on the CI emulator (unavailable or timed out)."
+[[ "$opus_root_uid" == 0 ]] || fail "Raw Opus snapshot requires su 0 to return root UID 0."
+opus_marker="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" cat files/opus-kill-row.txt)" \
+  || fail "Could not read the killed Opus row marker."
+mapfile -t opus_marker_lines <<< "$opus_marker"
+opus_path="${opus_marker_lines[2]:-}"
+# adb joins remote arguments into shell text; accept only the fixture's known path.
+[[ "$opus_path" =~ ^/storage/emulated/0/Music/Blackbox/blackbox_[0-9]+_kill_forward\.ogg$ ]] \
+  || fail "Killed Opus row marker contains an unexpected file path."
+opus_device_size="$(timeout -k 2 15 "${ADB[@]}" exec-out su 0 stat -c %s "$opus_path")" \
+  || fail "Could not stat the raw killed Opus file as root."
+[[ "$opus_device_size" =~ ^[1-9][0-9]*$ ]] || fail "Raw killed Opus file has an empty or invalid size."
+opus_host_snapshot="build/opus-killed-raw.ogg"
+timeout -k 2 15 "${ADB[@]}" exec-out su 0 cat "$opus_path" > "$opus_host_snapshot" \
+  || fail "Could not read the raw killed Opus file as root."
+opus_host_size="$(timeout -k 2 15 stat -c %s "$opus_host_snapshot")" \
+  || fail "Could not stat the host raw Opus snapshot."
+[[ -s "$opus_host_snapshot" && "$opus_host_size" == "$opus_device_size" ]] \
+  || fail "Raw Opus snapshot size mismatch: device=$opus_device_size host=$opus_host_size."
+# Create through run-as to retain app ownership and SELinux context. The verifier
+# reads this exact internal path before inspecting the separately repaired row.
+# `shell -T` (shell protocol, no PTY) forwards stdin byte-for-byte; exec-out does not
+# reliably forward stdin, and a PTY would mangle binary data.
+timeout -k 2 15 "${ADB[@]}" shell -T run-as "$APP_ID" sh -c \
+  "'cat > files/opus-killed-raw.ogg'" < "$opus_host_snapshot" \
+  || fail "Could not install the raw Opus snapshot in the app files directory."
+opus_app_size="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" stat -c %s files/opus-killed-raw.ogg)" \
+  || fail "Could not stat the app-readable raw Opus snapshot."
+[[ "$opus_app_size" == "$opus_device_size" ]] \
+  || fail "App raw Opus snapshot size mismatch: device=$opus_device_size app=$opus_app_size."
+JUNIT_PHASES+=(opus-kill-verify)
+timeout -k 5 180 "${ADB[@]}" shell am instrument -r -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
+  2>&1 | tee /tmp/instrumented-opus-kill-verify.log
+grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
+log "Opus process-kill and startup-recovery qualification OK."
+
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
+# Budget contract with InterruptionSpliceTest.EVENT_TIMEOUT_MILLIS = 10s:
+# Segment                    Test waits   Host limit (seconds)
+# launch -> READY_1          3 * 10 = 30   50
+# PCM_1 -> READY_2           0              20
+# READY_n -> RINGING_n       1 * 10 = 10   30
+# RINGING_n -> PAUSED_n      1 * 10 = 10   30
+# PAUSED_n -> PCM_n          4 * 10 = 40   60
+# PCM_2 -> completion        3 * 10 = 30   (outer limit)
+# Whole test (setup + 2 initial + 12 call + 2 export + teardown): 180s.
+# Marker limits include 10s teardown after a failed assertion + 10s reporting margin.
+# Outer 300s allows all 180s of test waits + 60s for six host commands + 60s
+# for instrumentation startup, framework work, metadata reads and result reporting.
+SPLICE_PHASE_SECONDS=300
 log "Launching InterruptionSpliceTest in the background..."
 "${ADB[@]}" logcat -c
-"${ADB[@]}" shell am instrument -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
+JUNIT_PHASES+=(splice)
+timeout -k 5 "$SPLICE_PHASE_SECONDS" "${ADB[@]}" shell am instrument -r -w -e class "$SPLICE_TEST_CLASS" "$RUNNER" \
   >/tmp/instrumented-splice.log 2>&1 &
 SPLICE_PID=$!
 
-wait_for_marker() {
-  local deadline=$((SECONDS + 60))
-  while [[ $SECONDS -lt $deadline ]]; do
-    if "${ADB[@]}" logcat -d -s "${MARKER_TAG}:I" 2>/dev/null | grep -q "$MARKER_READY"; then
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
-
-log "Waiting for the test to confirm recording has actually started..."
-if ! wait_for_marker; then
+# ERR cleanup leaves the existing EXIT emulator-shutdown trap intact. Inherit into
+# functions so marker-reader failures and all emu/keyevent failures take this path.
+splice_failed() {
+  local status=$?
+  trap - ERR
   kill "$SPLICE_PID" 2>/dev/null || true
   wait "$SPLICE_PID" 2>/dev/null || true
   cat /tmp/instrumented-splice.log >&2 || true
-  fail "InterruptionSpliceTest never logged '$MARKER_READY' -- recording did not start (see log above)."
-fi
-log "Recording confirmed. Driving two simulated GSM calls..."
+  printf '[instrumented-tier] ERROR: splice phase failed (status %s).\n' "$status" >&2
+  exit "$status"
+}
+set -E
+trap splice_failed ERR
 
-# `adb emu gsm call` alone only rings the simulated call -- it never becomes ACTIVE, and the
-# framework only silences other apps' microphone clients once a call actually goes off-hook
-# (confirmed empirically against a booted AVD: `dumpsys audio`'s RecordActivityMonitor line for
-# our session stays `silenced:false` through ringing, flips to `silenced:true` only after the
-# call is answered, and back to `false` on hangup). The emulator's console has no "answer an
-# inbound call" subcommand (`adb emu gsm accept` is documented as outbound-call-only), but the
-# stock google_apis image does ship a real Telecom/Dialer stack, and `KEYCODE_CALL` answers a
-# ringing call through it the same way a hardware call button would on a real phone.
-#
-# Generous fixed margins: real telephony state changes (ringing -> answered/active -> ended)
-# take a couple of seconds to propagate through the emulator's radio stack to
-# AudioManager.AudioRecordingCallback. The test itself does not depend on this exact timing --
-# it polls engine.gaps.value for a bounded 120s -- so these numbers only need to be "comfortably
-# long enough", not exact.
-sleep 3
-log "Call 1: ringing..."
-"${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-sleep 2
-log "Call 1: answering..."
-"${ADB[@]}" shell input keyevent KEYCODE_CALL
-sleep 4
-log "Call 1: ending..."
-"${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
-sleep 5
+wait_for_marker() {
+  local marker="$1"
+  local budget="$2"
+  # logcat includes retained messages, so a fast callback before this reader starts is safe.
+  log "Waiting up to ${budget}s for $marker..."
+  timeout -k 2 "$budget" "${ADB[@]}" logcat -m 1 -e "^${marker}$" -s "${MARKER_TAG}:I"
+}
 
-log "Call 2: ringing..."
-"${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
-sleep 2
-log "Call 2: answering..."
-"${ADB[@]}" shell input keyevent KEYCODE_CALL
-sleep 4
-log "Call 2: ending..."
-"${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
-sleep 5
+for call in 1 2; do
+  if [[ "$call" == 1 ]]; then
+    wait_for_marker "READY_$call" 50
+  else
+    wait_for_marker "READY_$call" 20
+  fi
+  log "Call $call: ringing..."
+  timeout -k 2 10 "${ADB[@]}" emu gsm call "$FAKE_CALLER_NUMBER"
+  wait_for_marker "RINGING_$call" 30
+  # A real framework ringing callback acknowledges that KEYCODE_CALL can answer it.
+  timeout -k 2 10 "${ADB[@]}" shell input keyevent KEYCODE_CALL
+  wait_for_marker "PAUSED_$call" 30
+  timeout -k 2 10 "${ADB[@]}" emu gsm cancel "$FAKE_CALLER_NUMBER"
+  wait_for_marker "PCM_$call" 60
+done
 
 log "Both calls issued. Waiting for the instrumentation run to finish (export + assertions)..."
-set +e
 wait "$SPLICE_PID"
-SPLICE_STATUS=$?
-set -e
+trap - ERR
 cat /tmp/instrumented-splice.log
-if [[ $SPLICE_STATUS -ne 0 ]] || ! grep -q "OK (" /tmp/instrumented-splice.log; then
+if ! grep -q "OK (" /tmp/instrumented-splice.log; then
   fail "InterruptionSpliceTest did not report OK -- see the log above."
 fi
 log "Phase 2 (InterruptionSpliceTest) OK."

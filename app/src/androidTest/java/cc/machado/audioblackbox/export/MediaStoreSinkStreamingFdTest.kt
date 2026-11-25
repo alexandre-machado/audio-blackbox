@@ -38,6 +38,7 @@ class MediaStoreSinkStreamingFdTest {
     fun openStreaming_descriptorSupportsFstatAndFtruncateAfterEarlyCommit() {
         val sink = MediaStoreSink(context)
         val target = sink.openStreaming("blackbox_fdtest_${System.nanoTime()}.m4a", StreamingAacWriter.MIME_TYPE_M4A)
+        target.prepare()
         try {
             // Precondition: the early commit happened, i.e. the row is published, not pending.
             val pending = context.contentResolver.query(

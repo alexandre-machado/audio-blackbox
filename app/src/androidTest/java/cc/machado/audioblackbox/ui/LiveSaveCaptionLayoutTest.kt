@@ -34,9 +34,10 @@ class LiveSaveCaptionLayoutTest {
                 Box(Modifier.requiredSize(windowWidth.value, COMPACT_WINDOW_HEIGHT).padding(SCREEN_GUTTER)) {
                     AvionicsCard {
                         AvionicsPanelButtonRow(
+                            saveLabel = "SAVE", liveLabel = "LIVE",
                             save = {
                                 AvionicsPanelButton(
-                                    label = "SAVE", onClick = {}, enabled = false,
+                                    onClick = {}, enabled = false,
                                     caption = caption.value,
                                     // Read the caption Text's actual layout, not the simple-string
                                     // semantics path's reconstructed MultiParagraph + layout size.
@@ -46,7 +47,7 @@ class LiveSaveCaptionLayoutTest {
                                     onCaptionTextLayout = { captionLayout = it },
                                 )
                             },
-                            live = { AvionicsPanelButton(label = "LIVE", onClick = {}) },
+                            live = { AvionicsPanelButton(onClick = {}) },
                         )
                     }
                 }

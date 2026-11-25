@@ -72,10 +72,11 @@ class MediaStoreStreamingSinkTest {
     fun openStreaming_isImmediatelyCommittedAndVisibleInMediaStore() {
         val name = "blackbox_${runId}_early_commit.m4a"
         val target = sink.openStreaming(name, "audio/mp4")
+        target.prepare()
         insertedUris += target.uri
 
         try {
-            // Oracle: IS_PENDING must be 0 immediately upon return from openStreaming()
+            // Oracle: IS_PENDING must be 0 after journal-before-publish prepare().
             val isPending = queryIsPending(target.uri)
             assertEquals("early-committed row must have IS_PENDING = 0", 0, isPending)
 
@@ -92,6 +93,7 @@ class MediaStoreStreamingSinkTest {
     fun streamingAacWriter_encodesViaStreamingTargetDescriptorAndDecodesValidAudio() {
         val name = "blackbox_${runId}_stream_encode.m4a"
         val target = sink.openStreaming(name, "audio/mp4")
+        target.prepare()
         insertedUris += target.uri
 
         val sampleRateHz = 16_000
@@ -144,6 +146,7 @@ class MediaStoreStreamingSinkTest {
     fun midRecordingFailure_preservesCommittedRowAndDataOnDisk() {
         val name = "blackbox_${runId}_mid_fail.m4a"
         val target = sink.openStreaming(name, "audio/mp4")
+        target.prepare()
         insertedUris += target.uri
 
         val sampleRateHz = 16_000
@@ -176,6 +179,7 @@ class MediaStoreStreamingSinkTest {
 
         val boundedTarget = sink.open(boundedName, "audio/mp4")
         val streamingTarget = sink.openStreaming(streamingName, "audio/mp4")
+        streamingTarget.prepare()
         insertedUris += streamingTarget.uri
 
         try {

@@ -17,19 +17,19 @@ engine_active: MOTOR ATIVO
 buffer_status: Estado do buffer circular
 mic_input: ENTRADA DO MIC (VU)
 buffer_retention: Retenção do buffer
-demo_save: 💾 Salvar áudio recente (.m4a)
+demo_save: 💾 Salvar áudio recente (.m4a / .ogg)
 demo_live: ⏺ Iniciar gravação contínua ao vivo
 overview_tag: Visão geral
 overview_title: O que é o Audio Blackbox?
 overview_intro: "O Audio Blackbox é um app Android de código aberto que mantém continuamente os últimos minutos de som na RAM e os grava no armazenamento local quando você toca em Salvar ou inicia Ao vivo. O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual."
 overview_detail: >-
-  Ele resolve um problema que um gravador comum não resolve: você só percebe que algo importava <em>depois</em> de ter sido dito, quando apertar gravar já não adianta. O Audio Blackbox continua gravando na própria memória enquanto a notificação aparece. Tocar em Salvar exporta o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) para um arquivo local <code>.m4a</code> (AAC), sem precisar voltar no tempo e sem sobreposição entre os arquivos. Foi feito para músicos e compositores, ideias e pensamentos em voz alta, reuniões e combinados dos quais você participa e momentos em família.
+  Ele resolve um problema que um gravador comum não resolve: você só percebe que algo importava <em>depois</em> de ter sido dito, quando apertar gravar já não adianta. O Audio Blackbox continua gravando na própria memória enquanto a notificação aparece. Tocar em Salvar exporta o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) para um arquivo local <code>.m4a</code> (AAC) ou <code>.ogg</code> (Opus), sem precisar voltar no tempo e sem sobreposição entre os arquivos. Foi feito para músicos e compositores, ideias e pensamentos em voz alta, reuniões e combinados dos quais você participa e momentos em família.
 overview_privacy: "O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem."
 features_tag: Recursos
 features_title: Feito para privacidade total e recuperação imediata
 features_intro: Captura contínua do ambiente sem desgastar o SSD, esgotar a bateria ou enviar o seu áudio para a nuvem.
 feature_lookback: Salvar o passado (Lookback)
-feature_lookback_desc: "Acabou de tocar um riff que vale guardar ou falar uma ideia em voz alta? Toque em Salvar e o Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo local. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo .aac (ADTS), reproduzível durante a gravação. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo."
+feature_lookback_desc: "Acabou de tocar um riff que vale guardar ou falar uma ideia em voz alta? Toque em Salvar e o Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo local. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo: .aac (ADTS) com AAC (padrão), reproduzível durante a gravação, ou .ogg com Opus, que exige aguardar o término para ouvir. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Formato ao salvar é gratuito, sem precisar do Pro: AAC (padrão) salva arquivos .m4a ao tocar em Salvar, ou escolha Opus (.ogg) para Salvar e Ao vivo. AAC (.m4a): maior compatibilidade. Opus (.ogg): voz em arquivos menores. Alguns players e apps de mensagem podem não abrir. Com AAC selecionado: Ao vivo continua em AAC (.aac), reproduzível durante a gravação. Para ouvir a gravação em Opus, aguarde o término. Se o app fechar inesperadamente, o trecho já salvo pode ser recuperado, mas o final pode se perder e alguns players podem não abrir o arquivo. Ao reabrir após um fechamento inesperado, o áudio Opus já gravado é recuperado; a última página Ogg incompleta é descartada, então o final pode se perder. Opus pode estar indisponível em alguns aparelhos; a opção fica desativada com o motivo indicado."
 feature_network: "O áudio nunca sai do celular"
 feature_network_desc: "O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem."
 feature_capture: Loop dedicado de captura
@@ -39,7 +39,7 @@ feature_interrupt_desc: Quando outro app em primeiro plano assume o microfone, o
 feature_battery: Proteção contra otimização de bateria
 feature_battery_desc: O serviço em primeiro plano, com notificação ativa e orientação para dispensar a otimização de bateria do fabricante, mantém a gravação sem interrupções mesmo com a tela apagada.
 feature_player: Player de áudio integrado
-feature_player_desc: Ouça, avance, apague e compartilhe as gravações <code>.m4a</code> / <code>.aac</code> (AAC) pela folha de compartilhamento do Android. Um widget na tela inicial liga ou desliga a gravação com um toque.
+feature_player_desc: Ouça, avance, apague e compartilhe as gravações <code>.m4a</code> / <code>.aac</code> (AAC) ou <code>.ogg</code> (Opus) pela folha de compartilhamento do Android. Um widget na tela inicial liga ou desliga a gravação com um toque.
 design_tag: Sistema de design da aviação dos EUA
 design_title: Protótipo vivo de design aviônico
 design_desc: 'Teste o simulador interativo de cockpit no navegador: medidor VU em tempo real, luzes de estado Korry, etiqueta de segurança "REMOVE BEFORE FLIGHT" e buffer de memória em fita de voo.'
@@ -73,11 +73,11 @@ usage_intro: 'Depois de instalado, o app é um serviço em segundo plano que voc
 usage_1: Abra o app e conceda a permissão <code>RECORD_AUDIO</code> (e, no Android 13+, <code>POST_NOTIFICATIONS</code>) quando solicitado.
 usage_2: Siga a orientação para dispensar a otimização de bateria, para que o fabricante não encerre o serviço de gravação com a tela apagada.
 usage_3: "Inicie a gravação contínua. O app roda como serviço em primeiro plano com uma notificação persistente e mantém os últimos minutos na RAM (pelo menos 5, até o limite seguro de memória do app para a qualidade escolhida), descartando o áudio antigo conforme chega o novo."
-usage_4: Quando algo que vale guardar acabou de acontecer, toque em <strong>Salvar</strong>. O Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) no armazenamento local como arquivo <code>.m4a</code> (AAC), sem precisar preparar ou prever nada.
+usage_4: Quando algo que vale guardar acabou de acontecer, toque em <strong>Salvar</strong>. O Audio Blackbox grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) no armazenamento local como arquivo <code>.m4a</code> (AAC) ou <code>.ogg</code> (Opus), sem precisar preparar ou prever nada.
 usage_5: Abra o player do app para ouvir, avançar e compartilhar a gravação exportada por qualquer destino da folha de compartilhamento do Android.
 download_tag: Download
 download_title: Baixe o Audio Blackbox no Google Play
-download_intro: "Uso gratuito, com desbloqueio Pro opcional de pagamento único. Código aberto e disponível para Android 10 ou mais recente."
+download_intro: "Uso gratuito, com desbloqueio Pro opcional de pagamento único. Código aberto e disponível para Android 10 ou mais recente. Pro grátis para quem chega cedo: instale o Audio Blackbox até 19 de dezembro de 2026 (antes de 20/12, 00h no horário de Brasília) e o Pro fica liberado neste aparelho, sem custo, para sempre. O benefício vale para essa instalação: se desinstalar e instalar de novo, ou trocar de aparelho, ele não é mantido."
 install_title: Instale pela Play Store
 install_desc: Abra a página no seu Android e toque em Instalar. Sem cadastro de conta nem convites.
 open_play: Abrir Play Store →
@@ -89,6 +89,7 @@ design_link: Modelo vivo de design aviônico
 architecture_link: Especificações de arquitetura
 invariants_link: AGENTS.md e invariantes
 privacy_link: Política de privacidade (em inglês)
+terms_link: Termos de Uso
 open_source: Código aberto
 repo_link: Repositório no GitHub
 license_link: Licença GPL-3.0
@@ -105,7 +106,7 @@ stereo: Estéreo
 pcm: PCM de 16 bits
 mb: MB
 throughput: KB/s de fluxo contínuo
-demo_alert: 'Demonstração: no app, Salvar grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo .m4a (AAC) em Recordings/Blackbox/.'
+demo_alert: 'Demonstração: no app, Salvar grava o áudio do buffer desde o último salvamento (o buffer inteiro na primeira vez) em um arquivo .m4a (AAC) ou .ogg (Opus) em Recordings/Blackbox/.'
 usecases_tag: "Casos de uso"
 usecases_title: "Uma dashcam de áudio no seu bolso"
 usecases_intro: "Você só percebe que algo importava depois que foi dito. O Audio Blackbox foi feito para esses momentos."
@@ -135,7 +136,7 @@ faq:
   - q: Como salvar áudio de antes de eu apertar gravar?
     a: Um gravador comum não faz isso, porque só começa a capturar quando você aperta gravar. Com o Audio Blackbox, você liga a gravação contínua uma vez e ele mantém os minutos mais recentes em um buffer circular na RAM, substituindo o áudio mais antigo pelo mais novo. Quando algo que vale guardar acabou de acontecer, toque em Salvar para gravar esses minutos em um arquivo. O áudio fica na RAM até você tocar em Salvar ou iniciar Ao vivo.
   - q: O que é um gravador retroativo ou de buffer sempre ativo?
-    a: "É um gravador que captura continuamente em um buffer de memória de tamanho fixo, para salvar o que já foi dito, além do que vem depois de apertar gravar. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo .aac (ADTS), reproduzível durante a gravação. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo."
+    a: "É um gravador que captura continuamente em um buffer de memória de tamanho fixo, para salvar o que já foi dito, além do que vem depois de apertar gravar. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo: .aac (ADTS) com AAC (padrão), reproduzível durante a gravação, ou .ogg com Opus, que exige aguardar o término para ouvir. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo."
   - q: Qual é a duração do buffer e quanta RAM ele usa?
     a: "O buffer começa em 5 minutos, ajustáveis de 5 em 5, até o limite seguro de memória do app para a qualidade escolhida. Não há teto de duração imposto pelo produto; os Ajustes mostram o limite atual. No preset padrão Voz (16.000 Hz mono), cada minuto usa cerca de 1,8 MB de RAM, então 30 minutos usam cerca de 55 MB. Equilibrado (32.000 Hz mono) usa o dobro por minuto e Alta fidelidade (44.100 Hz estéreo) cerca de 5,5 vezes mais. Assim, o mesmo celular comporta um buffer menor com qualidade maior. A calculadora na seção Arquitetura de memória mostra a RAM para qualquer janela e preset."
   - q: O Audio Blackbox envia algo ou precisa de internet?
@@ -145,7 +146,7 @@ faq:
   - q: Um gravador sempre ativo esgota a bateria?
     a: O Audio Blackbox foi medido em um Samsung Galaxy S25 gravando continuamente no preset Voz. Com a tela apagada, usou cerca de 1,0% a 1,5% da bateria por hora e menos de 1% de CPU, sem escritas em disco durante o preenchimento do buffer. Outros celulares e ajustes terão resultados diferentes.
   - q: O Audio Blackbox é gratuito e de código aberto?
-    a: "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo .aac (ADTS), reproduzível durante a gravação. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Instalações anteriores a 20/12/2026 às 03:00 UTC recebem o Pro sem custo."
+    a: "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. Ao vivo salva o áudio do buffer anterior ao toque e continua em um único arquivo: .aac (ADTS) com AAC (padrão), reproduzível durante a gravação, ou .ogg com Opus, que exige aguardar o término para ouvir. O tempo de gravação ao vivo é limitado a 2 horas no plano gratuito; depois, o arquivo é salvo automaticamente. O arquivo pode ultrapassar 2 horas porque inclui o passado do buffer. O desbloqueio Pro de pagamento único remove o limite de tempo ao vivo. Pro grátis para quem chega cedo: instale o Audio Blackbox até 19 de dezembro de 2026 (antes de 20/12, 00h no horário de Brasília) e o Pro fica liberado neste aparelho, sem custo, para sempre. O benefício vale para essa instalação: se desinstalar e instalar de novo, ou trocar de aparelho, ele não é mantido."
   - q: "Existe uma alternativa de código aberto a gravadores retroativos no Android?"
     a: "Gratuito para instalar e usar, com código aberto sob GPL-3.0. Tudo continua gratuito, exceto o desbloqueio Pro opcional de pagamento único. O próprio app não envia áudio nem analytics de uso. O Google Play Billing (serviços do Google Play) se comunica com o Google para processar a compra opcional e verificar o direito ao Pro; a biblioteca também envia seus próprios diagnósticos de uso e erros. Sem anúncios, conta ou armazenamento de áudio na nuvem."
   - q: Quais versões do Android são compatíveis?
@@ -157,7 +158,7 @@ faq:
   - q: "Existe um app de dashcam de áudio para Android?"
     a: "Sim. O Audio Blackbox funciona como uma dashcam para o som: guarda os últimos minutos em um buffer circular na RAM e grava áudio em arquivo quando você toca em Salvar ou inicia Ao vivo, para você guardar o que aconteceu logo antes. Diferente de um gravador escondido, ele sempre mostra uma notificação enquanto grava. Gravar outras pessoas pode exigir o consentimento delas, então consulte as leis do seu local."
   - q: "Consigo recuperar uma citação ou explicação de aula que esqueci de gravar?"
-    a: "Se o Audio Blackbox estava ligado, sim. Toque em Salvar e os minutos do buffer (pelo menos 5, até o limite seguro de memória do app para a qualidade escolhida) são gravados em um arquivo .m4a, mesmo sem você ter apertado gravar. Jornalistas podem usá-lo como backup do gravador principal, e estudantes podem guardar uma explicação que acabaram de perder nas aulas em que gravar é permitido."
+    a: "Se o Audio Blackbox estava ligado, sim. Toque em Salvar e os minutos do buffer (pelo menos 5, até o limite seguro de memória do app para a qualidade escolhida) são gravados em um arquivo .m4a (AAC) ou .ogg (Opus), mesmo sem você ter apertado gravar. Jornalistas podem usá-lo como backup do gravador principal, e estudantes podem guardar uma explicação que acabaram de perder nas aulas em que gravar é permitido."
   - q: "O Audio Blackbox pode me ajudar a lembrar instruções faladas?"
     a: "Ele pode servir de apoio à memória. Se você acabou de ouvir orientações, instruções ou detalhes e perdeu o fio, salve os últimos minutos e ouça de novo no player integrado. Isso pode ajudar quem costuma perder informações faladas, como pessoas com TDAH. O Audio Blackbox não é um dispositivo médico."
   - q: É permitido gravar com o Audio Blackbox?

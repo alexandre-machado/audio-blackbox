@@ -5,16 +5,27 @@
 Tracked in [#5](https://github.com/alexandre-machado/audio-blackbox/issues/5).
 
 ## Safe Buffer Reading (Lookback Save & Continuous Live Recording)
-`Save` (`ExportEngine.kt`) exports the buffered audio accumulated since the last save (or the entire buffer on the first save). The old fixed-window selector was retired in `#121`, and each successful save advances the ring buffer's export floor (`#410`) to the end of the saved window so consecutive saves never overlap. `Live` (`ForwardRecordingEngine.kt`) saves the buffered audio from before the tap and continues encoding newly captured audio into a single `.aac` (ADTS) file, playable while recording, advancing the export floor when it finishes. Live recording time is limited to 2 hours on the free plan, followed by automatic saving; the file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
+`Save` (`ExportEngine.kt`) exports the buffered audio accumulated since the last save (or the entire buffer on the first save). The old fixed-window selector was retired in `#121`, and each successful save advances the ring buffer's export floor (`#410`) to the end of the saved window so consecutive saves never overlap. `Live` (`ForwardRecordingEngine.kt`) saves the buffered audio from before the tap and continues encoding newly captured audio into a single file: `.aac` (ADTS) with AAC (default), playable while recording, or `.ogg` with Opus, to be played after recording ends, advancing the export floor when it finishes. Live recording time is limited to 2 hours on the free plan, followed by automatic saving; the file can exceed 2 hours because it includes the buffered past. A one-time Pro unlock removes the live time limit.
 
 Both paths drain the ring buffer in bounded 4 KB chunks via `readSince` (`#72`) rather than allocating a second full-window copy, so capture continues uninterrupted while the file is written and the capture thread is never blocked for more than a single chunk copy.
+
+## Save audio format
+
+Save audio format is free, with no Pro unlock required: AAC (default) saves .m4a files with Save, or choose Opus (.ogg) for both Save and Live. AAC (.m4a): wider compatibility. Opus (.ogg): smaller voice files. Some players and messaging apps may not open them. With AAC selected: Live stays AAC (.aac), playable while recording. Wait until recording ends to play Opus audio. If the app closes unexpectedly, saved audio may be recoverable, but the ending may be lost and some players may not open the file. On reopening after an unexpected close, Opus audio already written is recovered; the incomplete final Ogg page is discarded, so the ending may be lost. Opus may be unavailable on some devices; the option is disabled with the reason shown.
+
+Known Opus reader limitation (owner decision AB-2411-44, 2026-11-24): Android's Ogg
+extractor/decoder returns empty PCM for one complete audio page followed by a torn page,
+identically with MediaMuxer and our provider. Startup recovery repairs the file before the
+gallery; every repaired cut retaining at least one audio page must decode and prepare.
+Raw one-page cuts are logged/counted as `KNOWN_READER_LIMITATION`; raw cuts retaining two
+or more audio pages must still pass qualification.
 
 ## PCM to File Conversion
 Encapsulate the raw memory bytes into a playable file format, via a pluggable `PayloadEncoder`
 (issue #32).
 
-*Default (production):* AAC-LC in an MP4 container (`.m4a`, `audio/mp4`), via `MediaCodec` +
-`MediaMuxer`, ~64 kbps mono — see issue #32 for the device evidence that motivated this (every
+*Default for Save (production):* AAC-LC in an MP4 container (`.m4a`, `audio/mp4`), via `MediaCodec` +
+`MediaMuxer` — see issue #32 for the device evidence that motivated this (every
 other recorder on the target device already writes a compressed format; WAV opened in none of
 them). Encoding happens off the capture thread and never blocks it; a failed encode deletes the
 pending MediaStore row exactly like a failed write always has.
@@ -41,6 +52,7 @@ deliberately — see issue #3). Decided from the running OS (`Build.VERSION.SDK_
 already sitting in the app's pre-issue-#33 `Music/Recordings/` location are not migrated or
 deleted. Naming scheme (`ExportEngine.kt`, `ForwardRecordingEngine.kt`, `MediaStoreSink.kt`):
 `blackbox_<yyyy-MM-dd_HH-mm-ss>_<N>min.<extension>` (or `_<N>s.<extension>` for sub-minute saves, and
-`blackbox_<yyyy-MM-dd_HH-mm-ss>_forward.aac` for `Live` forward recordings: AAC ADTS in a
-single file that stays playable while it records). Save exports use `.m4a`; only the unwired
-`WavPayloadEncoder` export option uses `.wav`, never Live.
+`blackbox_<yyyy-MM-dd_HH-mm-ss>_forward.<extension>` for `Live` forward recordings).
+With AAC (default), Save uses `.m4a` and Live uses a single `.aac` (ADTS) file that stays
+playable while it records. With Opus, both use `.ogg`; wait until recording ends to play it.
+Only the unwired `WavPayloadEncoder` export option uses `.wav`, never Live.

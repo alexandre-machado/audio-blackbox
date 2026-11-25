@@ -402,4 +402,16 @@
     <string name="dashboard_panel_save_caption_live">Salvando ao vivo</string>
     <string name="dashboard_save_button_cd_live">Não é necessário tocar em Salvar durante a gravação ao vivo: o arquivo é salvo enquanto você grava.</string>
     <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Alteração pendente — buffer ativo: %1$d min.</string>
+    <string name="settings_save_audio_format">Formato ao salvar</string>
+    <string name="settings_format_aac">AAC (padrão)</string>
+    <string name="settings_format_opus">Opus</string>
+    <string name="settings_format_aac_helper">AAC (.m4a): maior compatibilidade.</string>
+    <string name="settings_format_opus_helper">Opus (.ogg): voz em arquivos menores. Alguns players e apps de mensagem podem não abrir.</string>
+    <string name="settings_format_aac_live">Ao vivo continua em AAC (.aac), reproduzível durante a gravação.</string>
+    <string name="settings_format_opus_live">Para ouvir a gravação em Opus, aguarde o término. Se o app fechar inesperadamente, o trecho já salvo pode ser recuperado, mas o final pode se perder e alguns players podem não abrir o arquivo.</string>
+    <string name="settings_format_opus_unavailable">Opus indisponível neste aparelho.</string>
+    <string name="settings_format_save_error">Não foi possível salvar o formato.</string>
+    <string name="audio_format_opus_extension">Opus (.ogg)</string>
+    <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
+    <string name="audio_format_ogg">Ogg</string>
 </resources>

@@ -444,4 +444,16 @@
     <string name="dashboard_panel_save_caption_live">Saving live</string>
     <string name="dashboard_save_button_cd_live">Save is not needed during live: the live file is saved as it records</string>
     <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Pending change — active buffer: %1$d min.</string>
+    <string name="settings_save_audio_format">Save audio format</string>
+    <string name="settings_format_aac">AAC (default)</string>
+    <string name="settings_format_opus">Opus</string>
+    <string name="settings_format_aac_helper">AAC (.m4a): wider compatibility.</string>
+    <string name="settings_format_opus_helper">Opus (.ogg): smaller voice files. Some players and messaging apps may not open them.</string>
+    <string name="settings_format_aac_live">Live stays AAC (.aac), playable while recording.</string>
+    <string name="settings_format_opus_live">Wait until recording ends to play Opus audio. If the app closes unexpectedly, saved audio may be recoverable, but the ending may be lost and some players may not open the file.</string>
+    <string name="settings_format_opus_unavailable">Opus unavailable on this device.</string>
+    <string name="settings_format_save_error">Could not save format.</string>
+    <string name="audio_format_opus_extension">Opus (.ogg)</string>
+    <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
+    <string name="audio_format_ogg">Ogg</string>
 </resources>

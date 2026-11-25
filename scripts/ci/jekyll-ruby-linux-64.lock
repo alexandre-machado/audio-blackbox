@@ -1,0 +1,37 @@
+# linux-64; Ruby 3.3.6, c/cxx-compiler 2.0.0, make 4.4.1; all transitive packages pinned.
+# Regenerate with micromamba 2.9.0-0 create --dry-run --json using those four specs.
+# URLs and SHA-256 digests come from actions.LINK in the conda-forge solve.
+@EXPLICIT
+https://conda.anaconda.org/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_3.conda#sha256:eb8a0db0aa570124f7d2a93d7c7f596e3390df5e047818d873baad32985fc736
+https://conda.anaconda.org/conda-forge/linux-64/libgomp-16.2.0-he0feb66_7.conda#sha256:92a0bb350c7be6a4eedcb4e111c60aefd176018e6b1c009a6e025dbe9bbcd758
+https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_7.conda#sha256:47d682b9f6d6ec9eb1a6e6c3e75ea6273e899e78fb7fc59f81d39745009fbc60
+https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda#sha256:1dd3fffd892081df9726d7eb7e0dea6198962ba775bd88842135a4ddb4deb3c9
+https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.46.1-default_hbd61a6d_103.conda#sha256:901649b1edbe841fd4ee7e2d491a05184ed540eb01cdae506872f344babc1d28
+https://conda.anaconda.org/conda-forge/linux-64/libgcc-16.2.0-ha9f2e26_7.conda#sha256:e031634c3a928f9594eba868bc46ef5230d6571a364a0c63215b06c4563bfcea
+https://conda.anaconda.org/conda-forge/linux-64/libgcc-ng-16.2.0-h69a702a_7.conda#sha256:03b54d7008de080a17cc2174b0e4acd6d06e1c981b2eb19846f46d8f59966034
+https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.7-hebe6cf0_0.conda#sha256:ddd9a2d5f0f792d3c030125a37ba5ce6e118277136b26f0f3a544956a069637a
+https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda#sha256:5d46557214ed184381dafe835b7c94a474a1c3b307a08a250b1ea4779b44ffb3
+https://conda.anaconda.org/conda-forge/linux-64/libxcrypt-4.4.38-h280c20c_0.conda#sha256:f7e9292dd219a6435bbb1223da9586c3e70d66d169c5a92f08db3f2127df04e9
+https://conda.anaconda.org/conda-forge/linux-64/libstdcxx-16.2.0-h934c35e_7.conda#sha256:fa7018298629fc429971fffd6ecba3d27a7b02e4e890d6a93ea01ffebe8cb745
+https://conda.anaconda.org/conda-forge/linux-64/libffi-3.7.0-h81df57d_1.conda#sha256:c8c7583ef063bc3c430f1d48298e5ad24f796a35c22ed5b14183325825a61106
+https://conda.anaconda.org/conda-forge/linux-64/make-4.4.1-h1114479_4.conda#sha256:d6a81e5c142d7be6a992f618097351e7996f81a6295045df3f9b4f498e1066a8
+https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-hd6e31c0_1.conda#sha256:01b3fe073a66e321970d09e04b388708f8cbdca5cdfbfcb7c9eeb470ad10383d
+https://conda.anaconda.org/conda-forge/linux-64/libsanitizer-15.3.0-h54950a5_7.conda#sha256:9e5518e38502568f4591be965d48c1a3f79e2da4d74567f1a62e00244cf40222
+https://conda.anaconda.org/conda-forge/linux-64/gmp-6.3.0-hfd2156b_3.conda#sha256:f36c336efc874f346a53a9011f67e997f9faac505562cc18c13b6d399cfe61c7
+https://conda.anaconda.org/conda-forge/linux-64/gdbm-1.18-h0a1914f_2.tar.bz2#sha256:8b9606dc896bd9262d09ab2ef1cb55c4ee43f352473209b58b37a9289dd7b00c
+https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.11.20-hbd8a1cb_0.conda#sha256:8c104262bf331b14478e36c6cedd63b558d4b7ff96f218742a91878353edeed1
+https://conda.anaconda.org/conda-forge/noarch/libstdcxx-devel_linux-64-15.3.0-hb2c5482_107.conda#sha256:4b2d94a9abf2feedea354e4256756c5dc255b84080e7faed9a324a101cf20e74
+https://conda.anaconda.org/conda-forge/noarch/libgcc-devel_linux-64-15.3.0-h2b852eb_107.conda#sha256:5200a1402eb3c3e9b0e4ba38b3cf163be136d020a15477fb86ce6e754d3ae515
+https://conda.anaconda.org/conda-forge/noarch/kernel-headers_linux-64-6.12.0-he073ed8_6.conda#sha256:73b11f31db6c9ebe63d900334fa4f46859aa1ddd8f37cfa5f25a043e0a59253c
+https://conda.anaconda.org/conda-forge/noarch/tzdata-2026e-h5d301ff_0.conda#sha256:2b7ca858879f183ce2dcc65b300f48a0133d5430550f35b23d80d405a0788dbf
+https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-64-2.39-hc4b9eeb_6.conda#sha256:7d235e4337f122f3439d0196e1c1c6e715a5b88fcbf24f944510186c84168e45
+https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.5-h781a0a9_0.conda#sha256:9c1533f1cf784f0e250919c0c9762d0b0e6bc727a79290ffb7cea1ceca1d038c
+https://conda.anaconda.org/conda-forge/linux-64/binutils_impl_linux-64-2.46.1-default_hfdba357_103.conda#sha256:98f9ddc6dc5d56a824b7eaea5bab6ad4bb47642288fc70d6b1b4024ac39d5595
+https://conda.anaconda.org/conda-forge/linux-64/ruby-3.3.6-he7af4c9_0.conda#sha256:15bd665cf8df50b24ba088fe4df42fd81d50bd6df3753ee4cd5e62ab9676a0a9
+https://conda.anaconda.org/conda-forge/linux-64/gcc_impl_linux-64-15.3.0-h6ad849d_7.conda#sha256:3c6deaf411a00aef601fb37f3a5e00aa4b85bace1fd2ebad347033aadc543c55
+https://conda.anaconda.org/conda-forge/linux-64/conda-gcc-specs-15.3.0-h8846f6e_7.conda#sha256:395a5928fc78e8545afdb4e9bf074cf90e37ff8287a1f34cd98c9350da6c3095
+https://conda.anaconda.org/conda-forge/linux-64/gxx_impl_linux-64-15.3.0-h90d9265_7.conda#sha256:23e396ca14d05c645f431175379ec010676827d0b7791131ef4f1422f522a755
+https://conda.anaconda.org/conda-forge/linux-64/gcc-15.3.0-hc6a0c74_7.conda#sha256:f362d14caab740de46f60d5ca8a4340066704ff573bc0a618030ceca3a2b7f87
+https://conda.anaconda.org/conda-forge/linux-64/gxx-15.3.0-hc6a0c74_7.conda#sha256:b4d8243c72c114f3bc5189659f0ad7745d35b3c08fbd529d7dd32b7fbb631a5e
+https://conda.anaconda.org/conda-forge/linux-64/c-compiler-2.0.0-ha29393d_1.conda#sha256:5cd81412b7e1374836fd9f4b6a3665ea0f65d55b8ef82d497de010ff8f609bc8
+https://conda.anaconda.org/conda-forge/linux-64/cxx-compiler-2.0.0-hdab9b82_1.conda#sha256:ea3f05dc546a655569f40f0fbfe382790ae48baef85dd7dc04eadc7e48116324

@@ -15,13 +15,43 @@ fun getGitCommitShortSha(): String {
     }
 }
 
+// Play internal track already received 777. CI release artifacts must exceed it.
+val VERSION_CODE_FLOOR = 778
+
 fun computeDynamicVersionCode(): Int {
-    val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
-    if (runNumber != null) {
-        // GITHUB_RUN_NUMBER is strictly monotonic per workflow without requiring full git clone history
-        return 100 + runNumber
+    val rawRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: return getGitCommitCount()
+    val runNumber = rawRunNumber.toIntOrNull()
+        ?: throw GradleException("GITHUB_RUN_NUMBER must be an integer: $rawRunNumber")
+    // CI workflows must set this explicitly. Absent-only fallback preserves legacy numbering.
+    val rawOffset = System.getenv("VERSION_CODE_OFFSET")
+    val offset = if (rawOffset == null) 100 else rawOffset.toIntOrNull()
+        ?: throw GradleException("VERSION_CODE_OFFSET must be an integer: $rawOffset")
+    return try {
+        Math.addExact(offset, runNumber)
+    } catch (e: ArithmeticException) {
+        throw GradleException("VERSION_CODE_OFFSET + GITHUB_RUN_NUMBER exceeds the integer range", e)
     }
-    return getGitCommitCount()
+}
+
+// Resolved tasks also cover aggregate builds and abbreviated task names.
+// lintDebug can process release manifests; only release artifact tasks trigger the floor.
+// Debug/test-only CI and all local builds remain unaffected.
+gradle.taskGraph.whenReady {
+    if (System.getenv("GITHUB_RUN_NUMBER") != null &&
+        allTasks.any {
+            it.project == project &&
+                it.name.matches(Regex("(assemble|bundle|package|sign).*Release(Bundle)?"))
+        }
+    ) {
+        val code = computeDynamicVersionCode()
+        if (code < VERSION_CODE_FLOOR) {
+            throw GradleException(
+                "CI release versionCode $code is below VERSION_CODE_FLOOR=$VERSION_CODE_FLOOR " +
+                    "(Play internal track already received 777). Set VERSION_CODE_OFFSET=2000 " +
+                    "or higher; never lower the workflow offset."
+            )
+        }
+    }
 }
 
 fun getGitCommitCount(): Int {
@@ -40,7 +70,7 @@ fun getGitCommitCount(): Int {
  *
  * - Date: the build date in UTC (CI runners and the Play upload are UTC; a BRT date would flip
  *   at 21:00 local and disagree with run timestamps).
- * - Build: the versionCode (100 + GITHUB_RUN_NUMBER), not the raw run number, so the name
+ * - Build: the versionCode (VERSION_CODE_OFFSET + GITHUB_RUN_NUMBER), not the raw run number, so the name
  *   and the code always identify the same upload.
  * - SHA: 7-character short commit SHA.
  * - Local/debug builds (no GITHUB_RUN_NUMBER) use build 0 and a -dev suffix:
@@ -72,9 +102,11 @@ plugins {
 }
 
 android {
+    sourceSets.getByName("test").kotlin.srcDir("src/testCommon/java")
+    sourceSets.getByName("androidTest").kotlin.srcDir("src/testCommon/java")
     namespace = "cc.machado.audioblackbox"
     // compileSdk major must match the minor platform package installed in CI
-    // (.github/workflows/ci.yml, "Install SDK platform and build-tools" step). AGP resolves
+    // (.github/workflows/android.yml, "Install SDK platform and build-tools" step). AGP resolves
     // the bare major here to whichever minor is installed on the runner; there is no bare
     // "android-37" SDK package. Bump both together. (see PR #8 review comment)
     compileSdk = 37
@@ -131,7 +163,7 @@ android {
             // vital rated the unminified build at 1% obfuscation, below its 25% per-category bar.
             // Keep rules live in proguard-rules.pro; every one names its runtime caller. The
             // mapping.txt this produces is embedded in the AAB and also uploaded explicitly by
-            // the deploy-playstore job in .github/workflows/ci.yml.
+            // the Play / Publish bundle and sync listing job (id deploy-playstore) in .github/workflows/android.yml.
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")

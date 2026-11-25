@@ -1,4 +1,6 @@
-name: CI
+name: Android CI and Play Release
+run-name: >-
+  Android · ${{ github.event_name }} · ${{ github.event.pull_request.title || github.ref_name }} · #${{ github.run_number }}.${{ github.run_attempt }} · ${{ github.event_name == 'pull_request' && 'checks' || (inputs.sync_only && 'listing sync' || (inputs.track || (startsWith(github.ref, 'refs/tags/v') && 'alpha' || 'internal'))) }}
 
 # Issue #399: this workflow used to be push[main]+pull_request[main] only, with the Play Store
 # release living in a separate, independent playstore.yml that fired on the same push[main] event
@@ -67,12 +69,26 @@ permissions:
   contents: read
 
 env:
+  # Renaming ci.yml resets the counter: old 100 + run number reached ~#680 (777+).
+  # 2000 + 1 = 2001 exceeds old values, including intervening merges. Never lower this.
+  VERSION_CODE_OFFSET: 2000
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+# Owner decision 2026-11-24 (AB-2411-34): a newer push to the same PR branch cancels the older
+# PR run, so hosted builds and self-hosted instrumented tests do not spend time on obsolete SHAs.
+# Anything that is not a pull_request (push to main, v* tags, workflow_dispatch, every deploy/Play/listing run)
+# gets a group keyed by its own run_id: it never shares a group, so it can be neither cancelled
+# nor superseded while pending. GitHub replaces a pending run in the same group even when
+# cancel-in-progress is false, so a shared main group would silently drop a middle merge's deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
-    runs-on: self-hosted
-    # Security guard: never execute external fork PRs on self-hosted runner. Issue #399: also
+    name: Android / Build, unit tests and lint
+    runs-on: ubuntu-latest
+    # Keep the same-repository PR guard across the hosted/self-hosted split (#480). Issue #399: also
     # skip on a workflow_dispatch requesting sync_only (metadata-only Play Store sync) -- there is
     # no code change to build or test on that path, so gating it behind a ~5 minute emulator boot
     # would only add latency without validating anything.
@@ -80,6 +96,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
 
       - name: Test Play listing sync
         run: python3 -m unittest discover -s scripts/ci -p 'test_sync_play_store_metadata.py' -v
@@ -89,6 +112,9 @@ jobs:
 
       - name: Test custom listing diff
         run: python3 -m unittest discover -s scripts/ci -p 'test_custom_listing_diff.py' -v
+
+      - name: Test instrumented JUnit converter
+        run: python3 -m unittest discover -s scripts/ci -p 'test_am_instrument_to_junit.py' -v
 
       # Lints the default listing plus every custom store listing root
       # (distribution/custom-listings/<slug>/). nullglob: with zero slugs the glob expands to
@@ -123,6 +149,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-disabled: false
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -166,7 +195,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: lint-report
+          name: lint-report-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -193,12 +222,13 @@ jobs:
   # cold boot costs -- so the cache is gone; do not reintroduce it without new evidence that a
   # restored snapshot actually boots reliably on this runner pool.
   instrumented-tests:
+    name: Android / Instrumented tests and screenshots
     runs-on: self-hosted
     # Security guard: never execute external fork PRs on self-hosted runner. Issue #399: also
     # skip on a workflow_dispatch requesting sync_only, same reasoning as the `build` job above.
     if: github.repository == 'alexandre-machado/audio-blackbox' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && !(github.event_name == 'workflow_dispatch' && inputs.sync_only)
     timeout-minutes: 30
-    # Scoped to this job only -- ci.yml:9-10 keeps contents: read at workflow level for every
+    # Scoped to this job only -- the workflow-level permissions block keeps contents: read at workflow level for every
     # other job. Needed here, and only here, so the "commit refreshed screenshots" step below
     # (issue #231) can push to the PR head branch. The fork guard above (job-level `if:`) already
     # ensures this only ever runs against a branch in this repository, never an external fork's.
@@ -228,33 +258,6 @@ jobs:
           # push this job intends. Auth for that push is supplied explicitly, only in the gate
           # step below, only for the git invocations that need it.
           persist-credentials: false
-
-      # `@techlead` finding on PR #35: this job passed at 4c7a159 and failed with "No space left
-      # on device" while preparing the system image at 6716346, with nothing in that diff
-      # touching disk usage -- meaning the job already sat at the runner's capacity limit and
-      # would fail intermittently for reasons unrelated to the code under test. Hand-rolled
-      # rather than a third-party action, since this is just deleting a few preinstalled
-      # directories this job never uses -- no extra supply-chain surface worth pinning a SHA for.
-      #
-      # Deliberately does NOT touch /usr/local/lib/android: that's the preinstalled Android SDK
-      # the very next step (`Set up Android SDK`) depends on being already populated (it only
-      # points env vars at it, it does not reinstall cmdline-tools/platform-tools from scratch),
-      # so removing it here would break the job rather than fix it. Everything removed below is a
-      # toolchain this job has no dependency on at all (.NET, Haskell/GHC, Boost, CodeQL) plus any
-      # cached Docker images the runner image ships with -- see the "before"/"after" `df -h`
-      # output in this step's own log for the actual headroom this buys on a given run.
-      - name: Reclaim disk space (preinstalled toolchains this job never uses)
-        run: |
-          echo "--- disk usage before reclamation ---"
-          df -h /
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /usr/local/.ghcup || true
-          sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo docker image prune -af || true
-          echo "--- disk usage after reclamation ---"
-          df -h /
 
       - name: Set up JDK 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -352,11 +355,8 @@ jobs:
 
       # Issue #345: this tier drives `am instrument` directly (see run-instrumented-tier.sh's
       # header for why it can't just be `connectedDebugAndroidTest`), so there is no Gradle-
-      # generated JUnit XML/HTML for it -- the only record of a failing assertion's message is
-      # the raw `am instrument` transcript the script already tees to these two fixed paths.
-      # Uploaded on failure only, same reasoning as the unit test report above. Both files are
-      # small, plain-text, single-run transcripts (no build output), and the second one may
-      # legitimately not exist if phase 1 itself failed first.
+      # generated report. Keep the raw transcripts alongside the converted XML (#348).
+      # Later phases may legitimately not exist if an earlier phase failed.
       - name: Upload instrumented test logs
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -365,6 +365,17 @@ jobs:
           path: |
             /tmp/instrumented-phase1.log
             /tmp/instrumented-splice.log
+            /tmp/instrumented-opus-kill-start.log
+            /tmp/instrumented-opus-kill-verify.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload instrumented JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: instrumented-junit-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/instrumented-junit/*.xml
           if-no-files-found: ignore
           retention-days: 14
 
@@ -382,7 +393,7 @@ jobs:
       # deterministically rather than sampling a running animation. Do not weaken this to a
       # perceptual/tolerance diff -- if a future case turns out not to be reproducible, that is a
       # STOP-and-report situation (see issue #231), not a reason to loosen the comparison quietly.
-      - name: Gate committed screenshots against this run's captures (issue #231)
+      - name: Verify and refresh committed screenshots
         if: success()
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -580,7 +591,7 @@ jobs:
               {
                 echo "### Failed to push refreshed screenshots to ${PR_HEAD_REF}"
                 echo ""
-                echo "Attempted twice (once, then once more after re-fetching) and both attempts were rejected as stale: ${PR_HEAD_REF} moved again during this run. Re-run this job, or apply this run's 'screen-captures' artifact locally and push, then re-run."
+                echo "Attempted twice (once, then once more after re-fetching) and both attempts were rejected as stale: ${PR_HEAD_REF} moved again during this run. Re-run this job, or apply this run's 'screen-captures-${GITHUB_JOB}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' artifact locally and push, then re-run."
               } >> "$GITHUB_STEP_SUMMARY"
               exit 1
             fi
@@ -604,7 +615,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: screen-captures
+          name: screen-captures-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/screen-captures/
           if-no-files-found: ignore
 
@@ -614,7 +625,8 @@ jobs:
   # (upserted, keyed by the <!-- custom-listing-diff --> marker). It never talks to Play, holds no
   # Play secrets, and nothing depends on it: not `build`, not `instrumented-tests`, not deploy.
   custom-listing-diff:
-    runs-on: self-hosted
+    name: Play / Custom listing diff
+    runs-on: ubuntu-latest
     # Same fork guard as the other jobs, and pull_request only (there is no PR to comment on
     # otherwise).
     if: github.repository == 'alexandre-machado/audio-blackbox' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -635,9 +647,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
       - name: Post custom listing text to the PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -650,7 +667,7 @@ jobs:
   # same push[main] event as `build`/`instrumented-tests` above, with no `needs:` between them --
   # on the single self-hosted runner all three jobs just serialized in whatever order the queue
   # handed them out, so a merge to main could reach the Play Store internal track before the tests
-  # for that same commit had even started, let alone passed. Folding this job into ci.yml with
+  # for that same commit had even started, let alone passed. Folding this job into android.yml with
   # `needs: [build, instrumented-tests]` makes that ordering a hard dependency instead of a queue
   # accident: this job cannot start until both finish, and it will not run at all if either fails.
   #
@@ -660,12 +677,13 @@ jobs:
   # fork or not. A fork PR is already blocked from `build`/`instrumented-tests` by their own guard
   # above; this job's guard is independent of that and blocks pull_request outright regardless.
   #
-  # Trigger behavior change, called out explicitly per issue #399: `ci.yml` previously did not run
+  # Trigger behavior change, called out explicitly per issue #399: this workflow previously did not run
   # on tag pushes at all (`playstore.yml` had its own `tags: ['v*']` push filter with no test gate
   # behind it). Tags now flow through the same push trigger as main and are therefore gated by
   # `build`/`instrumented-tests` exactly like a push to main -- a tag reaching this job with
   # untested code is exactly the hole this issue closes, so this is deliberate, not incidental.
   deploy-playstore:
+    name: Play / Publish bundle and sync listing
     needs: [build, instrumented-tests]
     runs-on: self-hosted
     # github.repository guard preserved from playstore.yml. Deploy only follows push (main or a
@@ -676,7 +694,12 @@ jobs:
     # because `build`/`instrumented-tests` are legitimately skipped (not run) on a sync_only
     # workflow_dispatch -- 'skipped' must count as "does not block deploy" there, while 'failure'
     # or 'cancelled' must still block it on every other trigger.
+    # Owner kill switch (2026-11-24, AB-2411-37): repository variable PLAY_ENABLED='false' skips
+    # this whole job (AAB upload, R8 mapping upload and listing sync, including sync_only), so
+    # nothing reaches Play while a submission is in review. Any other value, or the variable
+    # being unset, keeps the normal behaviour. Flip it in Settings > Variables, not in code.
     if: >-
+      vars.PLAY_ENABLED != 'false' &&
       github.repository == 'alexandre-machado/audio-blackbox' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (needs.build.result == 'success' || needs.build.result == 'skipped') &&
@@ -686,11 +709,21 @@ jobs:
     # and cancel-in-progress unrelated `build`/`instrumented-tests` runs (e.g. two open PRs' CI),
     # which playstore.yml's separation never did and which this merge must not introduce either.
     concurrency:
-      group: playstore-release
-      cancel-in-progress: true
+      # Owner rule (AB-2411-34): a Play deploy is never cancelled mid-flight. Branch pushes (main ->
+      # internal) share one group, which serializes their Play edits; a main deploy that is only
+      # *pending* can be superseded by a newer main deploy to the SAME track, whose AAB has a
+      # higher versionCode and contains the older code. Tags (alpha) and workflow_dispatch
+      # (track/sync_only) get a group per run, so a newer main deploy can never replace them
+      # and they always reach their own track. If such a run overlaps a main deploy, the Play
+      # API rejects the second edit loudly (re-runnable), never silently.
+      group: playstore-release-${{ github.event_name == 'push' && github.ref_type == 'branch' && 'internal' || github.run_id }}
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The job never pushes; the listing-change fetch is anonymous (public repo).
+          persist-credentials: false
 
       - name: Set up JDK 17
         if: ${{ !inputs.sync_only }}
@@ -721,6 +754,9 @@ jobs:
       - name: Set up Gradle
         if: ${{ !inputs.sync_only }}
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          # Release credentials must not share a cache with PR/hosted builds.
+          cache-disabled: true
 
       - name: Grant execute permission for gradlew
         if: ${{ !inputs.sync_only }}
@@ -763,7 +799,7 @@ jobs:
         if: ${{ !inputs.sync_only }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: r8-mapping-${{ github.run_number }}-${{ github.sha }}
+          name: r8-mapping-${{ github.run_number }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: error
           retention-days: 90
