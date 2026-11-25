@@ -145,6 +145,8 @@ class LiveButtonTitleLayoutTest {
                 }
             }
         }
+        var sideBySideCases = 0
+        var stackedCases = 0
         for (width in listOf(360, 412, 480)) {
             for (scale in (if (width == 360) listOf(1f, 1.3f, 2f) else listOf(1f, 1.3f))) {
                 for (tag in listOf("en", "pt-BR", "de", "es", "fr", "it")) {
@@ -165,7 +167,10 @@ class LiveButtonTitleLayoutTest {
                         val layouts = listOf(SAVE_BUTTON_TEST_TAG to saveTitle, liveTag to liveTitle)
                             .map { (buttonTag, title) -> buttonTag to titleLayout(buttonTag, title) }
                         val density = layouts.first().second.layoutInput.density
-                        val halfContent = with(density) { ((width.dp - 8.dp) / 2 - 47.dp).roundToPx() }
+                        val halfContent = with(density) {
+                            (width.dp.roundToPx() - 8.dp.roundToPx()) / 2 -
+                                2 * 14.dp.roundToPx() - 9.dp.roundToPx() - 10.dp.roundToPx()
+                        }
                         val fits = layouts.all { (_, layout) ->
                             val input = layout.layoutInput
                             val paragraph = androidx.compose.ui.text.ParagraphIntrinsics(
@@ -181,8 +186,12 @@ class LiveButtonTitleLayoutTest {
                             .assertExists()
                         composeRule.onNodeWithTag(if (stacked) PANEL_ROW_SIDE_BY_SIDE_TAG else PANEL_ROW_STACKED_TAG)
                             .assertDoesNotExist()
-                        if (stacked) assertTrue("$case: stacked rows", liveBounds.top >= saveBounds.bottom)
+                        if (stacked) {
+                            stackedCases++
+                            assertTrue("$case: stacked rows", liveBounds.top >= saveBounds.bottom)
+                        }
                         else {
+                            sideBySideCases++
                             assertEquals("$case: side-by-side tops", saveBounds.top, liveBounds.top)
                             assertTrue("$case: side-by-side columns", liveBounds.left >= saveBounds.right)
                         }
@@ -199,12 +208,35 @@ class LiveButtonTitleLayoutTest {
                         // independently, including when their localized captions wrap.
                         if (!stacked && layouts.all { it.second.lineCount == 1 }) {
                             assertEqualHeights(SAVE_BUTTON_TEST_TAG, liveTag, case)
-                            assertEqualTitleOffsets(SAVE_BUTTON_TEST_TAG, saveTitle, liveTag, liveTitle, case)
+                        }
+                        assertEqualTitleOffsets(SAVE_BUTTON_TEST_TAG, saveTitle, liveTag, liveTitle, case)
+                        // Captions can wrap independently; title-row bounds must contain
+                        // exactly the title's height, including in stacked and large-font cases.
+                        for ((buttonTag, title) in listOf(SAVE_BUTTON_TEST_TAG to saveTitle, liveTag to liveTitle)) {
+                            val row = composeRule.onNode(
+                                hasTestTag("panel-title-row") and hasAnyAncestor(hasTestTag(buttonTag)),
+                                useUnmergedTree = true,
+                            ).getUnclippedBoundsInRoot()
+                            val text = composeRule.onNode(
+                                hasText(title) and hasAnyAncestor(hasTestTag(buttonTag)),
+                                useUnmergedTree = true,
+                            ).getUnclippedBoundsInRoot()
+                            assertEquals("$case: title-row top", row.top, text.top)
+                            assertEquals("$case: title-row bottom", row.bottom, text.bottom)
+                            val indicator = composeRule.onNode(
+                                hasTestTag("panel-title-indicator") and hasAnyAncestor(hasTestTag(buttonTag)),
+                                useUnmergedTree = true,
+                            ).getUnclippedBoundsInRoot()
+                            assertTrue("$case: LED must be centered on the title row",
+                                abs((indicator.top.value + indicator.bottom.value) / 2 -
+                                    (row.top.value + row.bottom.value) / 2) <= 1f)
                         }
                     }
                 }
             }
         }
+        assertTrue("Matrix must execute side-by-side geometry checks", sideBySideCases > 0)
+        assertTrue("Matrix must execute stacked title-offset checks", stackedCases > 0)
     }
 
     private fun titleLayout(buttonTag: String, title: String): TextLayoutResult {

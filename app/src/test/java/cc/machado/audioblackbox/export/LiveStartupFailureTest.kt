@@ -16,6 +16,48 @@ import org.mockito.Mockito
 import org.mockito.kotlin.*
 
 class LiveStartupFailureTest {
+    // Oracle: acknowledgement must finish while prepare is still held by the test;
+    // holding the engine state lock across prepare fails the bounded Future.get.
+    @Test fun acknowledgementDoesNotWaitForStalledPrepare() {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val workers = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val target = mock<StreamingExportTarget>()
+        doAnswer {
+            entered.countDown()
+            check(release.await(20, java.util.concurrent.TimeUnit.SECONDS))
+            null
+        }.whenever(target).prepare()
+        val sink = mock<StreamingExportSink>()
+        whenever(sink.openStreaming(any(), any())).thenReturn(target)
+        val config = AudioConfig()
+        val ring = RingBuffer(6400, config.bytesPerSecond)
+        var captureReady = false
+        val engine = ForwardRecordingEngine(config = config, readSinceProvider = ring::readSince,
+            writeCursorProvider = { if (captureReady) ring.writeCursor() else null },
+            exportFloorAdvancerProvider = { null }, gapsProvider = { emptyList() }, sink = sink,
+            writerFactory = { _, _ -> mock<StreamingAudioWriter>() })
+        val terminal = engine.start()
+        assertTrue(terminal is ForwardRecordingState.Error)
+        captureReady = true
+        val start = workers.submit<ForwardRecordingState> { engine.start() }
+        try {
+            assertTrue("prepare entered", entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            workers.submit { engine.acknowledgeTerminalState(terminal) }
+                .get(1, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals(ForwardRecordingState.Idle, engine.state.value)
+            assertEquals("prepare remains stalled", 1L, release.count)
+        } finally {
+            release.countDown()
+            try {
+                start.get(15, java.util.concurrent.TimeUnit.SECONDS)
+                engine.cancel()
+            } finally {
+                workers.shutdownNow()
+            }
+        }
+    }
+
     // Oracle: the real sink deletes the pending row on journal failure, even if close
     // fails. No fake target implements the cleanup being tested.
     @Test fun journalFailureDeletesPendingRowWithoutPublishing() = withSink({ _, _ -> throw IOException("journal") }) { sink, resolver, uri ->

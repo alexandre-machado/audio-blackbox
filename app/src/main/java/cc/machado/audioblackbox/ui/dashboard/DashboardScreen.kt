@@ -834,7 +834,6 @@ internal fun ActionPanelRow(
         saveLabel = saveLabel, liveLabel = liveLabel, saveInProgress = isExporting,
         save = {
             AvionicsPanelButton(
-                label = saveLabel,
                 onClick = {
                     val now = System.currentTimeMillis()
                     if (now - lastSaveClickTime >= 500L) {
@@ -843,7 +842,6 @@ internal fun ActionPanelRow(
                     }
                 },
                 enabled = canSave,
-                inProgress = isExporting,
                 caption = saveCaption,
                 ledColor = FlightOrange,
                 contentDescription = saveCd,
@@ -852,7 +850,6 @@ internal fun ActionPanelRow(
         },
         live = {
             AvionicsPanelButton(
-                label = liveLabel,
                 onClick = if (isForwardRecording) onStopForwardRecording else onStartForwardRecording,
                 caption = liveCaption,
                 ledColor = FlightOrange,
