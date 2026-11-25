@@ -1,4 +1,6 @@
-name: Deploy GitHub Pages
+name: Site Build and Deploy
+run-name: >-
+  Site · ${{ github.event_name }} · ${{ github.event.pull_request.title || github.ref_name }} · #${{ github.run_number }}.${{ github.run_attempt }}
 
 on:
   push:
@@ -6,7 +8,7 @@ on:
       - main
     paths:
       - 'docs/**'
-      - '.github/workflows/pages.yml'
+      - '.github/workflows/site.yml'
       - 'scripts/ci/check-site-rendered.sh'
       - 'scripts/ci/setup-jekyll-ruby.sh'
       - 'scripts/ci/stage-cloudflare-site.sh'
@@ -33,6 +35,7 @@ concurrency:
 # the deploy is inert until credentials are set and only runs from main.
 jobs:
   build:
+    name: Site / Build and validate Jekyll
     runs-on: self-hosted
     if: github.repository == 'alexandre-machado/audio-blackbox'
     permissions:
@@ -80,12 +83,13 @@ jobs:
       - name: Guard against unrendered Liquid
         run: bash scripts/ci/check-site-rendered.sh _site
 
-      - name: Upload artifact
+      - name: Upload rendered site artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: '_site'
 
   deploy:
+    name: Site / Deploy GitHub Pages
     needs: build
     runs-on: self-hosted
     if: github.repository == 'alexandre-machado/audio-blackbox'
@@ -152,6 +156,7 @@ jobs:
   # mirrors the vaelo.club hotsite deploy this setup is modelled on. The fresh-directory and
   # locked-install steps below are kept as defence in depth.
   validate-cloudflare:
+    name: Site / Test and dry-run Cloudflare
     needs: build
     runs-on: ubuntu-latest
     if: github.repository == 'alexandre-machado/audio-blackbox'
@@ -229,6 +234,7 @@ jobs:
           ./node_modules/.bin/wrangler deploy --dry-run --config wrangler.jsonc --outdir "$RUNNER_TEMP/cloudflare-dry-run"
 
   deploy-cloudflare:
+    name: Site / Deploy Cloudflare
     needs: validate-cloudflare
     runs-on: ubuntu-latest
     if: github.repository == 'alexandre-machado/audio-blackbox' && github.ref == 'refs/heads/main'

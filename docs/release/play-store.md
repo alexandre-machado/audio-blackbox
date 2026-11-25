@@ -120,7 +120,7 @@ Mechanism (describing where secrets live, not generating anything):
 
 ## C. Release build config
 
-Current state (`app/build.gradle.kts`, checked against this branch):
+Historical initial configuration (versioning superseded below):
 
 ```kotlin
 defaultConfig {
@@ -152,17 +152,12 @@ buildTypes {
 
 **Judgment calls left to the owner (not guessed at):**
 
-1. **`versionCode`/`versionName` scheme.** Currently `versionCode = 1`,
-   `versionName = "0.1"`. Play requires `versionCode` to strictly increase on every
-   upload (including internal-testing-track builds) and never decrease. Two common
-   schemes: (a) manual bump per release in `build.gradle.kts`, simple but relies on
-   discipline; (b) derive `versionCode` from CI build number or commit count, more
-   automatable but couples release numbering to CI history. Given this repo has no
-   release automation yet and issue #48 explicitly defers publishing automation, I
-   recommend starting manual (bump both fields by hand per release, e.g.
-   `versionCode = 2`, `versionName = "0.2"` for first internal-testing upload) and
-   revisiting automation once there's a release cadence to automate. Not changed in
-   this PR — bumping now with no actual release imminent would just create noise.
+1. **Current versioning (#473).** `.github/workflows/android.yml` sets
+   `VERSION_CODE_OFFSET=2000`; versionCode = offset + `GITHUB_RUN_NUMBER` (first run: 2001).
+   Never lower the offset. Absent-only fallback 100 preserves legacy numbering; malformed
+   offsets fail. CI release tasks reject codes below 778 because Play internal received 777.
+   Local codes remain the git commit count. CI names are `v<UTC yy.MM.dd>.<versionCode>-<sha7>`;
+   local names are `v<UTC yy.MM.dd>.0-<sha7>-dev`. Dispatch with `gh workflow run android.yml`.
 2. **R8/minification.** Left `isMinifyEnabled = false`. The app uses
    `MediaCodec`/`MediaMuxer` (via the export path introduced in #37/#40) plus
    DataStore and Compose. None of these are unusually reflection-heavy from the
