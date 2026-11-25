@@ -107,6 +107,9 @@ jobs:
       - name: Test Play listing sync
         run: python3 -m unittest discover -s scripts/ci -p 'test_sync_play_store_metadata.py' -v
 
+      - name: Test Play product status
+        run: python3 -m unittest discover -s scripts/ci -p 'test_play_inapp_status.py' -v
+
       - name: Test Play listing lint
         run: python3 -m unittest discover -s scripts/ci -p 'test_lint_play_listing.py' -v
 

@@ -46,15 +46,17 @@ class PlayStatusTest(unittest.TestCase):
 
     def test_legacy(self):
         """Only a modern 404 triggers legacy GET; legacy micros/default price and state survive."""
-        for state, expected_code in (("active", 0), ("inactive", 2)):
+        for state, expected_code in (("active", 0), ("inactive", 2), ("statusUnspecified", 2), (None, 2)):
             with self.subTest(state=state):
                 session = Mock()
                 money = {"currency": "BRL", "priceMicros": "14900000"}
                 session.request.side_effect = [response(404, {}), response(200, {
-                    "status": state, "defaultPrice": money, "prices": {"BR": money},
+                    **({"status": state} if state is not None else {}),
+                    "defaultPrice": money, "prices": {"BR": money},
                     "listings": {"pt-BR": {"title": "Pro"}}})]
                 code, report = play.check(session)
                 self.assertEqual(expected_code, code)
+                self.assertIn(f"Status: {state if state is not None else 'unspecified'}", report)
                 self.assertIn("Default price: BRL 14.90", report)
                 self.assertIn("Region BR: BRL 14.90", report)
                 self.assertIn("Listing pt-BR: Pro", report)
@@ -81,6 +83,51 @@ class PlayStatusTest(unittest.TestCase):
         for secret in ("token-value", "account@example.com", "private-material", "other-token"):
             self.assertNotIn(secret, report)
         session.request.assert_called_once()
+
+    def test_redact_literal_secret(self):
+        """Literal secrets with quotes/newlines must be removed without the escaped rule."""
+        secret = 'literal"secret\nvalue'
+        self.assertEqual("detail [REDACTED]", play.redact("detail " + secret, (secret,)))
+
+    def test_redact_json_escaped_secret(self):
+        """Escaped secrets in ordinary JSON fields must be removed without literal matching."""
+        secret = 'escaped"secret\nvalue'
+        body = json.dumps({"detail": secret})
+        self.assertEqual('{"detail": "[REDACTED]"}', play.redact(body, (secret,)))
+
+    def test_redact_pem(self):
+        """Unknown multiline PEM material must be removed without supplied secrets."""
+        body = "key -----BEGIN PRIVATE KEY-----\nmaterial\n-----END PRIVATE KEY----- end"
+        self.assertEqual("key [REDACTED] end", play.redact(body))
+
+    def test_redact_bearer(self):
+        """An unknown bearer token outside a sensitive JSON field must be removed."""
+        self.assertEqual("detail Bearer [REDACTED] end",
+                         play.redact("detail Bearer unknown-token end"))
+
+    def test_redact_sensitive_json_fields(self):
+        """Each sensitive JSON field must hide an unknown value without other rules."""
+        for field in ("access_token", "refresh_token", "private_key", "client_secret", "authorization"):
+            with self.subTest(field=field):
+                body = json.dumps({field: 'unknown"value\nmaterial'})
+                self.assertEqual(json.dumps({field: "[REDACTED]"}), play.redact(body))
+
+    def test_credential_redaction_scope(self):
+        """All credential fields/raw file/token are hidden; public metadata stays readable."""
+        info = {
+            "private_key": "key-material", "private_key_id": "key-identifier",
+            "client_email": "account@example.com", "client_id": "client-identifier",
+            "type": "service_account", "universe_domain": "googleapis.com",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+        raw = json.dumps(info)
+        secrets = play.credential_secrets(raw, info, "oauth-token")
+        for value in (raw, "oauth-token", *(info[key] for key in
+                      ("private_key", "private_key_id", "client_email", "client_id"))):
+            with self.subTest(value=value):
+                self.assertEqual("[REDACTED]", play.redact(value, secrets))
+        public = "service_account https://androidpublisher.googleapis.com/path " + info["token_uri"]
+        self.assertEqual(public, play.redact(public, secrets))
 
     def test_legacy_error(self):
         """Legacy permission/server failures must remain errors, not false absence."""

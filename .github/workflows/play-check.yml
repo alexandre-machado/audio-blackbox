@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies and test
         run: |
-          python3 -m pip install --quiet google-auth==2.63.1 requests==2.34.2
+          python3 -m pip install --require-hashes --no-deps -r scripts/ci/play-check-requirements.txt
           python3 -m unittest discover -s scripts/ci -p test_play_inapp_status.py
       - name: Write service account file
         env:

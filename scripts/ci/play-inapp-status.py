@@ -86,6 +86,12 @@ def check(session, secrets=()):
     return 3, "Exists: no (404 from both product APIs)"
 
 
+def credential_secrets(raw, info, token):
+    """Redact credentials without hiding public domains or account metadata."""
+    fields = ("private_key", "private_key_id", "client_email", "client_id")
+    return [raw, token] + [info[key] for key in fields if isinstance(info.get(key), str)]
+
+
 def main():
     try:
         from google.auth.transport.requests import AuthorizedSession
@@ -97,7 +103,7 @@ def main():
         # Refresh separately: OAuth token exchange is authentication, not a publisher mutation.
         from google.auth.transport.requests import Request
         credentials.refresh(Request())
-        secrets = [raw, credentials.token] + [value for value in info.values() if isinstance(value, str)]
+        secrets = credential_secrets(raw, info, credentials.token)
         # Avoid hidden refresh/retry so the redaction token stays current.
         with AuthorizedSession(credentials, max_refresh_attempts=0) as session:
             code, report = check(session, secrets)
