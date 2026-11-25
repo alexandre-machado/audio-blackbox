@@ -5,9 +5,10 @@
 # booted AVD (scripts/run-instrumented-tests.sh). Never touches a physically connected device
 # (the S25) on purpose -- see the serial-selection guard below.
 #
-# Two things happen here, not one plain `./gradlew connectedDebugAndroidTest`:
-#   1. Every instrumented test EXCEPT InterruptionSpliceTest runs the normal way.
-#   2. InterruptionSpliceTest runs separately, launched directly via `adb shell am instrument`,
+# Three phases run here instead of one plain `./gradlew connectedDebugAndroidTest`:
+#   1. Normal instrumented tests, including Ogg prefix qualification, run first.
+#   2. OpusProcessKillTest runs with an external kill/restart handshake.
+#   3. InterruptionSpliceTest runs separately, launched directly via `adb shell am instrument`,
 #      because this script must inject two real GSM calls (`adb emu gsm call`/`gsm cancel`) at
 #      the right moments -- `adb emu` talks to the emulator's host-side console port and cannot
 #      be issued from on-device instrumentation, so Gradle's connectedAndroidTest task has no
@@ -43,6 +44,7 @@ APP_ID="cc.machado.audioblackbox.staging"
 TEST_APP_ID="${APP_ID}.test"
 RUNNER="${TEST_APP_ID}/androidx.test.runner.AndroidJUnitRunner"
 SPLICE_TEST_CLASS="cc.machado.audioblackbox.InterruptionSpliceTest"
+OPUS_KILL_TEST_CLASS="cc.machado.audioblackbox.export.OpusProcessKillTest"
 # Where ScreenshotCaptureTest (issue #78) writes its PNGs, relative to the app's data dir, and
 # where they land in the workspace for .github/workflows/android.yml to upload as an artifact. The
 # device path is the app's *internal* files dir on purpose: `run-as` reads it on any API level
@@ -208,13 +210,13 @@ if [[ -n "$STALE_CAPTURES" ]]; then
   fail "Stale screen captures survive at the app's $SCREENSHOT_DEVICE_DIR ($(echo "$STALE_CAPTURES" | tr '\n' ' ')) -- refusing to run, since the pull would upload a previous run's PNGs as this run's."
 fi
 
-# --- Phase 1: everything except InterruptionSpliceTest --------------------
+# --- Phase 1: tests that do not require an external handshake -------------
 # Cleared so the headroom-benchmark dump below (issue #22) only picks up this run's lines, not
 # leftovers from some earlier install/boot activity that happened to log the same tag.
 "${ADB[@]}" logcat -c
 log "Running the non-interruption instrumented tests..."
 set +e
-"${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS" "$RUNNER" \
+"${ADB[@]}" shell am instrument -w -e notClass "$SPLICE_TEST_CLASS,$OPUS_KILL_TEST_CLASS" "$RUNNER" \
   2>&1 | tee /tmp/instrumented-phase1.log
 PHASE1_STATUS=$?
 set -e
@@ -274,6 +276,66 @@ if [[ -z "$HEADROOM_OUTPUT" ]]; then
   fail "HeadroomBenchmark logcat tag produced no output -- AudioRecordHeadroomInstrumentedTest's results were lost (buffer rotated, process died, or the tag/filter drifted). Not treating an empty capture as success."
 fi
 printf '%s\n' "$HEADROOM_OUTPUT"
+
+# #433: Phase 1 includes the Ogg truncation qualification. A failure above is the owner's
+# stop gate under AB-2411-44: RAW one-page reader limitations are logged, but repair must pass.
+# The first instrumentation process is deliberately killed with its production Live writer open.
+log "Starting the Opus live process-kill qualification..."
+command -v timeout >/dev/null || fail "timeout is required for the process-kill qualification."
+"${ADB[@]}" logcat -c
+timeout -k 5 120 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase start "$RUNNER" \
+  > /tmp/instrumented-opus-kill-start.log 2>&1 &
+OPUS_START_PID=$!
+opus_ready="$(timeout -k 2 90 "${ADB[@]}" logcat -m 1 -e 'OPUS_KILL_READY pid=[0-9]+' -s OpusKillTest:I | grep -oE 'OPUS_KILL_READY pid=[0-9]+' || true)"
+if [[ -z "$opus_ready" ]]; then
+  timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
+  wait "$OPUS_START_PID" || true
+  fail "Opus live writer never reported READY; see /tmp/instrumented-opus-kill-start.log."
+fi
+opus_app_pid="${opus_ready##*=}"
+opus_actual_pid="$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" | tr -d '\r' || true)"
+[[ "$opus_app_pid" == "$opus_actual_pid" ]] || fail "The READY app PID is no longer alive; no process-kill result can be claimed."
+timeout -k 2 15 "${ADB[@]}" shell am force-stop "$APP_ID"
+wait "$OPUS_START_PID" || true # Process death is expected; verifier success is the oracle.
+[[ -z "$(timeout -k 2 5 "${ADB[@]}" shell pidof "$APP_ID" 2>/dev/null || true)" ]] || fail "Opus app process survived force-stop."
+# Snapshot after death and before Application.onCreate can repair the MediaStore row.
+# API 30 scoped storage denies direct access to this pending MediaStore row even
+# through run-as. Read as root without restarting adbd; never skip raw evidence.
+opus_root_uid="$(timeout -k 2 15 "${ADB[@]}" exec-out su 0 id -u)" \
+  || fail "Raw Opus snapshot requires working su 0 on the CI emulator (unavailable or timed out)."
+[[ "$opus_root_uid" == 0 ]] || fail "Raw Opus snapshot requires su 0 to return root UID 0."
+opus_marker="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" cat files/opus-kill-row.txt)" \
+  || fail "Could not read the killed Opus row marker."
+mapfile -t opus_marker_lines <<< "$opus_marker"
+opus_path="${opus_marker_lines[2]:-}"
+# adb joins remote arguments into shell text; accept only the fixture's known path.
+[[ "$opus_path" =~ ^/storage/emulated/0/Music/Blackbox/blackbox_[0-9]+_kill_forward\.ogg$ ]] \
+  || fail "Killed Opus row marker contains an unexpected file path."
+opus_device_size="$(timeout -k 2 15 "${ADB[@]}" exec-out su 0 stat -c %s "$opus_path")" \
+  || fail "Could not stat the raw killed Opus file as root."
+[[ "$opus_device_size" =~ ^[1-9][0-9]*$ ]] || fail "Raw killed Opus file has an empty or invalid size."
+opus_host_snapshot="build/opus-killed-raw.ogg"
+timeout -k 2 15 "${ADB[@]}" exec-out su 0 cat "$opus_path" > "$opus_host_snapshot" \
+  || fail "Could not read the raw killed Opus file as root."
+opus_host_size="$(timeout -k 2 15 stat -c %s "$opus_host_snapshot")" \
+  || fail "Could not stat the host raw Opus snapshot."
+[[ -s "$opus_host_snapshot" && "$opus_host_size" == "$opus_device_size" ]] \
+  || fail "Raw Opus snapshot size mismatch: device=$opus_device_size host=$opus_host_size."
+# Create through run-as to retain app ownership and SELinux context. The verifier
+# reads this exact internal path before inspecting the separately repaired row.
+# `shell -T` (shell protocol, no PTY) forwards stdin byte-for-byte; exec-out does not
+# reliably forward stdin, and a PTY would mangle binary data.
+timeout -k 2 15 "${ADB[@]}" shell -T run-as "$APP_ID" sh -c \
+  "'cat > files/opus-killed-raw.ogg'" < "$opus_host_snapshot" \
+  || fail "Could not install the raw Opus snapshot in the app files directory."
+opus_app_size="$(timeout -k 2 15 "${ADB[@]}" exec-out run-as "$APP_ID" stat -c %s files/opus-killed-raw.ogg)" \
+  || fail "Could not stat the app-readable raw Opus snapshot."
+[[ "$opus_app_size" == "$opus_device_size" ]] \
+  || fail "App raw Opus snapshot size mismatch: device=$opus_device_size app=$opus_app_size."
+timeout -k 5 180 "${ADB[@]}" shell am instrument -w -e class "$OPUS_KILL_TEST_CLASS" -e opusKillPhase verify "$RUNNER" \
+  2>&1 | tee /tmp/instrumented-opus-kill-verify.log
+grep -qE 'OK \([1-9][0-9]* test' /tmp/instrumented-opus-kill-verify.log || fail "Opus killed-file/startup-recovery verifier did not report OK."
+log "Opus process-kill and startup-recovery qualification OK."
 
 # --- Phase 2: InterruptionSpliceTest, with two real simulated calls -------
 log "Launching InterruptionSpliceTest in the background..."

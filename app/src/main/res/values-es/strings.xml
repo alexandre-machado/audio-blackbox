@@ -382,4 +382,16 @@
     <string name="dashboard_panel_save_caption_live">Guardando live</string>
     <string name="dashboard_save_button_cd_live">No hace falta guardar durante la grabación en directo: el archivo se guarda mientras se graba</string>
     <string name="settings_retention_pending" tools:ignore="PluralsCandidate">Cambio pendiente — búfer activo: %1$d min.</string>
+    <string name="settings_save_audio_format">Formato de audio al guardar</string>
+    <string name="settings_format_aac">AAC (predeterminado)</string>
+    <string name="settings_format_opus">Opus</string>
+    <string name="settings_format_aac_helper">AAC (.m4a): mayor compatibilidad.</string>
+    <string name="settings_format_opus_helper">Opus (.ogg): archivos de voz más pequeños. Algunos reproductores y apps de mensajería podrían no abrirlos.</string>
+    <string name="settings_format_aac_live">En vivo sigue en AAC (.aac), reproducible durante la grabación.</string>
+    <string name="settings_format_opus_live">Espera a que termine la grabación para reproducir audio Opus. Si la app se cierra inesperadamente, el audio ya guardado podría recuperarse, pero el final puede perderse y algunos reproductores podrían no abrir el archivo.</string>
+    <string name="settings_format_opus_unavailable">Opus no está disponible en este dispositivo.</string>
+    <string name="settings_format_save_error">No se pudo guardar el formato.</string>
+    <string name="audio_format_opus_extension">Opus (.ogg)</string>
+    <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
+    <string name="audio_format_ogg">Ogg</string>
 </resources>
