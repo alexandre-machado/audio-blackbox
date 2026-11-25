@@ -24,6 +24,7 @@ internal fun SaveAudioFormatSection(
     selected: SaveAudioFormat?,
     opusAvailable: Boolean?,
     failed: Boolean,
+    runningLiveFormat: SaveAudioFormat? = null,
     onSelect: (SaveAudioFormat) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -98,6 +99,12 @@ internal fun SaveAudioFormatSection(
                     else R.string.settings_format_opus_live), style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
+            nextRecordingFormatNotice(selected, runningLiveFormat)?.let { notice ->
+                Text(stringResource(notice), style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    modifier = Modifier.testTag("saveFormatNextRecording")
+                        .semantics { liveRegion = LiveRegionMode.Polite })
+            }
             if (opusAvailable == false) {
                 Text(stringResource(R.string.settings_format_opus_unavailable),
                     style = MaterialTheme.typography.bodySmall,
@@ -110,3 +117,11 @@ internal fun SaveAudioFormatSection(
         }
     }
 }
+
+/** The qualifier names the running session, never the newly selected preference. */
+internal fun nextRecordingFormatNotice(selected: SaveAudioFormat?, running: SaveAudioFormat?): Int? =
+    if (selected == null || running == null || selected == running) null
+    else when (running) {
+        SaveAudioFormat.AAC -> R.string.settings_format_next_recording_aac
+        SaveAudioFormat.OPUS -> R.string.settings_format_next_recording_opus
+    }

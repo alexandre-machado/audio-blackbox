@@ -32,6 +32,36 @@ import org.junit.Test
 class SaveAudioFormatSettingsTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
+    // Oracle: only a mismatched active session produces the qualifier, with polite semantics;
+    // the enabled dropdown still changes selection and the selected helper remains present.
+    @Test fun liveFormatQualifierTracksMismatchAndStop() {
+        val selected = mutableStateOf(SaveAudioFormat.AAC)
+        val running = mutableStateOf<SaveAudioFormat?>(SaveAudioFormat.AAC)
+        rule.setContent {
+            AudioBlackboxTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    SaveAudioFormatSection(selected.value, true, false, running.value) { selected.value = it }
+                }
+            }
+        }
+        rule.onNodeWithTag("saveFormatNextRecording").assertDoesNotExist()
+        rule.onNodeWithTag("saveFormatField").assertIsEnabled().performClick()
+        rule.onNodeWithTag("saveFormatOpus").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("saveFormatNextRecording").performScrollTo().assertIsDisplayed()
+            .assertTextEquals(rule.activity.getString(R.string.settings_format_next_recording_aac))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion,
+                androidx.compose.ui.semantics.LiveRegionMode.Polite))
+        rule.onNodeWithText(rule.activity.getString(R.string.settings_format_opus_helper)).assertExists()
+        rule.runOnIdle { selected.value = SaveAudioFormat.AAC }
+        rule.onNodeWithTag("saveFormatNextRecording").assertDoesNotExist()
+        rule.runOnIdle { running.value = SaveAudioFormat.OPUS }
+        rule.onNodeWithTag("saveFormatNextRecording")
+            .assertTextEquals(rule.activity.getString(R.string.settings_format_next_recording_opus))
+        rule.runOnIdle { running.value = null }
+        rule.onNodeWithTag("saveFormatNextRecording").assertDoesNotExist()
+    }
+
     /** Oracle: restored unsupported OPUS remains visible; its menu choice is disabled, while
      * explicit AAC selection reaches the callback and changes the real selected-option copy.
      * Compact PT-BR at 150% font scale forces the content to scroll instead of fitting naturally.
@@ -49,7 +79,7 @@ class SaveAudioFormatSettingsTest {
                 AudioBlackboxTheme {
                     Box(Modifier.requiredSize(360.dp, 320.dp)) {
                         Column(Modifier.verticalScroll(rememberScrollState())) {
-                            SaveAudioFormatSection(selected.value, false, false) { selected.value = it }
+                            SaveAudioFormatSection(selected.value, false, false, SaveAudioFormat.AAC) { selected.value = it }
                         }
                     }
                 }
@@ -57,6 +87,8 @@ class SaveAudioFormatSettingsTest {
         }
         rule.onNodeWithText(context.getString(R.string.settings_format_opus_helper))
             .performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("saveFormatNextRecording").performScrollTo().assertIsDisplayed()
+            .assertTextEquals(context.getString(R.string.settings_format_next_recording_aac))
         assertEquals(SaveAudioFormat.OPUS, selected.value)
         rule.onNodeWithText(context.getString(R.string.settings_format_opus_unavailable))
             .performScrollTo().assertIsDisplayed()
@@ -84,6 +116,7 @@ class SaveAudioFormatSettingsTest {
         rule.onAllNodesWithText(aacText).onLast().assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
+        rule.onNodeWithTag("saveFormatNextRecording").assertDoesNotExist()
         assertEquals(SaveAudioFormat.AAC, selected.value)
         rule.onNodeWithText(context.getString(R.string.settings_format_aac_helper))
             .performScrollTo().assertIsDisplayed()

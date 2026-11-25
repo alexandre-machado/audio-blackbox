@@ -399,4 +399,6 @@
     <string name="audio_format_opus_extension">Opus (.ogg)</string>
     <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
     <string name="audio_format_ogg">Ogg</string>
+    <string name="settings_format_next_recording_aac">S’applique au prochain enregistrement. Le direct actuel continue en AAC (.aac).</string>
+    <string name="settings_format_next_recording_opus">S’applique au prochain enregistrement. Le direct actuel continue en Opus (.ogg).</string>
 </resources>

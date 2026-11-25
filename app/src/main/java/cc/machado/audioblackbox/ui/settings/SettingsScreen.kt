@@ -104,6 +104,7 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val runningLiveFormat by viewModel.runningLiveFormat.collectAsStateWithLifecycle()
     val (proState, onPurchase) = cc.machado.audioblackbox.ui.rememberProPurchase()
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -133,6 +134,7 @@ fun SettingsRoute(
     SettingsScreen(
         uiState = uiState,
         saveAudioFormat = saveFormat,
+        runningLiveFormat = runningLiveFormat,
         opusAvailable = opusAvailable,
         formatError = formatError,
         onSelectSaveAudioFormat = { selected ->
@@ -188,6 +190,7 @@ fun SettingsScreen(
     saveAudioFormat: SaveAudioFormat? = SaveAudioFormat.AAC,
     opusAvailable: Boolean? = null,
     formatError: Boolean = false,
+    runningLiveFormat: SaveAudioFormat? = null,
     onSelectSaveAudioFormat: (SaveAudioFormat) -> Unit = {},
     proState: cc.machado.audioblackbox.ui.ProCardState = cc.machado.audioblackbox.ui.ProCardState(),
     onPurchase: () -> Unit = {},
@@ -208,7 +211,7 @@ fun SettingsScreen(
             onSelectQualityPreset = onSelectQualityPreset,
         )
         RetentionStepperSection(uiState.retentionStepper, uiState.retentionLimit, onDecrement, onIncrement)
-        SaveAudioFormatSection(saveAudioFormat, opusAvailable, formatError, onSelectSaveAudioFormat)
+        SaveAudioFormatSection(saveAudioFormat, opusAvailable, formatError, runningLiveFormat, onSelectSaveAudioFormat)
         AudioSpecsSection(selectedPreset = uiState.selectedPreset, saveAudioFormat = saveAudioFormat)
         ConsumptionTelemetrySection(telemetry = uiState.telemetry)
         DiagnosticsSection(

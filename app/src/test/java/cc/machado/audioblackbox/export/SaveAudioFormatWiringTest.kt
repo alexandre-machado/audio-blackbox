@@ -11,6 +11,13 @@ import java.io.File
 import java.io.FileDescriptor
 import org.junit.Assert.*
 import org.junit.Test
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.*
+import cc.machado.audioblackbox.ui.settings.SettingsViewModel
+import cc.machado.audioblackbox.ui.settings.nextRecordingFormatNotice
+import cc.machado.audioblackbox.R
 import org.mockito.Mockito
 import org.mockito.kotlin.*
 
@@ -168,6 +175,87 @@ class SaveAudioFormatWiringTest {
                 assertEquals("audio/aac-adts", opened[1].second)
                 assertTrue(opened[1].first.endsWith(".aac"))
                 verify(aac.single(), atLeastOnce()).write(any(), any(), any())
+    }
+
+    // Oracle: a preference change must not relabel the engine or Settings, replace the AAC
+    // writer, or rename its target. Stop removes the qualifier; only the next start uses Opus.
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun aacLivePreferenceSwitchIsOnlyAppliedToNextSession() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val selected = java.util.concurrent.atomic.AtomicReference(SaveAudioFormat.AAC)
+        val selector = RecordingFormatSelector(selected::get, File(System.getProperty("java.io.tmpdir")))
+        val ring = ring()
+        val opened = mutableListOf<Pair<String, String>>()
+        val aac = mutableListOf<StreamingAdtsWriter>()
+        val opus = mutableListOf<StreamingOpusWriter>()
+        val target = mock<StreamingExportTarget> { on { fileDescriptor } doReturn FileDescriptor() }
+        val engine = ForwardRecordingEngine(config = config,
+            readSinceProvider = ring::readSince, writeCursorProvider = ring::writeCursor,
+            oldestCursorProvider = ring::oldestCursor, exportFloorAdvancerProvider = { null },
+            gapsProvider = { emptyList() }, sink = streamingSink { name, mime ->
+                opened += name to mime
+                target
+            }, liveEncodingProvider = {
+                val encoding = selector.liveEncoding()
+                encoding.copy(createWriter = { destination, cfg ->
+                    Mockito.mockConstruction(StreamingAdtsWriter::class.java).use { aacMocks ->
+                        Mockito.mockConstruction(StreamingOpusWriter::class.java).use { opusMocks ->
+                            encoding.createWriter(destination, cfg).also {
+                                aac += aacMocks.constructed()
+                                opus += opusMocks.constructed()
+                            }
+                        }
+                    }
+                })
+            })
+        val store = androidx.lifecycle.ViewModelStore()
+        var collector: kotlinx.coroutines.Job? = null
+        try {
+            val vm = SettingsViewModel(forwardRecordingState = engine.state)
+            store.put("settings", vm)
+            collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.runningLiveFormat.collect {} }
+            assertTrue(engine.start() is ForwardRecordingState.Recording)
+            kotlinx.coroutines.withContext(Dispatchers.Default) {
+                kotlinx.coroutines.withTimeout(5_000) {
+                    engine.state.first { it is ForwardRecordingState.Recording && it.bytesWritten == 3200L }
+                }
+            }
+            runCurrent()
+            assertNull(nextRecordingFormatNotice(selected.get(), vm.runningLiveFormat.value))
+            selected.set(SaveAudioFormat.OPUS)
+            ring.write(ByteArray(3200) { 7 })
+            kotlinx.coroutines.withContext(Dispatchers.Default) {
+                kotlinx.coroutines.withTimeout(5_000) {
+                    engine.state.first { it is ForwardRecordingState.Recording && it.bytesWritten == 6400L }
+                }
+            }
+            runCurrent()
+            assertEquals(SaveAudioFormat.AAC, (engine.state.value as ForwardRecordingState.Recording).format)
+            assertEquals(R.string.settings_format_next_recording_aac,
+                nextRecordingFormatNotice(selected.get(), vm.runningLiveFormat.value))
+            val saved = engine.stop() as ForwardRecordingState.Success
+            runCurrent()
+            assertNull(vm.runningLiveFormat.value)
+            assertNull(nextRecordingFormatNotice(selected.get(), vm.runningLiveFormat.value))
+            assertTrue(saved.displayName.endsWith(".aac"))
+            assertEquals("audio/aac-adts", opened.single().second)
+            verify(aac.single(), atLeastOnce()).write(any(), any(), any())
+            assertTrue(opus.isEmpty())
+            assertEquals(SaveAudioFormat.OPUS, (engine.start() as ForwardRecordingState.Recording).format)
+            runCurrent()
+            assertEquals(SaveAudioFormat.OPUS, vm.runningLiveFormat.value)
+            assertNull(nextRecordingFormatNotice(selected.get(), vm.runningLiveFormat.value))
+            assertTrue((engine.stop() as ForwardRecordingState.Success).displayName.endsWith(".ogg"))
+            assertEquals("audio/ogg", opened[1].second)
+            verify(opus.single(), atLeastOnce()).write(any(), any(), any())
+            assertEquals(1, aac.size)
+        } finally {
+            engine.stop()
+            collector?.cancel()
+            store.clear()
+            runCurrent()
+            Dispatchers.resetMain()
+        }
     }
 
     // Oracle: discovery success is not encode success. A real configure-path exception must

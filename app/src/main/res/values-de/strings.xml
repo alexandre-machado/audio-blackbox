@@ -394,4 +394,6 @@
     <string name="audio_format_opus_extension">Opus (.ogg)</string>
     <string name="audio_format_ogg_extension">Ogg (.ogg)</string>
     <string name="audio_format_ogg">Ogg</string>
+    <string name="settings_format_next_recording_aac">Gilt für die nächste Aufnahme. Die aktuelle Live-Aufnahme wird in AAC (.aac) fortgesetzt.</string>
+    <string name="settings_format_next_recording_opus">Gilt für die nächste Aufnahme. Die aktuelle Live-Aufnahme wird in Opus (.ogg) fortgesetzt.</string>
 </resources>

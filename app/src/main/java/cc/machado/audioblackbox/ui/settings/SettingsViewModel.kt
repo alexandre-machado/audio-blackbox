@@ -20,11 +20,14 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import cc.machado.audioblackbox.export.ForwardRecordingState
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
@@ -98,7 +101,14 @@ class SettingsViewModel(
     private val batteryStatusProvider: () -> cc.machado.audioblackbox.telemetry.BatteryStatus = {
         cc.machado.audioblackbox.telemetry.BatteryStatus(percent = 100, isCharging = false, isIgnoringOptimizations = true)
     },
+    forwardRecordingState: StateFlow<ForwardRecordingState> = RecorderService.forwardRecordingState,
 ) : ViewModel() {
+
+    /** Actual session snapshot; preferences only affect the next start. */
+    val runningLiveFormat: StateFlow<SaveAudioFormat?> = forwardRecordingState.map {
+        (it as? ForwardRecordingState.Recording)?.format
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000),
+        (forwardRecordingState.value as? ForwardRecordingState.Recording)?.format)
 
     private val _pendingMinutes = MutableStateFlow<Int?>(null)
     private val _pendingPreset = MutableStateFlow<QualityPreset?>(null)
