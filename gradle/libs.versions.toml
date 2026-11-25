@@ -1,26 +1,28 @@
 [versions]
 agp = "9.5.2"
 kotlin = "2.4.21"
-coreKtx = "1.19.0"
-lifecycleRuntimeKtx = "2.11.0"
+coreKtx = "1.19.1"
+lifecycleRuntimeKtx = "2.11.1"
 activityCompose = "1.13.0"
 fragment = "1.9.1"
-composeBom = "2026.08.00"
+composeBom = "2026.11.01"
 junit = "4.13.2"
 androidxJunit = "1.3.0"
 espressoCore = "3.7.0"
-kotlinxCoroutines = "1.10.2"
+kotlinxCoroutines = "1.11.0"
+# Test-only dependency upgrades are tracked separately in #496 batch (c).
+kotlinxCoroutinesTest = "1.10.2"
 mockitoCore = "5.14.2"
 mockitoKotlin = "5.4.0"
 androidxTestRunner = "1.6.2"
 androidxTestRules = "1.6.1"
-datastorePreferences = "1.2.1"
+datastorePreferences = "1.3.0"
 billing = "9.1.0"
 
 [libraries]
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
-kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
