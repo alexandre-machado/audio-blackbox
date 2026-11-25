@@ -34,7 +34,7 @@ sealed interface ForwardRecordingState {
         val displayName: String,
         val bytesWritten: Long,
         val freeRemainingMillis: Long? = null,
-        val format: SaveAudioFormat = SaveAudioFormat.AAC,
+        val format: SaveAudioFormat,
     ) : ForwardRecordingState
 
     /** [freeLimitReached] is true only when the free cap, not the user, ended the session. */

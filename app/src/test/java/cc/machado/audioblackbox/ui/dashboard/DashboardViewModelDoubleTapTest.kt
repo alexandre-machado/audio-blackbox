@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.dashboard
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.export.ExportState
 import cc.machado.audioblackbox.export.ForwardRecordingFailureReason
@@ -264,7 +265,7 @@ class DashboardViewModelDoubleTapTest {
         viewModel.startForwardRecording()
         assertEquals(1, dispatchCount)
 
-        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "blackbox_2026-08-29_11-00-00.m4a", bytesWritten = 0)
+        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "blackbox_2026-08-29_11-00-00.m4a", bytesWritten = 0, format = SaveAudioFormat.AAC)
         runCurrent()
 
         viewModel.startForwardRecording()
@@ -284,7 +285,7 @@ class DashboardViewModelDoubleTapTest {
         viewModel.startForwardRecording()
         assertEquals(1, dispatchCount)
 
-        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "rec1.m4a", bytesWritten = 100)
+        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "rec1.m4a", bytesWritten = 100, format = SaveAudioFormat.AAC)
         runCurrent()
         forwardRecordingState.value = ForwardRecordingState.Success(displayName = "rec1.m4a", bytesWritten = 100)
         runCurrent()
@@ -391,7 +392,7 @@ class DashboardViewModelDoubleTapTest {
         )
 
         // Real state transition arrives
-        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "rec_retry.m4a", bytesWritten = 0)
+        forwardRecordingState.value = ForwardRecordingState.Recording(displayName = "rec_retry.m4a", bytesWritten = 0, format = SaveAudioFormat.AAC)
         runCurrent()
 
         // Guard is released by recording state

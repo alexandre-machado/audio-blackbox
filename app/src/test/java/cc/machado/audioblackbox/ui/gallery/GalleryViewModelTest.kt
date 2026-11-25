@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.gallery
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import android.net.Uri
 import android.util.Log
 import cc.machado.audioblackbox.export.ExportState
@@ -73,7 +74,7 @@ class GalleryViewModelTest {
         val ogg = row("blackbox_2026-01-01_00-00-00_forward.ogg").copy(mimeType = "audio/opus")
         val aac = row("blackbox_2026-01-01_00-00-01_forward.aac").copy(mimeType = "audio/aac")
         val player = FakeRecordingPlayer()
-        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording(ogg.displayName, 0))
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording(ogg.displayName, 0, format = SaveAudioFormat.OPUS))
         val viewModel = GalleryViewModel(FakeRecordingsRepository(listOf(ogg, aac)), player,
             ioDispatcher = Dispatchers.Unconfined, forwardRecordingState = forward)
         subscribe(viewModel)
@@ -85,7 +86,7 @@ class GalleryViewModelTest {
         forward.value = ForwardRecordingState.Success(ogg.displayName, 3200)
         viewModel.onPlayPauseClicked(opusItem)
         assertEquals(listOf(ogg.uri), player.playCalls)
-        forward.value = ForwardRecordingState.Recording(aac.displayName, 3200)
+        forward.value = ForwardRecordingState.Recording(aac.displayName, 3200, format = SaveAudioFormat.AAC)
         viewModel.onPlayPauseClicked(aacItem)
         assertEquals(listOf(ogg.uri, aac.uri), player.playCalls)
     }
@@ -144,7 +145,7 @@ class GalleryViewModelTest {
         vm.refresh()
         runCurrent()
         assertNull("row before Recording is not a save", vm.uiState.value.newlySavedKey)
-        forward.value = ForwardRecordingState.Recording(live.displayName, bytesWritten = 4096L)
+        forward.value = ForwardRecordingState.Recording(live.displayName, bytesWritten = 4096L, format = SaveAudioFormat.AAC)
         runCurrent()
         assertTrue(vm.uiState.value.items.single().isInProgress)
         assertNull("starting live is not a completed save", vm.uiState.value.newlySavedKey)
@@ -165,7 +166,7 @@ class GalleryViewModelTest {
     @Test
     fun `Recording to Error never flags partial row`() = runTest {
         val live = row("partial.m4a")
-        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording(live.displayName, 100))
+        val forward = MutableStateFlow<ForwardRecordingState>(ForwardRecordingState.Recording(live.displayName, 100, format = SaveAudioFormat.AAC))
         val vm = GalleryViewModel(FakeRecordingsRepository(listOf(live)), FakeRecordingPlayer(),
             ioDispatcher = Dispatchers.Unconfined, forwardRecordingState = forward)
         subscribe(vm)
@@ -429,7 +430,7 @@ class GalleryViewModelTest {
             listOf(row("blackbox_2026-01-01_00-00-00_5min.m4a"), row(liveName)),
         )
         val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(
-            ForwardRecordingState.Recording(displayName = liveName, bytesWritten = 4_096L),
+            ForwardRecordingState.Recording(displayName = liveName, bytesWritten = 4_096L, format = SaveAudioFormat.AAC),
         )
         val viewModel = GalleryViewModel(
             repository,
@@ -455,7 +456,7 @@ class GalleryViewModelTest {
         val liveName = "blackbox_2026-01-03_00-00-00_forward.m4a"
         val repository = FakeRecordingsRepository(listOf(row(liveName)))
         val forwardRecordingState = MutableStateFlow<ForwardRecordingState>(
-            ForwardRecordingState.Recording(displayName = liveName, bytesWritten = 4_096L),
+            ForwardRecordingState.Recording(displayName = liveName, bytesWritten = 4_096L, format = SaveAudioFormat.AAC),
         )
         val viewModel = GalleryViewModel(
             repository,

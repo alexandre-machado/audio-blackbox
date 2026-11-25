@@ -1,5 +1,6 @@
 package cc.machado.audioblackbox.ui.dashboard
 
+import cc.machado.audioblackbox.settings.SaveAudioFormat
 import cc.machado.audioblackbox.audio.AudioConfig
 import cc.machado.audioblackbox.audio.CaptureState
 import cc.machado.audioblackbox.audio.QualityPreset
@@ -63,7 +64,7 @@ class DashboardViewModelForwardRecordingTest {
     @Test
     fun `startForwardRecording is a no-op when already recording`() {
         val forwardState = MutableStateFlow<ForwardRecordingState>(
-            ForwardRecordingState.Recording("blackbox_2026-08-25_14-30-00_forward.m4a", 1000L)
+            ForwardRecordingState.Recording("blackbox_2026-08-25_14-30-00_forward.m4a", 1000L, format = SaveAudioFormat.AAC)
         )
         var startDispatched = false
 
@@ -85,7 +86,7 @@ class DashboardViewModelForwardRecordingTest {
     @Test
     fun `stopForwardRecording dispatches when forward recording is active`() {
         val forwardState = MutableStateFlow<ForwardRecordingState>(
-            ForwardRecordingState.Recording("blackbox_2026-08-25_14-30-00_forward.m4a", 1000L)
+            ForwardRecordingState.Recording("blackbox_2026-08-25_14-30-00_forward.m4a", 1000L, format = SaveAudioFormat.AAC)
         )
         var stopDispatched = false
 
