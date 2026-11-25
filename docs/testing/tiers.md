@@ -158,3 +158,11 @@ Two things stay human-only even after this script exists, because they need a re
 or a person's judgment, not just `adb`:
 - the exported `.m4a` / `.aac` / `.ogg` actually opening in the apps a person uses day to day (wait for Opus Live to end before playback);
 - Samsung-specific OS behavior around notifications, mic arbitration, and storage layout.
+
+## CI Gradle caching (setup-gradle v6, enhanced provider)
+
+`gradle/actions/setup-gradle` is pinned at v6.4.1 by commit SHA and uses the **enhanced** cache provider. That provider is the proprietary `gradle-actions-caching` component, governed by the [Gradle Technologies Terms of Use](https://gradle.com/legal/gradle-technologies-terms-of-use/). The owner accepted those terms on 2026-11-25 (#496, AB-2511-17). Acceptance comes from using the provider: no secret or token is involved. The repository is public, so enhanced caching is free.
+
+- **Build scans are off:** `build-scan-publish: false`, and no Develocity configuration exists. Gradle's stated data use is limited to cache metadata such as cache keys. Build content stays in the GitHub Actions cache of this repository.
+- **Release builds don't use it:** the Play deploy job keeps `cache-disabled: true`, so release credentials never share a cache.
+- **Reverting** to the MIT implementation is one line, `cache-provider: basic`, and needs no other change.
