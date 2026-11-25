@@ -140,17 +140,15 @@ buildTypes {
 }
 ```
 
-**Historical build verification (not re-run for this documentation update):**
-- `./gradlew testDebugUnitTest lintDebug` — passes.
-- `./gradlew bundleRelease` — **succeeds**, producing an unsigned
-  `app/build/outputs/bundle/release/app-release.aab`. An AAB (unlike an installable
-  release APK) does not require a signing config to build; Play Console accepts an
-  unsigned upload for the *first* upload if you're enrolling in Play App Signing at
-  creation time, or you sign it with the upload key before uploading. No signing
-  failure to report — this is good news, not a gap.
-- Release minification and resource shrinking are now enabled in `app/build.gradle.kts` (#416).
+**Historical build verification (early 2026, superseded; kept for context):**
+- At the time, `./gradlew bundleRelease` produced an *unsigned* AAB, because no release signing
+  config existed yet. That is no longer true: release builds are now signed by
+  `signingConfigs.release` (`app/build.gradle.kts`), using the keystore that the
+  `Play / Publish bundle and sync listing` job decodes from secrets.
 
 **Current release configuration and validation notes:**
+
+- Release builds are minified and resource-shrunk (`isMinifyEnabled = true`, `isShrinkResources = true`, #416) and signed with the release signing config.
 
 1. **Current versioning (#473).** `.github/workflows/android.yml` sets
    `VERSION_CODE_OFFSET=2000`; versionCode = offset + `GITHUB_RUN_NUMBER` (first run: 2001).
